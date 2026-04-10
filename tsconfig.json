@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/session-model" },
+    { "path": "./packages/session-contracts" },
+    { "path": "./packages/provider-catalog" },
+    { "path": "./packages/session-client" },
+    { "path": "./packages/ui" },
+    { "path": "./apps/desktop" },
+    { "path": "./apps/mobile" }
+  ]
+}

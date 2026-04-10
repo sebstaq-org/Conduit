@@ -1,0 +1,18 @@
+[package]
+name = "service-bin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+acp-discovery = { path = "../acp-discovery" }
+app-api = { path = "../app-api" }
+provider-claude = { path = "../provider-claude" }
+provider-codex = { path = "../provider-codex" }
+provider-copilot = { path = "../provider-copilot" }
+session-store = { path = "../session-store" }
+
+[lints]
+workspace = true

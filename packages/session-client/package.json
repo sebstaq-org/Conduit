@@ -1,0 +1,19 @@
+{
+  "name": "@conduit/session-client",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@conduit/provider-catalog": "workspace:*",
+    "@conduit/session-contracts": "workspace:*",
+    "@conduit/session-model": "workspace:*"
+  }
+}
