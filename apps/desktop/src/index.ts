@@ -1,10 +1,10 @@
-import { PROVIDER_CATALOG } from "@conduit/provider-catalog";
-import { createProofSurfaceCopy } from "@conduit/ui";
+import { PROVIDER_CATALOG } from "@conduit/app-core";
+import { createDesktopProofSurfaceCopy } from "@conduit/design-system-desktop";
 
 export function createDesktopProofPlan() {
   return {
     appId: "desktop",
-    copy: createProofSurfaceCopy("desktop"),
+    copy: createDesktopProofSurfaceCopy(),
     supportedProviders: Object.keys(PROVIDER_CATALOG),
   };
 }

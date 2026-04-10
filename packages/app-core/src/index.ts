@@ -4,6 +4,56 @@ export type ProviderId = (typeof PROVIDERS)[number];
 
 export type ConnectionState = "disconnected" | "ready";
 
+export interface ProviderDescriptor {
+  id: ProviderId;
+  launcher: string;
+  authSource: "local-login-state";
+  phaseStatus: "phase-1";
+}
+
+export const PROVIDER_CATALOG = {
+  claude: {
+    id: "claude",
+    launcher: "claude-agent-acp",
+    authSource: "local-login-state",
+    phaseStatus: "phase-1",
+  },
+  copilot: {
+    id: "copilot",
+    launcher: "copilot --acp --allow-all --no-color --no-auto-update",
+    authSource: "local-login-state",
+    phaseStatus: "phase-1",
+  },
+  codex: {
+    id: "codex",
+    launcher: "codex-acp",
+    authSource: "local-login-state",
+    phaseStatus: "phase-1",
+  },
+} as const satisfies Record<ProviderId, ProviderDescriptor>;
+
+export const LOCKED_METHODS = [
+  "initialize",
+  "session/new",
+  "session/list",
+  "session/load",
+  "session/prompt",
+  "session/cancel",
+] as const;
+
+export type LockedMethod = (typeof LOCKED_METHODS)[number];
+
+export const DESKTOP_ACTIONS = [
+  "connect",
+  "new",
+  "list",
+  "load",
+  "prompt",
+  "cancel",
+] as const;
+
+export type DesktopAction = (typeof DESKTOP_ACTIONS)[number];
+
 export interface LiveSessionIdentity {
   provider: ProviderId;
   acpSessionId: string;
@@ -57,4 +107,10 @@ export function createLiveSessionIdentity(
     provider,
     acpSessionId,
   };
+}
+
+export function getProviderDescriptor(
+  provider: ProviderId,
+): ProviderDescriptor {
+  return PROVIDER_CATALOG[provider];
 }

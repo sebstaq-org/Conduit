@@ -1,13 +1,13 @@
-import { PROVIDER_CATALOG } from "@conduit/provider-catalog";
-import { createDesktopProofClient } from "@conduit/session-client";
-import { createProofSurfaceCopy } from "@conduit/ui";
+import { createDesktopProofClient } from "@conduit/app-client";
+import { PROVIDER_CATALOG } from "@conduit/app-core";
+import { createMobileProofSurfaceCopy } from "@conduit/design-system-mobile";
 
 const sessionClient = createDesktopProofClient();
 
 export function createMobileBootstrapPlan() {
   return {
     appId: "mobile",
-    copy: createProofSurfaceCopy("mobile"),
+    copy: createMobileProofSurfaceCopy(),
     lockedPolicy: sessionClient.policy,
     supportedProviders: Object.keys(PROVIDER_CATALOG),
   };

@@ -12,12 +12,12 @@ import type {
   DesktopAction,
   DesktopProofRequest,
   DesktopProofResult,
-} from "@conduit/session-contracts";
+} from "@conduit/app-client";
 import type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/session-model";
+} from "@conduit/app-core";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const distRoot = dirname(fileURLToPath(import.meta.url));

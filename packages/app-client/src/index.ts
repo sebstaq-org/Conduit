@@ -1,10 +1,38 @@
 import type {
-  DesktopProofRequest,
-  DesktopProofResult,
-} from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
+  DesktopAction,
+  ProviderId,
+  ProviderSnapshot,
+  RawWireEvent,
+} from "@conduit/app-core";
 
-export interface SessionClientPort {
+export type {
+  DesktopAction,
+  ProviderId,
+  ProviderSnapshot,
+  RawWireEvent,
+} from "@conduit/app-core";
+
+export interface DesktopProofRequest {
+  provider: ProviderId;
+  action: DesktopAction;
+  cwd: string;
+  prompt?: string;
+  cancelAfterMs?: number;
+}
+
+export interface DesktopProofResult {
+  provider: ProviderId;
+  action: DesktopAction;
+  artifactRoot: string;
+  snapshot: ProviderSnapshot;
+  requests: unknown[];
+  responses: unknown[];
+  events: RawWireEvent[];
+  summary: string;
+  lastSessionId: string | null;
+}
+
+export interface AppClientPort {
   readonly policy: "official-acp-only";
   runAction(request: DesktopProofRequest): Promise<DesktopProofResult>;
   getProviderSnapshot(provider: ProviderId): Promise<DesktopProofResult>;
@@ -14,7 +42,7 @@ interface FetchOptions {
   baseUrl?: string;
 }
 
-export class DesktopProofClient implements SessionClientPort {
+export class DesktopProofClient implements AppClientPort {
   public readonly policy = "official-acp-only";
 
   public constructor(private readonly options: FetchOptions = {}) {}
@@ -59,6 +87,6 @@ export class DesktopProofClient implements SessionClientPort {
 
 export function createDesktopProofClient(
   options?: FetchOptions,
-): SessionClientPort {
+): AppClientPort {
   return new DesktopProofClient(options);
 }

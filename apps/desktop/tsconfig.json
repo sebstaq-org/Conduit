@@ -8,10 +8,9 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    { "path": "../../packages/provider-catalog" },
-    { "path": "../../packages/session-client" },
-    { "path": "../../packages/session-contracts" },
-    { "path": "../../packages/session-model" },
-    { "path": "../../packages/ui" }
+    { "path": "../../packages/app-client" },
+    { "path": "../../packages/app-core" },
+    { "path": "../../packages/design-system-desktop" },
+    { "path": "../../packages/design-system-tokens" }
   ]
 }

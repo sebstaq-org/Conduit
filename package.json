@@ -23,7 +23,7 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
