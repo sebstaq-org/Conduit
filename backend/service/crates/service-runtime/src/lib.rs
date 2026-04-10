@@ -14,12 +14,14 @@
 mod app_service;
 mod command;
 mod error;
+mod event;
 mod manager;
 mod port;
 
 pub use app_service::AppServiceFactory;
 pub use command::{ConsumerCommand, ConsumerError, ConsumerResponse};
 pub use error::{Result, RuntimeError};
+pub use event::{RuntimeEvent, RuntimeEventKind};
 pub use manager::ServiceRuntime;
 pub use port::{ProviderFactory, ProviderPort};
 

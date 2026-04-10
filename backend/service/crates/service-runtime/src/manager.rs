@@ -1,7 +1,10 @@
 //! Provider manager and command dispatcher.
 
-use crate::command::{ConsumerCommand, ConsumerResponse};
+use crate::command::{
+    ConsumerCommand, ConsumerResponse, session_id_from_value, session_ids_from_list,
+};
 use crate::error::{RuntimeError, path_param, string_param};
+use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
@@ -10,6 +13,7 @@ use std::str::FromStr;
 
 /// Consumer API runtime manager keyed by provider.
 pub struct ServiceRuntime<F = AppServiceFactory> {
+    event_buffer: EventBuffer,
     factory: F,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
 }
@@ -35,9 +39,15 @@ where
     /// Creates a consumer runtime with an explicit provider factory.
     pub fn with_factory(factory: F) -> Self {
         Self {
+            event_buffer: EventBuffer::new(),
             factory,
             providers: HashMap::new(),
         }
+    }
+
+    /// Drains recorded runtime events.
+    pub fn drain_events(&mut self) -> Vec<RuntimeEvent> {
+        self.event_buffer.drain()
     }
 
     /// Dispatches one command and converts errors into stable envelopes.
@@ -66,8 +76,18 @@ where
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
-        let provider_port = self.provider(provider)?;
-        let snapshot = provider_port.snapshot();
+        let (snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            (provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::ProviderConnected,
+            None,
+            json!({}),
+        );
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(
             id,
             to_value(&snapshot)?,
@@ -82,16 +102,40 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let cwd = path_param("session/new", params, "cwd")?;
-        let provider_port = self.provider(provider)?;
-        let result = provider_port.session_new(cwd)?;
-        let snapshot = provider_port.snapshot();
+        let (result, snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_new(cwd)?;
+            (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        if let Some(session_id) = session_id_from_value(&result) {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionObserved,
+                Some(session_id),
+                json!({ "observed_via": "session/new" }),
+            );
+        }
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn session_list(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
-        let provider_port = self.provider(provider)?;
-        let result = provider_port.session_list()?;
-        let snapshot = provider_port.snapshot();
+        let (result, snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_list()?;
+            (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        for session_id in session_ids_from_list(&result) {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionObserved,
+                Some(session_id),
+                json!({ "observed_via": "session/list" }),
+            );
+        }
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -103,9 +147,19 @@ where
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/load", params, "session_id")?;
         let cwd = path_param("session/load", params, "cwd")?;
-        let provider_port = self.provider(provider)?;
-        let result = provider_port.session_load(session_id, cwd)?;
-        let snapshot = provider_port.snapshot();
+        let (result, snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_load(session_id.clone(), cwd)?;
+            (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::SessionObserved,
+            Some(session_id),
+            json!({ "observed_via": "session/load" }),
+        );
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -117,9 +171,31 @@ where
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/prompt", params, "session_id")?;
         let prompt = string_param("session/prompt", params, "prompt")?;
-        let provider_port = self.provider(provider)?;
-        let result = provider_port.session_prompt(session_id, prompt)?;
-        let snapshot = provider_port.snapshot();
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::PromptStarted,
+            Some(session_id.clone()),
+            json!({ "prompt": prompt }),
+        );
+        let (result, snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_prompt(session_id.clone(), prompt)?;
+            (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::PromptUpdateObserved,
+            Some(session_id.clone()),
+            json!({ "source": "provider_response" }),
+        );
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::PromptCompleted,
+            Some(session_id),
+            result.clone(),
+        );
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -130,15 +206,29 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/cancel", params, "session_id")?;
-        let provider_port = self.provider(provider)?;
-        let result = provider_port.session_cancel(session_id)?;
-        let snapshot = provider_port.snapshot();
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::CancelSent,
+            Some(session_id.clone()),
+            json!({ "command": "session/cancel" }),
+        );
+        let (result, snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_cancel(session_id)?;
+            (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn provider_snapshot(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
-        let provider_port = self.provider(provider)?;
-        let snapshot = provider_port.snapshot();
+        let (snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            (provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(
             id,
             to_value(&snapshot)?,
@@ -151,16 +241,33 @@ where
         id: String,
         provider: ProviderId,
     ) -> Result<ConsumerResponse> {
-        let provider_port = self.provider(provider)?;
-        provider_port.disconnect()?;
-        let snapshot = provider_port.snapshot();
+        let (snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            provider_port.disconnect()?;
+            (provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::ProviderDisconnected,
+            None,
+            json!({}),
+        );
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
     fn events_subscribe(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
-        let provider_port = self.provider(provider)?;
-        let result = to_value(provider_port.raw_events())?;
-        let snapshot = provider_port.snapshot();
+        let (snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            (provider_port.snapshot(), provider_port.raw_events())
+        };
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
+        let result = json!({
+            "events": self.event_buffer.events(),
+            "raw_wire_events": raw_events,
+        });
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -180,10 +287,4 @@ fn parse_provider(value: &str) -> Result<ProviderId> {
         provider: value.to_owned(),
         message,
     })
-}
-
-impl From<serde_json::Error> for RuntimeError {
-    fn from(error: serde_json::Error) -> Self {
-        Self::Provider(error.to_string())
-    }
 }

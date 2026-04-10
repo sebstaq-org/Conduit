@@ -1,7 +1,8 @@
 //! Tests for the consumer runtime manager.
 
 use super::{
-    ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, ServiceRuntime,
+    ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, RuntimeEvent,
+    RuntimeEventKind, ServiceRuntime,
 };
 use acp_core::{ConnectionState, ProviderSnapshot, RawWireEvent, WireKind, WireStream};
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
@@ -10,6 +11,7 @@ use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs::read_to_string;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -163,9 +165,80 @@ fn event_subscription_returns_raw_wire_truth() -> TestResult<()> {
     let response = runtime.dispatch(command("1", "events/subscribe", "copilot", json!({})));
 
     assert_ok(&response)?;
-    if !response.result.is_array() {
-        return Err(format!("expected array event stream, got {}", response.result).into());
+    if !response
+        .result
+        .get("events")
+        .is_some_and(serde_json::Value::is_array)
+    {
+        return Err(format!("expected runtime events, got {}", response.result).into());
     }
+    if !response
+        .result
+        .get("raw_wire_events")
+        .is_some_and(serde_json::Value::is_array)
+    {
+        return Err(format!("expected raw wire events, got {}", response.result).into());
+    }
+    Ok(())
+}
+
+#[test]
+fn prompt_dispatch_records_lifecycle_events() -> TestResult<()> {
+    let state = Rc::new(RefCell::new(FakeState::default()));
+    let mut runtime = runtime(state);
+    let response = runtime.dispatch(command(
+        "1",
+        "session/prompt",
+        "codex",
+        json!({ "session_id": "session-1", "prompt": "hello" }),
+    ));
+
+    assert_ok(&response)?;
+    let events = runtime.drain_events();
+    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
+    ensure_event(&events, RuntimeEventKind::PromptUpdateObserved)?;
+    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
+    Ok(())
+}
+
+#[test]
+fn cancel_dispatch_records_cancel_without_final_state() -> TestResult<()> {
+    let state = Rc::new(RefCell::new(FakeState::default()));
+    let mut runtime = runtime(state);
+    let response = runtime.dispatch(command(
+        "1",
+        "session/cancel",
+        "claude",
+        json!({ "session_id": "session-1" }),
+    ));
+
+    assert_ok(&response)?;
+    let events = runtime.drain_events();
+    ensure_event(&events, RuntimeEventKind::CancelSent)?;
+    if events
+        .iter()
+        .any(|event| event.kind == RuntimeEventKind::PromptCompleted)
+    {
+        return Err("cancel invented a provider-independent prompt completion".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn golden_consumer_event_stream_deserializes() -> TestResult<()> {
+    let contents = read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .ok_or("could not resolve backend service root")?
+            .join("testdata/golden/consumer-events.json"),
+    )?;
+    let events: Vec<RuntimeEvent> = serde_json::from_str(&contents)?;
+    if events.len() < 4 {
+        return Err("golden consumer event stream is too small".into());
+    }
+    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
+    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
     Ok(())
 }
 
@@ -187,6 +260,13 @@ fn assert_ok(response: &ConsumerResponse) -> TestResult<()> {
         return Err(format!("command failed: {:?}", response.error).into());
     }
     Ok(())
+}
+
+fn ensure_event(events: &[RuntimeEvent], kind: RuntimeEventKind) -> TestResult<()> {
+    if events.iter().any(|event| event.kind == kind) {
+        return Ok(());
+    }
+    Err(format!("missing runtime event {kind:?}").into())
 }
 
 fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {

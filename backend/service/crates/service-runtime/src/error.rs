@@ -62,6 +62,12 @@ impl RuntimeError {
     }
 }
 
+impl From<serde_json::Error> for RuntimeError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Provider(error.to_string())
+    }
+}
+
 pub(crate) fn string_param(
     command: &'static str,
     params: &serde_json::Value,

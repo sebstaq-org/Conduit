@@ -1,0 +1,4 @@
+{"sequence":1,"kind":"provider_connected","provider":"codex","session_id":null,"payload":{}}
+{"sequence":2,"kind":"prompt_started","provider":"codex","session_id":"session-1","payload":{"prompt":"hello"}}
+{"sequence":3,"kind":"prompt_update_observed","provider":"codex","session_id":"session-1","payload":{"source":"provider_response"}}
+{"sequence":4,"kind":"prompt_completed","provider":"codex","session_id":"session-1","payload":{"sessionId":"session-1","stopReason":"end_turn"}}

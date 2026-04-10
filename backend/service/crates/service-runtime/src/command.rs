@@ -65,3 +65,21 @@ pub struct ConsumerError {
     /// Human-readable error details.
     pub message: String,
 }
+
+pub(crate) fn session_id_from_value(value: &Value) -> Option<String> {
+    value
+        .get("sessionId")
+        .or_else(|| value.get("session_id"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+pub(crate) fn session_ids_from_list(value: &Value) -> Vec<String> {
+    value
+        .get("sessions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(session_id_from_value)
+        .collect()
+}

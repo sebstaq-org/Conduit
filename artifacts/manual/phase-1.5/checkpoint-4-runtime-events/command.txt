@@ -1,0 +1,2 @@
+rtk cargo test --manifest-path backend/service/Cargo.toml -p service-runtime
+rtk pnpm run check
