@@ -1,7 +1,6 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "baseUrl": ".",
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
@@ -20,7 +19,6 @@
     "../../packages/app-core/src/**/*.ts",
     "../../packages/design-system-mobile/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
-    "eslint.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     ".expo/types/**/*.ts",

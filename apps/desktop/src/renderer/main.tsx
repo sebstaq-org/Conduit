@@ -1,8 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.js";
+import { App } from "./App.js";
 
-const rootElement = document.getElementById("app");
+const rootElement = document.querySelector("#app");
 
 if (rootElement === null) {
   throw new Error("Desktop renderer root element is missing.");

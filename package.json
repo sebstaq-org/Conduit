@@ -24,7 +24,7 @@
     "desktop:typecheck": "pnpm --filter @conduit/desktop run typecheck",
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
-    "lint": "eslint eslint.config.ts vitest.config.ts scripts packages --max-warnings 0",
+    "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "mobile:android": "pnpm --filter @conduit/mobile run android",
     "mobile:doctor": "pnpm --filter @conduit/mobile run doctor",
     "mobile:ios": "pnpm --filter @conduit/mobile run ios",
@@ -43,13 +43,11 @@
     "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run mobile:typecheck && pnpm run mobile:lint && pnpm run mobile:test && pnpm run mobile:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.1",
     "@types/node": "25.6.0",
-    "eslint": "9.39.1",
-    "jiti": "2.6.1",
+    "oxlint": "1.59.0",
+    "oxlint-tsgolint": "0.20.0",
     "prettier": "3.8.2",
     "typescript": "6.0.2",
-    "typescript-eslint": "8.58.1",
     "vitest": "4.1.4"
   }
 }

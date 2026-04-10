@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm run typecheck && electron-vite build",
     "dev": "electron-vite dev --noSandbox",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "oxlint . --config ../../oxlint.config.ts --deny-warnings",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
