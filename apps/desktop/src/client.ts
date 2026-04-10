@@ -1,53 +1,30 @@
-type ProviderId = "claude" | "copilot" | "codex";
-type DesktopAction = "connect" | "new" | "list" | "load" | "prompt" | "cancel";
+import type {
+  DesktopAction,
+  DesktopProofConfig,
+  DesktopProofRequest,
+  DesktopProofResult,
+} from "@conduit/app-client";
 
-interface DesktopProofRequest {
-  provider: ProviderId;
-  action: DesktopAction;
-  cwd: string;
-  prompt?: string;
-  cancelAfterMs?: number;
-}
-
-interface DesktopProofResult {
-  provider: ProviderId;
-  action: DesktopAction;
-  artifactRoot: string;
-  snapshot: unknown;
-  requests: unknown[];
-  responses: unknown[];
-  events: unknown[];
-  summary: string;
-  lastSessionId: string | null;
-}
-
-const PROVIDERS = ["claude", "copilot", "codex"] as const;
-const copy = {
-  title: "Conduit desktop ACP proof",
-  subtitle:
-    "Official ACP only. This surface drives the locked subset and shows raw wire truth.",
-  promptPlaceholder: "Reply with exactly OK.",
-};
-
-function main() {
-  document.title = copy.title;
+async function main() {
+  const config = await readConfig();
+  document.title = config.copy.title;
   document.body.innerHTML = `
     <main class="shell">
       <header>
-        <h1>${copy.title}</h1>
-        <p>${copy.subtitle}</p>
+        <h1>${config.copy.title}</h1>
+        <p>${config.copy.subtitle}</p>
       </header>
       <section class="controls">
         <label>Provider <select id="provider"></select></label>
-        <label>CWD <input id="cwd" value="${escapeHtml(window.location.pathname.includes("/apps/desktop") ? "/srv/devops/repos/w2/Conduit" : "/srv/devops/repos/w2/Conduit")}" /></label>
-        <label>Prompt <textarea id="prompt">${copy.promptPlaceholder}</textarea></label>
+        <label>CWD <input id="cwd" value="${escapeHtml(config.defaultCwd)}" /></label>
+        <label>Prompt <textarea id="prompt">${config.copy.promptPlaceholder}</textarea></label>
         <div class="buttons">
-          <button data-action="connect">Connect</button>
-          <button data-action="new">New</button>
-          <button data-action="list">List</button>
-          <button data-action="load">Load</button>
-          <button data-action="prompt">Prompt</button>
-          <button data-action="cancel">Cancel</button>
+          ${config.actions
+            .map(
+              (action) =>
+                `<button data-action="${action}">${label(action)}</button>`,
+            )
+            .join("")}
         </div>
       </section>
       <section class="status">
@@ -63,13 +40,13 @@ function main() {
       </section>
     </main>
   `;
-  hydrateProviderSelect();
+  hydrateProviderSelect(config);
   bindButtons();
 }
 
-function hydrateProviderSelect() {
+function hydrateProviderSelect(config: DesktopProofConfig) {
   const select = element("provider") as HTMLSelectElement;
-  for (const provider of PROVIDERS) {
+  for (const provider of config.providers) {
     const option = document.createElement("option");
     option.value = provider;
     option.textContent = provider;
@@ -109,12 +86,25 @@ async function runAction(action: DesktopAction) {
 }
 
 function renderResult(result: DesktopProofResult) {
-  element("artifact").textContent = `Artifacts: ${result.artifactRoot}`;
+  element("artifact").textContent =
+    `Artifacts: ${result.artifactRoot} | PNG: ${result.desktopProofPng}`;
   element("summary").textContent = result.summary;
   element("snapshot").textContent = JSON.stringify(result.snapshot, null, 2);
   element("requests").textContent = JSON.stringify(result.requests, null, 2);
   element("responses").textContent = JSON.stringify(result.responses, null, 2);
   element("events").textContent = JSON.stringify(result.events, null, 2);
+}
+
+async function readConfig(): Promise<DesktopProofConfig> {
+  const response = await fetch("/api/config");
+  if (!response.ok) {
+    throw new Error(`desktop proof config failed: ${String(response.status)}`);
+  }
+  return (await response.json()) as DesktopProofConfig;
+}
+
+function label(action: DesktopAction): string {
+  return `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
 }
 
 function setStatus(text: string) {
@@ -153,4 +143,4 @@ async function runDesktopAction(
   return (await response.json()) as DesktopProofResult;
 }
 
-main();
+void main();

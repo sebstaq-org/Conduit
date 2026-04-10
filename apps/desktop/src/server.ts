@@ -3,13 +3,15 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
   DesktopAction,
+  DesktopProofConfig,
   DesktopProofRequest,
   DesktopProofResult,
 } from "@conduit/app-client";
@@ -18,6 +20,8 @@ import type {
   ProviderSnapshot,
   RawWireEvent,
 } from "@conduit/app-core";
+
+import { createDesktopProofConfig } from "./proof-config.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const distRoot = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +44,13 @@ async function route(request: IncomingMessage, response: ServerResponse) {
   if (request.method === "GET" && request.url === "/") {
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     response.end(html());
+    return;
+  }
+  if (request.method === "GET" && request.url === "/api/config") {
+    response.writeHead(200, {
+      "content-type": "application/json; charset=utf-8",
+    });
+    response.end(JSON.stringify(desktopProofConfig()));
     return;
   }
   if (request.method === "POST" && request.url === "/api/run") {
@@ -87,10 +98,11 @@ async function execute(
   if (lastSessionId) {
     lastSessionIds.set(request.provider, lastSessionId);
   }
-  return {
+  const result = {
     provider: request.provider,
     action: request.action,
     artifactRoot,
+    desktopProofPng: join(artifactRoot, "desktop-proof.png"),
     snapshot,
     requests,
     responses,
@@ -98,6 +110,12 @@ async function execute(
     summary,
     lastSessionId,
   };
+  await captureDesktopProof(result);
+  return result;
+}
+
+function desktopProofConfig(): DesktopProofConfig {
+  return createDesktopProofConfig(repoRoot);
 }
 
 function scenarioArgs(
@@ -202,6 +220,7 @@ function runSilentScenario(args: string[]): Promise<void> {
         "cargo",
         "run",
         "--quiet",
+        "--locked",
         "--manifest-path",
         "backend/service/Cargo.toml",
         "-p",
@@ -230,6 +249,103 @@ function runSilentScenario(args: string[]): Promise<void> {
       );
     });
   });
+}
+
+async function captureDesktopProof(result: DesktopProofResult): Promise<void> {
+  const htmlPath = join(result.artifactRoot, "desktop-proof.html");
+  await writeFile(htmlPath, desktopProofHtml(result), "utf8");
+  await runChromiumScreenshot(htmlPath, result.desktopProofPng);
+}
+
+async function runChromiumScreenshot(
+  htmlPath: string,
+  screenshotPath: string,
+): Promise<void> {
+  const scratchRoot = await mkdtemp(join(homedir(), "conduit-desktop-proof-"));
+  const scratchHtml = join(scratchRoot, "desktop-proof.html");
+  const scratchPng = join(scratchRoot, "desktop-proof.png");
+  try {
+    await copyFile(htmlPath, scratchHtml);
+    await spawnChromiumScreenshot(scratchHtml, scratchPng);
+    await copyFile(scratchPng, screenshotPath);
+  } finally {
+    await rm(scratchRoot, { recursive: true, force: true });
+  }
+}
+
+function spawnChromiumScreenshot(
+  htmlPath: string,
+  screenshotPath: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const chromium = process.env.CONDUIT_CHROMIUM_BIN ?? "chromium";
+    const child = spawn(chromium, [
+      "--headless=new",
+      "--disable-gpu",
+      "--no-sandbox",
+      "--window-size=1440,1100",
+      `--screenshot=${screenshotPath}`,
+      `file://${htmlPath}`,
+    ]);
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += typeof chunk === "string" ? chunk : chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          stderr ||
+            `desktop screenshot capture failed with exit code ${String(code ?? "null")}`,
+        ),
+      );
+    });
+  });
+}
+
+function desktopProofHtml(result: DesktopProofResult): string {
+  const snapshot = escapeHtml(JSON.stringify(result.snapshot, null, 2));
+  const events = escapeHtml(JSON.stringify(result.events, null, 2));
+  const requests = escapeHtml(JSON.stringify(result.requests, null, 2));
+  const responses = escapeHtml(JSON.stringify(result.responses, null, 2));
+  return `<!doctype html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <title>Conduit desktop proof artifact</title>
+      <style>
+        body { font-family: "Iosevka", "JetBrains Mono", monospace; margin: 0; background: linear-gradient(180deg, #f5f0e8, #e7efe6); color: #1f2a22; }
+        main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        section { background: rgba(255,255,255,0.72); border: 1px solid rgba(31,42,34,0.15); border-radius: 16px; margin: 16px 0; padding: 16px; }
+        pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      </style>
+    </head>
+    <body>
+      <main>
+        <h1>Conduit desktop ACP proof</h1>
+        <p>Provider: <strong>${escapeHtml(result.provider)}</strong></p>
+        <p>Action: <strong>${escapeHtml(result.action)}</strong></p>
+        <p>Artifacts: <code>${escapeHtml(result.artifactRoot)}</code></p>
+        <section><h2>Summary</h2><pre>${escapeHtml(result.summary)}</pre></section>
+        <section><h2>Snapshot</h2><pre>${snapshot}</pre></section>
+        <section><h2>Requests</h2><pre>${requests}</pre></section>
+        <section><h2>Responses</h2><pre>${responses}</pre></section>
+        <section><h2>Raw Wire Events</h2><pre>${events}</pre></section>
+      </main>
+    </body>
+  </html>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function readJson<T>(request: IncomingMessage): Promise<T> {

@@ -187,12 +187,15 @@ impl ContractBundle {
             .and_then(Value::as_object)
             .ok_or_else(|| Error::contract("vendor meta.json is missing agentMethods"))?;
 
-        Ok(map
-            .iter()
-            .map(|(key, value)| {
-                let value = value.as_str().unwrap_or_default().to_owned();
-                (key.clone(), value)
-            })
-            .collect())
+        let mut methods = BTreeMap::new();
+        for (key, value) in map {
+            let Some(value) = value.as_str() else {
+                return Err(Error::contract(format!(
+                    "vendor meta.json agentMethods.{key} is not a string"
+                )));
+            };
+            methods.insert(key.clone(), value.to_owned());
+        }
+        Ok(methods)
     }
 }

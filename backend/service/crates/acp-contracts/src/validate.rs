@@ -27,6 +27,19 @@ pub enum LockedMethod {
 }
 
 impl LockedMethod {
+    /// Returns the `agentMethods` key expected in the ACP meta bundle.
+    #[must_use]
+    pub const fn agent_method_key(self) -> &'static str {
+        match self {
+            Self::Initialize => "initialize",
+            Self::SessionNew => "session_new",
+            Self::SessionList => "session_list",
+            Self::SessionLoad => "session_load",
+            Self::SessionPrompt => "session_prompt",
+            Self::SessionCancel => "session_cancel",
+        }
+    }
+
     /// Returns the ACP wire method name.
     #[must_use]
     pub const fn method_name(self) -> &'static str {
@@ -60,12 +73,18 @@ pub const LOCKED_ACP_METHODS: [LockedMethod; 6] = [
 pub fn assert_locked_method_registration(bundle: &ContractBundle) -> Result<()> {
     let agent_methods = bundle.agent_method_map()?;
     for method in LOCKED_ACP_METHODS {
-        let is_registered = agent_methods
-            .values()
-            .any(|value| value == method.method_name());
-        if !is_registered {
+        let Some(value) = agent_methods.get(method.agent_method_key()) else {
             return Err(Error::contract(format!(
-                "vendor meta.json does not register {}",
+                "vendor meta.json does not register {} as {}",
+                method.agent_method_key(),
+                method.method_name()
+            )));
+        };
+        if value != method.method_name() {
+            return Err(Error::contract(format!(
+                "vendor meta.json registers {} as {}, expected {}",
+                method.agent_method_key(),
+                value,
                 method.method_name()
             )));
         }

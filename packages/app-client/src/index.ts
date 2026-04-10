@@ -20,10 +20,22 @@ export interface DesktopProofRequest {
   cancelAfterMs?: number;
 }
 
+export interface DesktopProofConfig {
+  providers: ProviderId[];
+  actions: DesktopAction[];
+  defaultCwd: string;
+  copy: {
+    title: string;
+    subtitle: string;
+    promptPlaceholder: string;
+  };
+}
+
 export interface DesktopProofResult {
   provider: ProviderId;
   action: DesktopAction;
   artifactRoot: string;
+  desktopProofPng: string;
   snapshot: ProviderSnapshot;
   requests: unknown[];
   responses: unknown[];

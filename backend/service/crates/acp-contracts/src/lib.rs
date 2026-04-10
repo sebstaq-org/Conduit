@@ -40,7 +40,7 @@ mod tests {
         NewSessionRequest, NewSessionResponse, Notification, OutgoingMessage, PromptResponse,
         ProtocolVersion, Request, Response, SessionId, StopReason,
     };
-    use serde_json::to_value;
+    use serde_json::{json, to_value};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -58,6 +58,36 @@ mod tests {
         if LOCKED_ACP_METHODS.len() != 6 {
             return Err(Error::contract(
                 "locked ACP method count drifted from Phase 1",
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_drifted_agent_method_registry_shape() -> Result<()> {
+        let mut bundle = load_contract_bundle()?;
+        bundle.meta["agentMethods"]["session_new"] = json!("session/create");
+        let error = assert_locked_method_registration(&bundle)
+            .err()
+            .ok_or_else(|| Error::contract("drifted session_new unexpectedly passed"))?;
+        if !error.to_string().contains("session_new") {
+            return Err(Error::contract(
+                "drifted session_new error did not identify the key",
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_non_string_agent_method_values() -> Result<()> {
+        let mut bundle = load_contract_bundle()?;
+        bundle.meta["agentMethods"]["session_new"] = json!(true);
+        let error = assert_locked_method_registration(&bundle)
+            .err()
+            .ok_or_else(|| Error::contract("non-string session_new unexpectedly passed"))?;
+        if !error.to_string().contains("not a string") {
+            return Err(Error::contract(
+                "non-string session_new error did not identify the shape failure",
             ));
         }
         Ok(())
