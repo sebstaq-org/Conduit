@@ -22,7 +22,7 @@ impl ServiceRuntime<AppServiceFactory> {
     /// Creates a consumer runtime backed by real provider services.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_factory(AppServiceFactory)
+        Self::with_factory(AppServiceFactory::default())
     }
 }
 

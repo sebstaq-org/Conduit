@@ -2,20 +2,30 @@
 
 use crate::{ProviderFactory, ProviderPort, Result, RuntimeError};
 use acp_core::{ProviderSnapshot, RawWireEvent};
-use acp_discovery::ProviderId;
+use acp_discovery::{ProcessEnvironment, ProviderId};
 use app_api::AppService;
 use serde::Serialize;
 use serde_json::{Value, json, to_value};
 use std::path::PathBuf;
 
 /// Factory that connects real `app-api` provider services.
-#[derive(Debug, Default)]
-pub struct AppServiceFactory;
+#[derive(Debug, Clone, Default)]
+pub struct AppServiceFactory {
+    environment: ProcessEnvironment,
+}
+
+impl AppServiceFactory {
+    /// Creates a factory with explicit provider process environment overrides.
+    #[must_use]
+    pub fn with_environment(environment: ProcessEnvironment) -> Self {
+        Self { environment }
+    }
+}
 
 impl ProviderFactory for AppServiceFactory {
     fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
         Ok(Box::new(AppServicePort {
-            service: AppService::connect_provider(provider)
+            service: AppService::connect_provider_with_environment(provider, &self.environment)
                 .map_err(|error| RuntimeError::Provider(error.to_string()))?,
         }))
     }

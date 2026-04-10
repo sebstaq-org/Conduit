@@ -50,6 +50,18 @@ fn proof_session_new_still_requires_artifact_root() -> TestResult<()> {
     Ok(())
 }
 
+#[test]
+fn consumer_proof_requires_artifact_root() -> TestResult<()> {
+    let args = strings(&["consumer-proof", "--provider", "codex"]);
+    let error = parse_command(&args)
+        .err()
+        .ok_or("consumer proof unexpectedly parsed")?;
+    if !matches!(error, ServiceError::MissingFlag { ref flag } if flag == "--artifact-root") {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
 fn strings(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
 }

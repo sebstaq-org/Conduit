@@ -13,6 +13,7 @@
 
 mod artifact;
 mod cli;
+mod consumer_proof;
 mod error;
 mod proof;
 mod runtime;
@@ -28,6 +29,10 @@ fn main() -> Result<()> {
     let command = parse_command(&args)?;
     match command {
         cli::Command::Runtime { command } => runtime::run(command),
+        cli::Command::ConsumerProof {
+            provider,
+            artifact_root,
+        } => consumer_proof::run(provider, &artifact_root, &args),
         proof_command => scenarios::run(proof_command, &args),
     }
 }

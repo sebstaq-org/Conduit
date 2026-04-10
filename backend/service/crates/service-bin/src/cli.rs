@@ -14,6 +14,13 @@ pub(crate) enum Command {
         /// The runtime command envelope.
         command: ConsumerCommand,
     },
+    /// Runs one consumer API proof sequence and writes artifacts.
+    ConsumerProof {
+        /// The provider being used.
+        provider: ProviderId,
+        /// The artifact root to populate.
+        artifact_root: PathBuf,
+    },
     /// Writes Part 1 contract lock artifacts.
     Contracts {
         /// The artifact root to populate.
@@ -106,6 +113,16 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,
         }),
+        "consumer-proof" => Ok(Command::ConsumerProof {
+            provider: required_provider(args, "--provider")?,
+            artifact_root: required_path(args, "--artifact-root")?,
+        }),
+        _ => parse_proof_command(command, args),
+    }
+}
+
+fn parse_proof_command(command: &str, args: &[String]) -> Result<Command> {
+    match command {
         "contracts" => Ok(Command::Contracts {
             artifact_root: required_path(args, "--artifact-root")?,
         }),

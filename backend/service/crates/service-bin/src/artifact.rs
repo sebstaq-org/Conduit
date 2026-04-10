@@ -83,12 +83,12 @@ pub(crate) fn write_contract_artifacts(
     Ok(())
 }
 
-fn write_json(path: impl AsRef<Path>, value: &impl serde::Serialize) -> Result<()> {
+pub(crate) fn write_json(path: impl AsRef<Path>, value: &impl serde::Serialize) -> Result<()> {
     let data = serde_json::to_string_pretty(value)?;
     write_text(path, &data)
 }
 
-fn write_jsonl(path: impl AsRef<Path>, values: &[impl serde::Serialize]) -> Result<()> {
+pub(crate) fn write_jsonl(path: impl AsRef<Path>, values: &[impl serde::Serialize]) -> Result<()> {
     let mut lines = Vec::with_capacity(values.len());
     for value in values {
         lines.push(serde_json::to_string(value)?);
@@ -96,7 +96,7 @@ fn write_jsonl(path: impl AsRef<Path>, values: &[impl serde::Serialize]) -> Resu
     write_text(path, &lines.join("\n"))
 }
 
-fn write_text(path: impl AsRef<Path>, contents: &str) -> Result<()> {
+pub(crate) fn write_text(path: impl AsRef<Path>, contents: &str) -> Result<()> {
     let path = path.as_ref();
     write(path, contents).map_err(|source| write_error(path, source))
 }

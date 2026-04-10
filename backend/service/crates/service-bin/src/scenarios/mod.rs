@@ -17,6 +17,9 @@ pub(crate) fn run(command: Command, args: &[String]) -> Result<()> {
         Command::Runtime { .. } => Err(ServiceError::InvalidCapture {
             message: "runtime commands must be handled outside proof scenarios".to_owned(),
         }),
+        Command::ConsumerProof { .. } => Err(ServiceError::InvalidCapture {
+            message: "consumer proof must be handled outside proof scenarios".to_owned(),
+        }),
         Command::Contracts { artifact_root } => contracts::run(&artifact_root, args),
         Command::Discovery {
             provider,
