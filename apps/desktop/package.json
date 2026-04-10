@@ -12,8 +12,9 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@conduit/provider-catalog": "workspace:*",
-    "@conduit/session-client": "workspace:*",
-    "@conduit/ui": "workspace:*"
+    "@conduit/app-client": "workspace:*",
+    "@conduit/app-core": "workspace:*",
+    "@conduit/design-system-desktop": "workspace:*",
+    "@conduit/design-system-tokens": "workspace:*"
   }
 }

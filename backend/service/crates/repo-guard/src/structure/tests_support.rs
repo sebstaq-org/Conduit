@@ -88,11 +88,11 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "backend/service/testdata/golden",
         "backend/service/testdata/providers",
         "docs",
-        "packages/provider-catalog/src",
-        "packages/session-client/src",
-        "packages/session-contracts/src",
-        "packages/session-model/src",
-        "packages/ui/src",
+        "packages/app-client/src",
+        "packages/app-core/src",
+        "packages/design-system-desktop/src",
+        "packages/design-system-mobile/src",
+        "packages/design-system-tokens/src",
         "scripts",
         "vendor/agent-client-protocol",
     ] {
@@ -162,11 +162,20 @@ fn workspace_packages() -> [(&'static str, &'static str); 7] {
     [
         ("@conduit/desktop", "apps/desktop"),
         ("@conduit/mobile", "apps/mobile"),
-        ("@conduit/provider-catalog", "packages/provider-catalog"),
-        ("@conduit/session-client", "packages/session-client"),
-        ("@conduit/session-contracts", "packages/session-contracts"),
-        ("@conduit/session-model", "packages/session-model"),
-        ("@conduit/ui", "packages/ui"),
+        ("@conduit/app-client", "packages/app-client"),
+        ("@conduit/app-core", "packages/app-core"),
+        (
+            "@conduit/design-system-desktop",
+            "packages/design-system-desktop",
+        ),
+        (
+            "@conduit/design-system-mobile",
+            "packages/design-system-mobile",
+        ),
+        (
+            "@conduit/design-system-tokens",
+            "packages/design-system-tokens",
+        ),
     ]
 }
 

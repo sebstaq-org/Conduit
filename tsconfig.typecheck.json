@@ -6,6 +6,7 @@
   "include": [
     "apps/**/*.ts",
     "packages/**/*.ts",
+    "scripts/**/*.ts",
     "eslint.config.ts",
     "vitest.config.ts"
   ]
