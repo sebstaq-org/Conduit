@@ -1,6 +1,6 @@
 # Conduit
 
-Conduit Phase 0.5 bootstraps the repo for an official-ACP-only Phase 1 without locking in the ACP host or provider runtime too early. This repo contains the final top-level structure, pinned toolchains, workspace wiring, check entrypoints, structural guard rails, and empty artifact/testdata roots.
+Conduit is in a frontend foundation pass. This pass locks the desktop/mobile package shape, repo rules, and agent workflow before any product UI, design tokens, primitives, themes, or features are built.
 
 ## Happy Path
 
@@ -8,25 +8,28 @@ Conduit Phase 0.5 bootstraps the repo for an official-ACP-only Phase 1 without l
 2. `rtk pnpm run bootstrap`
 3. `rtk pnpm run check`
 
-## Structure
+## Frontend Structure
 
 ```text
-apps/          desktop and mobile shells
-packages/      shared TypeScript packages
-backend/       Rust service workspace and future backend-owned assets
-vendor/        pinned external sources only
-artifacts/     generated evidence only
-docs/          repo policy and contributor guidance
-scripts/       repo automation and guard rails
+apps/                         Electron and React Native shells only
+packages/app-client/          shared frontend transport boundary
+packages/app-core/            shared framework-neutral feature logic
+packages/design-system-*/     shared UI boundaries without implementation yet
+backend/                      Rust service workspace and future backend-owned assets
+vendor/                       pinned external sources only
+artifacts/                    generated evidence only
+docs/                         canonical policy and architecture notes
+scripts/                      repo automation, registries, and current guard rails
 ```
 
 ## Rules That Matter
 
-- Official ACP only is policy, but Phase 0.5 does not implement the ACP host or provider runtimes.
-- `backend/` is the only backend root. Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
-- New JS or TS source stays in TypeScript.
-- Rust is blocking by default: curated workspace lints, `clippy -D warnings`, `rustdoc -D warnings`, and crate-edge structure checks all run in the root suite.
-- Apps talk through packages and the app API boundary, never by reaching into backend internals.
-- `artifacts/` and `vendor/` hold generated or pinned evidence, not hand-authored runtime code.
+- This pass is frontend-only. Do not build ACP host logic, provider runtime logic, or backend features here.
+- `apps/desktop` and `apps/mobile` are shells only. Shared behavior belongs in `packages/`.
+- `packages/app-client` owns future transport-facing frontend capability clients.
+- `packages/app-core` owns future framework-neutral reducers, selectors, and view-model logic.
+- `packages/design-system-tokens`, `packages/design-system-desktop`, and `packages/design-system-mobile` reserve the UI boundary. Do not add primitives, themes, or tokens yet.
+- Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
+- No raw DOM or React Native primitives belong in feature code. That boundary is reserved for the design-system packages.
 
-More detail lives in `ARCHITECTURE.md`, `AGENTS.md`, and `docs/contributing.md`.
+Canonical detail lives in `ARCHITECTURE.md`, `AGENTS.md`, `docs/contributing.md`, and `docs/frontend-architecture.md`.
