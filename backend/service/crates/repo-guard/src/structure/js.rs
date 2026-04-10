@@ -205,7 +205,12 @@ fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {
 fn source_files(unit: &Unit) -> Result<Vec<PathBuf>> {
     Ok(walk_files(&unit.root.join("src"))?
         .into_iter()
-        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("ts"))
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(std::ffi::OsStr::to_str),
+                Some("ts" | "tsx")
+            )
+        })
         .collect())
 }
 

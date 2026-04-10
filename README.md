@@ -1,6 +1,6 @@
 # Conduit
 
-Conduit is in a frontend foundation pass. This pass locks the desktop/mobile package shape, repo rules, and agent workflow before any product UI, design tokens, primitives, themes, or features are built.
+Conduit is in a frontend shell-init pass. This pass turns `apps/desktop` and `apps/mobile` into real Electron and Expo shells while keeping product UI, design tokens, primitives, themes, and features out of scope.
 
 ## Happy Path
 
@@ -23,7 +23,7 @@ scripts/       frontend registries only; repo guard rails live in backend/servic
 ## Rules That Matter
 
 - This pass is frontend-only. Do not build ACP host logic, provider runtime logic, or backend features here.
-- `apps/desktop` and `apps/mobile` are shells only. Shared behavior belongs in `packages/`.
+- `apps/desktop` and `apps/mobile` are runnable shells only. Shared behavior belongs in `packages/`.
 - `packages/app-client` owns future transport-facing frontend capability clients.
 - `packages/app-core` owns future framework-neutral reducers, selectors, and view-model logic.
 - `packages/design-system-tokens`, `packages/design-system-desktop`, and `packages/design-system-mobile` reserve the UI boundary. Do not add primitives, themes, or tokens yet.

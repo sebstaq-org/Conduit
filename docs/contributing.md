@@ -12,9 +12,9 @@ Structural rules are enforced by `rtk pnpm run structure:check`, which now runs 
 
 Rust is intentionally hard-default. Keep new crates in the workspace, satisfy the curated workspace lint set, and preserve the crate-edge rules enforced from `cargo metadata`. `service-bin` stays the only runtime composition root, and `repo-guard` is not exempt from any Rust policy. For Rust-specific authoring rules, follow `backend/service/AGENTS.md` and `docs/rust-policy.md`.
 
-For the current frontend foundation pass:
+For the current frontend shell-init pass:
 
-- `apps/desktop` and `apps/mobile` stay shell-only.
+- `apps/desktop` and `apps/mobile` stay shell-only apart from the minimum Electron and Expo runtime wiring.
 - `packages/app-client` is the future contract and transport boundary.
 - `packages/app-core` is the future framework-neutral logic boundary.
 - `packages/design-system-*` reserve UI boundaries only. Do not add components, themes, or tokens yet.
