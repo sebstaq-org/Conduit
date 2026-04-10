@@ -1,45 +1,64 @@
-import { getProviderDescriptor } from "@conduit/provider-catalog";
-import {
-  LOCKED_METHODS,
-  type ProviderConnectionSnapshot,
-  type SessionListProjection,
+import type {
+  DesktopProofRequest,
+  DesktopProofResult,
 } from "@conduit/session-contracts";
 import type { ProviderId } from "@conduit/session-model";
 
 export interface SessionClientPort {
   readonly policy: "official-acp-only";
-  readonly lockedMethods: readonly string[];
-  getProviderSnapshot(
-    provider: ProviderId,
-  ): Promise<ProviderConnectionSnapshot>;
-  listSessions(): Promise<SessionListProjection>;
+  runAction(request: DesktopProofRequest): Promise<DesktopProofResult>;
+  getProviderSnapshot(provider: ProviderId): Promise<DesktopProofResult>;
 }
 
-class BootstrapSessionClient implements SessionClientPort {
+interface FetchOptions {
+  baseUrl?: string;
+}
+
+export class DesktopProofClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  public readonly lockedMethods = LOCKED_METHODS;
+
+  public constructor(private readonly options: FetchOptions = {}) {}
+
+  public runAction(request: DesktopProofRequest): Promise<DesktopProofResult> {
+    return this.post("/api/run", request);
+  }
 
   public getProviderSnapshot(
     provider: ProviderId,
-  ): Promise<ProviderConnectionSnapshot> {
-    const descriptor = getProviderDescriptor(provider);
-
-    return Promise.resolve({
+  ): Promise<DesktopProofResult> {
+    return this.runAction({
       provider,
-      ready: false,
-      launcherPolicy: "official-acp-only",
-      note: `Phase 0.5 reserves ${descriptor.launcher} without launching it yet.`,
+      action: "connect",
+      cwd: process.cwd(),
     });
   }
 
-  public listSessions(): Promise<SessionListProjection> {
-    return Promise.resolve({
-      source: "acp-runtime",
-      sessions: [],
+  private async post(
+    path: string,
+    request: DesktopProofRequest,
+  ): Promise<DesktopProofResult> {
+    const response = await fetch(`${this.baseUrl()}${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(request),
     });
+    if (!response.ok) {
+      throw new Error(
+        `desktop proof request failed: ${String(response.status)}`,
+      );
+    }
+    return (await response.json()) as DesktopProofResult;
+  }
+
+  private baseUrl(): string {
+    return this.options.baseUrl ?? "http://127.0.0.1:4173";
   }
 }
 
-export function createBootstrapSessionClient(): SessionClientPort {
-  return new BootstrapSessionClient();
+export function createDesktopProofClient(
+  options?: FetchOptions,
+): SessionClientPort {
+  return new DesktopProofClient(options);
 }

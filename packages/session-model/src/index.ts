@@ -1,30 +1,60 @@
-export const PROVIDERS = ["claude", "codex", "copilot"] as const;
+export const PROVIDERS = ["claude", "copilot", "codex"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
-export interface SessionIdentity {
+export type ConnectionState = "disconnected" | "ready";
+
+export interface LiveSessionIdentity {
   provider: ProviderId;
   acpSessionId: string;
 }
 
-export type SessionLifecycle = "disconnected" | "ready" | "busy";
-
-export interface SessionSnapshot {
-  identity: SessionIdentity;
-  title: string;
-  lifecycle: SessionLifecycle;
+export interface LiveSessionSnapshot {
+  identity: LiveSessionIdentity;
+  cwd: string;
+  title: string | null;
+  observedVia: string;
 }
 
-export function createSessionIdentity(
+export type PromptLifecycleState =
+  | "idle"
+  | "running"
+  | "completed"
+  | "cancelled";
+
+export interface PromptLifecycleSnapshot {
+  identity: LiveSessionIdentity;
+  state: PromptLifecycleState;
+  stopReason: string | null;
+  rawUpdateCount: number;
+}
+
+export interface ProviderSnapshot {
+  provider: ProviderId;
+  connectionState: ConnectionState;
+  discovery: unknown;
+  capabilities: unknown;
+  authMethods: unknown[];
+  liveSessions: LiveSessionSnapshot[];
+  lastPrompt: PromptLifecycleSnapshot | null;
+}
+
+export interface RawWireEvent {
+  sequence: number;
+  stream: "outgoing" | "incoming" | "stderr";
+  kind: "request" | "response" | "notification" | "diagnostic";
+  payload: string;
+  method: string | null;
+  requestId: string | null;
+  json: unknown;
+}
+
+export function createLiveSessionIdentity(
   provider: ProviderId,
   acpSessionId: string,
-): SessionIdentity {
-  return { provider, acpSessionId };
-}
-
-export function createSessionSnapshot(
-  identity: SessionIdentity,
-  title: string,
-): SessionSnapshot {
-  return { identity, title, lifecycle: "ready" };
+): LiveSessionIdentity {
+  return {
+    provider,
+    acpSessionId,
+  };
 }

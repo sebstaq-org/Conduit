@@ -1,4 +1,8 @@
-import type { ProviderId, SessionSnapshot } from "@conduit/session-model";
+import type {
+  ProviderId,
+  ProviderSnapshot,
+  RawWireEvent,
+} from "@conduit/session-model";
 
 export const LOCKED_METHODS = [
   "initialize",
@@ -11,26 +15,33 @@ export const LOCKED_METHODS = [
 
 export type LockedMethod = (typeof LOCKED_METHODS)[number];
 
-export interface ProviderConnectionSnapshot {
+export const DESKTOP_ACTIONS = [
+  "connect",
+  "new",
+  "list",
+  "load",
+  "prompt",
+  "cancel",
+] as const;
+
+export type DesktopAction = (typeof DESKTOP_ACTIONS)[number];
+
+export interface DesktopProofRequest {
   provider: ProviderId;
-  ready: boolean;
-  launcherPolicy: "official-acp-only";
-  note: string;
+  action: DesktopAction;
+  cwd: string;
+  prompt?: string;
+  cancelAfterMs?: number;
 }
 
-export interface SessionListProjection {
-  source: "acp-runtime";
-  sessions: SessionSnapshot[];
-}
-
-export interface BootstrapBoundary {
-  phase: "0.5";
-  lockedMethods: readonly LockedMethod[];
-}
-
-export function createBootstrapBoundary(): BootstrapBoundary {
-  return {
-    phase: "0.5",
-    lockedMethods: LOCKED_METHODS,
-  };
+export interface DesktopProofResult {
+  provider: ProviderId;
+  action: DesktopAction;
+  artifactRoot: string;
+  snapshot: ProviderSnapshot;
+  requests: unknown[];
+  responses: unknown[];
+  events: RawWireEvent[];
+  summary: string;
+  lastSessionId: string | null;
 }
