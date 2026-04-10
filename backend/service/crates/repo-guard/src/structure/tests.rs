@@ -13,6 +13,48 @@ fn accepts_the_approved_layout() -> Result<()> {
 }
 
 #[test]
+fn rejects_framework_runtime_imports_in_framework_neutral_packages() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture.repo_root.join("packages/app-core/src/index.ts"),
+        "import { useState } from 'react';\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "packages/app-core/src/index.ts imports forbidden framework or shell runtime via react.",
+    )
+}
+
+#[test]
+fn rejects_platform_runtime_crossing_design_system_boundaries() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/design-system-desktop/src/index.ts"),
+        "import { View } from 'react-native';\n",
+    )?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/design-system-mobile/src/index.ts"),
+        "import { createRoot } from 'react-dom/client';\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "packages/design-system-desktop/src/index.ts imports runtime outside the desktop design-system boundary via react-native.",
+    )?;
+    ensure_contains(
+        &failures,
+        "packages/design-system-mobile/src/index.ts imports runtime outside the mobile design-system boundary via react-dom/client.",
+    )
+}
+
+#[test]
 fn rejects_forbidden_provider_dependencies() -> Result<()> {
     let mut fixture = fixture()?;
     if let Some(resolve) = fixture.metadata.resolve.as_mut()

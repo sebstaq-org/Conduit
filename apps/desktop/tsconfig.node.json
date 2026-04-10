@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": [
-    "eslint.config.ts",
     "electron.vite.config.ts",
     "src/main/**/*",
     "src/preload/**/*",

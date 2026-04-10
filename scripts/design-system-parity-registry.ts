@@ -1,10 +1,13 @@
-export type DesignSystemParityStatus = "reserved" | "active";
+type DesignSystemParityStatus = "reserved" | "active";
 
-export interface DesignSystemParityRegistration {
+interface DesignSystemParityRegistration {
   componentName: string;
   desktopExport: string;
   mobileExport: string;
   status: DesignSystemParityStatus;
 }
 
-export const designSystemParityRegistry: DesignSystemParityRegistration[] = [];
+const designSystemParityRegistry: DesignSystemParityRegistration[] = [];
+
+export { designSystemParityRegistry };
+export type { DesignSystemParityRegistration, DesignSystemParityStatus };

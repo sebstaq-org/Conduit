@@ -1,3 +1,3 @@
-export default function App(): null {
+export function App(): null {
   return null;
 }

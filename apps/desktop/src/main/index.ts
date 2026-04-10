@@ -1,8 +1,7 @@
 import { app, BrowserWindow } from "electron";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const currentDirectory = import.meta.dirname;
 
 function createMainWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -22,24 +21,24 @@ function createMainWindow(): BrowserWindow {
     mainWindow.show();
   });
 
-  const rendererUrl = process.env["ELECTRON_RENDERER_URL"];
-  if (rendererUrl !== undefined) {
-    void mainWindow.loadURL(rendererUrl);
-  } else {
+  const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+  if (rendererUrl === undefined) {
     void mainWindow.loadFile(join(currentDirectory, "../renderer/index.html"));
+  } else {
+    void mainWindow.loadURL(rendererUrl);
   }
 
   return mainWindow;
 }
 
-void app.whenReady().then(() => {
-  createMainWindow();
+await app.whenReady();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
-  });
+createMainWindow();
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createMainWindow();
+  }
 });
 
 app.on("window-all-closed", () => {

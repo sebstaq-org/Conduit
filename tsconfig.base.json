@@ -5,19 +5,18 @@
     "lib": ["ES2024"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@conduit/app-client": ["packages/app-client/src/index.ts"],
-      "@conduit/app-core": ["packages/app-core/src/index.ts"],
+      "@conduit/app-client": ["./packages/app-client/src/index.ts"],
+      "@conduit/app-core": ["./packages/app-core/src/index.ts"],
       "@conduit/design-system-desktop": [
-        "packages/design-system-desktop/src/index.ts"
+        "./packages/design-system-desktop/src/index.ts"
       ],
       "@conduit/design-system-mobile": [
-        "packages/design-system-mobile/src/index.ts"
+        "./packages/design-system-mobile/src/index.ts"
       ],
       "@conduit/design-system-tokens": [
-        "packages/design-system-tokens/src/index.ts"
+        "./packages/design-system-tokens/src/index.ts"
       ]
     },
     "strict": true,

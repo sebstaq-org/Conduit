@@ -20,21 +20,21 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        "@": resolve(__dirname, "src/renderer"),
+        "@": resolve(import.meta.dirname, "src/renderer"),
         "@conduit/app-client": resolve(
-          __dirname,
+          import.meta.dirname,
           "../../packages/app-client/src/index.ts",
         ),
         "@conduit/app-core": resolve(
-          __dirname,
+          import.meta.dirname,
           "../../packages/app-core/src/index.ts",
         ),
         "@conduit/design-system-desktop": resolve(
-          __dirname,
+          import.meta.dirname,
           "../../packages/design-system-desktop/src/index.ts",
         ),
         "@conduit/design-system-tokens": resolve(
-          __dirname,
+          import.meta.dirname,
           "../../packages/design-system-tokens/src/index.ts",
         ),
       },

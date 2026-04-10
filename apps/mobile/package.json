@@ -7,7 +7,7 @@
     "android": "expo start --android",
     "doctor": "pnpm exec expo-doctor",
     "ios": "expo start --ios",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "oxlint . --config ../../oxlint.config.ts --deny-warnings",
     "start": "expo start",
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -33,7 +33,6 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "eslint": "9.39.1",
     "expo-doctor": "1.18.18",
     "typescript": "~5.9.2",
     "vitest": "4.1.4"
