@@ -1,14 +1,14 @@
 # Architecture
 
-Conduit is repo-structured around product boundaries instead of language buckets. Phase 0.5 creates those boundaries now so Phase 1 can add the official ACP host and provider adapters without moving modules again.
+Conduit is repo-structured around product boundaries instead of language buckets. Phase 1 now implements the first official-ACP-only runtime slice inside the boundaries created by Phase 0.5.
 
 ## Phase Boundary
 
-Phase 0.5 includes repository shape, pinned toolchains, check chains, repo bootstrap automation, and compile-safe stubs. It explicitly excludes ACP host behavior, provider runtime launches, session persistence logic, product UI, and any fallback runtime path.
+Phase 1 includes the vendored ACP contract lock, official launcher discovery, raw stdio JSON-RPC host ownership, in-memory live session state, text-only prompt/cancel, and manual proof artifacts. It still excludes fallback runtime paths, provider-specific Conduit protocols, duplicated live DTO families above ACP, and persisted runtime truth.
 
 ## TypeScript Layer
 
-- `apps/desktop` and `apps/mobile` are shell entrypoints only.
+- `apps/desktop` contains the minimal proof surface for the locked ACP subset; `apps/mobile` remains a shell entrypoint.
 - `packages/session-model` owns shared session identity and lifecycle vocabulary.
 - `packages/session-contracts` owns app-facing snapshots and the locked ACP method list.
 - `packages/session-client` owns the client boundary toward the future service.
@@ -17,11 +17,11 @@ Phase 0.5 includes repository shape, pinned toolchains, check chains, repo boots
 
 ## Rust Layer
 
-- `backend/service/crates/acp-contracts` reserves the vendor-facing contract boundary.
-- `backend/service/crates/acp-core` reserves the ACP runtime ownership boundary.
-- `backend/service/crates/acp-discovery` reserves launcher and readiness provenance.
-- `backend/service/crates/app-api` reserves the app-facing service surface.
-- `backend/service/crates/provider-*` reserve provider-specific adapter homes.
+- `backend/service/crates/acp-contracts` owns the vendor-facing contract lock and locked-subset envelope validation.
+- `backend/service/crates/acp-core` owns ACP process lifecycle, raw JSON-RPC stdio, request tracking, live initialize truth, events, snapshots, sessions, prompt, and cancel.
+- `backend/service/crates/acp-discovery` owns official launcher resolution, initialize viability, raw discovery captures, and transport diagnostics.
+- `backend/service/crates/app-api` owns the app-facing Phase 1 provider/session operations.
+- `backend/service/crates/provider-*` own provider launcher descriptors only.
 - `backend/service/crates/repo-guard` owns repo guard rails as a normal workspace crate under the same Rust policy as every other crate.
 - `backend/service/crates/session-store` reserves read-side and persistence boundaries.
 - `backend/service/crates/service-bin` is the runtime workspace composition root.
@@ -29,4 +29,4 @@ Phase 0.5 includes repository shape, pinned toolchains, check chains, repo boots
 
 ## Deferred Slots
 
-`backend/service` is the only backend subtree created in Phase 0.5. Native bridge directories stay deferred until a concrete desktop or mobile bridge exists, so the bootstrap does not create empty platform trees that might force early boundary decisions.
+Native bridge directories stay deferred until a concrete desktop or mobile bridge exists, so Phase 1 does not create empty platform trees that might force early boundary decisions.

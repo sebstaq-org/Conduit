@@ -3,6 +3,7 @@
   "compilerOptions": {
     "noEmit": true
   },
+  "exclude": ["**/dist", "**/*.d.ts"],
   "include": [
     "apps/**/*.ts",
     "packages/**/*.ts",

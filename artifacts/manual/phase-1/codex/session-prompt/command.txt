@@ -1,0 +1,1 @@
+rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- session-prompt --provider codex --cwd /srv/devops/repos/w2/Conduit --prompt Reply with exactly CONDUIT_READY. --artifact-root /srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/codex/session-prompt

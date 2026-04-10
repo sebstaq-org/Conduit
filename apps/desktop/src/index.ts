@@ -1,14 +1,10 @@
 import { PROVIDER_CATALOG } from "@conduit/provider-catalog";
-import { createBootstrapSessionClient } from "@conduit/session-client";
-import { createBootstrapSurfaceCopy } from "@conduit/ui";
+import { createProofSurfaceCopy } from "@conduit/ui";
 
-const sessionClient = createBootstrapSessionClient();
-
-export function createDesktopBootstrapPlan() {
+export function createDesktopProofPlan() {
   return {
     appId: "desktop",
-    copy: createBootstrapSurfaceCopy("desktop"),
-    lockedPolicy: sessionClient.policy,
+    copy: createProofSurfaceCopy("desktop"),
     supportedProviders: Object.keys(PROVIDER_CATALOG),
   };
 }

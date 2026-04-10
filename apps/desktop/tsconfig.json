@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "lib": ["ES2024", "DOM"],
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "tsconfig.tsbuildinfo"
@@ -9,6 +10,8 @@
   "references": [
     { "path": "../../packages/provider-catalog" },
     { "path": "../../packages/session-client" },
+    { "path": "../../packages/session-contracts" },
+    { "path": "../../packages/session-model" },
     { "path": "../../packages/ui" }
   ]
 }

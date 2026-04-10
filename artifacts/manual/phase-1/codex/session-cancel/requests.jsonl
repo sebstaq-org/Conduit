@@ -1,0 +1,4 @@
+{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
+{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/session-cancel/cwd","mcpServers":[]}}
+{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Count from 1 to 1000 slowly.","type":"text"}],"sessionId":"019d78f7-c5cb-7902-9595-6dbd63705674"}}
+{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"019d78f7-c5cb-7902-9595-6dbd63705674"}}

@@ -1,14 +1,16 @@
-export interface BootstrapSurfaceCopy {
+export interface ProofSurfaceCopy {
   title: string;
   subtitle: string;
+  promptPlaceholder: string;
 }
 
-export function createBootstrapSurfaceCopy(
+export function createProofSurfaceCopy(
   scope: "desktop" | "mobile",
-): BootstrapSurfaceCopy {
+): ProofSurfaceCopy {
   return {
-    title: `Conduit ${scope} bootstrap`,
+    title: `Conduit ${scope} ACP proof`,
     subtitle:
-      "Phase 0.5 reserves structure and policy without implementing runtime behavior.",
+      "Official ACP only. This surface drives the locked subset and shows raw wire truth.",
+    promptPlaceholder: "Reply with exactly OK.",
   };
 }
