@@ -28,7 +28,7 @@ const APPROVED_PACKAGES: [&str; 5] = [
     "design-system-mobile",
     "design-system-tokens",
 ];
-const APPROVED_CRATES: [&str; 10] = [
+const APPROVED_CRATES: [&str; 11] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -38,6 +38,7 @@ const APPROVED_CRATES: [&str; 10] = [
     "provider-copilot",
     "repo-guard",
     "service-bin",
+    "service-runtime",
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];

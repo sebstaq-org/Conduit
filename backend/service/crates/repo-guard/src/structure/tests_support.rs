@@ -7,7 +7,7 @@ use std::fs::{create_dir_all, write};
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-const APPROVED_CRATES: [&str; 10] = [
+const APPROVED_CRATES: [&str; 11] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -17,6 +17,7 @@ const APPROVED_CRATES: [&str; 10] = [
     "provider-copilot",
     "repo-guard",
     "service-bin",
+    "service-runtime",
     "session-store",
 ];
 
@@ -205,6 +206,10 @@ fn metadata(repo_root: &Path) -> Metadata {
                 "provider-copilot",
                 "session-store",
             ],
+        ),
+        (
+            "service-runtime",
+            vec!["acp-core", "acp-discovery", "app-api"],
         ),
         ("session-store", Vec::<&str>::new()),
     ];

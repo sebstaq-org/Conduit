@@ -1,0 +1,32 @@
+    Checking repo-guard v0.5.0 (/srv/devops/repos/w2/Conduit/backend/service/crates/repo-guard)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+ Documenting repo-guard v0.5.0 (/srv/devops/repos/w2/Conduit/backend/service/crates/repo-guard)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.40s
+   Generated /srv/devops/repos/w2/Conduit/backend/service/target/doc/acp_contracts/index.html and 10 other files
+   Compiling repo-guard v0.5.0 (/srv/devops/repos/w2/Conduit/backend/service/crates/repo-guard)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.31s
+   Compiling repo-guard v0.5.0 (/srv/devops/repos/w2/Conduit/backend/service/crates/repo-guard)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running unittests src/lib.rs (backend/service/target/debug/deps/acp_contracts-fe9930363b00eb19)
+     Running tests/protocol_captures.rs (backend/service/target/debug/deps/protocol_captures-0413d5c025ab5be8)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/acp_core-7b6a87e1c0536431)
+     Running tests/golden_testdata.rs (backend/service/target/debug/deps/golden_testdata-01bc3fbd72442de1)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/acp_discovery-802aea8cc028702f)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/app_api-0929018935d378b6)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/provider_claude-dff428837d38d488)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/provider_codex-f74c2df54ff435a6)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/provider_copilot-233d763b61888812)
+     Running unittests src/main.rs (backend/service/target/debug/deps/repo_guard-090107b4b2e2b4ab)
+     Running unittests src/main.rs (backend/service/target/debug/deps/service_bin-719c02a33563457b)
+     Running tests/failure_fixtures.rs (backend/service/target/debug/deps/failure_fixtures-105e5db628e1df6a)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/service_runtime-5103f62a29657c5e)
+     Running unittests src/lib.rs (backend/service/target/debug/deps/session_store-075df817f76d410a)
+   Doc-tests acp_contracts
+   Doc-tests acp_core
+   Doc-tests acp_discovery
+   Doc-tests app_api
+   Doc-tests provider_claude
+   Doc-tests provider_codex
+   Doc-tests provider_copilot
+   Doc-tests service_runtime
+   Doc-tests session_store

@@ -1,0 +1,21 @@
+[package]
+name = "service-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+acp-core = { path = "../acp-core" }
+acp-discovery = { path = "../acp-discovery" }
+app-api = { path = "../app-api" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
+
+[dev-dependencies]
+agent-client-protocol-schema = "0.11.5"
+
+[lints]
+workspace = true

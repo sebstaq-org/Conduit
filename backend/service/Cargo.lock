@@ -1581,6 +1581,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "service-runtime"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "agent-client-protocol-schema",
+ "app-api",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "session-store"
 version = "0.5.0"
 

@@ -90,6 +90,7 @@ pub(super) fn collect_workspace_failures(
 
     enforce_isolated_crates(&deps_by_crate, failures);
     enforce_runtime_barriers(&deps_by_crate, failures);
+    enforce_service_runtime_rules(&deps_by_crate, failures);
     enforce_provider_rules(&deps_by_crate, failures);
     enforce_session_rules(&deps_by_crate, failures);
     for package in &layout.packages {
@@ -219,6 +220,23 @@ fn enforce_runtime_barriers(
             if local_deps.contains(forbidden) {
                 failures.push(format!("{crate_name} may not depend on {forbidden}."));
             }
+        }
+    }
+}
+
+fn enforce_service_runtime_rules(
+    deps_by_crate: &HashMap<String, HashSet<String>>,
+    failures: &mut Vec<String>,
+) {
+    let Some(local_deps) = deps_by_crate.get("service-runtime") else {
+        return;
+    };
+    let allowed = ["acp-contracts", "acp-core", "acp-discovery", "app-api"];
+    for dependency in local_deps {
+        if !allowed.contains(&dependency.as_str()) {
+            failures.push(format!(
+                "service-runtime may not depend on {dependency}; it must stay above app-api and ACP-facing crates only."
+            ));
         }
     }
 }
