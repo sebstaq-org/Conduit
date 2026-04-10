@@ -4,7 +4,7 @@ export interface ProviderDescriptor {
   id: ProviderId;
   launcher: string;
   authSource: "local-login-state";
-  phaseStatus: "bootstrap-only";
+  phaseStatus: "phase-1";
 }
 
 export const PROVIDER_CATALOG = {
@@ -12,19 +12,19 @@ export const PROVIDER_CATALOG = {
     id: "claude",
     launcher: "claude-agent-acp",
     authSource: "local-login-state",
-    phaseStatus: "bootstrap-only",
-  },
-  codex: {
-    id: "codex",
-    launcher: "codex-acp",
-    authSource: "local-login-state",
-    phaseStatus: "bootstrap-only",
+    phaseStatus: "phase-1",
   },
   copilot: {
     id: "copilot",
     launcher: "copilot --acp --allow-all --no-color --no-auto-update",
     authSource: "local-login-state",
-    phaseStatus: "bootstrap-only",
+    phaseStatus: "phase-1",
+  },
+  codex: {
+    id: "codex",
+    launcher: "codex-acp",
+    authSource: "local-login-state",
+    phaseStatus: "phase-1",
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
