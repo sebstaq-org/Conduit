@@ -14,12 +14,21 @@ use crate::error::{Result, ServiceError};
 /// Returns an error when the selected scenario fails.
 pub(crate) fn run(command: Command, args: &[String]) -> Result<()> {
     match command {
-        Command::Runtime { .. } => Err(ServiceError::InvalidCapture {
-            message: "runtime commands must be handled outside proof scenarios".to_owned(),
-        }),
-        Command::ConsumerProof { .. } => Err(ServiceError::InvalidCapture {
-            message: "consumer proof must be handled outside proof scenarios".to_owned(),
-        }),
+        Command::Runtime { .. } | Command::Serve { .. } | Command::ConsumerProof { .. } => {
+            non_scenario_command()
+        }
+        proof_command => run_proof_command(proof_command, args),
+    }
+}
+
+fn non_scenario_command() -> Result<()> {
+    Err(ServiceError::InvalidCapture {
+        message: "runtime commands must be handled outside proof scenarios".to_owned(),
+    })
+}
+
+fn run_proof_command(command: Command, args: &[String]) -> Result<()> {
+    match command {
         Command::Contracts { artifact_root } => contracts::run(&artifact_root, args),
         Command::Discovery {
             provider,
@@ -70,5 +79,8 @@ pub(crate) fn run(command: Command, args: &[String]) -> Result<()> {
             root: &artifact_root,
             args,
         }),
+        Command::Runtime { .. } | Command::Serve { .. } | Command::ConsumerProof { .. } => {
+            non_scenario_command()
+        }
     }
 }

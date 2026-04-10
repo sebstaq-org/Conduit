@@ -13,7 +13,7 @@
     "auth_hints": [],
     "initialize_viable": true,
     "transport_diagnostics": [
-      "claude initialize responded in 109 ms",
+      "claude initialize responded in 106 ms",
       "stderr lines captured: 0"
     ],
     "initialize_probe": {
@@ -85,7 +85,7 @@
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"_meta\":{\"claudeCode\":{\"promptQueueing\":true}},\"promptCapabilities\":{\"image\":true,\"embeddedContext\":true},\"mcpCapabilities\":{\"http\":true,\"sse\":true},\"loadSession\":true,\"sessionCapabilities\":{\"fork\":{},\"list\":{},\"resume\":{},\"close\":{}}},\"agentInfo\":{\"name\":\"@agentclientprotocol/claude-agent-acp\",\"title\":\"Claude Agent\",\"version\":\"0.26.0\"},\"authMethods\":[]}}"
       ],
       "stderr_lines": [],
-      "elapsed_ms": 109
+      "elapsed_ms": 106
     }
   },
   "capabilities": {
@@ -115,7 +115,7 @@
     {
       "identity": {
         "provider": "claude",
-        "acp_session_id": "831b781d-cbf3-421c-bc5a-c81c1e8b2be0"
+        "acp_session_id": "7de15901-9be9-45c6-b89f-149353ec8a80"
       },
       "cwd": "/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1.5/_proof-workspaces/claude/consumer-api/cwd",
       "title": "Reply with exactly CONDUIT_CONSUMER_API_READY.",

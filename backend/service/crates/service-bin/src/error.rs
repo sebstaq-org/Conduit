@@ -21,6 +21,9 @@ pub(crate) enum ServiceError {
     /// JSON serialization failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// Service I/O failed.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
     /// One required CLI flag was missing.
     #[error("missing required flag {flag}")]
     MissingFlag {

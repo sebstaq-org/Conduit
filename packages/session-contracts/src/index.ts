@@ -2,6 +2,8 @@ import type { ProviderId, ProviderSnapshot } from "@conduit/session-model";
 
 let nextCommandSequence = 0;
 
+export const CONDUIT_TRANSPORT_VERSION = 1 as const;
+
 export const SESSION_COMMANDS = [
   "initialize",
   "session/new",
@@ -12,7 +14,7 @@ export const SESSION_COMMANDS = [
 ] as const;
 
 export const CONDUIT_COMMANDS = [
-  "provider/snapshot",
+  "snapshot/get",
   "provider/disconnect",
   "events/subscribe",
 ] as const;
@@ -47,6 +49,46 @@ export interface ConsumerResponse<Result = unknown> {
   error: ConsumerError | null;
   snapshot: ProviderSnapshot | null;
 }
+
+export type RuntimeEventKind =
+  | "provider_connected"
+  | "provider_disconnected"
+  | "session_observed"
+  | "prompt_started"
+  | "prompt_update_observed"
+  | "prompt_completed"
+  | "cancel_sent"
+  | "raw_wire_event_captured";
+
+export interface RuntimeEvent {
+  sequence: number;
+  kind: RuntimeEventKind;
+  provider: ProviderId;
+  session_id: string | null;
+  payload: unknown;
+}
+
+export interface ClientCommandFrame {
+  v: typeof CONDUIT_TRANSPORT_VERSION;
+  type: "command";
+  id: string;
+  command: ConsumerCommand;
+}
+
+export interface ServerResponseFrame {
+  v: typeof CONDUIT_TRANSPORT_VERSION;
+  type: "response";
+  id: string;
+  response: ConsumerResponse;
+}
+
+export interface ServerEventFrame {
+  v: typeof CONDUIT_TRANSPORT_VERSION;
+  type: "event";
+  event: RuntimeEvent;
+}
+
+export type ServerFrame = ServerResponseFrame | ServerEventFrame;
 
 export function createConsumerCommand(
   command: ConsumerCommandName,

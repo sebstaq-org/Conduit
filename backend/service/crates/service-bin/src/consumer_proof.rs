@@ -109,13 +109,7 @@ fn recover_session(
         json!({ "session_id": load_id }),
         responses,
     )?;
-    submit(
-        &mut runtime,
-        provider,
-        "provider/snapshot",
-        json!({}),
-        responses,
-    )?;
+    submit(&mut runtime, provider, "snapshot/get", json!({}), responses)?;
     submit(
         &mut runtime,
         provider,
@@ -254,7 +248,7 @@ fn summary(
     event_count: usize,
 ) -> String {
     format!(
-        "# Phase 1.5 Consumer API Proof: {provider}\n\nConsumer API sequence: `initialize -> session/new -> session/prompt -> session/list -> provider/disconnect -> initialize -> session/list -> session/load -> session/cancel -> provider/snapshot -> events/subscribe -> provider/disconnect`.\n\nSeeded ACP session id: `{session_id}`.\n\nConsumer responses captured: `{response_count}`.\n\nRuntime events captured: `{event_count}`.\n\nProvider caveats:\n\n{}\n\n`session/cancel` is recorded as a raw ACP notification and no provider-independent final cancel state is asserted.\n",
+        "# Phase 1.5 Consumer API Proof: {provider}\n\nConsumer API sequence: `initialize -> session/new -> session/prompt -> session/list -> provider/disconnect -> initialize -> session/list -> session/load -> session/cancel -> snapshot/get -> events/subscribe -> provider/disconnect`.\n\nSeeded ACP session id: `{session_id}`.\n\nConsumer responses captured: `{response_count}`.\n\nRuntime events captured: `{event_count}`.\n\nProvider caveats:\n\n{}\n\n`session/cancel` is recorded as a raw ACP notification and no provider-independent final cancel state is asserted.\n",
         provider_caveat(provider)
     )
 }

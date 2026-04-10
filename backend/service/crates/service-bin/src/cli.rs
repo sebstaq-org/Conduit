@@ -9,6 +9,13 @@ use std::str::FromStr;
 
 /// The supported silent proof commands.
 pub(crate) enum Command {
+    /// Runs the normal product WebSocket service boundary.
+    Serve {
+        /// Host interface to bind.
+        host: String,
+        /// TCP port to bind.
+        port: u16,
+    },
     /// Runs one normal runtime consumer command and writes JSON to stdout.
     Runtime {
         /// The runtime command envelope.
@@ -110,6 +117,10 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         return Err(unsupported("missing command"));
     };
     match command.as_str() {
+        "serve" => Ok(Command::Serve {
+            host: optional_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_owned()),
+            port: optional_u16(args, "--port")?.unwrap_or(4174),
+        }),
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,
         }),
@@ -194,7 +205,7 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
     match command {
         "initialize"
         | "session/list"
-        | "provider/snapshot"
+        | "snapshot/get"
         | "provider/disconnect"
         | "events/subscribe" => Ok(json!({})),
         "session/new" => Ok(json!({
@@ -231,6 +242,20 @@ fn required_u64(args: &[String], flag: &str) -> Result<u64> {
     let value = required_value(args, flag)?;
     value
         .parse::<u64>()
+        .map_err(|source| ServiceError::InvalidFlagValue {
+            flag: flag.to_owned(),
+            value,
+            message: source.to_string(),
+        })
+}
+
+fn optional_u16(args: &[String], flag: &str) -> Result<Option<u16>> {
+    let Some(value) = optional_value(args, flag) else {
+        return Ok(None);
+    };
+    value
+        .parse::<u16>()
+        .map(Some)
         .map_err(|source| ServiceError::InvalidFlagValue {
             flag: flag.to_owned(),
             value,

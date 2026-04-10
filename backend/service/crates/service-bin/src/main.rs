@@ -18,16 +18,19 @@ mod error;
 mod proof;
 mod runtime;
 mod scenarios;
+mod serve;
 mod support;
 
 use crate::cli::parse_command;
 use crate::error::Result;
 use std::env;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let command = parse_command(&args)?;
     match command {
+        cli::Command::Serve { host, port } => serve::run(&host, port).await,
         cli::Command::Runtime { command } => runtime::run(command),
         cli::Command::ConsumerProof {
             provider,

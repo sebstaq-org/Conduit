@@ -89,3 +89,20 @@ pub(crate) fn path_param(
 ) -> Result<PathBuf> {
     Ok(PathBuf::from(string_param(command, params, parameter)?))
 }
+
+pub(crate) fn optional_u64_param(
+    command: &'static str,
+    params: &serde_json::Value,
+    parameter: &'static str,
+) -> Result<Option<u64>> {
+    let Some(value) = params.get(parameter) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    value
+        .as_u64()
+        .map(Some)
+        .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
+}

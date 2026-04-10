@@ -5,6 +5,8 @@ use acp_core::RawWireEvent;
 use acp_discovery as _;
 use agent_client_protocol_schema as _;
 use app_api as _;
+use axum as _;
+use futures_util as _;
 use regex as _;
 use serde as _;
 use service_runtime as _;
@@ -12,6 +14,8 @@ use std::error::Error;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 use thiserror as _;
+use tokio as _;
+use tower_http as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 

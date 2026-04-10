@@ -62,6 +62,21 @@ fn consumer_proof_requires_artifact_root() -> TestResult<()> {
     Ok(())
 }
 
+#[test]
+fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
+    let args = strings(&["serve"]);
+    let Command::Serve { host, port } = parse_command(&args)? else {
+        return Err("expected serve command".into());
+    };
+    if host != "127.0.0.1" {
+        return Err(format!("unexpected host {host}").into());
+    }
+    if port != 4174 {
+        return Err(format!("unexpected port {port}").into());
+    }
+    Ok(())
+}
+
 fn strings(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
 }

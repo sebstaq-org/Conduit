@@ -3,9 +3,10 @@
 use crate::command::{
     ConsumerCommand, ConsumerResponse, session_id_from_value, session_ids_from_list,
 };
-use crate::error::{RuntimeError, path_param, string_param};
+use crate::error::{RuntimeError, optional_u64_param, path_param, string_param};
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
+use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use std::collections::HashMap;
@@ -50,6 +51,18 @@ where
         self.event_buffer.drain()
     }
 
+    /// Returns runtime events after the supplied sequence cursor.
+    #[must_use]
+    pub fn events_after(&self, sequence: u64) -> Vec<RuntimeEvent> {
+        self.event_buffer.events_after(sequence)
+    }
+
+    /// Returns the latest emitted event sequence.
+    #[must_use]
+    pub fn latest_event_sequence(&self) -> u64 {
+        self.event_buffer.latest_sequence()
+    }
+
     /// Dispatches one command and converts errors into stable envelopes.
     pub fn dispatch(&mut self, command: ConsumerCommand) -> ConsumerResponse {
         let id = command.id.clone();
@@ -68,9 +81,9 @@ where
             "session/load" => self.session_load(command.id, provider, &command.params),
             "session/prompt" => self.session_prompt(command.id, provider, &command.params),
             "session/cancel" => self.session_cancel(command.id, provider, &command.params),
-            "provider/snapshot" => self.provider_snapshot(command.id, provider),
+            "snapshot/get" => self.provider_snapshot(command.id, provider),
             "provider/disconnect" => self.provider_disconnect(command.id, provider),
-            "events/subscribe" => self.events_subscribe(command.id, provider),
+            "events/subscribe" => self.events_subscribe(command.id, provider, &command.params),
             _ => Err(RuntimeError::UnsupportedCommand(command.command)),
         }
     }
@@ -254,10 +267,18 @@ where
         );
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
+        self.providers.remove(&provider);
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
-    fn events_subscribe(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
+    fn events_subscribe(
+        &mut self,
+        id: String,
+        provider: ProviderId,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let after_sequence =
+            optional_u64_param("events/subscribe", params, "after_sequence")?.unwrap_or(0);
         let (snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
             (provider_port.snapshot(), provider_port.raw_events())
@@ -265,13 +286,21 @@ where
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
         let result = json!({
-            "events": self.event_buffer.events(),
+            "events": self.event_buffer.events_after(after_sequence),
+            "next_sequence": self.event_buffer.latest_sequence(),
             "raw_wire_events": raw_events,
         });
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
+        if self
+            .providers
+            .get(&provider)
+            .is_some_and(|entry| entry.snapshot().connection_state == ConnectionState::Disconnected)
+        {
+            self.providers.remove(&provider);
+        }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;
             self.providers.insert(provider, service);

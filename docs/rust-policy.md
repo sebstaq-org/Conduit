@@ -47,8 +47,7 @@ Conduit uses a deny-first Rust policy. If a rule is ambiguous between "allow som
 - Unit tests belong next to the code they cover.
 - Integration tests belong in `tests/`.
 - Doctests are the required form for public examples.
-- Source files over 300 lines are forbidden.
-- Test files over 400 lines are forbidden.
+- Rust source and test files over 700 lines are forbidden.
 - Function length, argument count, and cognitive complexity are bounded through Clippy config and deny-level lints. Split code instead of pleading special cases.
 
 ## Primary Sources

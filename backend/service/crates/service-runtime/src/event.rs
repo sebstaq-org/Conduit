@@ -60,8 +60,16 @@ impl EventBuffer {
         }
     }
 
-    pub(crate) fn events(&self) -> &[RuntimeEvent] {
-        &self.events
+    pub(crate) fn events_after(&self, sequence: u64) -> Vec<RuntimeEvent> {
+        self.events
+            .iter()
+            .filter(|event| event.sequence > sequence)
+            .cloned()
+            .collect()
+    }
+
+    pub(crate) fn latest_sequence(&self) -> u64 {
+        self.next_sequence.saturating_sub(1)
     }
 
     pub(crate) fn drain(&mut self) -> Vec<RuntimeEvent> {

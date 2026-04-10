@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 
 /// Factory for connecting provider runtimes.
-pub trait ProviderFactory {
+pub trait ProviderFactory: Send {
     /// Connects and initializes one provider runtime.
     ///
     /// # Errors
@@ -17,7 +17,7 @@ pub trait ProviderFactory {
 }
 
 /// One initialized provider runtime managed by `service-runtime`.
-pub trait ProviderPort {
+pub trait ProviderPort: Send {
     /// Returns the current read-side provider snapshot.
     fn snapshot(&self) -> ProviderSnapshot;
 

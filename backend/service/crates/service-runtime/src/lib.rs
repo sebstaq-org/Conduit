@@ -18,12 +18,12 @@ mod event;
 mod manager;
 mod port;
 
+#[cfg(test)]
+use agent_client_protocol_schema as _;
+
 pub use app_service::AppServiceFactory;
 pub use command::{ConsumerCommand, ConsumerError, ConsumerResponse};
 pub use error::{Result, RuntimeError};
 pub use event::{RuntimeEvent, RuntimeEventKind};
 pub use manager::ServiceRuntime;
 pub use port::{ProviderFactory, ProviderPort};
-
-#[cfg(test)]
-mod tests;

@@ -1,8 +1,8 @@
 # Phase 1.5 Consumer API Proof: claude
 
-Consumer API sequence: `initialize -> session/new -> session/prompt -> session/list -> provider/disconnect -> initialize -> session/list -> session/load -> session/cancel -> provider/snapshot -> events/subscribe -> provider/disconnect`.
+Consumer API sequence: `initialize -> session/new -> session/prompt -> session/list -> provider/disconnect -> initialize -> session/list -> session/load -> session/cancel -> snapshot/get -> events/subscribe -> provider/disconnect`.
 
-Seeded ACP session id: `831b781d-cbf3-421c-bc5a-c81c1e8b2be0`.
+Seeded ACP session id: `7de15901-9be9-45c6-b89f-149353ec8a80`.
 
 Consumer responses captured: `12`.
 

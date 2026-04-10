@@ -20,7 +20,7 @@
     ],
     "initialize_viable": true,
     "transport_diagnostics": [
-      "copilot initialize responded in 866 ms",
+      "copilot initialize responded in 797 ms",
       "stderr lines captured: 0"
     ],
     "initialize_probe": {
@@ -106,7 +106,7 @@
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"loadSession\":true,\"promptCapabilities\":{\"image\":true,\"audio\":false,\"embeddedContext\":true},\"sessionCapabilities\":{\"list\":{}}},\"agentInfo\":{\"name\":\"Copilot\",\"title\":\"Copilot\",\"version\":\"1.0.21\"},\"authMethods\":[{\"id\":\"copilot-login\",\"name\":\"Log in with Copilot CLI\",\"description\":\"Run `copilot login` in the terminal\",\"_meta\":{\"terminal-auth\":{\"command\":\"/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot\",\"args\":[\"login\"],\"label\":\"Copilot Login\"}}}]}}"
       ],
       "stderr_lines": [],
-      "elapsed_ms": 866
+      "elapsed_ms": 797
     }
   },
   "capabilities": {
@@ -140,7 +140,7 @@
     {
       "identity": {
         "provider": "copilot",
-        "acp_session_id": "e1dabc71-f8f7-4bda-9daf-4dbc02ea8cc9"
+        "acp_session_id": "5e7bc382-6592-457b-bceb-a766890c6391"
       },
       "cwd": "/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1.5/_proof-workspaces/copilot/consumer-api/cwd",
       "title": "Reply with exactly CONDUIT_CONSUMER_API_READY.",
