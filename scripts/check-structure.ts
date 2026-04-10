@@ -57,11 +57,11 @@ const forbiddenTopLevelDirs = new Set([
 ]);
 const approvedApps = new Set(["desktop", "mobile"]);
 const approvedPackages = new Set([
-  "provider-catalog",
-  "session-client",
-  "session-contracts",
-  "session-model",
-  "ui",
+  "app-client",
+  "app-core",
+  "design-system-desktop",
+  "design-system-mobile",
+  "design-system-tokens",
 ]);
 const approvedCrates = new Set([
   "acp-contracts",
