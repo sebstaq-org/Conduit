@@ -48,7 +48,13 @@ fn clear_workspace_dist(root: &Path) -> Result<()> {
         }
 
         remove_tree(&entry.path().join("dist"))?;
+        remove_tree(&entry.path().join("out"))?;
+        remove_tree(&entry.path().join(".expo"))?;
+        remove_tree(&entry.path().join(".expo-shared"))?;
+        remove_tree(&entry.path().join("web-build"))?;
         remove_leaf(&entry.path().join("tsconfig.tsbuildinfo"))?;
+        remove_leaf(&entry.path().join("tsconfig.node.tsbuildinfo"))?;
+        remove_leaf(&entry.path().join("tsconfig.web.tsbuildinfo"))?;
     }
 
     Ok(())

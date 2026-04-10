@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "eslint.config.ts",
+    "electron.vite.config.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "vitest.config.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "ignoreDeprecations": "5.0",
+    "lib": ["ES2024"],
+    "skipLibCheck": true,
+    "types": ["electron-vite/node", "node"]
+  }
+}

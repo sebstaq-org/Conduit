@@ -1,6 +1,12 @@
 node_modules/
 dist/
+out/
 coverage/
 backend/service/target/
 *.tsbuildinfo
+.expo/
+.expo-shared/
+web-build/
+apps/mobile/android/
+apps/mobile/ios/
 .DS_Store

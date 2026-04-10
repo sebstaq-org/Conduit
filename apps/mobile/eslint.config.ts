@@ -1,37 +1,22 @@
 import eslint from "@eslint/js";
 import { defineConfig } from "eslint/config";
-import { fileURLToPath } from "node:url";
+import { URL, fileURLToPath } from "node:url";
 import tseslint from "typescript-eslint";
 
-const repoRoot = fileURLToPath(new URL(".", import.meta.url));
+const appRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(
   {
-    ignores: [
-      "artifacts/**/*",
-      "vendor/**/*",
-      "apps/**/*",
-      "**/dist/**/*",
-      "**/out/**/*",
-      "**/.expo/**/*",
-      "**/.expo-shared/**/*",
-      "**/node_modules/**/*",
-      "**/target/**/*",
-    ],
+    ignores: [".expo/**/*", ".expo-shared/**/*", "node_modules/**/*"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
-    files: [
-      "eslint.config.ts",
-      "vitest.config.ts",
-      "packages/**/*.ts",
-      "scripts/**/*.ts",
-    ],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
-        project: "./tsconfig.typecheck.json",
-        tsconfigRootDir: repoRoot,
+        project: "./tsconfig.json",
+        tsconfigRootDir: appRoot,
       },
     },
     rules: {

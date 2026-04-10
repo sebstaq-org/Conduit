@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-This document is the canonical frontend architecture note for the current foundation pass.
+This document is the canonical frontend architecture note for the current shell-init pass.
 
 ## Decision
 
@@ -31,9 +31,9 @@ Raw DOM and React Native implementation should remain platform-owned.
 - `packages/design-system-mobile`
   - future mobile primitives behind the same Conduit-owned component APIs
 - `apps/desktop`
-  - Electron shell and desktop integration only
+  - Electron shell and desktop integration only, including the minimum runtime wiring needed to launch
 - `apps/mobile`
-  - React Native shell and mobile integration only
+  - React Native shell and mobile integration only, including the minimum runtime wiring needed to launch
 
 ## Hard Rules
 

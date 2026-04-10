@@ -8,13 +8,30 @@
     "node": "24.14.0",
     "pnpm": "10.30.3"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
   "scripts": {
     "bootstrap": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
     "build": "tsc -b tsconfig.json",
     "clean": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- clean",
+    "desktop:build": "pnpm --filter @conduit/desktop run build",
+    "desktop:dev": "pnpm --filter @conduit/desktop run dev",
+    "desktop:lint": "pnpm --filter @conduit/desktop run lint",
+    "desktop:test": "pnpm --filter @conduit/desktop run test",
+    "desktop:typecheck": "pnpm --filter @conduit/desktop run typecheck",
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint eslint.config.ts vitest.config.ts scripts packages --max-warnings 0",
+    "mobile:android": "pnpm --filter @conduit/mobile run android",
+    "mobile:doctor": "pnpm --filter @conduit/mobile run doctor",
+    "mobile:ios": "pnpm --filter @conduit/mobile run ios",
+    "mobile:lint": "pnpm --filter @conduit/mobile run lint",
+    "mobile:start": "pnpm --filter @conduit/mobile run start",
+    "mobile:test": "pnpm --filter @conduit/mobile run test",
+    "mobile:typecheck": "pnpm --filter @conduit/mobile run typecheck",
     "typecheck": "tsc -p tsconfig.typecheck.json --pretty false",
     "test": "vitest run && cargo test --manifest-path backend/service/Cargo.toml --workspace",
     "toolchain:check": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- toolchain-check",
@@ -23,7 +40,7 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run mobile:typecheck && pnpm run mobile:lint && pnpm run mobile:test && pnpm run mobile:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

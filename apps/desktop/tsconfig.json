@@ -1,15 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
-  },
-  "include": ["src/**/*.ts"],
+  "files": [],
   "references": [
-    { "path": "../../packages/app-client" },
-    { "path": "../../packages/app-core" },
-    { "path": "../../packages/design-system-desktop" },
-    { "path": "../../packages/design-system-tokens" }
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.web.json" }
   ]
 }

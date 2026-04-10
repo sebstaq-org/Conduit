@@ -1,11 +1,11 @@
 # Conduit Agent Notes
 
-Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work out of this frontend foundation pass unless the task explicitly says otherwise.
+Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work out of this frontend shell-init pass unless the task explicitly says otherwise.
 
 ## Repo Rules
 
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
-- `apps/desktop` and `apps/mobile` are shells only.
+- `apps/desktop` and `apps/mobile` are runnable shells only.
 - Shared frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in `apps/*`.
 - Apps may depend on packages, but they must not import each other or reach into backend internals directly.
 - Do not create placeholder UI, starter components, starter themes, fake tokens, or speculative feature stubs.
@@ -19,7 +19,7 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 
 ## Current Intent
 
-This pass is about architecture, rules, workspace shape, and guard-rail surfaces. It is not a product UI pass.
+This pass is about runnable shell setup, rules, workspace shape, and guard-rail surfaces. It is not a product UI pass.
 
 Official ACP only remains product policy. In this pass that means boundary reservation and provenance only, not ACP host or provider-runtime implementation.
 

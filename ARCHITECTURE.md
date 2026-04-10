@@ -1,13 +1,13 @@
 # Architecture
 
-Conduit is structured around product boundaries instead of language buckets. The current pass locks the final frontend workspace shape and policy so desktop and mobile can be built on one shared semantic model without placeholder UI.
+Conduit is structured around product boundaries instead of language buckets. The current pass keeps the locked frontend workspace shape and policy, but upgrades `apps/desktop` and `apps/mobile` into real runnable shells without placeholder UI.
 
 ## Current Pass
 
 This pass includes:
 
 - final frontend package names
-- shell-only desktop and mobile apps
+- runnable desktop and mobile shells
 - frontend ownership canon
 - local and repo-wide agent rules
 - empty registry surfaces for future policy enforcement
@@ -29,8 +29,8 @@ This pass explicitly excludes:
 
 ## Frontend Layer
 
-- `apps/desktop` is the future Electron shell only.
-- `apps/mobile` is the future React Native shell only.
+- `apps/desktop` is the Electron shell only.
+- `apps/mobile` is the React Native shell only.
 - `packages/app-client` owns the future frontend transport and contract adaptation boundary.
 - `packages/app-core` owns future framework-neutral reducers, selectors, and view-model logic.
 - `packages/design-system-tokens` reserves the semantic design-token contract boundary.
