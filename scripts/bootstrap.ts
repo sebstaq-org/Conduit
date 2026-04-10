@@ -19,4 +19,4 @@ for (const [command, args] of commands) {
   execFileSync(command, [...args], { cwd: repoRoot, stdio: "inherit" });
 }
 
-console.log("Conduit Phase 0.5 bootstrap completed.");
+console.log("Conduit frontend foundation bootstrap completed.");

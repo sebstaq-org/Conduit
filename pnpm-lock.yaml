@@ -37,55 +37,51 @@ importers:
 
   apps/desktop:
     dependencies:
-      "@conduit/provider-catalog":
+      "@conduit/app-client":
         specifier: workspace:*
-        version: link:../../packages/provider-catalog
-      "@conduit/session-client":
+        version: link:../../packages/app-client
+      "@conduit/app-core":
         specifier: workspace:*
-        version: link:../../packages/session-client
-      "@conduit/ui":
+        version: link:../../packages/app-core
+      "@conduit/design-system-desktop":
         specifier: workspace:*
-        version: link:../../packages/ui
+        version: link:../../packages/design-system-desktop
+      "@conduit/design-system-tokens":
+        specifier: workspace:*
+        version: link:../../packages/design-system-tokens
 
   apps/mobile:
     dependencies:
-      "@conduit/provider-catalog":
+      "@conduit/app-client":
         specifier: workspace:*
-        version: link:../../packages/provider-catalog
-      "@conduit/session-client":
+        version: link:../../packages/app-client
+      "@conduit/app-core":
         specifier: workspace:*
-        version: link:../../packages/session-client
-      "@conduit/ui":
+        version: link:../../packages/app-core
+      "@conduit/design-system-mobile":
         specifier: workspace:*
-        version: link:../../packages/ui
+        version: link:../../packages/design-system-mobile
+      "@conduit/design-system-tokens":
+        specifier: workspace:*
+        version: link:../../packages/design-system-tokens
 
-  packages/provider-catalog:
+  packages/app-client: {}
+
+  packages/app-core: {}
+
+  packages/design-system-desktop:
     dependencies:
-      "@conduit/session-model":
+      "@conduit/design-system-tokens":
         specifier: workspace:*
-        version: link:../session-model
+        version: link:../design-system-tokens
 
-  packages/session-client:
+  packages/design-system-mobile:
     dependencies:
-      "@conduit/provider-catalog":
+      "@conduit/design-system-tokens":
         specifier: workspace:*
-        version: link:../provider-catalog
-      "@conduit/session-contracts":
-        specifier: workspace:*
-        version: link:../session-contracts
-      "@conduit/session-model":
-        specifier: workspace:*
-        version: link:../session-model
+        version: link:../design-system-tokens
 
-  packages/session-contracts:
-    dependencies:
-      "@conduit/session-model":
-        specifier: workspace:*
-        version: link:../session-model
-
-  packages/session-model: {}
-
-  packages/ui: {}
+  packages/design-system-tokens: {}
 
 packages:
   "@emnapi/core@1.9.2":
