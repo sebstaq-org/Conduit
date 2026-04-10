@@ -15,6 +15,7 @@ mod artifact;
 mod cli;
 mod error;
 mod proof;
+mod runtime;
 mod scenarios;
 mod support;
 
@@ -25,5 +26,8 @@ use std::env;
 fn main() -> Result<()> {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let command = parse_command(&args)?;
-    scenarios::run(command, &args)
+    match command {
+        cli::Command::Runtime { command } => runtime::run(command),
+        proof_command => scenarios::run(proof_command, &args),
+    }
 }

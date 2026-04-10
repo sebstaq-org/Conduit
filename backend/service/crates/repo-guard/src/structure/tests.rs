@@ -220,3 +220,48 @@ fn rejects_direct_stdout_imports() -> Result<()> {
         "expected direct stdout import failure",
     )
 }
+
+#[test]
+fn accepts_runtime_cli_stdout_boundary() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("backend/service/crates/service-bin/src/runtime.rs"),
+        concat!(
+            "//! Crate docs.\n\n",
+            "fn local_stub() {\n",
+            "    let _ = std::io::stdout();\n",
+            "}\n",
+        ),
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure(
+        failures.is_empty(),
+        "expected runtime CLI stdout boundary to pass",
+    )
+}
+
+#[test]
+fn rejects_runtime_cli_stderr_boundary() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("backend/service/crates/service-bin/src/runtime.rs"),
+        concat!(
+            "//! Crate docs.\n\n",
+            "fn local_stub() {\n",
+            "    let _ = std::io::stderr();\n",
+            "}\n",
+        ),
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_any(
+        &failures,
+        |failure| failure.contains("directly emits to forbidden stdout/stderr output"),
+        "expected runtime CLI stderr boundary failure",
+    )
+}

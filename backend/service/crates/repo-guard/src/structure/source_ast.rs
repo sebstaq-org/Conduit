@@ -8,6 +8,7 @@ use syn::{
 };
 
 const OUTPUT_FUNCTIONS: [&str; 2] = ["stderr", "stdout"];
+const OUTPUT_ALLOWED_FILES: [&str; 1] = ["backend/service/crates/service-bin/src/runtime.rs"];
 
 pub(super) fn check_ast(relative: &str, syntax: &File, failures: &mut Vec<String>) {
     check_file_suppressions(relative, syntax, failures);
@@ -237,6 +238,9 @@ impl<'a> OutputVisitor<'a> {
             .iter()
             .map(|segment| segment.ident.to_string())
             .collect::<Vec<_>>();
+        if self.allows_runtime_stdout(&segments) {
+            return false;
+        }
 
         match segments.as_slice() {
             [std, io, function] => std == "std" && io == "io" && is_output_name(function),
@@ -244,6 +248,11 @@ impl<'a> OutputVisitor<'a> {
             [alias] => self.scope.output_aliases.contains(alias),
             _ => false,
         }
+    }
+
+    fn allows_runtime_stdout(&self, segments: &[String]) -> bool {
+        OUTPUT_ALLOWED_FILES.contains(&self.relative)
+            && matches!(segments, [std, io, function] if std == "std" && io == "io" && function == "stdout")
     }
 }
 

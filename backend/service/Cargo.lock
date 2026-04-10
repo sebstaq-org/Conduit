@@ -1577,6 +1577,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "service-runtime",
  "thiserror 2.0.18",
 ]
 

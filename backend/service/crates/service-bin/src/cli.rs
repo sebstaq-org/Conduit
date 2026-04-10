@@ -2,11 +2,18 @@
 
 use crate::error::{Result, ServiceError};
 use acp_discovery::ProviderId;
+use serde_json::{Value, json};
+use service_runtime::ConsumerCommand;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 /// The supported silent proof commands.
 pub(crate) enum Command {
+    /// Runs one normal runtime consumer command and writes JSON to stdout.
+    Runtime {
+        /// The runtime command envelope.
+        command: ConsumerCommand,
+    },
     /// Writes Part 1 contract lock artifacts.
     Contracts {
         /// The artifact root to populate.
@@ -96,6 +103,9 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         return Err(unsupported("missing command"));
     };
     match command.as_str() {
+        "runtime" => Ok(Command::Runtime {
+            command: runtime_command(args)?,
+        }),
         "contracts" => Ok(Command::Contracts {
             artifact_root: required_path(args, "--artifact-root")?,
         }),
@@ -148,6 +158,46 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
     }
 }
 
+fn runtime_command(args: &[String]) -> Result<ConsumerCommand> {
+    let Some(command) = args.get(1) else {
+        return Err(missing("<runtime-command>"));
+    };
+    require_flag(args, "--json")?;
+    let provider = required_value(args, "--provider")?;
+    let params = runtime_params(command, args)?;
+    Ok(ConsumerCommand {
+        id: optional_value(args, "--id").unwrap_or_else(|| "runtime-1".to_owned()),
+        command: command.to_owned(),
+        provider,
+        params,
+    })
+}
+
+fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
+    match command {
+        "initialize"
+        | "session/list"
+        | "provider/snapshot"
+        | "provider/disconnect"
+        | "events/subscribe" => Ok(json!({})),
+        "session/new" => Ok(json!({
+            "cwd": required_value(args, "--cwd")?,
+        })),
+        "session/load" => Ok(json!({
+            "session_id": required_value(args, "--session-id")?,
+            "cwd": required_value(args, "--cwd")?,
+        })),
+        "session/prompt" => Ok(json!({
+            "session_id": required_value(args, "--session-id")?,
+            "prompt": required_value(args, "--prompt")?,
+        })),
+        "session/cancel" => Ok(json!({
+            "session_id": required_value(args, "--session-id")?,
+        })),
+        _ => Err(unsupported(command)),
+    }
+}
+
 fn required_provider(args: &[String], flag: &str) -> Result<ProviderId> {
     let value = required_value(args, flag)?;
     ProviderId::from_str(&value).map_err(|message| ServiceError::InvalidProvider {
@@ -181,6 +231,13 @@ fn optional_value(args: &[String], flag: &str) -> Option<String> {
         .map(|window| window[1].clone())
 }
 
+fn require_flag(args: &[String], flag: &str) -> Result<()> {
+    if args.iter().any(|arg| arg == flag) {
+        return Ok(());
+    }
+    Err(missing(flag))
+}
+
 fn missing(flag: &str) -> ServiceError {
     ServiceError::MissingFlag {
         flag: flag.to_owned(),
@@ -192,3 +249,6 @@ fn unsupported(command: &str) -> ServiceError {
         command: command.to_owned(),
     }
 }
+
+#[cfg(test)]
+mod tests;

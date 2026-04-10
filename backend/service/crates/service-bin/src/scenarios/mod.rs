@@ -5,7 +5,7 @@ mod discovery;
 mod sessions;
 
 use crate::cli::Command;
-use crate::error::Result;
+use crate::error::{Result, ServiceError};
 
 /// Runs one parsed proof command.
 ///
@@ -14,6 +14,9 @@ use crate::error::Result;
 /// Returns an error when the selected scenario fails.
 pub(crate) fn run(command: Command, args: &[String]) -> Result<()> {
     match command {
+        Command::Runtime { .. } => Err(ServiceError::InvalidCapture {
+            message: "runtime commands must be handled outside proof scenarios".to_owned(),
+        }),
         Command::Contracts { artifact_root } => contracts::run(&artifact_root, args),
         Command::Discovery {
             provider,
