@@ -17,7 +17,7 @@ backend/       Rust service workspace and future backend-owned assets
 vendor/        pinned external sources only
 artifacts/     generated evidence only
 docs/          repo policy and contributor guidance
-scripts/       repo automation and guard rails
+scripts/       reserved top-level helper root; repo guard rails live in backend/service/crates/repo-guard
 ```
 
 ## Rules That Matter

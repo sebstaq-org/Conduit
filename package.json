@@ -9,16 +9,16 @@
     "pnpm": "10.30.3"
   },
   "scripts": {
-    "bootstrap": "tsx scripts/bootstrap.ts",
+    "bootstrap": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
     "build": "tsc -b tsconfig.json",
-    "clean": "tsx scripts/clean.ts",
+    "clean": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- clean",
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -p tsconfig.typecheck.json --pretty false",
     "test": "vitest run && cargo test --manifest-path backend/service/Cargo.toml --workspace",
-    "toolchain:check": "tsx scripts/check-toolchain.ts",
-    "structure:check": "tsx scripts/check-structure.ts",
+    "toolchain:check": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- toolchain-check",
+    "structure:check": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- structure-check",
     "rust:build": "cargo build --manifest-path backend/service/Cargo.toml --workspace",
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
@@ -31,7 +31,6 @@
     "eslint": "9.39.1",
     "jiti": "2.6.1",
     "prettier": "3.8.2",
-    "tsx": "4.21.0",
     "typescript": "6.0.2",
     "typescript-eslint": "8.58.1",
     "vitest": "4.1.4"

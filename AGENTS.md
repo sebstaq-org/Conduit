@@ -6,4 +6,6 @@ Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`. 
 
 Official ACP only is policy. In Phase 0.5 that means boundary reservation, provenance pinning, and guard rails, not ACP host or provider-runtime implementation.
 
-Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, and crate-edge violations fail structure checks.
+Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
+
+Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, broad lint suppressions are forbidden, and crate-edge violations fail structure checks. The repo guardrail crate under `backend/service/crates/repo-guard` is fully bound by the same Rust rules and gets no policy carve-outs.

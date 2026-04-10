@@ -4,7 +4,7 @@ Conduit is repo-structured around product boundaries instead of language buckets
 
 ## Phase Boundary
 
-Phase 0.5 includes repository shape, pinned toolchains, check chains, bootstrap scripts, and compile-safe stubs. It explicitly excludes ACP host behavior, provider runtime launches, session persistence logic, product UI, and any fallback runtime path.
+Phase 0.5 includes repository shape, pinned toolchains, check chains, repo bootstrap automation, and compile-safe stubs. It explicitly excludes ACP host behavior, provider runtime launches, session persistence logic, product UI, and any fallback runtime path.
 
 ## TypeScript Layer
 
@@ -22,9 +22,10 @@ Phase 0.5 includes repository shape, pinned toolchains, check chains, bootstrap 
 - `backend/service/crates/acp-discovery` reserves launcher and readiness provenance.
 - `backend/service/crates/app-api` reserves the app-facing service surface.
 - `backend/service/crates/provider-*` reserve provider-specific adapter homes.
+- `backend/service/crates/repo-guard` owns repo guard rails as a normal workspace crate under the same Rust policy as every other crate.
 - `backend/service/crates/session-store` reserves read-side and persistence boundaries.
-- `backend/service/crates/service-bin` is the workspace binary entrypoint.
-- Rust guard rails treat `service-bin` as the only composition root, keep `acp-contracts` vendor-facing only, and block provider crates from depending upward into `app-api`, `session-store`, or sibling providers.
+- `backend/service/crates/service-bin` is the runtime workspace composition root.
+- Rust guard rails treat `service-bin` as the only runtime composition root, keep `acp-contracts` vendor-facing only, keep `repo-guard` isolated from runtime crates, and block provider crates from depending upward into `app-api`, `session-store`, or sibling providers.
 
 ## Deferred Slots
 

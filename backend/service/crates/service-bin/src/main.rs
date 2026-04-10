@@ -1,7 +1,13 @@
+//! Binary composition root for the Conduit service workspace.
+
 #![forbid(unsafe_code)]
 #![deny(
+    missing_docs,
     rustdoc::bare_urls,
     rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_codeblock_attributes,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::missing_crate_level_docs,
     rustdoc::private_intra_doc_links
 )]
 
@@ -11,49 +17,13 @@ use provider_claude::descriptor as claude_descriptor;
 use provider_codex::descriptor as codex_descriptor;
 use provider_copilot::descriptor as copilot_descriptor;
 use session_store::bootstrap_store_boundary;
-use std::io::{self, Write};
 
-fn main() -> io::Result<()> {
-    let surface = bootstrap_surface();
-    let provider_summary = [
-        format!(
-            "{}={}",
-            claude_descriptor().provider,
-            claude_descriptor().launcher
-        ),
-        format!(
-            "{}={}",
-            codex_descriptor().provider,
-            codex_descriptor().launcher
-        ),
-        format!(
-            "{}={}",
-            copilot_descriptor().provider,
-            copilot_descriptor().launcher
-        ),
-    ]
-    .join(", ");
-    let store_boundary = bootstrap_store_boundary();
-    let mut stdout = io::stdout().lock();
-
-    writeln!(stdout, "Conduit Phase {} bootstrap ready.", surface.phase)?;
-    writeln!(stdout, "Policy: {}", surface.policy)?;
-    writeln!(
-        stdout,
-        "Locked methods: {}",
-        surface.locked_methods.join(", ")
-    )?;
-    writeln!(
-        stdout,
-        "Discovery catalog entries: {}",
-        PROVIDER_LAUNCHERS.len()
-    )?;
-    writeln!(stdout, "Provider launchers: {provider_summary}")?;
-    writeln!(
-        stdout,
-        "Store boundary: {} / {}",
-        store_boundary.live_truth, store_boundary.allowed_scope
-    )?;
-
-    Ok(())
+/// Resolves the bootstrap composition graph for the service workspace.
+fn main() {
+    let _surface = bootstrap_surface();
+    let _claude = claude_descriptor();
+    let _codex = codex_descriptor();
+    let _copilot = copilot_descriptor();
+    let _launcher_count = PROVIDER_LAUNCHERS.len();
+    let _store_boundary = bootstrap_store_boundary();
 }

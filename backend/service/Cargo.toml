@@ -7,6 +7,7 @@ members = [
   "crates/provider-claude",
   "crates/provider-codex",
   "crates/provider-copilot",
+  "crates/repo-guard",
   "crates/service-bin",
   "crates/session-store"
 ]
@@ -21,8 +22,16 @@ version = "0.5.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+deprecated_safe_2024 = "deny"
+missing_unsafe_on_extern = "deny"
+unsafe_attr_outside_unsafe = "deny"
+static_mut_refs = "deny"
 unused_crate_dependencies = "deny"
 unreachable_pub = "deny"
+missing_docs = "deny"
+unfulfilled_lint_expectations = "deny"
+unexpected_cfgs = { level = "deny", check-cfg = ['cfg()'] }
 
 [workspace.lints.clippy]
 all = "deny"
@@ -44,3 +53,9 @@ wildcard_imports = "deny"
 enum_glob_use = "deny"
 module_name_repetitions = "deny"
 map_err_ignore = "deny"
+missing_errors_doc = "deny"
+missing_panics_doc = "deny"
+missing_safety_doc = "deny"
+panic_in_result_fn = "deny"
+allow_attributes_without_reason = "deny"
+undocumented_unsafe_blocks = "deny"
