@@ -1,0 +1,2 @@
+{"scenario":"initialize-timeout","stream":"stdin","line":"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}"}
+{"scenario":"initialize-timeout","stream":"expected","line":"no initialize response before timeout"}

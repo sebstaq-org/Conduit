@@ -4,3 +4,4 @@ coverage/
 backend/service/target/
 *.tsbuildinfo
 .DS_Store
+artifacts/manual/phase-1/_proof-workspaces/

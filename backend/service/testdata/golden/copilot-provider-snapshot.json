@@ -1,0 +1,130 @@
+{
+  "provider": "copilot",
+  "connection_state": "ready",
+  "discovery": {
+    "provider": "copilot",
+    "launcher": {
+      "executable": "/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot",
+      "args": ["--acp", "--allow-all", "--no-color", "--no-auto-update"],
+      "display": "copilot --acp --allow-all --no-color --no-auto-update"
+    },
+    "resolved_path": "/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot",
+    "version": "1.0.21",
+    "auth_hints": [
+      "Log in with Copilot CLI: Run `copilot login` in the terminal"
+    ],
+    "initialize_viable": true,
+    "transport_diagnostics": [
+      "copilot initialize responded in 1230 ms",
+      "stderr lines captured: 0"
+    ],
+    "initialize_probe": {
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "loadSession": true,
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "Copilot",
+            "title": "Copilot",
+            "version": "1.0.21"
+          },
+          "authMethods": [
+            {
+              "_meta": {
+                "terminal-auth": {
+                  "args": ["login"],
+                  "command": "/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot",
+                  "label": "Copilot Login"
+                }
+              },
+              "description": "Run `copilot login` in the terminal",
+              "id": "copilot-login",
+              "name": "Log in with Copilot CLI"
+            }
+          ],
+          "protocolVersion": 1
+        }
+      },
+      "payload": {
+        "protocolVersion": 1,
+        "agentCapabilities": {
+          "loadSession": true,
+          "promptCapabilities": {
+            "image": true,
+            "audio": false,
+            "embeddedContext": true
+          },
+          "mcpCapabilities": {
+            "http": false,
+            "sse": false
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "authMethods": [
+          {
+            "id": "copilot-login",
+            "name": "Log in with Copilot CLI",
+            "description": "Run `copilot login` in the terminal",
+            "_meta": {
+              "terminal-auth": {
+                "args": ["login"],
+                "command": "/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot",
+                "label": "Copilot Login"
+              }
+            }
+          }
+        ],
+        "agentInfo": {
+          "name": "Copilot",
+          "title": "Copilot",
+          "version": "1.0.21"
+        }
+      },
+      "stdout_lines": [
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"loadSession\":true,\"promptCapabilities\":{\"image\":true,\"audio\":false,\"embeddedContext\":true},\"sessionCapabilities\":{\"list\":{}}},\"agentInfo\":{\"name\":\"Copilot\",\"title\":\"Copilot\",\"version\":\"1.0.21\"},\"authMethods\":[{\"id\":\"copilot-login\",\"name\":\"Log in with Copilot CLI\",\"description\":\"Run `copilot login` in the terminal\",\"_meta\":{\"terminal-auth\":{\"command\":\"/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot\",\"args\":[\"login\"],\"label\":\"Copilot Login\"}}}]}}"
+      ],
+      "stderr_lines": [],
+      "elapsed_ms": 1230
+    }
+  },
+  "capabilities": {
+    "loadSession": true,
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "list": {}
+    }
+  },
+  "auth_methods": [
+    {
+      "_meta": {
+        "terminal-auth": {
+          "args": ["login"],
+          "command": "/home/linuxbrew/.linuxbrew/Caskroom/copilot-cli/0.0.418/copilot",
+          "label": "Copilot Login"
+        }
+      },
+      "description": "Run `copilot login` in the terminal",
+      "id": "copilot-login",
+      "name": "Log in with Copilot CLI"
+    }
+  ],
+  "live_sessions": [],
+  "last_prompt": null
+}

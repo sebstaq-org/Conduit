@@ -44,9 +44,9 @@ const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
 const APPROVED_VENDOR_ROOTS: [&str; 1] = ["agent-client-protocol"];
 const APPROVED_TESTDATA_ROOTS: [&str; 3] = ["failures", "golden", "providers"];
 const IGNORED_TOP_LEVEL: [&str; 1] = ["node_modules"];
-const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 18] = [
-    "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".log", ".md", ".ndjson",
-    ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
+const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 19] = [
+    "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".jsonl", ".log", ".md",
+    ".ndjson", ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
 ];
 const ALLOWED_VENDOR_EXTENSIONS: [&str; 9] = [
     "", ".gitkeep", ".json", ".lock", ".md", ".toml", ".txt", ".yaml", ".yml",

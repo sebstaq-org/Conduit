@@ -1,0 +1,9 @@
+{
+  "identity": {
+    "provider": "copilot",
+    "acp_session_id": "01e6f39f-1e5d-4500-abc3-88ae5cbb488f"
+  },
+  "state": "completed",
+  "stop_reason": "end_turn",
+  "raw_update_count": 4
+}

@@ -1,0 +1,2 @@
+{"scenario":"prompt-timeout","stream":"stdin","line":"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/prompt\"}"}
+{"scenario":"prompt-timeout","stream":"expected","line":"no prompt response before timeout"}

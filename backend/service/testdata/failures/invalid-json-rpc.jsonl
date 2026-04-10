@@ -1,0 +1,2 @@
+{"scenario":"invalid-json-rpc","stream":"stdout","line":"not-json"}
+{"scenario":"invalid-json-rpc","stream":"expected","line":"JSON parse failure before ACP response validation"}

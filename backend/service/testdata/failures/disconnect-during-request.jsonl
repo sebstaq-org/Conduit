@@ -1,0 +1,2 @@
+{"scenario":"disconnect-during-request","stream":"stdout","line":"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"1\"}}"}
+{"scenario":"disconnect-during-request","stream":"transport","line":"provider process exited before response"}
