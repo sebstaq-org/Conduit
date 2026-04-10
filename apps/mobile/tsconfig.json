@@ -7,9 +7,10 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    { "path": "../../packages/app-client" },
-    { "path": "../../packages/app-core" },
     { "path": "../../packages/design-system-mobile" },
-    { "path": "../../packages/design-system-tokens" }
+    { "path": "../../packages/design-system-tokens" },
+    { "path": "../../packages/session-client" },
+    { "path": "../../packages/session-contracts" },
+    { "path": "../../packages/session-model" }
   ]
 }

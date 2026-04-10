@@ -1,20 +1,29 @@
 import type {
-  DesktopAction,
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/app-core";
+} from "@conduit/session-model";
 
 export type {
-  DesktopAction,
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/app-core";
+} from "@conduit/session-model";
+
+export const DESKTOP_PROOF_ACTIONS = [
+  "connect",
+  "new",
+  "list",
+  "load",
+  "prompt",
+  "cancel",
+] as const;
+
+export type DesktopProofAction = (typeof DESKTOP_PROOF_ACTIONS)[number];
 
 export interface DesktopProofRequest {
   provider: ProviderId;
-  action: DesktopAction;
+  action: DesktopProofAction;
   cwd: string;
   prompt?: string;
   cancelAfterMs?: number;
@@ -22,7 +31,7 @@ export interface DesktopProofRequest {
 
 export interface DesktopProofConfig {
   providers: ProviderId[];
-  actions: DesktopAction[];
+  actions: DesktopProofAction[];
   defaultCwd: string;
   copy: {
     title: string;
@@ -33,7 +42,7 @@ export interface DesktopProofConfig {
 
 export interface DesktopProofResult {
   provider: ProviderId;
-  action: DesktopAction;
+  action: DesktopProofAction;
   artifactRoot: string;
   desktopProofPng: string;
   snapshot: ProviderSnapshot;

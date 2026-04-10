@@ -14,8 +14,10 @@
   },
   "dependencies": {
     "@conduit/app-client": "workspace:*",
-    "@conduit/app-core": "workspace:*",
     "@conduit/design-system-desktop": "workspace:*",
-    "@conduit/design-system-tokens": "workspace:*"
+    "@conduit/design-system-tokens": "workspace:*",
+    "@conduit/session-client": "workspace:*",
+    "@conduit/session-contracts": "workspace:*",
+    "@conduit/session-model": "workspace:*"
   }
 }

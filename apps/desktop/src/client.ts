@@ -1,5 +1,5 @@
 import type {
-  DesktopAction,
+  DesktopProofAction,
   DesktopProofConfig,
   DesktopProofRequest,
   DesktopProofResult,
@@ -60,12 +60,12 @@ function bindButtons() {
   );
   for (const button of buttons) {
     button.addEventListener("click", () => {
-      void runAction(button.dataset.action as DesktopAction);
+      void runAction(button.dataset.action as DesktopProofAction);
     });
   }
 }
 
-async function runAction(action: DesktopAction) {
+async function runAction(action: DesktopProofAction) {
   setStatus(`Running ${action}…`);
   try {
     const request: DesktopProofRequest = {
@@ -103,7 +103,7 @@ async function readConfig(): Promise<DesktopProofConfig> {
   return (await response.json()) as DesktopProofConfig;
 }
 
-function label(action: DesktopAction): string {
+function label(action: DesktopProofAction): string {
   return `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
 }
 

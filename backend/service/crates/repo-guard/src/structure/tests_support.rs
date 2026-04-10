@@ -94,6 +94,9 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "packages/design-system-desktop/src",
         "packages/design-system-mobile/src",
         "packages/design-system-tokens/src",
+        "packages/session-client/src",
+        "packages/session-contracts/src",
+        "packages/session-model/src",
         "scripts",
         "vendor/agent-client-protocol",
     ] {
@@ -159,7 +162,7 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 7] {
+fn workspace_packages() -> [(&'static str, &'static str); 10] {
     [
         ("@conduit/desktop", "apps/desktop"),
         ("@conduit/mobile", "apps/mobile"),
@@ -177,6 +180,9 @@ fn workspace_packages() -> [(&'static str, &'static str); 7] {
             "@conduit/design-system-tokens",
             "packages/design-system-tokens",
         ),
+        ("@conduit/session-client", "packages/session-client"),
+        ("@conduit/session-contracts", "packages/session-contracts"),
+        ("@conduit/session-model", "packages/session-model"),
     ]
 }
 

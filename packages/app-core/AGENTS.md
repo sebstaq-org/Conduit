@@ -1,7 +1,7 @@
 # App Core Guidance
 
-This package is the future framework-neutral feature logic boundary.
+This package is a compatibility re-export boundary for framework-neutral data.
 
 - Keep it free of React, React Native, Electron, DOM APIs, and process APIs.
-- Future code here should be plain TypeScript data and logic only.
+- New session/provider contracts belong in `@conduit/session-contracts` and `@conduit/session-model`.
 - Do not add tokens, primitives, transport code, or placeholder feature state yet.

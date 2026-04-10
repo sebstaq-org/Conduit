@@ -1,5 +1,5 @@
 {
-  "name": "@conduit/app-client",
+  "name": "@conduit/session-client",
   "private": true,
   "version": "0.5.0",
   "type": "module",
@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@conduit/session-contracts": "workspace:*",
     "@conduit/session-model": "workspace:*"
   }
 }

@@ -5,6 +5,12 @@ import {
 
 export type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
 
-export function createMobileProofSurfaceCopy(): ProofSurfaceCopy {
+export type SessionSurfaceCopy = ProofSurfaceCopy;
+
+export function createMobileSessionSurfaceCopy(): SessionSurfaceCopy {
   return createProofSurfaceCopy("mobile");
+}
+
+export function createMobileProofSurfaceCopy(): ProofSurfaceCopy {
+  return createMobileSessionSurfaceCopy();
 }

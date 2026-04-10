@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type {
-  DesktopAction,
+  DesktopProofAction,
   DesktopProofConfig,
   DesktopProofRequest,
   DesktopProofResult,
@@ -19,7 +19,7 @@ import type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/app-core";
+} from "@conduit/session-model";
 
 import { createDesktopProofConfig } from "./proof-config.js";
 
@@ -192,7 +192,10 @@ function scenarioArgs(
   }
 }
 
-function artifactRootFor(provider: ProviderId, action: DesktopAction): string {
+function artifactRootFor(
+  provider: ProviderId,
+  action: DesktopProofAction,
+): string {
   const suffix = {
     connect: "initialize",
     new: "session-new",

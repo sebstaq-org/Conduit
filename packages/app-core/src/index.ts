@@ -1,116 +1,27 @@
-export const PROVIDERS = ["claude", "copilot", "codex"] as const;
-
-export type ProviderId = (typeof PROVIDERS)[number];
-
-export type ConnectionState = "disconnected" | "ready";
-
-export interface ProviderDescriptor {
-  id: ProviderId;
-  launcher: string;
-  authSource: "local-login-state";
-  phaseStatus: "phase-1";
-}
-
-export const PROVIDER_CATALOG = {
-  claude: {
-    id: "claude",
-    launcher: "claude-agent-acp",
-    authSource: "local-login-state",
-    phaseStatus: "phase-1",
-  },
-  copilot: {
-    id: "copilot",
-    launcher: "copilot --acp --allow-all --no-color --no-auto-update",
-    authSource: "local-login-state",
-    phaseStatus: "phase-1",
-  },
-  codex: {
-    id: "codex",
-    launcher: "codex-acp",
-    authSource: "local-login-state",
-    phaseStatus: "phase-1",
-  },
-} as const satisfies Record<ProviderId, ProviderDescriptor>;
-
-export const LOCKED_METHODS = [
-  "initialize",
-  "session/new",
-  "session/list",
-  "session/load",
-  "session/prompt",
-  "session/cancel",
-] as const;
-
-export type LockedMethod = (typeof LOCKED_METHODS)[number];
-
-export const DESKTOP_ACTIONS = [
-  "connect",
-  "new",
-  "list",
-  "load",
-  "prompt",
-  "cancel",
-] as const;
-
-export type DesktopAction = (typeof DESKTOP_ACTIONS)[number];
-
-export interface LiveSessionIdentity {
-  provider: ProviderId;
-  acpSessionId: string;
-}
-
-export interface LiveSessionSnapshot {
-  identity: LiveSessionIdentity;
-  cwd: string;
-  title: string | null;
-  observedVia: string;
-}
-
-export type PromptLifecycleState =
-  | "idle"
-  | "running"
-  | "completed"
-  | "cancelled";
-
-export interface PromptLifecycleSnapshot {
-  identity: LiveSessionIdentity;
-  state: PromptLifecycleState;
-  stopReason: string | null;
-  rawUpdateCount: number;
-}
-
-export interface ProviderSnapshot {
-  provider: ProviderId;
-  connectionState: ConnectionState;
-  discovery: unknown;
-  capabilities: unknown;
-  authMethods: unknown[];
-  liveSessions: LiveSessionSnapshot[];
-  lastPrompt: PromptLifecycleSnapshot | null;
-}
-
-export interface RawWireEvent {
-  sequence: number;
-  stream: "outgoing" | "incoming" | "stderr";
-  kind: "request" | "response" | "notification" | "diagnostic";
-  payload: string;
-  method: string | null;
-  requestId: string | null;
-  json: unknown;
-}
-
-export function createLiveSessionIdentity(
-  provider: ProviderId,
-  acpSessionId: string,
-): LiveSessionIdentity {
-  return {
-    provider,
-    acpSessionId,
-  };
-}
-
-export function getProviderDescriptor(
-  provider: ProviderId,
-): ProviderDescriptor {
-  return PROVIDER_CATALOG[provider];
-}
+export {
+  CONDUIT_COMMANDS,
+  CONSUMER_COMMANDS,
+  SESSION_COMMANDS,
+  type ConduitCommandName,
+  type ConsumerCommand,
+  type ConsumerCommandName,
+  type ConsumerError,
+  type ConsumerResponse,
+  type SessionCommandName,
+  createConsumerCommand,
+} from "@conduit/session-contracts";
+export {
+  PROVIDERS,
+  PROVIDER_CATALOG,
+  type ConnectionState,
+  type LiveSessionIdentity,
+  type LiveSessionSnapshot,
+  type PromptLifecycleSnapshot,
+  type PromptLifecycleState,
+  type ProviderDescriptor,
+  type ProviderId,
+  type ProviderSnapshot,
+  type RawWireEvent,
+  createLiveSessionIdentity,
+  getProviderDescriptor,
+} from "@conduit/session-model";

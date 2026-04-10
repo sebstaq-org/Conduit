@@ -18,7 +18,10 @@
       ],
       "@conduit/design-system-tokens": [
         "packages/design-system-tokens/src/index.ts"
-      ]
+      ],
+      "@conduit/session-client": ["packages/session-client/src/index.ts"],
+      "@conduit/session-contracts": ["packages/session-contracts/src/index.ts"],
+      "@conduit/session-model": ["packages/session-model/src/index.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

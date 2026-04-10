@@ -1,10 +1,17 @@
-import { PROVIDER_CATALOG } from "@conduit/app-core";
-import { createDesktopProofSurfaceCopy } from "@conduit/design-system-desktop";
+import { createDesktopSessionSurfaceCopy } from "@conduit/design-system-desktop";
+import {
+  CONSUMER_COMMANDS,
+  PROVIDERS,
+  createSessionClient,
+} from "@conduit/session-client";
 
-export function createDesktopProofPlan() {
+export function createDesktopBootstrapPlan() {
+  const sessionClient = createSessionClient();
   return {
     appId: "desktop",
-    copy: createDesktopProofSurfaceCopy(),
-    supportedProviders: Object.keys(PROVIDER_CATALOG),
+    copy: createDesktopSessionSurfaceCopy(),
+    lockedPolicy: sessionClient.policy,
+    supportedCommands: [...CONSUMER_COMMANDS],
+    supportedProviders: [...PROVIDERS],
   };
 }
