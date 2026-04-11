@@ -1,10 +1,11 @@
 import { Fragment } from "react";
+import { skipToken } from "@reduxjs/toolkit/query";
 import { useGetSessionGroupsQuery } from "@/app-state";
 import { List, Row } from "@/ui";
 
 const sessionRowDepth = 1;
 
-const emptySessionGroupsQuery = {};
+const visibleCwds: string[] = [];
 
 const pinnedSession = {
   id: "pinned-session",
@@ -33,9 +34,14 @@ function sessionTitle(title: string | null): string {
 }
 
 function SessionListRows(): React.JSX.Element {
-  const { data, isError, isLoading } = useGetSessionGroupsQuery(
-    emptySessionGroupsQuery,
-  );
+  const shouldSkipSessionGroups = visibleCwds.length === 0;
+  let sessionGroupsQuery: Parameters<typeof useGetSessionGroupsQuery>[0] =
+    skipToken;
+  if (!shouldSkipSessionGroups) {
+    sessionGroupsQuery = { cwdFilters: visibleCwds };
+  }
+  const { data, isError, isLoading } =
+    useGetSessionGroupsQuery(sessionGroupsQuery);
 
   return (
     <List>
@@ -48,9 +54,11 @@ function SessionListRows(): React.JSX.Element {
       />
       {isLoading && <Row label="Loading sessions" muted />}
       {isError && <Row label="Sessions unavailable" muted />}
-      {!isLoading && !isError && data?.groups.length === 0 && (
-        <Row label="No sessions" muted />
-      )}
+      {!isLoading &&
+        !isError &&
+        (shouldSkipSessionGroups || data?.groups.length === 0) && (
+          <Row label="No sessions" muted />
+        )}
       {!isLoading &&
         !isError &&
         data?.groups.map((group) => (
