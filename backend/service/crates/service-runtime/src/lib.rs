@@ -18,6 +18,7 @@ mod event;
 mod manager;
 mod port;
 mod session_groups;
+mod session_history;
 
 #[cfg(test)]
 use agent_client_protocol_schema as _;

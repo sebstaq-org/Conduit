@@ -1,6 +1,9 @@
 //! Test support for `service-runtime` integration tests.
 
-use acp_core::{ConnectionState, ProviderSnapshot, RawWireEvent, WireKind, WireStream};
+use acp_core::{
+    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
+    TranscriptUpdateSnapshot, WireKind, WireStream,
+};
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
 use serde_json::{Value, json};
@@ -22,7 +25,9 @@ pub(crate) struct FakeState {
     pub(crate) session_lists: HashMap<ProviderId, Value>,
     pub(crate) session_list_pages: HashMap<SessionListKey, Value>,
     pub(crate) session_list_errors: HashMap<ProviderId, String>,
+    pub(crate) session_load_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
+    loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
     disconnected: bool,
     sessions: usize,
 }
@@ -69,7 +74,18 @@ impl ProviderPort for FakeProvider {
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
             last_prompt: None,
-            loaded_transcripts: Vec::new(),
+            loaded_transcripts: self
+                .state
+                .lock()
+                .map(|state| {
+                    state
+                        .loaded_transcripts
+                        .values()
+                        .filter(|transcript| transcript.identity.provider == self.provider)
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 
@@ -124,6 +140,26 @@ impl ProviderPort for FakeProvider {
     }
 
     fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        let updates = state
+            .session_load_updates
+            .get(&(self.provider, session_id.clone()))
+            .cloned()
+            .unwrap_or_default();
+        state.loaded_transcripts.insert(
+            (self.provider, session_id.clone()),
+            LoadedTranscriptSnapshot {
+                identity: LiveSessionIdentity {
+                    provider: self.provider,
+                    acp_session_id: session_id.clone(),
+                },
+                raw_update_count: updates.len(),
+                updates,
+            },
+        );
         Ok(json!({ "sessionId": session_id }))
     }
 

@@ -117,3 +117,20 @@ pub(crate) fn optional_u64_param(
         .map(Some)
         .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
 }
+
+pub(crate) fn optional_string_param(
+    command: &'static str,
+    params: &serde_json::Value,
+    parameter: &'static str,
+) -> Result<Option<String>> {
+    let Some(value) = params.get(parameter) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    value
+        .as_str()
+        .map(|value| Some(value.to_owned()))
+        .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
+}

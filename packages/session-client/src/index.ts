@@ -2,13 +2,18 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
+import { readSessionHistoryResponse } from "./historyWindow.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
   ServerFrame,
+  SessionHistoryRequest,
+  SessionHistoryWindow,
+  SessionOpenRequest,
 } from "@conduit/session-contracts";
 import { SessionGroupsViewSchema } from "@conduit/session-model";
 import type {
+  ProviderId,
   SessionGroupsQuery,
   SessionGroupsView,
 } from "@conduit/session-model";
@@ -16,6 +21,14 @@ import type {
 interface SessionClientPort {
   readonly policy: "official-acp-only";
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
+  openSession(
+    provider: ProviderId,
+    request: SessionOpenRequest,
+  ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
+  readSessionHistory(
+    provider: ProviderId,
+    request: SessionHistoryRequest,
+  ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
 }
 
 interface SessionClientOptions {
@@ -61,20 +74,6 @@ class WebSocketSessionClient implements SessionClientPort {
     this.options = options;
   }
 
-  private async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
-    const socket = await this.openSocket();
-    const response = this.trackResponse(command.id);
-    socket.send(
-      JSON.stringify({
-        v: CONDUIT_TRANSPORT_VERSION,
-        type: "command",
-        id: command.id,
-        command,
-      }),
-    );
-    return response;
-  }
-
   public async getSessionGroups(
     query: SessionGroupsQuery = {},
   ): Promise<SessionGroupsView> {
@@ -87,6 +86,40 @@ class WebSocketSessionClient implements SessionClientPort {
       );
     }
     return SessionGroupsViewSchema.parse(response.result);
+  }
+
+  public async openSession(
+    provider: ProviderId,
+    request: SessionOpenRequest,
+  ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/open", provider, request),
+    );
+    return readSessionHistoryResponse(response);
+  }
+
+  public async readSessionHistory(
+    provider: ProviderId,
+    request: SessionHistoryRequest,
+  ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/history", provider, request),
+    );
+    return readSessionHistoryResponse(response);
+  }
+
+  private async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
+    const socket = await this.openSocket();
+    const response = this.trackResponse(command.id);
+    socket.send(
+      JSON.stringify({
+        v: CONDUIT_TRANSPORT_VERSION,
+        type: "command",
+        id: command.id,
+        command,
+      }),
+    );
+    return response;
   }
 
   private async openSocket(): Promise<WebSocket> {
@@ -178,8 +211,17 @@ function createSessionClient(
 export { createSessionClient };
 
 export type {
+  SessionHistoryRequest,
+  SessionHistoryWindow,
+  SessionOpenRequest,
+} from "@conduit/session-contracts";
+export type {
   ProviderId,
   SessionGroupsQuery,
   SessionGroupsView,
+  TranscriptEventItem,
+  TranscriptItem,
+  TranscriptMessageItem,
+  TranscriptMessageRole,
 } from "@conduit/session-model";
 export type { SessionClientOptions, SessionClientPort };

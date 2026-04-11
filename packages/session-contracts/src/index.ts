@@ -1,8 +1,11 @@
 import type {
   ProviderId,
   ProviderSnapshot,
+  SessionHistoryRequest,
+  SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
+  SessionOpenRequest,
 } from "@conduit/session-model";
 
 let nextCommandSequence = 0;
@@ -23,6 +26,8 @@ const CONDUIT_COMMANDS = [
   "provider/disconnect",
   "events/subscribe",
   "sessions/grouped",
+  "session/open",
+  "session/history",
 ] as const;
 
 const CONSUMER_COMMANDS = [...SESSION_COMMANDS, ...CONDUIT_COMMANDS] as const;
@@ -35,9 +40,13 @@ type ConsumerCommandName = (typeof CONSUMER_COMMANDS)[number];
 
 type SessionGroupsCommandName = "sessions/grouped";
 
+type SessionOpenCommandName = "session/open";
+
+type SessionHistoryCommandName = "session/history";
+
 type ProviderScopedCommandName = Exclude<
   ConsumerCommandName,
-  SessionGroupsCommandName
+  SessionGroupsCommandName | SessionOpenCommandName | SessionHistoryCommandName
 >;
 
 interface ProviderConsumerCommand {
@@ -54,7 +63,25 @@ interface SessionGroupsConsumerCommand {
   params: SessionGroupsQuery;
 }
 
-type ConsumerCommand = ProviderConsumerCommand | SessionGroupsConsumerCommand;
+interface SessionOpenConsumerCommand {
+  id: string;
+  command: SessionOpenCommandName;
+  provider: ProviderId;
+  params: SessionOpenRequest;
+}
+
+interface SessionHistoryConsumerCommand {
+  id: string;
+  command: SessionHistoryCommandName;
+  provider: ProviderId;
+  params: SessionHistoryRequest;
+}
+
+type ConsumerCommand =
+  | ProviderConsumerCommand
+  | SessionGroupsConsumerCommand
+  | SessionOpenConsumerCommand
+  | SessionHistoryConsumerCommand;
 
 type ConsumerCommandTarget = ProviderId | "all";
 
@@ -117,9 +144,7 @@ function nextConsumerCommandId(): string {
   return `conduit-command-${String(nextCommandSequence)}`;
 }
 
-function toRecordParams(
-  params: Record<string, unknown> | SessionGroupsQuery,
-): Record<string, unknown> {
+function toRecordParams(params: object): Record<string, unknown> {
   const record: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(params)) {
     record[key] = value;
@@ -134,6 +159,18 @@ function createConsumerCommand(
 ): SessionGroupsConsumerCommand;
 
 function createConsumerCommand(
+  command: SessionOpenCommandName,
+  provider: ProviderId,
+  params: SessionOpenRequest,
+): SessionOpenConsumerCommand;
+
+function createConsumerCommand(
+  command: SessionHistoryCommandName,
+  provider: ProviderId,
+  params: SessionHistoryRequest,
+): SessionHistoryConsumerCommand;
+
+function createConsumerCommand(
   command: ProviderScopedCommandName,
   provider: ProviderId,
   params?: Record<string, unknown>,
@@ -142,7 +179,11 @@ function createConsumerCommand(
 function createConsumerCommand(
   command: ConsumerCommandName,
   provider: ConsumerCommandTarget,
-  params: Record<string, unknown> | SessionGroupsQuery = {},
+  params:
+    | Record<string, unknown>
+    | SessionGroupsQuery
+    | SessionOpenRequest
+    | SessionHistoryRequest = {},
 ): ConsumerCommand {
   const id = nextConsumerCommandId();
   if (command === "sessions/grouped") {
@@ -150,8 +191,19 @@ function createConsumerCommand(
       id,
       command,
       provider,
-      params,
+      params: params as SessionGroupsQuery,
     };
+  }
+  if (command === "session/open" || command === "session/history") {
+    if (provider === "all") {
+      throw new Error(`${command} must target a provider`);
+    }
+    return {
+      id,
+      command,
+      provider,
+      params,
+    } as SessionOpenConsumerCommand | SessionHistoryConsumerCommand;
   }
   if (provider === "all") {
     throw new Error(`${command} must target a provider`);
@@ -187,9 +239,16 @@ export type {
   ServerEventFrame,
   ServerFrame,
   ServerResponseFrame,
+  SessionCommandName,
   SessionGroupsCommandName,
   SessionGroupsConsumerCommand,
-  SessionCommandName,
+  SessionHistoryCommandName,
+  SessionHistoryConsumerCommand,
+  SessionHistoryRequest,
+  SessionHistoryWindow,
+  SessionOpenCommandName,
+  SessionOpenConsumerCommand,
+  SessionOpenRequest,
   SessionGroupsQuery,
   SessionGroupsView,
 };

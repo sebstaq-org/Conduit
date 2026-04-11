@@ -87,6 +87,8 @@ async fn catalog() -> Json<serde_json::Value> {
             "session/new",
             "session/list",
             "session/load",
+            "session/open",
+            "session/history",
             "session/prompt",
             "session/cancel",
             "snapshot/get",
