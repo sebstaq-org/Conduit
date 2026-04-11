@@ -1,6 +1,10 @@
+import { z } from "zod";
+
 const PROVIDERS = ["claude", "copilot", "codex"] as const;
 
-type ProviderId = (typeof PROVIDERS)[number];
+const ProviderIdSchema = z.enum(PROVIDERS);
+
+type ProviderId = z.infer<typeof ProviderIdSchema>;
 
 type ConnectionState = "disconnected" | "ready";
 
@@ -66,27 +70,35 @@ interface LoadedTranscriptSnapshot {
   updates: TranscriptUpdateSnapshot[];
 }
 
-interface SessionRow {
-  provider: ProviderId;
-  sessionId: string;
-  title: string | null;
-  updatedAt: string | null;
-}
+const SessionRowSchema = z.object({
+  provider: ProviderIdSchema,
+  sessionId: z.string(),
+  title: z.string().nullable(),
+  updatedAt: z.string().nullable(),
+});
 
-interface SessionGroup {
-  groupId: string;
-  cwd: string;
-  sessions: SessionRow[];
-}
+type SessionRow = z.infer<typeof SessionRowSchema>;
 
-interface SessionGroupsView {
-  groups: SessionGroup[];
-}
+const SessionGroupSchema = z.object({
+  groupId: z.string(),
+  cwd: z.string(),
+  sessions: z.array(SessionRowSchema),
+});
 
-interface SessionGroupsQuery {
-  cwdFilters?: string[];
-  updatedWithinDays?: number | null;
-}
+type SessionGroup = z.infer<typeof SessionGroupSchema>;
+
+const SessionGroupsViewSchema = z.object({
+  groups: z.array(SessionGroupSchema),
+});
+
+type SessionGroupsView = z.infer<typeof SessionGroupsViewSchema>;
+
+const SessionGroupsQuerySchema = z.object({
+  cwdFilters: z.array(z.string()).optional(),
+  updatedWithinDays: z.number().nullable().optional(),
+});
+
+type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
 
 interface ProviderSnapshot {
   provider: ProviderId;
@@ -126,6 +138,11 @@ function getProviderDescriptor(provider: ProviderId): ProviderDescriptor {
 export {
   PROVIDER_CATALOG,
   PROVIDERS,
+  ProviderIdSchema,
+  SessionGroupSchema,
+  SessionGroupsQuerySchema,
+  SessionGroupsViewSchema,
+  SessionRowSchema,
   createLiveSessionIdentity,
   getProviderDescriptor,
 };

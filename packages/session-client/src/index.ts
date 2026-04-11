@@ -8,11 +8,17 @@ import type {
   RuntimeEvent,
   ServerFrame,
 } from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
+import { SessionGroupsViewSchema } from "@conduit/session-model";
+import type {
+  ProviderId,
+  SessionGroupsQuery,
+  SessionGroupsView,
+} from "@conduit/session-model";
 
 interface SessionClientPort {
   readonly policy: "official-acp-only";
   dispatch(command: ConsumerCommand): Promise<ConsumerResponse>;
+  getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
   initialize(provider: ProviderId): Promise<ConsumerResponse>;
   subscribe(
     provider: ProviderId,
@@ -77,6 +83,20 @@ class WebSocketSessionClient implements SessionClientPort {
       }),
     );
     return response;
+  }
+
+  public async getSessionGroups(
+    query: SessionGroupsQuery = {},
+  ): Promise<SessionGroupsView> {
+    const response = await this.dispatch(
+      createConsumerCommand("sessions/grouped", "all", query),
+    );
+    if (!response.ok) {
+      throw new Error(
+        response.error?.message ?? "session groups request failed",
+      );
+    }
+    return SessionGroupsViewSchema.parse(response.result);
   }
 
   public async initialize(provider: ProviderId): Promise<ConsumerResponse> {
@@ -235,5 +255,9 @@ export type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
+  SessionGroup,
+  SessionGroupsQuery,
+  SessionGroupsView,
+  SessionRow,
 } from "@conduit/session-model";
 export type { SessionClientOptions, SessionClientPort };
