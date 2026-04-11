@@ -30,6 +30,8 @@ pub(super) enum HostCommand {
         reply: Sender<Result<acp::NewSessionResponse>>,
     },
     ListSessions {
+        cwd: Option<PathBuf>,
+        cursor: Option<String>,
         reply: Sender<Result<acp::ListSessionsResponse>>,
     },
     LoadSession {
@@ -119,8 +121,8 @@ impl SdkHostActor {
                 let result = self.new_session(cwd).await;
                 send_reply(reply, result);
             }
-            HostCommand::ListSessions { reply } => {
-                let result = self.list_sessions().await;
+            HostCommand::ListSessions { cwd, cursor, reply } => {
+                let result = self.list_sessions(cwd, cursor).await;
                 send_reply(reply, result);
             }
             HostCommand::LoadSession {
@@ -187,10 +189,15 @@ impl SdkHostActor {
         Ok(response)
     }
 
-    async fn list_sessions(&mut self) -> Result<acp::ListSessionsResponse> {
+    async fn list_sessions(
+        &mut self,
+        cwd: Option<PathBuf>,
+        cursor: Option<String>,
+    ) -> Result<acp::ListSessionsResponse> {
+        let request = acp::ListSessionsRequest::new().cwd(cwd).cursor(cursor);
         let response = self
             .connection()?
-            .list_sessions(acp::ListSessionsRequest::new())
+            .list_sessions(request)
             .await
             .map_err(|source| sdk_error(self.provider, "session/list", source))?;
         for session in &response.sessions {

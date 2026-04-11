@@ -17,6 +17,7 @@ mod error;
 mod event;
 mod manager;
 mod port;
+mod session_groups;
 
 #[cfg(test)]
 use agent_client_protocol_schema as _;

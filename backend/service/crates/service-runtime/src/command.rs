@@ -43,6 +43,16 @@ impl ConsumerResponse {
         }
     }
 
+    pub(crate) fn success_without_snapshot(id: String, result: Value) -> Self {
+        Self {
+            id,
+            ok: true,
+            result,
+            error: None,
+            snapshot: None,
+        }
+    }
+
     pub(crate) fn failure(id: String, code: &'static str, message: String) -> Self {
         Self {
             id,
