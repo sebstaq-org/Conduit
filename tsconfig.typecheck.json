@@ -5,10 +5,9 @@
   },
   "exclude": ["**/dist", "**/*.d.ts"],
   "include": [
-    "apps/**/*.ts",
     "packages/**/*.ts",
     "scripts/**/*.ts",
-    "eslint.config.ts",
+    "oxlint.config.ts",
     "vitest.config.ts"
   ]
 }

@@ -12,8 +12,11 @@ use axum::routing::get;
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
+use service_runtime::AppServiceFactory;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
 use wire::{ClientCommandFrame, ServerEventFrame, ServerResponseFrame};
 
@@ -35,14 +38,37 @@ pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
 }
 
 fn router() -> Router {
+    router_with_actor(RuntimeActor::start())
+}
+
+fn router_with_actor(actor: RuntimeActor) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/catalog", get(catalog))
         .route("/api/session", get(session_socket))
         .layer(CorsLayer::permissive())
-        .with_state(Arc::new(ServeState {
-            actor: RuntimeActor::start(),
-        }))
+        .with_state(Arc::new(ServeState { actor }))
+}
+
+pub(crate) struct ProofServer {
+    pub(crate) address: SocketAddr,
+    handle: JoinHandle<()>,
+}
+
+impl Drop for ProofServer {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+pub(crate) async fn spawn_proof_server(factory: AppServiceFactory) -> Result<ProofServer> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+    let address = listener.local_addr()?;
+    let app = router_with_actor(RuntimeActor::start_with_factory(factory));
+    let handle = tokio::spawn(async move {
+        let _result = axum::serve(listener, app).await;
+    });
+    Ok(ProofServer { address, handle })
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -88,7 +114,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
                 let Some(Ok(message)) = message else {
                     break;
                 };
-                if !handle_client_message(&mut sender, &state.actor, message, &mut subscribed).await {
+                if !handle_client_message(
+                    &mut sender,
+                    &state.actor,
+                    message,
+                    &mut live_events,
+                    &mut subscribed,
+                ).await {
                     break;
                 }
             }
@@ -108,6 +140,7 @@ async fn handle_client_message(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     actor: &RuntimeActor,
     message: Message,
+    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
     subscribed: &mut bool,
 ) -> bool {
     let Ok(text) = message.to_text() else {
@@ -125,6 +158,7 @@ async fn handle_client_message(
         return false;
     }
     if frame.command_name() == "events/subscribe" {
+        *live_events = live_events.resubscribe();
         *subscribed = true;
         return send_backlog(sender, &response.result).await;
     }

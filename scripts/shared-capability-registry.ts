@@ -1,10 +1,13 @@
-export type SharedCapabilityStatus = "reserved" | "active";
+type SharedCapabilityStatus = "reserved" | "active";
 
-export interface SharedCapabilityRegistration {
+interface SharedCapabilityRegistration {
   capabilityName: string;
   desktopFeatureRoot: string;
   mobileFeatureRoot: string;
   status: SharedCapabilityStatus;
 }
 
-export const sharedCapabilityRegistry: SharedCapabilityRegistration[] = [];
+const sharedCapabilityRegistry: SharedCapabilityRegistration[] = [];
+
+export { sharedCapabilityRegistry };
+export type { SharedCapabilityRegistration, SharedCapabilityStatus };

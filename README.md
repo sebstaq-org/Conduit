@@ -1,7 +1,7 @@
 # Conduit
 
-Conduit now contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, owns raw JSON-RPC over stdio, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime.
-The frontend workspace uses the locked desktop/mobile foundation shape: `apps/*` are shells, `packages/session-client` and `packages/session-contracts` own the normal consumer boundary, `packages/app-client` remains proof-surface-only, `packages/app-core` owns framework-neutral vocabulary, and `packages/design-system-*` reserve UI boundaries without speculative product UI.
+Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime.
+The frontend workspace has runnable Electron and Expo shells while keeping product UI, design tokens, primitives, themes, and features out of scope. `packages/session-client` and `packages/session-contracts` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-*` keep their reserved frontend boundaries.
 
 ## Happy Path
 

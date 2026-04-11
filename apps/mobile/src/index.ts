@@ -7,7 +7,15 @@ import {
 
 const sessionClient = createSessionClient();
 
-export function createMobileBootstrapPlan() {
+interface MobileBootstrapPlan {
+  appId: "mobile";
+  copy: ReturnType<typeof createMobileSessionSurfaceCopy>;
+  lockedPolicy: "official-acp-only";
+  supportedCommands: string[];
+  supportedProviders: string[];
+}
+
+export function createMobileBootstrapPlan(): MobileBootstrapPlan {
   return {
     appId: "mobile",
     copy: createMobileSessionSurfaceCopy(),

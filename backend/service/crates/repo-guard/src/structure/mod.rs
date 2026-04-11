@@ -2,6 +2,7 @@
 
 mod files;
 mod js;
+mod js_runtime;
 mod rust;
 mod source;
 mod source_ast;

@@ -8,8 +8,6 @@
     { "path": "./packages/design-system-tokens" },
     { "path": "./packages/session-model" },
     { "path": "./packages/session-contracts" },
-    { "path": "./packages/session-client" },
-    { "path": "./apps/desktop" },
-    { "path": "./apps/mobile" }
+    { "path": "./packages/session-client" }
   ]
 }

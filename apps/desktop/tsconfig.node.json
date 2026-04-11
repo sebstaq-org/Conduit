@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "electron.vite.config.ts",
+    "../../packages/design-system-desktop/src/**/*.ts",
+    "../../packages/design-system-tokens/src/**/*.ts",
+    "../../packages/session-client/src/**/*.ts",
+    "../../packages/session-contracts/src/**/*.ts",
+    "../../packages/session-model/src/**/*.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "vitest.config.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "ignoreDeprecations": "5.0",
+    "lib": ["ES2024"],
+    "skipLibCheck": true,
+    "types": ["electron-vite/node", "node"]
+  }
+}

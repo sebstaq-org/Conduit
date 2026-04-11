@@ -12,7 +12,7 @@ Structural rules are enforced by `rtk pnpm run structure:check`, which runs the 
 
 Rust is intentionally hard-default. Keep new crates in the workspace, satisfy the curated workspace lint set, and preserve the crate-edge rules enforced from `cargo metadata`. `service-bin` stays the only runtime composition root, and `repo-guard` is not exempt from any Rust policy. For Rust-specific authoring rules, follow `backend/service/AGENTS.md` and `docs/rust-policy.md`.
 
-For the current frontend foundation pass:
+For the current frontend shell-init pass:
 
 - `apps/desktop` may contain the minimal Phase 1 proof surface; `apps/mobile` stays shell-only.
 - `packages/session-client` is the normal consumer transport boundary for versioned `service-bin serve` WebSocket frames.

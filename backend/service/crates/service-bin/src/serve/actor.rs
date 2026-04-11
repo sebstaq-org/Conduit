@@ -1,6 +1,8 @@
 //! Single-owner runtime actor for WebSocket consumers.
 
-use service_runtime::{ConsumerCommand, ConsumerResponse, RuntimeEvent, ServiceRuntime};
+use service_runtime::{
+    AppServiceFactory, ConsumerCommand, ConsumerResponse, RuntimeEvent, ServiceRuntime,
+};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[derive(Debug)]
@@ -20,9 +22,15 @@ impl RuntimeActor {
     /// Starts one actor that exclusively owns `ServiceRuntime`.
     #[must_use]
     pub(crate) fn start() -> Self {
+        Self::start_with_factory(AppServiceFactory::default())
+    }
+
+    /// Starts one actor with an explicit provider factory.
+    #[must_use]
+    pub(crate) fn start_with_factory(factory: AppServiceFactory) -> Self {
         let (commands, receiver) = mpsc::channel(32);
         let (events, _) = broadcast::channel(256);
-        tokio::spawn(run_actor(receiver, events.clone()));
+        tokio::spawn(run_actor(receiver, events.clone(), factory));
         Self { commands, events }
     }
 
@@ -51,8 +59,9 @@ impl RuntimeActor {
 async fn run_actor(
     mut receiver: mpsc::Receiver<ActorRequest>,
     events: broadcast::Sender<RuntimeEvent>,
+    factory: AppServiceFactory,
 ) {
-    let mut runtime = ServiceRuntime::new();
+    let mut runtime = ServiceRuntime::with_factory(factory);
     while let Some(request) = receiver.recv().await {
         handle_request(&mut runtime, &events, request);
     }

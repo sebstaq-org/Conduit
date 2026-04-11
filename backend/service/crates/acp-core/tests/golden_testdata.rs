@@ -3,12 +3,15 @@
 use acp_contracts as _;
 use acp_core::{LiveSessionSnapshot, PromptLifecycleSnapshot, ProviderSnapshot};
 use acp_discovery as _;
-use agent_client_protocol_schema as _;
+use agent_client_protocol as _;
+use async_trait as _;
 use serde as _;
 use std::error::Error;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use thiserror as _;
+use tokio as _;
+use tokio_util as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 

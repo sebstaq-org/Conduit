@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conduit PR Green"
+  short_description: "Create Conduit PRs and wait for green checks"
+  default_prompt: "Use $conduit-pr-green to create or update this Conduit PR and keep polling GitHub until every required check is green."

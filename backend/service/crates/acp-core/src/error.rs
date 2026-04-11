@@ -36,6 +36,25 @@ pub enum AcpError {
         #[source]
         source: std::io::Error,
     },
+    /// Official ACP SDK returned an error.
+    #[error("official ACP SDK error from {provider} during {operation}")]
+    Sdk {
+        /// The provider being driven through the SDK.
+        provider: ProviderId,
+        /// The logical operation being sent.
+        operation: String,
+        /// The SDK error.
+        #[source]
+        source: agent_client_protocol::Error,
+    },
+    /// The host actor stopped before completing the operation.
+    #[error("ACP host actor for {provider} stopped while handling {operation}")]
+    ActorStopped {
+        /// The provider owned by the actor.
+        provider: ProviderId,
+        /// The logical operation being sent.
+        operation: String,
+    },
     /// The provider returned invalid JSON.
     #[error("failed to parse JSON from {provider}")]
     Json {

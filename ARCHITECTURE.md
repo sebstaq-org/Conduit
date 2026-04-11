@@ -1,6 +1,6 @@
 # Architecture
 
-Conduit is structured around product boundaries instead of language buckets. Phase 1 implements the first official-ACP-only runtime slice while preserving the locked desktop/mobile frontend workspace shape.
+Conduit is structured around product boundaries instead of language buckets. The current pass keeps the locked frontend workspace shape and policy, upgrades `apps/desktop` and `apps/mobile` into real runnable shells without placeholder UI, and layers the Phase 1.5 official-ACP-only consumer API over the Rust backend.
 
 ## Current Pass
 
@@ -9,7 +9,8 @@ Phase 1 includes the vendored ACP contract lock, official launcher discovery, ra
 This pass also includes:
 
 - final frontend package names
-- shell-first desktop and mobile app boundaries
+- runnable desktop and mobile shells
+- normal consumer API session package boundaries
 - frontend ownership canon
 - local and repo-wide agent rules
 - empty registry surfaces for future policy enforcement
@@ -27,11 +28,14 @@ This pass explicitly excludes:
 
 ## Frontend Layer
 
-- `apps/desktop` contains the minimal Phase 1 proof surface for the locked ACP subset.
-- `apps/mobile` remains a shell entrypoint.
-- `packages/app-client` owns the frontend capability client and proof-surface contract boundary.
-- `packages/app-core` owns provider/session vocabulary and framework-neutral view-model logic.
-- `packages/design-system-tokens` reserves the semantic design-token contract boundary and currently exposes only proof-surface copy.
+- `apps/desktop` is the Electron shell only.
+- `apps/mobile` is the React Native shell only.
+- `packages/session-client` owns the normal consumer transport boundary.
+- `packages/session-contracts` owns shared consumer command and transport envelopes.
+- `packages/session-model` owns provider/session model vocabulary.
+- `packages/app-client` owns the proof-surface contract boundary.
+- `packages/app-core` owns framework-neutral reducers, selectors, and view-model logic.
+- `packages/design-system-tokens` reserves the semantic design-token contract boundary.
 - `packages/design-system-desktop` reserves desktop primitive implementations behind Conduit-owned component APIs.
 - `packages/design-system-mobile` reserves mobile primitive implementations behind the same Conduit-owned component APIs.
 

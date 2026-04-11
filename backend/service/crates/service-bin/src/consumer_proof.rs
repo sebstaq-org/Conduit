@@ -3,14 +3,23 @@
 use crate::artifact::{write_json, write_jsonl, write_text};
 use crate::error::{Result, ServiceError};
 use crate::proof::ProofWorkspace;
+use crate::serve;
 use crate::support::command_text;
 use acp_core::ProviderSnapshot;
 use acp_discovery::ProviderId;
+use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
-use service_runtime::{AppServiceFactory, ConsumerCommand, ConsumerResponse, ServiceRuntime};
+use service_runtime::{AppServiceFactory, ConsumerCommand, ConsumerResponse};
 use std::path::Path;
+use std::time::Duration;
+use tokio::net::TcpStream;
+use tokio_tungstenite::MaybeTlsStream;
+use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 
 const READY_PROMPT: &str = "Reply with exactly CONDUIT_CONSUMER_API_READY.";
+type ProofSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 struct ConsumerArtifact<'a> {
     root: &'a Path,
@@ -28,12 +37,20 @@ struct ConsumerArtifact<'a> {
 ///
 /// Returns an error when provider runtime commands fail or artifacts cannot be
 /// written.
-pub(crate) fn run(provider: ProviderId, root: &Path, args: &[String]) -> Result<()> {
+pub(crate) async fn run(provider: ProviderId, root: &Path, args: &[String]) -> Result<()> {
     let proof = ProofWorkspace::prepare(provider, root)?;
+    let factory = AppServiceFactory::with_environment(proof.environment().clone());
+    let server = serve::spawn_proof_server(factory).await?;
+    let mut client = ProofClient::connect(server.address).await?;
     let mut responses = Vec::new();
     let mut events = Vec::new();
-    let session_id = seed_session(provider, &proof, &mut responses, &mut events)?;
-    let snapshot = recover_session(provider, &proof, &session_id, &mut responses, &mut events)?;
+    let mut capture = ProofCapture {
+        client: &mut client,
+        responses: &mut responses,
+        events: &mut events,
+    };
+    let session_id = seed_session(provider, &proof, &mut capture).await?;
+    let snapshot = recover_session(provider, &proof, &session_id, &mut capture).await?;
     write_consumer_artifacts(ConsumerArtifact {
         root: proof.artifact_root(),
         command: &command_text(args),
@@ -45,118 +62,245 @@ pub(crate) fn run(provider: ProviderId, root: &Path, args: &[String]) -> Result<
     })
 }
 
-fn seed_session(
+async fn seed_session(
     provider: ProviderId,
     proof: &ProofWorkspace,
-    responses: &mut Vec<ConsumerResponse>,
-    events: &mut Vec<service_runtime::RuntimeEvent>,
+    capture: &mut ProofCapture<'_>,
 ) -> Result<String> {
-    let mut runtime = runtime(proof);
-    submit(&mut runtime, provider, "initialize", json!({}), responses)?;
+    submit(capture, provider, "initialize", json!({})).await?;
     let created = submit(
-        &mut runtime,
+        capture,
         provider,
         "session/new",
         json!({ "cwd": proof.cwd().display().to_string() }),
-        responses,
-    )?;
+    )
+    .await?;
     let session_id = session_id_from_result(&created.result)?;
     submit(
-        &mut runtime,
+        capture,
         provider,
         "session/prompt",
         json!({ "session_id": session_id, "prompt": READY_PROMPT }),
-        responses,
-    )?;
-    submit(&mut runtime, provider, "session/list", json!({}), responses)?;
-    submit(
-        &mut runtime,
-        provider,
-        "provider/disconnect",
-        json!({}),
-        responses,
-    )?;
-    events.extend(runtime.drain_events());
+    )
+    .await?;
+    submit(capture, provider, "session/list", json!({})).await?;
+    submit(capture, provider, "provider/disconnect", json!({})).await?;
     session_id_from_result(&created.result)
 }
 
-fn recover_session(
+async fn recover_session(
     provider: ProviderId,
     proof: &ProofWorkspace,
     seeded_session_id: &str,
-    responses: &mut Vec<ConsumerResponse>,
-    events: &mut Vec<service_runtime::RuntimeEvent>,
+    capture: &mut ProofCapture<'_>,
 ) -> Result<ProviderSnapshot> {
-    let mut runtime = runtime(proof);
-    submit(&mut runtime, provider, "initialize", json!({}), responses)?;
-    let list = submit(&mut runtime, provider, "session/list", json!({}), responses)?;
+    submit(capture, provider, "initialize", json!({})).await?;
+    let list = submit(capture, provider, "session/list", json!({})).await?;
     let load_id = recoverable_session_id(
         &list.result,
         seeded_session_id,
         &proof.cwd().display().to_string(),
     )?;
     submit(
-        &mut runtime,
+        capture,
         provider,
         "session/load",
         json!({ "session_id": load_id, "cwd": proof.cwd().display().to_string() }),
-        responses,
-    )?;
+    )
+    .await?;
     submit(
-        &mut runtime,
+        capture,
         provider,
         "session/cancel",
         json!({ "session_id": load_id }),
-        responses,
-    )?;
-    submit(&mut runtime, provider, "snapshot/get", json!({}), responses)?;
-    submit(
-        &mut runtime,
-        provider,
-        "events/subscribe",
-        json!({}),
-        responses,
-    )?;
-    let disconnected = submit(
-        &mut runtime,
-        provider,
-        "provider/disconnect",
-        json!({}),
-        responses,
-    )?;
-    events.extend(runtime.drain_events());
+    )
+    .await?;
+    submit(capture, provider, "snapshot/get", json!({})).await?;
+    submit(capture, provider, "events/subscribe", json!({})).await?;
+    let disconnected = submit(capture, provider, "provider/disconnect", json!({})).await?;
     disconnected
         .snapshot
         .ok_or_else(|| invalid_capture("provider/disconnect did not return a snapshot"))
 }
 
-fn runtime(proof: &ProofWorkspace) -> ServiceRuntime<AppServiceFactory> {
-    ServiceRuntime::with_factory(AppServiceFactory::with_environment(
-        proof.environment().clone(),
-    ))
-}
-
-fn submit(
-    runtime: &mut ServiceRuntime<AppServiceFactory>,
+async fn submit(
+    capture: &mut ProofCapture<'_>,
     provider: ProviderId,
     command: &str,
     params: Value,
-    responses: &mut Vec<ConsumerResponse>,
 ) -> Result<ConsumerResponse> {
-    let response = runtime.dispatch(ConsumerCommand {
-        id: format!("consumer-{}", responses.len() + 1),
-        command: command.to_owned(),
-        provider: provider.as_str().to_owned(),
-        params,
-    });
+    let response = capture
+        .client
+        .dispatch(
+            ProofDispatch {
+                provider,
+                command,
+                params,
+                sequence: capture.responses.len() + 1,
+            },
+            capture.events,
+        )
+        .await?;
     if !response.ok {
         return Err(invalid_capture(&format!(
             "{command} failed: {:?}",
             response.error
         )));
     }
-    responses.push(response.clone());
+    capture.responses.push(response.clone());
     Ok(response)
+}
+
+struct ProofCapture<'a> {
+    client: &'a mut ProofClient,
+    responses: &'a mut Vec<ConsumerResponse>,
+    events: &'a mut Vec<service_runtime::RuntimeEvent>,
+}
+
+struct ProofDispatch<'a> {
+    provider: ProviderId,
+    command: &'a str,
+    params: Value,
+    sequence: usize,
+}
+
+struct ProofClient {
+    socket: ProofSocket,
+}
+
+impl ProofClient {
+    async fn connect(address: std::net::SocketAddr) -> Result<Self> {
+        let url = format!("ws://{address}/api/session");
+        let (socket, _response) = connect_async(url)
+            .await
+            .map_err(|error| invalid_capture(&format!("websocket connect failed: {error}")))?;
+        Ok(Self { socket })
+    }
+
+    async fn dispatch(
+        &mut self,
+        dispatch: ProofDispatch<'_>,
+        events: &mut Vec<service_runtime::RuntimeEvent>,
+    ) -> Result<ConsumerResponse> {
+        let id = format!("consumer-{}", dispatch.sequence);
+        self.send_command(&id, dispatch).await?;
+        let response = self.read_response(&id, events).await?;
+        self.read_expected_backlog(&response, events).await?;
+        self.drain_events(events).await?;
+        Ok(response)
+    }
+
+    async fn send_command(&mut self, id: &str, dispatch: ProofDispatch<'_>) -> Result<()> {
+        let frame = json!({
+            "v": 1,
+            "type": "command",
+            "id": id,
+            "command": ConsumerCommand {
+                id: id.to_owned(),
+                command: dispatch.command.to_owned(),
+                provider: dispatch.provider.as_str().to_owned(),
+                params: dispatch.params,
+            },
+        });
+        self.socket
+            .send(Message::Text(frame.to_string().into()))
+            .await
+            .map_err(|error| invalid_capture(&format!("websocket send failed: {error}")))
+    }
+
+    async fn read_response(
+        &mut self,
+        id: &str,
+        events: &mut Vec<service_runtime::RuntimeEvent>,
+    ) -> Result<ConsumerResponse> {
+        loop {
+            let message = self.next_message().await?;
+            if let Some(response) = response_from_message(&message, id)? {
+                return Ok(response);
+            }
+            if let Some(event) = event_from_message(&message)? {
+                events.push(event);
+            }
+        }
+    }
+
+    async fn read_expected_backlog(
+        &mut self,
+        response: &ConsumerResponse,
+        events: &mut Vec<service_runtime::RuntimeEvent>,
+    ) -> Result<()> {
+        let Some(backlog) = response.result.get("events").and_then(Value::as_array) else {
+            return Ok(());
+        };
+        for _entry in backlog {
+            let message = self.next_message().await?;
+            if let Some(event) = event_from_message(&message)? {
+                events.push(event);
+            }
+        }
+        Ok(())
+    }
+
+    async fn drain_events(
+        &mut self,
+        events: &mut Vec<service_runtime::RuntimeEvent>,
+    ) -> Result<()> {
+        while let Ok(message) =
+            tokio::time::timeout(Duration::from_millis(50), self.next_message()).await
+        {
+            if let Some(event) = event_from_message(&message?)? {
+                events.push(event);
+            }
+        }
+        Ok(())
+    }
+
+    async fn next_message(&mut self) -> Result<Message> {
+        let Some(message) = self.socket.next().await else {
+            return Err(invalid_capture("websocket closed before response"));
+        };
+        message.map_err(|error| invalid_capture(&format!("websocket read failed: {error}")))
+    }
+}
+
+fn response_from_message(message: &Message, id: &str) -> Result<Option<ConsumerResponse>> {
+    let value = json_from_message(message)?;
+    if value.get("type").and_then(Value::as_str) != Some("response") {
+        return Ok(None);
+    }
+    if value.get("id").and_then(Value::as_str) != Some(id) {
+        return Err(invalid_capture(
+            "websocket response id did not match command id",
+        ));
+    }
+    let response = value
+        .get("response")
+        .cloned()
+        .ok_or_else(|| invalid_capture("websocket response frame was missing response"))?;
+    serde_json::from_value(response)
+        .map_err(ServiceError::from)
+        .map(Some)
+}
+
+fn event_from_message(message: &Message) -> Result<Option<service_runtime::RuntimeEvent>> {
+    let value = json_from_message(message)?;
+    if value.get("type").and_then(Value::as_str) != Some("event") {
+        return Ok(None);
+    }
+    let event = value
+        .get("event")
+        .cloned()
+        .ok_or_else(|| invalid_capture("websocket event frame was missing event"))?;
+    serde_json::from_value(event)
+        .map_err(ServiceError::from)
+        .map(Some)
+}
+
+fn json_from_message(message: &Message) -> Result<Value> {
+    let Message::Text(text) = message else {
+        return Err(invalid_capture("websocket message was not text"));
+    };
+    serde_json::from_str(text).map_err(ServiceError::from)
 }
 
 fn session_id_from_result(value: &Value) -> Result<String> {

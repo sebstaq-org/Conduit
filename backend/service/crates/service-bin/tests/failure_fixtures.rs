@@ -15,6 +15,7 @@ use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};
 use thiserror as _;
 use tokio as _;
+use tokio_tungstenite as _;
 use tower_http as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;

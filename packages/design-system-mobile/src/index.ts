@@ -1,16 +1,16 @@
-import {
-  createProofSurfaceCopy,
-  type ProofSurfaceCopy,
-} from "@conduit/design-system-tokens";
+import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
+import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
 
-export type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
+type SessionSurfaceCopy = ProofSurfaceCopy;
 
-export type SessionSurfaceCopy = ProofSurfaceCopy;
-
-export function createMobileSessionSurfaceCopy(): SessionSurfaceCopy {
+function createMobileSessionSurfaceCopy(): SessionSurfaceCopy {
   return createProofSurfaceCopy("mobile");
 }
 
-export function createMobileProofSurfaceCopy(): ProofSurfaceCopy {
+function createMobileProofSurfaceCopy(): ProofSurfaceCopy {
   return createMobileSessionSurfaceCopy();
 }
+
+export { createMobileProofSurfaceCopy, createMobileSessionSurfaceCopy };
+
+export type { ProofSurfaceCopy, SessionSurfaceCopy };

@@ -5,23 +5,26 @@
     "lib": ["ES2024", "DOM"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
     "ignoreDeprecations": "6.0",
     "paths": {
-      "@conduit/app-client": ["packages/app-client/src/index.ts"],
-      "@conduit/app-core": ["packages/app-core/src/index.ts"],
+      "@conduit/app-client": ["./packages/app-client/src/index.ts"],
+      "@conduit/app-core": ["./packages/app-core/src/index.ts"],
+      "@conduit/desktop/preload": ["./apps/desktop/src/preload/index.ts"],
       "@conduit/design-system-desktop": [
-        "packages/design-system-desktop/src/index.ts"
+        "./packages/design-system-desktop/src/index.ts"
       ],
       "@conduit/design-system-mobile": [
-        "packages/design-system-mobile/src/index.ts"
+        "./packages/design-system-mobile/src/index.ts"
       ],
       "@conduit/design-system-tokens": [
-        "packages/design-system-tokens/src/index.ts"
+        "./packages/design-system-tokens/src/index.ts"
       ],
-      "@conduit/session-client": ["packages/session-client/src/index.ts"],
-      "@conduit/session-contracts": ["packages/session-contracts/src/index.ts"],
-      "@conduit/session-model": ["packages/session-model/src/index.ts"]
+      "@conduit/session-client": ["./packages/session-client/src/index.ts"],
+      "@conduit/session-contracts": [
+        "./packages/session-contracts/src/index.ts"
+      ],
+      "@conduit/session-model": ["./packages/session-model/src/index.ts"],
+      "@conduit/mobile/bootstrap": ["./apps/mobile/src/index.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

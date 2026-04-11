@@ -1,17 +1,17 @@
-export const PROVIDERS = ["claude", "copilot", "codex"] as const;
+const PROVIDERS = ["claude", "copilot", "codex"] as const;
 
-export type ProviderId = (typeof PROVIDERS)[number];
+type ProviderId = (typeof PROVIDERS)[number];
 
-export type ConnectionState = "disconnected" | "ready";
+type ConnectionState = "disconnected" | "ready";
 
-export interface ProviderDescriptor {
+interface ProviderDescriptor {
   id: ProviderId;
   launcher: string;
   authSource: "local-login-state";
   phaseStatus: "phase-1";
 }
 
-export const PROVIDER_CATALOG = {
+const PROVIDER_CATALOG = {
   claude: {
     id: "claude",
     launcher: "claude-agent-acp",
@@ -32,32 +32,28 @@ export const PROVIDER_CATALOG = {
   },
 } as const satisfies Record<ProviderId, ProviderDescriptor>;
 
-export interface LiveSessionIdentity {
+interface LiveSessionIdentity {
   provider: ProviderId;
   acpSessionId: string;
 }
 
-export interface LiveSessionSnapshot {
+interface LiveSessionSnapshot {
   identity: LiveSessionIdentity;
   cwd: string;
   title: string | null;
   observedVia: string;
 }
 
-export type PromptLifecycleState =
-  | "idle"
-  | "running"
-  | "completed"
-  | "cancelled";
+type PromptLifecycleState = "idle" | "running" | "completed" | "cancelled";
 
-export interface PromptLifecycleSnapshot {
+interface PromptLifecycleSnapshot {
   identity: LiveSessionIdentity;
   state: PromptLifecycleState;
   stopReason: string | null;
   rawUpdateCount: number;
 }
 
-export interface ProviderSnapshot {
+interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
   discovery: unknown;
@@ -67,7 +63,7 @@ export interface ProviderSnapshot {
   lastPrompt: PromptLifecycleSnapshot | null;
 }
 
-export interface RawWireEvent {
+interface RawWireEvent {
   sequence: number;
   stream: "outgoing" | "incoming" | "stderr";
   kind: "request" | "response" | "notification" | "diagnostic";
@@ -77,7 +73,7 @@ export interface RawWireEvent {
   json: unknown;
 }
 
-export function createLiveSessionIdentity(
+function createLiveSessionIdentity(
   provider: ProviderId,
   acpSessionId: string,
 ): LiveSessionIdentity {
@@ -87,8 +83,25 @@ export function createLiveSessionIdentity(
   };
 }
 
-export function getProviderDescriptor(
-  provider: ProviderId,
-): ProviderDescriptor {
+function getProviderDescriptor(provider: ProviderId): ProviderDescriptor {
   return PROVIDER_CATALOG[provider];
 }
+
+export {
+  PROVIDER_CATALOG,
+  PROVIDERS,
+  createLiveSessionIdentity,
+  getProviderDescriptor,
+};
+
+export type {
+  ConnectionState,
+  LiveSessionIdentity,
+  LiveSessionSnapshot,
+  PromptLifecycleSnapshot,
+  PromptLifecycleState,
+  ProviderDescriptor,
+  ProviderId,
+  ProviderSnapshot,
+  RawWireEvent,
+};

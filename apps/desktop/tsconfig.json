@@ -1,18 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ES2024", "DOM"],
-    "rootDir": "src",
-    "outDir": "dist",
-    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
-  },
-  "include": ["src/**/*.ts"],
+  "files": [],
   "references": [
-    { "path": "../../packages/app-client" },
-    { "path": "../../packages/design-system-desktop" },
-    { "path": "../../packages/design-system-tokens" },
-    { "path": "../../packages/session-client" },
-    { "path": "../../packages/session-contracts" },
-    { "path": "../../packages/session-model" }
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.web.json" }
   ]
 }

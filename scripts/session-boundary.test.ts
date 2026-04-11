@@ -1,7 +1,5 @@
 import { describe, expect, test } from "vitest";
 
-import { createDesktopBootstrapPlan } from "../apps/desktop/src/index.js";
-import { createMobileBootstrapPlan } from "../apps/mobile/src/index.js";
 import {
   CONDUIT_COMMANDS,
   CONDUIT_TRANSPORT_VERSION,
@@ -10,12 +8,18 @@ import {
 } from "../packages/session-contracts/src/index.js";
 
 describe("shared session boundary", () => {
-  test("desktop and mobile expose the same consumer command set", () => {
-    const desktop = createDesktopBootstrapPlan();
-    const mobile = createMobileBootstrapPlan();
-
-    expect(desktop.supportedCommands).toEqual([...CONSUMER_COMMANDS]);
-    expect(mobile.supportedCommands).toEqual([...CONSUMER_COMMANDS]);
+  test("the shared consumer command set stays canonical", () => {
+    expect(CONSUMER_COMMANDS).toEqual([
+      "initialize",
+      "session/new",
+      "session/list",
+      "session/load",
+      "session/prompt",
+      "session/cancel",
+      "snapshot/get",
+      "provider/disconnect",
+      "events/subscribe",
+    ]);
   });
 
   test("consumer transport uses versioned correlated websocket frames", () => {

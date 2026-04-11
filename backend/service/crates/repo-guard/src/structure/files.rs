@@ -69,7 +69,10 @@ pub(super) fn walk_files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in WalkDir::new(root).into_iter().filter_entry(|entry| {
         let name = entry.file_name().to_string_lossy();
-        !matches!(name.as_ref(), "dist" | "node_modules" | "target")
+        !matches!(
+            name.as_ref(),
+            ".expo" | ".expo-shared" | "dist" | "node_modules" | "out" | "target" | "web-build"
+        )
     }) {
         let entry = entry
             .map_err(|source| Error::io(Some(root.to_path_buf()), std::io::Error::other(source)))?;

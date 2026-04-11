@@ -1,19 +1,16 @@
-import type {
-  ServerFrame,
-  ConsumerCommand,
-  ConsumerResponse,
-  RuntimeEvent,
-} from "@conduit/session-contracts";
 import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
+import type {
+  ConsumerCommand,
+  ConsumerResponse,
+  RuntimeEvent,
+  ServerFrame,
+} from "@conduit/session-contracts";
 import type { ProviderId } from "@conduit/session-model";
 
-export * from "@conduit/session-contracts";
-export * from "@conduit/session-model";
-
-export interface SessionClientPort {
+interface SessionClientPort {
   readonly policy: "official-acp-only";
   dispatch(command: ConsumerCommand): Promise<ConsumerResponse>;
   initialize(provider: ProviderId): Promise<ConsumerResponse>;
@@ -24,30 +21,53 @@ export interface SessionClientPort {
   ): Promise<() => void>;
 }
 
-export interface SessionClientOptions {
+interface SessionClientOptions {
   url?: string;
   WebSocketImpl?: typeof WebSocket;
 }
 
-type PendingResponse = {
+interface PendingResponse {
   resolve: (response: ConsumerResponse) => void;
   reject: (error: Error) => void;
-};
+}
 
-export class WebSocketSessionClient implements SessionClientPort {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isServerFrame(value: unknown): value is ServerFrame {
+  if (!isRecord(value) || value.v !== CONDUIT_TRANSPORT_VERSION) {
+    return false;
+  }
+  if (value.type === "response") {
+    return typeof value.id === "string" && isRecord(value.response);
+  }
+  return value.type === "event" && isRecord(value.event);
+}
+
+function parseServerFrame(text: string): ServerFrame | null {
+  const parsed: unknown = JSON.parse(text);
+  if (!isServerFrame(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly pending = new Map<string, PendingResponse>();
   private readonly eventHandlers = new Set<(event: RuntimeEvent) => void>();
-  private socket: WebSocket | null = null;
+  private readonly options: SessionClientOptions;
+  private readonly pending = new Map<string, PendingResponse>();
   private connecting: Promise<WebSocket> | null = null;
+  private socket: WebSocket | null = null;
 
-  public constructor(private readonly options: SessionClientOptions = {}) {}
+  public constructor(options: SessionClientOptions = {}) {
+    this.options = options;
+  }
 
   public async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
     const socket = await this.openSocket();
-    const response = new Promise<ConsumerResponse>((resolve, reject) => {
-      this.pending.set(command.id, { resolve, reject });
-    });
+    const response = this.trackResponse(command.id);
     socket.send(
       JSON.stringify({
         v: CONDUIT_TRANSPORT_VERSION,
@@ -59,8 +79,11 @@ export class WebSocketSessionClient implements SessionClientPort {
     return response;
   }
 
-  public initialize(provider: ProviderId): Promise<ConsumerResponse> {
-    return this.dispatch(createConsumerCommand("initialize", provider));
+  public async initialize(provider: ProviderId): Promise<ConsumerResponse> {
+    const response = await this.dispatch(
+      createConsumerCommand("initialize", provider),
+    );
+    return response;
   }
 
   public async subscribe(
@@ -83,18 +106,20 @@ export class WebSocketSessionClient implements SessionClientPort {
     };
   }
 
-  private openSocket(): Promise<WebSocket> {
+  private async openSocket(): Promise<WebSocket> {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      return Promise.resolve(this.socket);
+      return this.socket;
     }
     if (this.connecting) {
-      return this.connecting;
+      const socket = await this.connecting;
+      return socket;
     }
     this.connecting = this.connectSocket();
-    return this.connecting;
+    const socket = await this.connecting;
+    return socket;
   }
 
-  private connectSocket(): Promise<WebSocket> {
+  private async connectSocket(): Promise<WebSocket> {
     const Socket = this.options.WebSocketImpl ?? WebSocket;
     const socket = new Socket(this.url());
     this.socket = socket;
@@ -104,7 +129,12 @@ export class WebSocketSessionClient implements SessionClientPort {
     socket.addEventListener("close", () => {
       this.handleClose();
     });
-    return new Promise((resolve, reject) => {
+    const openedSocket = await this.waitForOpen(socket);
+    return openedSocket;
+  }
+
+  private async waitForOpen(socket: WebSocket): Promise<WebSocket> {
+    const openedSocket = await new Promise<WebSocket>((resolve, reject) => {
       socket.addEventListener("open", () => {
         this.connecting = null;
         resolve(socket);
@@ -114,6 +144,14 @@ export class WebSocketSessionClient implements SessionClientPort {
         reject(new Error("session websocket failed to connect"));
       });
     });
+    return openedSocket;
+  }
+
+  private async trackResponse(id: string): Promise<ConsumerResponse> {
+    const response = await new Promise<ConsumerResponse>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+    });
+    return response;
   }
 
   private handleMessage(event: MessageEvent): void {
@@ -124,6 +162,10 @@ export class WebSocketSessionClient implements SessionClientPort {
     if (!frame) {
       return;
     }
+    this.handleServerFrame(frame);
+  }
+
+  private handleServerFrame(frame: ServerFrame): void {
     if (frame.type === "response") {
       this.pending.get(frame.id)?.resolve(frame.response);
       this.pending.delete(frame.id);
@@ -148,30 +190,50 @@ export class WebSocketSessionClient implements SessionClientPort {
   }
 }
 
-export function createSessionClient(
+function createSessionClient(
   options?: SessionClientOptions,
 ): SessionClientPort {
   return new WebSocketSessionClient(options);
 }
 
-function parseServerFrame(text: string): ServerFrame | null {
-  const parsed: unknown = JSON.parse(text);
-  if (!isServerFrame(parsed)) {
-    return null;
-  }
-  return parsed;
-}
+export {
+  CONDUIT_COMMANDS,
+  CONDUIT_TRANSPORT_VERSION,
+  CONSUMER_COMMANDS,
+  SESSION_COMMANDS,
+  createConsumerCommand,
+} from "@conduit/session-contracts";
+export {
+  PROVIDER_CATALOG,
+  PROVIDERS,
+  createLiveSessionIdentity,
+  getProviderDescriptor,
+} from "@conduit/session-model";
+export { WebSocketSessionClient, createSessionClient };
 
-function isServerFrame(value: unknown): value is ServerFrame {
-  if (!isRecord(value) || value.v !== CONDUIT_TRANSPORT_VERSION) {
-    return false;
-  }
-  if (value.type === "response") {
-    return typeof value.id === "string" && isRecord(value.response);
-  }
-  return value.type === "event" && isRecord(value.event);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+export type {
+  ClientCommandFrame,
+  ConduitCommandName,
+  ConsumerCommand,
+  ConsumerCommandName,
+  ConsumerError,
+  ConsumerResponse,
+  RuntimeEvent,
+  RuntimeEventKind,
+  ServerEventFrame,
+  ServerFrame,
+  ServerResponseFrame,
+  SessionCommandName,
+} from "@conduit/session-contracts";
+export type {
+  ConnectionState,
+  LiveSessionIdentity,
+  LiveSessionSnapshot,
+  PromptLifecycleSnapshot,
+  PromptLifecycleState,
+  ProviderDescriptor,
+  ProviderId,
+  ProviderSnapshot,
+  RawWireEvent,
+} from "@conduit/session-model";
+export type { SessionClientOptions, SessionClientPort };

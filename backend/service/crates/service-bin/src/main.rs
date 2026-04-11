@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         cli::Command::ConsumerProof {
             provider,
             artifact_root,
-        } => consumer_proof::run(provider, &artifact_root, &args),
+        } => consumer_proof::run(provider, &artifact_root, &args).await,
         proof_command => scenarios::run(proof_command, &args),
     }
 }

@@ -3,8 +3,8 @@
 This directory pins the official ACP schema bundle used by Conduit Phase 1.
 
 - Upstream repository: `https://github.com/agentclientprotocol/agent-client-protocol`
-- Pinned tag: `v0.11.5`
-- Pinned commit: `da1b3a8c432c47b2e7b171548a46f0e94a848a2f`
+- Pinned tag: `v0.11.4`
+- Pinned commit: `f8662f197ecf813d8f372211af6c68c54578e7df`
 - Locked files:
   - `manifest.toml`
   - `schema/schema.json`

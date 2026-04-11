@@ -1,6 +1,7 @@
 //! TypeScript workspace checks for repo structure.
 
 use super::files::{relative_path, walk_files};
+use super::js_runtime;
 use crate::error::{Error, Result};
 use regex::Regex;
 use serde::Deserialize;
@@ -95,6 +96,7 @@ impl ImportCheck<'_> {
     fn record(&mut self, unit: &Unit, file: &Path, specifier: &str) {
         if self.record_relative_escape(unit, file, specifier)
             || self.record_repo_path(file, specifier)
+            || self.record_frontend_runtime_violation(unit, file, specifier)
         {
             return;
         }
@@ -187,6 +189,25 @@ impl ImportCheck<'_> {
         ));
         true
     }
+
+    fn record_frontend_runtime_violation(
+        &mut self,
+        unit: &Unit,
+        file: &Path,
+        specifier: &str,
+    ) -> bool {
+        let message = js_runtime::violation_message(&unit.name, specifier);
+        let Some(message) = message else {
+            return false;
+        };
+
+        self.failures.push(format!(
+            "{} {message} via {}.",
+            relative_path(self.repo_root, file),
+            specifier
+        ));
+        true
+    }
 }
 
 fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {
@@ -205,7 +226,12 @@ fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {
 fn source_files(unit: &Unit) -> Result<Vec<PathBuf>> {
     Ok(walk_files(&unit.root.join("src"))?
         .into_iter()
-        .filter(|path| path.extension().and_then(std::ffi::OsStr::to_str) == Some("ts"))
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(std::ffi::OsStr::to_str),
+                Some("ts" | "tsx")
+            )
+        })
         .collect())
 }
 

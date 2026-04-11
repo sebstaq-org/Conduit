@@ -118,7 +118,7 @@ mod tests {
                 id: 1.into(),
                 result: AgentResponse::InitializeResponse(
                     InitializeResponse::new(ProtocolVersion::V1)
-                        .agent_info(Implementation::new("agent", "0.11.5")),
+                        .agent_info(Implementation::new("agent", "0.11.4")),
                 ),
             },
         ));

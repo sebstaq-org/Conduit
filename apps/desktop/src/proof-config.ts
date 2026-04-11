@@ -1,7 +1,5 @@
-import {
-  DESKTOP_PROOF_ACTIONS,
-  type DesktopProofConfig,
-} from "@conduit/app-client";
+import { DESKTOP_PROOF_ACTIONS } from "@conduit/app-client";
+import type { DesktopProofConfig } from "@conduit/app-client";
 import { createDesktopProofSurfaceCopy } from "@conduit/design-system-desktop";
 import { PROVIDERS } from "@conduit/session-model";
 

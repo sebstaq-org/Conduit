@@ -5,7 +5,15 @@ import {
   createSessionClient,
 } from "@conduit/session-client";
 
-export function createDesktopBootstrapPlan() {
+interface DesktopBootstrapPlan {
+  appId: "desktop";
+  copy: ReturnType<typeof createDesktopSessionSurfaceCopy>;
+  lockedPolicy: "official-acp-only";
+  supportedCommands: string[];
+  supportedProviders: string[];
+}
+
+export function createDesktopBootstrapPlan(): DesktopBootstrapPlan {
   const sessionClient = createSessionClient();
   return {
     appId: "desktop",

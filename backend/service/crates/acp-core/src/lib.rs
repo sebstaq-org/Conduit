@@ -14,7 +14,6 @@
 mod error;
 mod host;
 mod snapshot;
-mod transport;
 mod wire;
 
 pub use error::{AcpError, Result};
