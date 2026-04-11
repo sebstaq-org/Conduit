@@ -1,23 +1,21 @@
-import { Box, Text } from "@/theme";
+import { SessionTranscript } from "@/features/session-transcript";
+import { Box } from "@/theme";
 import {
-  sessionScreenAlignItems,
   sessionScreenBackgroundColor,
   sessionScreenFlex,
-  sessionScreenJustifyContent,
   sessionScreenPaddingX,
-  sessionScreenPlaceholderVariant,
+  sessionScreenPaddingY,
 } from "./session.styles";
 
 function SessionScreen(): React.JSX.Element {
   return (
     <Box
-      alignItems={sessionScreenAlignItems}
       backgroundColor={sessionScreenBackgroundColor}
       flex={sessionScreenFlex}
-      justifyContent={sessionScreenJustifyContent}
       px={sessionScreenPaddingX}
+      py={sessionScreenPaddingY}
     >
-      <Text variant={sessionScreenPlaceholderVariant}>No session selected</Text>
+      <SessionTranscript />
     </Box>
   );
 }

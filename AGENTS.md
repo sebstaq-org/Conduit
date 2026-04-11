@@ -30,6 +30,25 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Product UI should be defined once in `apps/frontend` and hosted by platform shells.
 - `apps/frontend/src/screens/navigation-panel` is composition-only: it may arrange panel sections and temporary local fixtures, but feature behavior and state must move to narrow feature modules when introduced.
 
+## Session View Rules
+
+The session view is expected to grow into a large product surface: transcript
+rows, thoughts, tool calls, events, composer, active run state, approvals,
+interactions, pagination, and live sync all belong there over time. Do not hide
+that complexity by creating one broad `session-detail` feature, component, or
+state slice that owns the whole surface.
+
+Model the backend-facing session data as a stable projection behind
+`packages/app-client` / `packages/app-core`, then render it through narrow
+frontend features. Good initial boundaries are transcript/timeline rendering,
+composer, tool-call rendering, thought/event rendering, active-run state,
+approval or interaction handling, and live/pagination sync.
+
+`apps/frontend/src/screens/session` should compose those pieces. It may hold
+screen layout and temporary empty or loading states, but feature behavior,
+transport, parsing, and long-lived state must move into narrower modules as soon
+as they exist.
+
 ## Current Intent
 
 This pass is about the React Native Web frontend foundation, rules, workspace shape, and the first navigation panel screen composition.
