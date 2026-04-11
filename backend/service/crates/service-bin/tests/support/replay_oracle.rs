@@ -67,6 +67,7 @@ pub(crate) fn normalize_event_oracle(value: Value, _scenario: &Value) -> OracleR
 
 pub(crate) fn normalize_snapshot_oracle(value: Value, scenario: &Value) -> OracleResult<Value> {
     let mut normalized = value;
+    remove_empty_array_key(&mut normalized, "loaded_transcripts");
     if dynamic_field_declared(scenario, &["cwd"]) {
         normalize_keyed_string_values(&mut normalized, "cwd", "/__dynamic_cwd__");
     }
@@ -108,6 +109,28 @@ pub(crate) fn normalize_snapshot_oracle(value: Value, scenario: &Value) -> Oracl
         normalize_path_like_strings(&mut normalized);
     }
     Ok(normalized)
+}
+
+fn remove_empty_array_key(value: &mut Value, key: &str) {
+    match value {
+        Value::Object(map) => {
+            if map
+                .get(key)
+                .is_some_and(|entry| entry.as_array().is_some_and(|values| values.is_empty()))
+            {
+                map.remove(key);
+            }
+            for entry_value in map.values_mut() {
+                remove_empty_array_key(entry_value, key);
+            }
+        }
+        Value::Array(values) => {
+            for entry in values {
+                remove_empty_array_key(entry, key);
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }
 
 fn normalize_keyed_number_values(value: &mut Value, key: &str, replacement: i64) {

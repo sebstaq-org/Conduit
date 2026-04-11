@@ -19,7 +19,7 @@ mod wire;
 pub use error::{AcpError, Result};
 pub use host::AcpHost;
 pub use snapshot::{
-    ConnectionState, LiveSessionIdentity, LiveSessionSnapshot, PromptLifecycleSnapshot,
-    PromptLifecycleState, ProviderSnapshot,
+    ConnectionState, LiveSessionIdentity, LiveSessionSnapshot, LoadedTranscriptSnapshot,
+    PromptLifecycleSnapshot, PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,
 };
 pub use wire::{RawWireEvent, WireKind, WireStream};

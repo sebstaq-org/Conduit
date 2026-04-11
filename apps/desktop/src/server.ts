@@ -409,6 +409,11 @@ function normalizeSnapshot(raw: Record<string, unknown>): ProviderSnapshot {
   const lastPrompt = raw.last_prompt
     ? normalizePrompt(raw.last_prompt as Record<string, unknown>)
     : null;
+  const loadedTranscripts = Array.isArray(raw.loaded_transcripts)
+    ? raw.loaded_transcripts.map((entry) =>
+        normalizeLoadedTranscript(entry as Record<string, unknown>),
+      )
+    : [];
   return {
     provider: raw.provider as ProviderId,
     connectionState:
@@ -418,6 +423,30 @@ function normalizeSnapshot(raw: Record<string, unknown>): ProviderSnapshot {
     authMethods: Array.isArray(raw.auth_methods) ? raw.auth_methods : [],
     liveSessions,
     lastPrompt,
+    loadedTranscripts,
+  };
+}
+
+function normalizeLoadedTranscript(
+  raw: Record<string, unknown>,
+): ProviderSnapshot["loadedTranscripts"][number] {
+  const identity = raw.identity as Record<string, unknown>;
+  return {
+    identity: {
+      provider: identity.provider as ProviderId,
+      acpSessionId: String(identity.acp_session_id),
+    },
+    rawUpdateCount: Number(raw.raw_update_count ?? 0),
+    updates: Array.isArray(raw.updates)
+      ? raw.updates.map((entry) => {
+          const update = entry as Record<string, unknown>;
+          return {
+            index: Number(update.index ?? 0),
+            variant: readString(update.variant),
+            update: update.update ?? null,
+          };
+        })
+      : [],
   };
 }
 

@@ -1,0 +1,31 @@
+{
+  "schema": "conduit.session_load_verifier_summary.v1",
+  "status": "no_blocking_functional_mismatch_after_review",
+  "reviewed_surfaces": [
+    "ACP loading-sessions docs versus locked schema",
+    "locked LoadSessionRequest and LoadSessionResponse validation",
+    "live direct ACP coverage matrix for codex, claude, and copilot",
+    "curated session-load-known-session fixtures",
+    "replay fake provider load-time session/update behavior",
+    "consumer WebSocket loaded_transcripts read model",
+    "fixture and replay test oracles",
+    "secret and path hygiene expectations"
+  ],
+  "conclusion": "Verifier found no blocking functional mismatch after docs/schema drift was documented, fixtures carried load-time replay updates before the session/load response, and the continuation oracle required loaded history evidence.",
+  "accepted_contract_drift": [
+    "ACP narrative docs show result:null for session/load, while the locked schema and live providers use object-shaped LoadSessionResponse.",
+    "Provider-specific unstable model/session fields are omitted from curated fixtures when absent from the locked schema, and omitted fields are recorded in each promotion log."
+  ],
+  "follow_up_from_human_review": [
+    "Continuation oracle must prove loaded history context use, not only stopReason=end_turn.",
+    "Coverage matrix must preserve the manual chunk-reconstruction evidence for codex and copilot.",
+    "Red-first and verifier evidence must be present as sanitized committed artifacts."
+  ],
+  "hygiene": "sanitized; no raw session ids, private prompts, local paths, auth metadata, or raw provider captures",
+  "verifier_subagents": ["Nietzsche", "Copernicus"],
+  "latest_verifier_observation": {
+    "verifier": "Copernicus",
+    "blocker": "red-first proof and verifier summary artifacts were still untracked at review time",
+    "remediation": "include the sanitized proof and verifier summary artifacts in this changeset before finalizing"
+  }
+}

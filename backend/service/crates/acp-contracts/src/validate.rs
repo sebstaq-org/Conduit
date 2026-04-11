@@ -121,7 +121,7 @@ pub fn validate_locked_request_envelope(
             Ok(LockedMethod::SessionList)
         }
         "session/load" => {
-            validate_params::<LoadSessionRequest>(params)?;
+            validate_load_session_request(params)?;
             Ok(LockedMethod::SessionLoad)
         }
         "session/prompt" => {
@@ -233,4 +233,13 @@ where
     serde_json::from_value::<T>(result.clone())
         .map(|_| ())
         .map_err(|error| Error::contract(error.to_string()))
+}
+
+fn validate_load_session_request(params: &Value) -> Result<()> {
+    let request = serde_json::from_value::<LoadSessionRequest>(params.clone())
+        .map_err(|error| Error::contract(error.to_string()))?;
+    if request.cwd.is_absolute() {
+        return Ok(());
+    }
+    Err(Error::contract("session/load cwd must be absolute"))
 }

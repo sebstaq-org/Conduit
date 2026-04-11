@@ -8,7 +8,9 @@ use super::common::{
     require_string_field, scenario_path_from_manifest, string_field,
 };
 use super::hygiene::validate_fixture_file_hygiene;
+use acp_contracts::{LockedMethod, load_locked_contract_bundle, validate_locked_response_envelope};
 use serde_json::Value;
+use serde_json::json;
 use std::path::Path;
 
 pub(crate) fn validate_replay_provider(
@@ -83,6 +85,7 @@ fn validate_manifest_scenario(
 
     let scenario = read_json(context)?;
     validate_scenario_metadata(context, entry, &scenario)?;
+    validate_session_load_replay_contract(context, &scenario)?;
     validate_expected_events(
         context,
         &scenario_path.with_file_name("expected-events.jsonl"),
@@ -95,6 +98,177 @@ fn validate_manifest_scenario(
     validate_replay_frames(context, &scenario, report)?;
     validate_fixture_file_hygiene(context.path, provider, name)?;
     Ok(())
+}
+
+fn validate_session_load_replay_contract(
+    context: ValidationContext<'_, '_>,
+    scenario: &Value,
+) -> ValidationResult<()> {
+    let Some(session_load) = scenario
+        .get("replay")
+        .and_then(|replay| replay.get("session_load"))
+    else {
+        return Ok(());
+    };
+    let result = session_load
+        .get("result")
+        .ok_or_else(|| failure(context, "session_load replay was missing result"))?;
+    let envelope = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": result,
+    });
+    let bundle = load_locked_contract_bundle().map_err(|error| {
+        failure(
+            context,
+            format!("could not load locked ACP schema: {error}"),
+        )
+    })?;
+    validate_locked_response_envelope(&bundle, LockedMethod::SessionLoad, &envelope).map_err(
+        |error| {
+            failure(
+                context,
+                format!("session_load response drifted from locked schema: {error}"),
+            )
+        },
+    )?;
+
+    if context.scenario != "session-load-known-session" {
+        return Ok(());
+    }
+    let replay_updates = array_field(context, session_load, "replay_updates")?;
+    if replay_updates.is_empty() {
+        return Err(failure(
+            context,
+            "session-load-known-session must include load-time replay_updates",
+        ));
+    }
+    for update in replay_updates {
+        let variant = string_field(context, update, "sessionUpdate")?;
+        if !is_official_session_update_variant(variant) {
+            return Err(failure(
+                context,
+                format!("unsupported sessionUpdate variant {variant}"),
+            ));
+        }
+    }
+    validate_continuation_context_oracle(context, scenario, replay_updates)?;
+    let expected_kinds = array_field(context, scenario, "expected_event_kinds")?;
+    if !expected_kinds
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|kind| kind == "session_replay_update")
+    {
+        return Err(failure(
+            context,
+            "session-load-known-session must expect session_replay_update events",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_continuation_context_oracle(
+    context: ValidationContext<'_, '_>,
+    scenario: &Value,
+    replay_updates: &[Value],
+) -> ValidationResult<()> {
+    let session_prompt = scenario
+        .get("replay")
+        .and_then(|replay| replay.get("session_prompt"))
+        .ok_or_else(|| {
+            failure(
+                context,
+                "session-load-known-session must define session_prompt replay",
+            )
+        })?;
+    validate_continuation_context_declaration(context, session_prompt, replay_updates)?;
+    validate_continuation_consumer_assertion(context, scenario)
+}
+
+fn validate_continuation_context_declaration(
+    context: ValidationContext<'_, '_>,
+    session_prompt: &Value,
+    replay_updates: &[Value],
+) -> ValidationResult<()> {
+    if session_prompt
+        .get("requires_loaded_replay")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Err(failure(
+            context,
+            "session-load-known-session continuation oracle must require loaded replay history",
+        ));
+    }
+
+    let expected_variants = array_field(context, session_prompt, "expected_history_variants")?;
+    let actual_variants = replay_updates
+        .iter()
+        .map(|update| string_field(context, update, "sessionUpdate").map(ToOwned::to_owned))
+        .collect::<ValidationResult<Vec<_>>>()?;
+    let expected_variants = expected_variants
+        .iter()
+        .map(|variant| {
+            variant
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| failure(context, "expected_history_variants must contain strings"))
+        })
+        .collect::<ValidationResult<Vec<_>>>()?;
+    if actual_variants != expected_variants {
+        return Err(failure(
+            context,
+            format!(
+                "continuation oracle variants {expected_variants:?} did not match replay updates {actual_variants:?}"
+            ),
+        ));
+    }
+
+    let expected_text = array_field(context, session_prompt, "expected_history_text_includes")?;
+    if expected_text.is_empty() {
+        return Err(failure(
+            context,
+            "continuation oracle must include expected replay text markers",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_continuation_consumer_assertion(
+    context: ValidationContext<'_, '_>,
+    scenario: &Value,
+) -> ValidationResult<()> {
+    let sequence = array_field(context, scenario, "consumer_sequence")?;
+    let has_context_assertion = sequence.iter().any(|operation| {
+        operation.get("command").and_then(Value::as_str) == Some("session/prompt")
+            && operation
+                .get("assert_loaded_replay_context_used")
+                .and_then(Value::as_bool)
+                == Some(true)
+    });
+    if !has_context_assertion {
+        return Err(failure(
+            context,
+            "consumer_sequence must assert loaded replay context use on session/prompt",
+        ));
+    }
+    Ok(())
+}
+
+fn is_official_session_update_variant(variant: &str) -> bool {
+    matches!(
+        variant,
+        "user_message_chunk"
+            | "agent_message_chunk"
+            | "agent_thought_chunk"
+            | "tool_call"
+            | "tool_call_update"
+            | "plan"
+            | "available_commands_update"
+            | "current_mode_update"
+            | "config_option_update"
+            | "session_info_update"
+    )
 }
 
 fn validate_scenario_metadata(

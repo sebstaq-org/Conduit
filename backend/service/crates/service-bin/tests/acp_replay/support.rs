@@ -1,6 +1,7 @@
 //! Support code for the ACP replay integration test.
 
 use super::REPLAY_PROVIDER_SCRIPT;
+use super::load_replay::{assert_loaded_replay_context_used, assert_loaded_transcript_variants};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::error::Error;
@@ -381,6 +382,31 @@ pub(crate) fn assert_operation_expectations(
             .ok_or("scenario was missing session.session_id")?;
         assert_snapshot_observed_via(frame, provider, session_id, expected_observed_via)?;
     }
+    if let Some(expected_variants) = operation
+        .get("assert_loaded_transcript_variants")
+        .and_then(Value::as_array)
+    {
+        let variants = expected_variants
+            .iter()
+            .map(|variant| variant.as_str().map(ToOwned::to_owned))
+            .collect::<Option<Vec<_>>>()
+            .ok_or("assert_loaded_transcript_variants contained a non-string value")?;
+        let session_id = scenario
+            .get("session")
+            .and_then(|session| session.get("session_id"))
+            .and_then(Value::as_str)
+            .ok_or("scenario was missing session.session_id")?;
+        assert_loaded_transcript_variants(frame, provider, session_id, &variants)?;
+    }
+    if let Some(expected_result) = operation.get("assert_result_equals") {
+        let actual_result = response_result(frame)?;
+        if actual_result != expected_result {
+            return Err(
+                format!("expected response result {expected_result}, got {actual_result}").into(),
+            );
+        }
+    }
+    assert_loaded_replay_context_used(scenario, operation)?;
     Ok(())
 }
 

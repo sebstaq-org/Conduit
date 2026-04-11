@@ -3,8 +3,8 @@
 use super::helpers::{identity, unexpected};
 use crate::error::{AcpError, Result};
 use crate::snapshot::{
-    ConnectionState, LiveSessionSnapshot, PromptLifecycleSnapshot, PromptLifecycleState,
-    ProviderSnapshot,
+    ConnectionState, LiveSessionSnapshot, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
+    PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,
 };
 use acp_discovery::{LauncherCommand, ProcessEnvironment, ProviderDiscovery, ProviderId};
 use agent_client_protocol::{self as acp, Agent as _};
@@ -66,6 +66,7 @@ struct SdkHostActor {
     connection: Option<acp::ClientSideConnection>,
     discovery: ProviderDiscovery,
     last_prompt: Option<PromptLifecycleSnapshot>,
+    loaded_transcripts: BTreeMap<String, LoadedTranscriptSnapshot>,
     live_sessions: BTreeMap<String, LiveSessionSnapshot>,
     provider: ProviderId,
     updates: Arc<Mutex<PromptUpdateState>>,
@@ -93,6 +94,7 @@ impl SdkHostActor {
             connection: Some(connection),
             discovery,
             last_prompt: None,
+            loaded_transcripts: BTreeMap::new(),
             live_sessions: BTreeMap::new(),
             provider,
             updates,
@@ -154,6 +156,7 @@ impl SdkHostActor {
             auth_methods: self.auth_methods.clone(),
             live_sessions: self.live_sessions.values().cloned().collect(),
             last_prompt: self.last_prompt.clone(),
+            loaded_transcripts: self.loaded_transcripts.values().cloned().collect(),
         }
     }
 
@@ -209,14 +212,22 @@ impl SdkHostActor {
         session_id: acp::SessionId,
         cwd: PathBuf,
     ) -> Result<acp::LoadSessionResponse> {
+        update_session_tracker(
+            &self.updates,
+            Some(session_id.to_string()),
+            0,
+            self.provider,
+        )?;
         let response = self
             .connection()?
             .load_session(acp::LoadSessionRequest::new(
                 session_id.clone(),
                 cwd.clone(),
             ))
-            .await
-            .map_err(|source| sdk_error(self.provider, "session/load", source))?;
+            .await;
+        let replay_updates = take_session_updates(&self.updates, self.provider)?;
+        let response =
+            response.map_err(|source| sdk_error(self.provider, "session/load", source))?;
         let title = self
             .live_sessions
             .get(&session_id.to_string())
@@ -228,6 +239,14 @@ impl SdkHostActor {
                 cwd: cwd.display().to_string(),
                 title,
                 observed_via: "load".to_owned(),
+            },
+        );
+        self.loaded_transcripts.insert(
+            session_id.to_string(),
+            LoadedTranscriptSnapshot {
+                identity: identity(self.provider, &session_id),
+                raw_update_count: replay_updates.raw_update_count,
+                updates: replay_updates.updates,
             },
         );
         Ok(response)
@@ -294,7 +313,7 @@ impl SdkHostActor {
     }
 
     fn start_prompt(&mut self, session_id: &acp::SessionId) -> Result<()> {
-        update_prompt_tracker(
+        update_session_tracker(
             &self.updates,
             Some(session_id.to_string()),
             0,
@@ -315,7 +334,7 @@ impl SdkHostActor {
         session_id: &acp::SessionId,
         response: &acp::PromptResponse,
     ) -> Result<()> {
-        let updates = take_prompt_updates(&self.updates, self.provider)?;
+        let updates = take_session_updates(&self.updates, self.provider)?;
         let stop_reason = stop_reason_string(response);
         let state = if stop_reason.as_deref() == Some("cancelled") {
             PromptLifecycleState::Cancelled
@@ -365,11 +384,13 @@ struct PromptUpdateState {
     active_session: Option<String>,
     raw_update_count: usize,
     agent_text_chunks: Vec<String>,
+    updates: Vec<TranscriptUpdateSnapshot>,
 }
 
 struct PromptUpdates {
     raw_update_count: usize,
     agent_text_chunks: Vec<String>,
+    updates: Vec<TranscriptUpdateSnapshot>,
 }
 
 #[derive(Clone)]
@@ -396,10 +417,23 @@ impl acp::Client for SdkClient {
         })?;
         if updates.active_session.as_deref() == Some(&args.session_id.to_string()) {
             updates.raw_update_count += 1;
-            if let acp::SessionUpdate::AgentMessageChunk(chunk) = args.update
-                && let acp::ContentBlock::Text(text) = chunk.content
+            let index = updates.raw_update_count.saturating_sub(1);
+            let variant = session_update_variant(&args.update);
+            let update = to_value(&args.update).map_err(|error| {
+                acp::Error::internal_error().data(format!(
+                    "session update serialization failed for {}: {error}",
+                    self.provider
+                ))
+            })?;
+            updates.updates.push(TranscriptUpdateSnapshot {
+                index,
+                variant,
+                update,
+            });
+            if let acp::SessionUpdate::AgentMessageChunk(chunk) = &args.update
+                && let acp::ContentBlock::Text(text) = &chunk.content
             {
-                updates.agent_text_chunks.push(text.text);
+                updates.agent_text_chunks.push(text.text.clone());
             }
         }
         Ok(())
@@ -513,7 +547,7 @@ fn child_stdout(
         .ok_or_else(|| disconnected(provider, "stdout"))
 }
 
-fn update_prompt_tracker(
+fn update_session_tracker(
     updates: &Arc<Mutex<PromptUpdateState>>,
     active_session: Option<String>,
     raw_update_count: usize,
@@ -525,10 +559,11 @@ fn update_prompt_tracker(
     updates.active_session = active_session;
     updates.raw_update_count = raw_update_count;
     updates.agent_text_chunks.clear();
+    updates.updates.clear();
     Ok(())
 }
 
-fn take_prompt_updates(
+fn take_session_updates(
     updates: &Arc<Mutex<PromptUpdateState>>,
     provider: ProviderId,
 ) -> Result<PromptUpdates> {
@@ -537,12 +572,31 @@ fn take_prompt_updates(
         .map_err(|error| unexpected(provider, error.to_string()))?;
     let count = updates.raw_update_count;
     let agent_text_chunks = std::mem::take(&mut updates.agent_text_chunks);
+    let captured_updates = std::mem::take(&mut updates.updates);
     updates.active_session = None;
     updates.raw_update_count = 0;
     Ok(PromptUpdates {
         raw_update_count: count,
         agent_text_chunks,
+        updates: captured_updates,
     })
+}
+
+fn session_update_variant(update: &acp::SessionUpdate) -> String {
+    let variant = match update {
+        acp::SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
+        acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
+        acp::SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",
+        acp::SessionUpdate::ToolCall(_) => "tool_call",
+        acp::SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+        acp::SessionUpdate::Plan(_) => "plan",
+        acp::SessionUpdate::AvailableCommandsUpdate(_) => "available_commands_update",
+        acp::SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
+        acp::SessionUpdate::ConfigOptionUpdate(_) => "config_option_update",
+        acp::SessionUpdate::SessionInfoUpdate(_) => "session_info_update",
+        _ => "unknown_session_update",
+    };
+    variant.to_owned()
 }
 
 fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {
@@ -591,6 +645,7 @@ pub(super) fn disconnected_snapshot(
         auth_methods: Vec::new(),
         live_sessions: Vec::new(),
         last_prompt: None,
+        loaded_transcripts: Vec::new(),
     }
 }
 

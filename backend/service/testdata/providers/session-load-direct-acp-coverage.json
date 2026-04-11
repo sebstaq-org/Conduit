@@ -1,0 +1,36 @@
+{
+  "schema": "conduit.session_load_direct_acp_coverage.v1",
+  "source": "sanitized summaries under manual artifact set session-load-transcript-20260411T150921Z",
+  "providers": [
+    {
+      "provider": "codex",
+      "capabilities": "loadSession=true; sessionCapabilities=list,close; promptCapabilities=image,audio=false,embeddedContext",
+      "request_shape": "session/new and session/load used absolute neutral cwd and mcpServers=[]; session/list cursor was treated as opaque",
+      "replay_update_variants": "user_message_chunk=1; agent_message_chunk=1; all other official SessionUpdate variants not observed in load replay",
+      "update_order": "session/load request sent; replay updates arrived in order user_message_chunk then agent_message_chunk; load response followed",
+      "load_response_shape": "schema object with configOptions, models, modes; narrative null result not observed",
+      "continuation_after_load": "prompt after load succeeded; manual continuation chunk reconstruction confirmed the neutral marker token, while the direct response-envelope classifier alone did not detect it",
+      "missing_or_blocked_observations": "not observed: agent_thought_chunk, tool_call, tool_call_update, plan, available_commands_update, current_mode_update, config_option_update, session_info_update during load replay"
+    },
+    {
+      "provider": "claude",
+      "capabilities": "loadSession=true; sessionCapabilities=fork,list,resume,close; promptCapabilities=image,embeddedContext",
+      "request_shape": "session/new and session/load used absolute neutral cwd and mcpServers=[]; session/list cursor not applicable because first page had no nextCursor",
+      "replay_update_variants": "user_message_chunk=3; agent_message_chunk=1; all other official SessionUpdate variants not observed in load replay",
+      "update_order": "session/load request sent; replay updates arrived in order user_message_chunk, user_message_chunk, user_message_chunk, agent_message_chunk; load response followed",
+      "load_response_shape": "schema object with configOptions, models, modes, sessionId; narrative null result not observed",
+      "continuation_after_load": "prompt after load succeeded; direct classifier and manual continuation chunk reconstruction confirmed the neutral marker token",
+      "missing_or_blocked_observations": "not observed: agent_thought_chunk, tool_call, tool_call_update, plan, available_commands_update, current_mode_update, config_option_update, session_info_update during load replay"
+    },
+    {
+      "provider": "copilot",
+      "capabilities": "loadSession=true; sessionCapabilities=list; promptCapabilities=image,audio=false,embeddedContext",
+      "request_shape": "session/new and session/load used absolute neutral cwd and mcpServers=[]; session/list cursor was treated as opaque",
+      "replay_update_variants": "user_message_chunk=1; agent_message_chunk=1; all other official SessionUpdate variants not observed in load replay",
+      "update_order": "session/load request sent; replay updates arrived in order user_message_chunk then agent_message_chunk; load response followed",
+      "load_response_shape": "schema object with configOptions, models, modes; narrative null result not observed",
+      "continuation_after_load": "prompt after load succeeded; manual continuation chunk reconstruction confirmed the neutral marker token, while the direct response-envelope classifier alone did not detect it",
+      "missing_or_blocked_observations": "not observed: agent_thought_chunk, tool_call, tool_call_update, plan, available_commands_update, current_mode_update, config_option_update, session_info_update during load replay; cwd-filtered list returned zero entries but known session load still succeeded"
+    }
+  ]
+}

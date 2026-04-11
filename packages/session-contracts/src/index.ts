@@ -51,6 +51,7 @@ type RuntimeEventKind =
   | "provider_connected"
   | "provider_disconnected"
   | "session_observed"
+  | "session_replay_update"
   | "prompt_started"
   | "prompt_update_observed"
   | "prompt_completed"

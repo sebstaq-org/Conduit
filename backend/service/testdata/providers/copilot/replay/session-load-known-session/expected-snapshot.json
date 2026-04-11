@@ -127,7 +127,49 @@
     "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
     "version": "/__dynamic_provider_version__"
   },
-  "last_prompt": null,
+  "last_prompt": {
+    "agent_text_chunks": [],
+    "identity": {
+      "acp_session_id": "replay-copilot-session-load-known-session-session-1",
+      "provider": "copilot"
+    },
+    "raw_update_count": 0,
+    "state": "completed",
+    "stop_reason": "end_turn"
+  },
+  "loaded_transcripts": [
+    {
+      "identity": {
+        "acp_session_id": "replay-copilot-session-load-known-session-session-1",
+        "provider": "copilot"
+      },
+      "raw_update_count": 2,
+      "updates": [
+        {
+          "index": 0,
+          "update": {
+            "content": {
+              "text": "Neutral seed prompt preserved in loaded history.",
+              "type": "text"
+            },
+            "sessionUpdate": "user_message_chunk"
+          },
+          "variant": "user_message_chunk"
+        },
+        {
+          "index": 1,
+          "update": {
+            "content": {
+              "text": "Neutral seed response preserved in loaded history.",
+              "type": "text"
+            },
+            "sessionUpdate": "agent_message_chunk"
+          },
+          "variant": "agent_message_chunk"
+        }
+      ]
+    }
+  ],
   "live_sessions": [
     {
       "cwd": "/__dynamic_cwd__",
