@@ -4,6 +4,7 @@ const panelTokens = {
     border: "#ececec",
     icon: "#8d8d8d",
     mutedText: "#b7b7b7",
+    pressed: "#f1f1f1",
     text: "#5b5b5b",
   },
   font: {
@@ -17,11 +18,14 @@ const panelTokens = {
   sizes: {
     desktopPanelWidth: 414,
     icon: 18,
+    iconButton: 28,
     iconGlyph: 16,
     rowHeight: 34,
   },
   space: {
+    bottomY: 22,
     contentX: 22,
+    footerY: 10,
     gap: 12,
     indent: 26,
     sectionY: 18,

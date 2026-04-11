@@ -7,6 +7,10 @@ const panelStyles = StyleSheet.create({
     paddingHorizontal: panelTokens.space.contentX,
     paddingTop: panelTokens.space.topY,
   },
+  footer: {
+    paddingBottom: panelTokens.space.bottomY,
+    paddingTop: panelTokens.space.footerY,
+  },
   host: {
     backgroundColor: panelTokens.colors.background,
     flex: 1,
