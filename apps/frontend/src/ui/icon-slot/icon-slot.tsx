@@ -3,14 +3,20 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useTheme } from "@shopify/restyle";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
-import { createIconSlotFrameStyle, iconSlotMetrics } from "./icon-slot.styles";
+import {
+  createIconSlotFrameStyle,
+  createNavigationPanelToggleIconStyles,
+  iconSlotMetrics,
+} from "./icon-slot.styles";
 
 type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
 type MaterialCommunityIconName = React.ComponentProps<
   typeof MaterialCommunityIcons
 >["name"];
+type CustomIconSlotName = "navigation-panel-toggle";
 
 type IconSlotName =
+  | CustomIconSlotName
   | FeatherIconName
   | { family: "material-community"; name: MaterialCommunityIconName };
 
@@ -36,6 +42,20 @@ function IconSlot({ color, name }: IconSlotProps): React.JSX.Element {
   const metrics = iconSlotMetrics(theme);
   const frameStyle = createIconSlotFrameStyle(theme);
   const iconColor = resolveIconColor(theme, metrics, color);
+
+  if (name === "navigation-panel-toggle") {
+    const toggleIconStyles = createNavigationPanelToggleIconStyles(
+      theme,
+      iconColor,
+    );
+
+    return (
+      <Box style={toggleIconStyles.frame}>
+        <Box style={toggleIconStyles.topLine} />
+        <Box style={toggleIconStyles.bottomLine} />
+      </Box>
+    );
+  }
 
   if (typeof name !== "string") {
     return (
