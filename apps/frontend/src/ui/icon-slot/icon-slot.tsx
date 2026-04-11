@@ -15,19 +15,33 @@ type IconSlotName =
   | { family: "material-community"; name: MaterialCommunityIconName };
 
 interface IconSlotProps {
+  color?: keyof Theme["colors"] | undefined;
   name: IconSlotName;
 }
 
-function IconSlot({ name }: IconSlotProps): React.JSX.Element {
+function resolveIconColor(
+  theme: Theme,
+  metrics: ReturnType<typeof iconSlotMetrics>,
+  color: keyof Theme["colors"] | undefined,
+): string {
+  if (color === undefined) {
+    return metrics.color;
+  }
+
+  return theme.colors[color];
+}
+
+function IconSlot({ color, name }: IconSlotProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const metrics = iconSlotMetrics(theme);
   const frameStyle = createIconSlotFrameStyle(theme);
+  const iconColor = resolveIconColor(theme, metrics, color);
 
   if (typeof name !== "string") {
     return (
       <Box style={frameStyle}>
         <MaterialCommunityIcons
-          color={metrics.color}
+          color={iconColor}
           name={name.name}
           size={metrics.glyphSize}
         />
@@ -37,7 +51,7 @@ function IconSlot({ name }: IconSlotProps): React.JSX.Element {
 
   return (
     <Box style={frameStyle}>
-      <Feather color={metrics.color} name={name} size={metrics.glyphSize} />
+      <Feather color={iconColor} name={name} size={metrics.glyphSize} />
     </Box>
   );
 }
