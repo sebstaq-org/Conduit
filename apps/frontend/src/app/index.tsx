@@ -1,5 +1,5 @@
-import { NavigationPanelScreen } from "@/screens/navigation-panel/navigation-panel";
+import { AppShellScreen } from "@/screens/app-shell";
 
 export default function IndexRoute(): React.JSX.Element {
-  return <NavigationPanelScreen />;
+  return <AppShellScreen />;
 }

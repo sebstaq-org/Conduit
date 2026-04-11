@@ -20,6 +20,7 @@ function createPanelContainerStyle(theme: Theme): ViewStyle {
     backgroundColor: theme.colors.background,
     borderColor: theme.colors.borderSubtle,
     borderRightWidth: 1,
+    flex: 1,
     flexShrink: 0,
     maxWidth: theme.panel.maxWidth,
     width: "100%",
