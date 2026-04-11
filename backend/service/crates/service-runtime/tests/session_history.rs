@@ -40,8 +40,18 @@ fn session_open_returns_latest_history_window_and_older_cursor() -> TestResult<(
     )?;
     let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
     let next_cursor = string_field(&opened.result, "nextCursor")?.to_owned();
+    assert_older_history_page(&mut runtime, &open_session_id, &next_cursor, "2")?;
+    assert_older_history_page(&mut runtime, &open_session_id, &next_cursor, "3")
+}
+
+fn assert_older_history_page(
+    runtime: &mut ServiceRuntime<FakeFactory>,
+    open_session_id: &str,
+    next_cursor: &str,
+    command_id: &str,
+) -> TestResult<()> {
     let older = runtime.dispatch(command(
-        "2",
+        command_id,
         "session/history",
         "codex",
         json!({

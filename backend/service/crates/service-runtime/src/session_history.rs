@@ -104,7 +104,7 @@ impl SessionHistoryStore {
         limit: Option<u64>,
     ) -> Result<Value> {
         let end = match cursor {
-            Some(cursor) => self.take_cursor(&open_session_id, &cursor)?,
+            Some(cursor) => self.cursor_end(&open_session_id, &cursor)?,
             None => self
                 .open_sessions
                 .get(&open_session_id)
@@ -145,10 +145,10 @@ impl SessionHistoryStore {
             .map(|transcript| transcript.provider)
     }
 
-    fn take_cursor(&mut self, open_session_id: &str, cursor: &str) -> Result<usize> {
+    fn cursor_end(&self, open_session_id: &str, cursor: &str) -> Result<usize> {
         let cursor = self
             .cursors
-            .remove(cursor)
+            .get(cursor)
             .ok_or(RuntimeError::InvalidParameter {
                 command: "session/history",
                 parameter: "cursor",
