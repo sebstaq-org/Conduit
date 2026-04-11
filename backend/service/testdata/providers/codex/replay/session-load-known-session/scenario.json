@@ -317,6 +317,20 @@
       "result": {
         "stopReason": "end_turn"
       },
+      "replay_update_delay_ms": 0,
+      "replay_updates": [
+        {
+          "sessionUpdate": "available_commands_update",
+          "availableCommands": []
+        },
+        {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Conduit direct ACP continuation turn observed."
+          }
+        }
+      ],
       "requires_loaded_replay": true,
       "expected_history_variants": [
         "user_message_chunk",
@@ -379,7 +393,7 @@
     {
       "command": "session/prompt",
       "params": {
-        "session_id": "replay-codex-session-load-known-session-session-1",
+        "openSessionId": "$lastOpenSessionId",
         "prompt": "Neutral continuation check."
       },
       "expect_ok": true,
@@ -387,6 +401,22 @@
         "stopReason": "end_turn"
       },
       "assert_loaded_replay_context_used": true
+    },
+    {
+      "command": "session/history",
+      "params": {
+        "openSessionId": "$lastOpenSessionId",
+        "limit": 40
+      },
+      "expect_ok": true,
+      "assert_history_item_variants": [
+        "user_message_chunk",
+        "agent_message_chunk",
+        "session_prompt",
+        "available_commands_update",
+        "agent_message_chunk"
+      ],
+      "assert_history_next_cursor": null
     }
   ],
   "expected_event_kinds": [
@@ -399,7 +429,9 @@
     "session_observed",
     "prompt_started",
     "prompt_update_observed",
-    "prompt_completed"
+    "prompt_update_observed",
+    "prompt_completed",
+    "session_timeline_changed"
   ],
   "observation": {
     "source_scenario": "session-load-known-session",
@@ -447,7 +479,8 @@
         "load-time session/update replay precedes session/load response",
         "user_message_chunk then agent_message_chunk ordering",
         "LoadSessionResponse object shape with configOptions and modes",
-        "continuation prompt accepted only after the replay fake provider matched loaded history variants and neutral text markers"
+        "continuation prompt accepted only after the replay fake provider matched loaded history variants and neutral text markers",
+        "continuation prompt-turn emits curated session/update notifications before prompt response and session/history exposes the appended turn through openSessionId"
       ],
       "omitted_observed_session_update_variants": [],
       "omitted_load_response_fields": ["models"],

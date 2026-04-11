@@ -195,10 +195,23 @@ async function handle(message) {
     return;
   }
   if (message.method === 'session/prompt') {
+    if (!requireLoadedReplayContext(message)) {
+      return;
+    }
+    const promptReplay = scenario.replay?.session_prompt;
+    const promptSessionId = sessionIdText(message.params?.sessionId ?? message.params?.session_id) ?? sessionId;
+    for (const update of promptReplay?.replay_updates ?? []) {
+      send({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: promptSessionId,
+          update: materialize(update),
+        },
+      });
+      await sleep(promptReplay?.replay_update_delay_ms ?? 0);
+    }
     if (!scenario.prompt) {
-      if (!requireLoadedReplayContext(message)) {
-        return;
-      }
       respond(message.id, materialize(scenario.replay?.session_prompt?.result ?? { stopReason: 'end_turn' }));
       return;
     }
@@ -276,7 +289,8 @@ async fn exercise_replay_sequence(
     prompt_replay_session(socket, &mut run, scenario, &session_id, &mut event_frames).await?;
     let expected_snapshot =
         assert_snapshot_agent_chunks(socket, &mut run, scenario, &mut event_frames).await?;
-    let backlog_frames = assert_subscribe_backlog(socket, &mut run, &mut event_frames).await?;
+    let backlog_frames =
+        assert_subscribe_backlog(socket, &mut run, scenario, &mut event_frames).await?;
     assert_expected_oracles(fixture, scenario, &backlog_frames, &expected_snapshot)?;
     assert_replay_disconnect(socket, &mut run, &mut event_frames, &backlog_frames).await
 }
@@ -290,6 +304,7 @@ async fn exercise_curated_sequence(
     let mut event_frames = Vec::new();
     let mut run = ReplayRun::new(provider);
     let mut expected_snapshot = None;
+    let mut opened_session_id = None;
     let operations = scenario
         .get("consumer_sequence")
         .and_then(Value::as_array)
@@ -304,6 +319,7 @@ async fn exercise_curated_sequence(
             .get("params")
             .cloned()
             .unwrap_or_else(|| json!({}));
+        let params = materialize_curated_params(params, opened_session_id.as_deref())?;
         let response = dispatch(socket, &mut run, command, params, &mut event_frames).await?;
         let expect_ok = operation
             .get("expect_ok")
@@ -318,7 +334,18 @@ async fn exercise_curated_sequence(
             assert_response_error(&response, operation)?;
         }
         assert_operation_expectations(&response, provider, scenario, operation)?;
-        if let Some(snapshot) = response_snapshot_value(&response) {
+        if command == "session/open" && expect_ok {
+            opened_session_id = Some(
+                response_result(&response)?
+                    .get("openSessionId")
+                    .and_then(Value::as_str)
+                    .ok_or("session/open result did not include openSessionId")?
+                    .to_owned(),
+            );
+        }
+        if let Some(snapshot) =
+            response_snapshot_value(&response).filter(|snapshot| !snapshot.is_null())
+        {
             expected_snapshot = Some(snapshot.clone());
         }
     }
@@ -335,6 +362,28 @@ async fn exercise_curated_sequence(
         .ok_or("scenario did not produce a response snapshot before events/subscribe")?;
     assert_expected_oracles(fixture, scenario, &backlog_frames, &expected_snapshot)?;
     assert_replay_disconnect(socket, &mut run, &mut event_frames, &backlog_frames).await
+}
+
+fn materialize_curated_params(value: Value, opened_session_id: Option<&str>) -> TestResult<Value> {
+    match value {
+        Value::String(text) if text == "$lastOpenSessionId" => opened_session_id
+            .map(|id| Value::String(id.to_owned()))
+            .ok_or_else(|| "$lastOpenSessionId used before session/open".into()),
+        Value::String(text) => Ok(Value::String(text)),
+        Value::Array(values) => values
+            .into_iter()
+            .map(|entry| materialize_curated_params(entry, opened_session_id))
+            .collect::<TestResult<Vec<_>>>()
+            .map(Value::Array),
+        Value::Object(map) => map
+            .into_iter()
+            .map(|(key, entry)| {
+                materialize_curated_params(entry, opened_session_id).map(|entry| (key, entry))
+            })
+            .collect::<TestResult<serde_json::Map<_, _>>>()
+            .map(Value::Object),
+        Value::Null | Value::Bool(_) | Value::Number(_) => Ok(value),
+    }
 }
 
 async fn create_replay_session(

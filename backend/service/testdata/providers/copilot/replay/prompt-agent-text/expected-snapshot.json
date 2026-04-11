@@ -73,17 +73,26 @@
         }
       },
       "stderr_lines": [],
-      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+      "stdout_lines": [
+        "/__dynamic_initialize_stdout__"
+      ]
     },
     "initialize_viable": true,
     "launcher": {
-      "args": ["--acp", "--allow-all", "--no-color", "--no-auto-update"],
+      "args": [
+        "--acp",
+        "--allow-all",
+        "--no-color",
+        "--no-auto-update"
+      ],
       "display": "copilot --acp --allow-all --no-color --no-auto-update",
       "executable": "/__dynamic_path__"
     },
     "provider": "copilot",
     "resolved_path": "/__dynamic_path__",
-    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "transport_diagnostics": [
+      "/__dynamic_transport_diagnostics__"
+    ],
     "version": "/__dynamic_provider_version__"
   },
   "last_prompt": {
@@ -107,7 +116,141 @@
     },
     "raw_update_count": 12,
     "state": "completed",
-    "stop_reason": "end_turn"
+    "stop_reason": "end_turn",
+    "updates": [
+      {
+        "index": 0,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "con"
+          }
+        }
+      },
+      {
+        "index": 1,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "duit"
+          }
+        }
+      },
+      {
+        "index": 2,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "-phase"
+          }
+        }
+      },
+      {
+        "index": 3,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "-"
+          }
+        }
+      },
+      {
+        "index": 4,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "2"
+          }
+        }
+      },
+      {
+        "index": 5,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "-re"
+          }
+        }
+      },
+      {
+        "index": 6,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "play"
+          }
+        }
+      },
+      {
+        "index": 7,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "-c"
+          }
+        }
+      },
+      {
+        "index": 8,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "op"
+          }
+        }
+      },
+      {
+        "index": 9,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "ilot"
+          }
+        }
+      },
+      {
+        "index": 10,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " observed"
+          }
+        }
+      },
+      {
+        "index": 11,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          }
+        }
+      }
+    ]
   },
   "live_sessions": [
     {

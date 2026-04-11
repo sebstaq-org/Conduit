@@ -36,6 +36,7 @@ pub(crate) async fn assert_snapshot_agent_chunks(
 pub(crate) async fn assert_subscribe_backlog(
     socket: &mut TestSocket,
     run: &mut ReplayRun<'_>,
+    scenario: &Value,
     event_frames: &mut Vec<Value>,
 ) -> TestResult<Vec<Value>> {
     let subscribed = dispatch(
@@ -51,16 +52,18 @@ pub(crate) async fn assert_subscribe_backlog(
     let before_backlog_frames = event_frames.len();
     read_events_until(socket, event_frames, before_backlog_frames + backlog_count).await?;
     let backlog_frames = event_frames[before_backlog_frames..].to_vec();
-    assert_event_kinds(
-        &backlog_frames,
-        &[
-            "provider_connected",
-            "session_observed",
-            "prompt_started",
-            "prompt_update_observed",
-            "prompt_completed",
-        ],
-    )?;
+    let mut expected = vec![
+        "provider_connected".to_owned(),
+        "session_observed".to_owned(),
+        "prompt_started".to_owned(),
+    ];
+    expected.extend(
+        expected_chunks(scenario)?
+            .into_iter()
+            .map(|_| "prompt_update_observed".to_owned()),
+    );
+    expected.push("prompt_completed".to_owned());
+    assert_event_kind_strings(&backlog_frames, &expected)?;
     Ok(backlog_frames)
 }
 
@@ -185,6 +188,7 @@ impl ServiceProcess {
             .env("PATH", path_with_shim(config.shim_root)?)
             .env("CONDUIT_ACP_REPLAY_FIXTURE", config.fixture)
             .env("CONDUIT_REPLAY_PROVIDER_SCRIPT", config.provider_script)
+            .env("XDG_DATA_HOME", config.shim_root.join("xdg-data"))
             .env_remove("ANTHROPIC_API_KEY")
             .env_remove("CLAUDE_API_KEY")
             .env_remove("CODEX_API_KEY")

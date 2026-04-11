@@ -1,5 +1,7 @@
 {"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
 {"kind":"session_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"observed_via":"session/new"}}
 {"kind":"prompt_started","provider":"claude","session_id":"replay-claude-session-1","payload":{"prompt":"Reply exactly: conduit-phase-2-replay-claude observed."}}
-{"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"source":"provider_response"}}
+{"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":0,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":""}}}}
+{"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":1,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"cond"}}}}
+{"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":2,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"uit-phase-2-replay-claude observed."}}}}
 {"kind":"prompt_completed","provider":"claude","session_id":"replay-claude-session-1","payload":{"stopReason":"end_turn"}}

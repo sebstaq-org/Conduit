@@ -125,7 +125,9 @@
         }
       },
       "stderr_lines": [],
-      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+      "stdout_lines": [
+        "/__dynamic_initialize_stdout__"
+      ]
     },
     "initialize_viable": true,
     "launcher": {
@@ -135,18 +137,43 @@
     },
     "provider": "codex",
     "resolved_path": "/__dynamic_path__",
-    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "transport_diagnostics": [
+      "/__dynamic_transport_diagnostics__"
+    ],
     "version": "/__dynamic_provider_version__"
   },
   "last_prompt": {
-    "agent_text_chunks": [],
+    "agent_text_chunks": [
+      "Conduit direct ACP continuation turn observed."
+    ],
     "identity": {
       "acp_session_id": "replay-codex-session-load-known-session-session-1",
       "provider": "codex"
     },
-    "raw_update_count": 0,
+    "raw_update_count": 2,
     "state": "completed",
-    "stop_reason": "end_turn"
+    "stop_reason": "end_turn",
+    "updates": [
+      {
+        "index": 0,
+        "variant": "available_commands_update",
+        "update": {
+          "sessionUpdate": "available_commands_update",
+          "availableCommands": []
+        }
+      },
+      {
+        "index": 1,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Conduit direct ACP continuation turn observed."
+          }
+        }
+      }
+    ]
   },
   "loaded_transcripts": [
     {
