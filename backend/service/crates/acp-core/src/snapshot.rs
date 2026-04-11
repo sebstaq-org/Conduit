@@ -66,6 +66,29 @@ pub struct PromptLifecycleSnapshot {
     pub agent_text_chunks: Vec<String>,
 }
 
+/// One replayed `session/update` captured during `session/load`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptUpdateSnapshot {
+    /// Zero-based replay order within the loaded transcript.
+    pub index: usize,
+    /// Official ACP `SessionUpdate` discriminator value when known.
+    pub variant: String,
+    /// The structurally serialized official ACP update payload.
+    pub update: Value,
+}
+
+/// Read-side transcript replay captured while loading a session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoadedTranscriptSnapshot {
+    /// The loaded session identity.
+    pub identity: LiveSessionIdentity,
+    /// The number of official SDK notifications observed during load.
+    pub raw_update_count: usize,
+    /// Replayed updates in provider emission order.
+    #[serde(default)]
+    pub updates: Vec<TranscriptUpdateSnapshot>,
+}
+
 /// The current provider snapshot exposed to apps and proof tooling.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProviderSnapshot {
@@ -83,4 +106,7 @@ pub struct ProviderSnapshot {
     pub live_sessions: Vec<LiveSessionSnapshot>,
     /// The last observed prompt lifecycle, if any.
     pub last_prompt: Option<PromptLifecycleSnapshot>,
+    /// Transcript replays captured during `session/load`.
+    #[serde(default)]
+    pub loaded_transcripts: Vec<LoadedTranscriptSnapshot>,
 }

@@ -4,7 +4,7 @@
   "name": "session-load-known-session",
   "acp_protocol_version": 1,
   "sdk_dependency": "agent-client-protocol =0.10.4",
-  "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+  "capture_source": "capture://live-direct-acp/session-load-transcript-20260411T150921Z/codex",
   "redaction_status": "curated-public-repo-safe-structural-scrub",
   "session": {
     "session_id": "replay-codex-session-load-known-session-session-1",
@@ -294,7 +294,38 @@
           ],
           "currentModeId": "full-access"
         }
-      }
+      },
+      "replay_update_delay_ms": 0,
+      "replay_updates": [
+        {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Neutral seed prompt preserved in loaded history."
+          }
+        },
+        {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Neutral seed response preserved in loaded history."
+          }
+        }
+      ]
+    },
+    "session_prompt": {
+      "result": {
+        "stopReason": "end_turn"
+      },
+      "requires_loaded_replay": true,
+      "expected_history_variants": [
+        "user_message_chunk",
+        "agent_message_chunk"
+      ],
+      "expected_history_text_includes": [
+        "Neutral seed prompt preserved in loaded history.",
+        "Neutral seed response preserved in loaded history."
+      ]
     },
     "missing_session_load": {
       "session_id": "replay-codex-missing-session-1",
@@ -325,10 +356,34 @@
         "cwd": "/__conduit_replay_cwd__"
       },
       "expect_ok": true,
-      "assert_snapshot_observed_via": "load"
+      "assert_snapshot_observed_via": "load",
+      "assert_loaded_transcript_variants": [
+        "user_message_chunk",
+        "agent_message_chunk"
+      ]
+    },
+    {
+      "command": "session/prompt",
+      "params": {
+        "session_id": "replay-codex-session-load-known-session-session-1",
+        "prompt": "Neutral continuation check."
+      },
+      "expect_ok": true,
+      "assert_result_equals": {
+        "stopReason": "end_turn"
+      },
+      "assert_loaded_replay_context_used": true
     }
   ],
-  "expected_event_kinds": ["provider_connected", "session_observed"],
+  "expected_event_kinds": [
+    "provider_connected",
+    "session_replay_update",
+    "session_replay_update",
+    "session_observed",
+    "prompt_started",
+    "prompt_update_observed",
+    "prompt_completed"
+  ],
   "observation": {
     "source_scenario": "session-load-known-session",
     "command_record_indexes": [10, 11, 12, 13],
@@ -336,7 +391,8 @@
     "event_backlog_documented_in": "expected-events.jsonl and events/subscribe replay assertion",
     "provider_caveats": [
       "Official ACP SDK owns raw JSON-RPC transport; Conduit observes consumer command/response/event frames at the WebSocket product boundary, not private SDK transport frames.",
-      "Curated replay preserves the scenario-specific response/event semantics while replacing local provider state with scrubbed ids, cwds, and titles."
+      "Curated replay preserves the scenario-specific response/event semantics while replacing local provider state with scrubbed ids, cwds, and titles.",
+      "Fixture promotion preserved the live direct ACP load-time replay variant order user_message_chunk then agent_message_chunk and omitted only private text, raw session ids, local cwd, auth metadata, and provider dumps."
     ],
     "dynamic_ignored_fields": [
       "frame ids",
@@ -362,6 +418,33 @@
       "private historical session titles/cwds/session ids",
       "provider-version paths"
     ],
+    "promotion_log": {
+      "scrubbed": [
+        "raw session ids",
+        "private prompts",
+        "local paths",
+        "auth metadata",
+        "provider dumps"
+      ],
+      "preserved_semantics": [
+        "load-time session/update replay precedes session/load response",
+        "user_message_chunk then agent_message_chunk ordering",
+        "LoadSessionResponse object shape with configOptions and modes",
+        "continuation prompt accepted only after the replay fake provider matched loaded history variants and neutral text markers"
+      ],
+      "omitted_observed_session_update_variants": [],
+      "omitted_load_response_fields": ["models"],
+      "accepted_contract_drift": [
+        "narrative docs show null result; locked schema accepts object response",
+        "live Codex summary included models; current locked schema marks model state unstable and Conduit preserves schema-stable fields here"
+      ]
+    },
+    "red_first_proof": {
+      "command": "CONDUIT_ACP_REPLAY_CANDIDATE_ROOT=<repo>/backend/service/testdata/providers/codex/replay/session-load-known-session rtk cargo test -p service-bin --test acp_replay -- curated_acp_replay_drives_public_websocket_flow",
+      "failed_test": "curated_acp_replay_drives_public_websocket_flow",
+      "exact_error": "Error: \"snapshot did not include loaded_transcripts\"",
+      "why_correct": "The fake provider emitted load-time session/update frames before the session/load response, but the current Conduit WebSocket snapshot did not expose a loaded transcript read model."
+    },
     "blockers": []
   }
 }

@@ -1,0 +1,27 @@
+{
+  "schema": "conduit.session_load_red_first_proof.v1",
+  "scenario": "session-load-known-session",
+  "accepted_failure": {
+    "command": "CONDUIT_ACP_REPLAY_CANDIDATE_ROOT=<repo>/backend/service/testdata/providers/codex/replay/session-load-known-session rtk cargo test -p service-bin --test acp_replay -- curated_acp_replay_drives_public_websocket_flow",
+    "failed_test": "curated_acp_replay_drives_public_websocket_flow",
+    "exact_error": "Error: \"snapshot did not include loaded_transcripts\"",
+    "why_correct": "The fixture-only provider emitted load-time session/update frames before the session/load response, but the then-current Conduit WebSocket snapshot did not expose a loaded transcript read model."
+  },
+  "rejected_false_start": {
+    "command": "CONDUIT_ACP_REPLAY_CANDIDATE_ROOT=backend/service/testdata/providers/codex/replay/session-load-known-session rtk cargo test -p service-bin --test acp_replay -- curated_acp_replay_drives_public_websocket_flow",
+    "exact_error": "No such file or directory",
+    "why_rejected": "The candidate root was relative to the service process working directory, so this did not prove the load replay contract failure."
+  },
+  "post_fix_guard": {
+    "requirement": "The replay fake provider emits session/update frames during session/load before its load response, and session/prompt succeeds only after matching the stored loaded replay variants and neutral text markers.",
+    "protected_failures": [
+      "missing load-time replay updates",
+      "load response before replay updates",
+      "lost update ordering",
+      "lost variant classification",
+      "missing Conduit consumer API exposure",
+      "continuation without loaded replay history"
+    ]
+  },
+  "hygiene": "sanitized; no raw session ids, private prompts, local paths, auth metadata, or raw provider captures"
+}

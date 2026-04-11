@@ -165,6 +165,14 @@ where
             let result = provider_port.session_load(session_id.clone(), cwd)?;
             (result, provider_port.snapshot(), provider_port.raw_events())
         };
+        for update in loaded_transcript_updates(&snapshot, &session_id) {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionReplayUpdate,
+                Some(session_id.clone()),
+                update,
+            );
+        }
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::SessionObserved,
@@ -316,4 +324,28 @@ fn parse_provider(value: &str) -> Result<ProviderId> {
         provider: value.to_owned(),
         message,
     })
+}
+
+fn loaded_transcript_updates(
+    snapshot: &acp_core::ProviderSnapshot,
+    session_id: &str,
+) -> Vec<Value> {
+    snapshot
+        .loaded_transcripts
+        .iter()
+        .find(|transcript| transcript.identity.acp_session_id == session_id)
+        .map(|transcript| {
+            transcript
+                .updates
+                .iter()
+                .map(|update| {
+                    json!({
+                        "replay_index": update.index,
+                        "session_update": update.variant,
+                        "update": update.update,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }

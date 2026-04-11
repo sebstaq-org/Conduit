@@ -32,6 +32,8 @@ pub enum RuntimeEventKind {
     ProviderDisconnected,
     /// A session was observed through an ACP command.
     SessionObserved,
+    /// A replayed load-time `session/update` was exposed to consumers.
+    SessionReplayUpdate,
     /// A prompt command started.
     PromptStarted,
     /// A prompt update was observed.

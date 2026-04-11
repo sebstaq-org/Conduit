@@ -15,6 +15,8 @@ use tower_http as _;
 
 #[path = "acp_replay/fixtures.rs"]
 mod fixtures;
+#[path = "acp_replay/load_replay.rs"]
+mod load_replay;
 #[path = "support/replay_oracle.rs"]
 mod oracle;
 #[path = "acp_replay/support.rs"]
@@ -38,6 +40,7 @@ const scenario = JSON.parse(readFileSync(fixturePath, 'utf8'));
 const sessionId = scenario.session.session_id;
 const missingSessionId = scenario.replay?.missing_session_load?.session_id;
 let cwd = scenario.session.cwd;
+const loadedReplayBySession = new Map();
 
 function send(message) {
   process.stdout.write(`${JSON.stringify(message)}\n`);
@@ -81,6 +84,65 @@ function materialize(value) {
   return value;
 }
 
+function requireLoadRequestShape(message) {
+  if (typeof message.params?.sessionId !== 'string') {
+    error(message.id, 'session/load request missing sessionId', -32602);
+    return false;
+  }
+  if (typeof message.params?.cwd !== 'string' || !message.params.cwd.startsWith('/')) {
+    error(message.id, 'session/load request missing absolute cwd', -32602);
+    return false;
+  }
+  if (!Array.isArray(message.params?.mcpServers)) {
+    error(message.id, 'session/load request missing mcpServers', -32602);
+    return false;
+  }
+  return true;
+}
+
+function updateVariant(update) {
+  return update?.sessionUpdate;
+}
+
+function updateText(update) {
+  const content = update?.content;
+  if (content?.type === 'text' && typeof content.text === 'string') {
+    return content.text;
+  }
+  return '';
+}
+
+function arraysEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function requireLoadedReplayContext(message) {
+  const promptReplay = scenario.replay?.session_prompt;
+  if (promptReplay?.requires_loaded_replay !== true) {
+    return true;
+  }
+  const requestedSessionId = sessionIdText(message.params?.sessionId ?? message.params?.session_id) ?? sessionId;
+  const replayUpdates = loadedReplayBySession.get(requestedSessionId) ?? [];
+  if (replayUpdates.length === 0) {
+    error(message.id, 'session/prompt missing loaded replay history', -32000);
+    return false;
+  }
+  const expectedVariants = promptReplay.expected_history_variants ?? [];
+  const actualVariants = replayUpdates.map(updateVariant);
+  if (!arraysEqual(actualVariants, expectedVariants)) {
+    error(message.id, `session/prompt loaded replay variants mismatch: ${JSON.stringify(actualVariants)}`, -32000);
+    return false;
+  }
+  const replayText = replayUpdates.map(updateText).join('\n');
+  for (const expectedText of promptReplay.expected_history_text_includes ?? []) {
+    if (!replayText.includes(expectedText)) {
+      error(message.id, `session/prompt loaded replay text missing: ${expectedText}`, -32000);
+      return false;
+    }
+  }
+  return true;
+}
+
 async function handle(message) {
   if (message.method === 'initialize') {
     respond(message.id, {
@@ -101,17 +163,38 @@ async function handle(message) {
     return;
   }
   if (message.method === 'session/load') {
+    if (!requireLoadRequestShape(message)) {
+      return;
+    }
     const requestedSessionId = sessionIdText(message.params?.sessionId ?? message.params?.session_id);
     if (missingSessionId && requestedSessionId === missingSessionId) {
       const replayError = scenario.replay.missing_session_load.jsonrpc_error;
       error(message.id, replayError.message, replayError.code);
       return;
     }
+    const replayUpdates = [];
+    for (const update of scenario.replay?.session_load?.replay_updates ?? []) {
+      const replayUpdate = materialize(update);
+      replayUpdates.push(replayUpdate);
+      send({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: requestedSessionId ?? sessionId,
+          update: replayUpdate,
+        },
+      });
+      await sleep(scenario.replay?.session_load?.replay_update_delay_ms ?? 0);
+    }
+    loadedReplayBySession.set(requestedSessionId ?? sessionId, replayUpdates);
     respond(message.id, materialize(scenario.replay?.session_load?.result ?? {}));
     return;
   }
   if (message.method === 'session/prompt') {
     if (!scenario.prompt) {
+      if (!requireLoadedReplayContext(message)) {
+        return;
+      }
       respond(message.id, materialize(scenario.replay?.session_prompt?.result ?? { stopReason: 'end_turn' }));
       return;
     }

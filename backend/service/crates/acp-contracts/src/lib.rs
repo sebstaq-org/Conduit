@@ -29,16 +29,17 @@ pub use validate::{
 #[cfg(test)]
 mod tests {
     use super::{
-        LOCKED_ACP_METHODS, LockedMethod, assert_locked_method_registration, load_contract_bundle,
-        validate_locked_cancel_notification, validate_locked_request_envelope,
-        validate_locked_response_envelope,
+        ContractBundle, LOCKED_ACP_METHODS, LockedMethod, assert_locked_method_registration,
+        load_contract_bundle, validate_locked_cancel_notification,
+        validate_locked_request_envelope, validate_locked_response_envelope,
     };
     use crate::{Error, Result};
     use agent_client_protocol_schema::{
         AGENT_METHOD_NAMES, AgentResponse, AgentSide, CancelNotification, ClientRequest,
         ClientSide, Implementation, InitializeRequest, InitializeResponse, JsonRpcMessage,
-        NewSessionRequest, NewSessionResponse, Notification, OutgoingMessage, PromptResponse,
-        ProtocolVersion, Request, Response, SessionId, StopReason,
+        LoadSessionRequest, LoadSessionResponse, NewSessionRequest, NewSessionResponse,
+        Notification, OutgoingMessage, PromptResponse, ProtocolVersion, Request, Response,
+        SessionId, StopReason,
     };
     use serde_json::{json, to_value};
     use std::path::PathBuf;
@@ -170,6 +171,88 @@ mod tests {
         let cancel_value = serialize_value(cancel)?;
         validate_locked_cancel_notification(&bundle, &cancel_value)?;
         Ok(())
+    }
+
+    #[test]
+    fn validates_load_session_request_and_object_response() -> Result<()> {
+        let bundle = load_contract_bundle()?;
+        let request_value = serialize_value(load_session_request(PathBuf::from("/tmp")))?;
+        let method = validate_locked_request_envelope(&bundle, &request_value)?;
+        if method != LockedMethod::SessionLoad {
+            return Err(Error::contract(
+                "session/load request validated as the wrong method",
+            ));
+        }
+
+        assert_load_session_request_rejects(&bundle, load_without_mcp_servers(), "mcpServers")?;
+        assert_load_session_request_rejects(&bundle, load_with_relative_cwd(), "absolute")?;
+
+        let response_value = serialize_value(load_session_response())?;
+        validate_locked_response_envelope(&bundle, LockedMethod::SessionLoad, &response_value)?;
+        Ok(())
+    }
+
+    fn load_session_request(
+        cwd: PathBuf,
+    ) -> JsonRpcMessage<OutgoingMessage<ClientSide, AgentSide>> {
+        JsonRpcMessage::wrap(OutgoingMessage::<ClientSide, AgentSide>::Request(Request {
+            id: 3.into(),
+            method: Arc::from("session/load"),
+            params: Some(ClientRequest::LoadSessionRequest(LoadSessionRequest::new(
+                SessionId::new("session-1"),
+                cwd,
+            ))),
+        }))
+    }
+
+    fn load_session_response() -> JsonRpcMessage<OutgoingMessage<AgentSide, ClientSide>> {
+        JsonRpcMessage::wrap(OutgoingMessage::<AgentSide, ClientSide>::Response(
+            Response::Result {
+                id: 3.into(),
+                result: AgentResponse::LoadSessionResponse(LoadSessionResponse::new()),
+            },
+        ))
+    }
+
+    fn load_without_mcp_servers() -> serde_json::Value {
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "session/load",
+            "params": {
+                "sessionId": "session-1",
+                "cwd": "/tmp"
+            }
+        })
+    }
+
+    fn load_with_relative_cwd() -> serde_json::Value {
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "session/load",
+            "params": {
+                "sessionId": "session-1",
+                "cwd": "relative",
+                "mcpServers": []
+            }
+        })
+    }
+
+    fn assert_load_session_request_rejects(
+        bundle: &ContractBundle,
+        request: serde_json::Value,
+        expected_message: &str,
+    ) -> Result<()> {
+        let error = validate_locked_request_envelope(bundle, &request)
+            .err()
+            .ok_or_else(|| Error::contract("invalid session/load request passed"))?;
+        if error.to_string().contains(expected_message) {
+            return Ok(());
+        }
+        Err(Error::contract(format!(
+            "session/load error did not identify {expected_message}"
+        )))
     }
 
     #[test]

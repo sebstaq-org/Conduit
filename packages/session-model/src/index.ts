@@ -54,6 +54,18 @@ interface PromptLifecycleSnapshot {
   agentTextChunks: string[];
 }
 
+interface TranscriptUpdateSnapshot {
+  index: number;
+  variant: string;
+  update: unknown;
+}
+
+interface LoadedTranscriptSnapshot {
+  identity: LiveSessionIdentity;
+  rawUpdateCount: number;
+  updates: TranscriptUpdateSnapshot[];
+}
+
 interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
@@ -62,6 +74,7 @@ interface ProviderSnapshot {
   authMethods: unknown[];
   liveSessions: LiveSessionSnapshot[];
   lastPrompt: PromptLifecycleSnapshot | null;
+  loadedTranscripts: LoadedTranscriptSnapshot[];
 }
 
 interface RawWireEvent {
@@ -101,8 +114,10 @@ export type {
   LiveSessionSnapshot,
   PromptLifecycleSnapshot,
   PromptLifecycleState,
+  LoadedTranscriptSnapshot,
   ProviderDescriptor,
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
+  TranscriptUpdateSnapshot,
 };

@@ -64,6 +64,7 @@ impl ProviderPort for FakeProvider {
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
             last_prompt: None,
+            loaded_transcripts: Vec::new(),
         }
     }
 

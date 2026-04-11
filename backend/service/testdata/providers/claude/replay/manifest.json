@@ -31,13 +31,17 @@
     {
       "name": "session-load-known-session",
       "path": "session-load-known-session/scenario.json",
-      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/claude",
+      "capture_source": "capture://live-direct-acp/session-load-transcript-20260411T150921Z/claude",
       "redaction_status": "curated-public-repo-safe-structural-scrub",
       "stable_assertions": [
         "frame_correlation",
         "ready_snapshot",
         "events_subscribe_cursor_backlog",
-        "session-load-known-session"
+        "session-load-known-session",
+        "load-replay-before-response",
+        "load-replay-update-order",
+        "load-replay-variant-classification",
+        "continuation-after-load"
       ]
     },
     {

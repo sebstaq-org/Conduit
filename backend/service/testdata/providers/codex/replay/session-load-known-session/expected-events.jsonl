@@ -1,2 +1,7 @@
 {"kind":"provider_connected","provider":"codex","session_id":null,"payload":{}}
+{"kind":"session_replay_update","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"replay_index":0,"session_update":"user_message_chunk","update":{"content":{"text":"Neutral seed prompt preserved in loaded history.","type":"text"},"sessionUpdate":"user_message_chunk"}}}
+{"kind":"session_replay_update","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"replay_index":1,"session_update":"agent_message_chunk","update":{"content":{"text":"Neutral seed response preserved in loaded history.","type":"text"},"sessionUpdate":"agent_message_chunk"}}}
 {"kind":"session_observed","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"observed_via":"session/load"}}
+{"kind":"prompt_started","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"prompt":"Neutral continuation check."}}
+{"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"source":"provider_response"}}
+{"kind":"prompt_completed","provider":"codex","session_id":"replay-codex-session-load-known-session-session-1","payload":{"stopReason":"end_turn"}}
