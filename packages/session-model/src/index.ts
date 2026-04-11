@@ -51,6 +51,7 @@ interface PromptLifecycleSnapshot {
   state: PromptLifecycleState;
   stopReason: string | null;
   rawUpdateCount: number;
+  agentTextChunks: string[];
 }
 
 interface ProviderSnapshot {

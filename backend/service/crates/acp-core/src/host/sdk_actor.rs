@@ -305,6 +305,7 @@ impl SdkHostActor {
             state: PromptLifecycleState::Running,
             stop_reason: None,
             raw_update_count: 0,
+            agent_text_chunks: Vec::new(),
         });
         Ok(())
     }
@@ -325,7 +326,8 @@ impl SdkHostActor {
             identity: identity(self.provider, session_id),
             state,
             stop_reason,
-            raw_update_count: updates,
+            raw_update_count: updates.raw_update_count,
+            agent_text_chunks: updates.agent_text_chunks,
         });
         Ok(())
     }
@@ -362,6 +364,12 @@ impl SdkHostActor {
 struct PromptUpdateState {
     active_session: Option<String>,
     raw_update_count: usize,
+    agent_text_chunks: Vec<String>,
+}
+
+struct PromptUpdates {
+    raw_update_count: usize,
+    agent_text_chunks: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -388,6 +396,11 @@ impl acp::Client for SdkClient {
         })?;
         if updates.active_session.as_deref() == Some(&args.session_id.to_string()) {
             updates.raw_update_count += 1;
+            if let acp::SessionUpdate::AgentMessageChunk(chunk) = args.update
+                && let acp::ContentBlock::Text(text) = chunk.content
+            {
+                updates.agent_text_chunks.push(text.text);
+            }
         }
         Ok(())
     }
@@ -511,20 +524,25 @@ fn update_prompt_tracker(
         .map_err(|error| unexpected(provider, error.to_string()))?;
     updates.active_session = active_session;
     updates.raw_update_count = raw_update_count;
+    updates.agent_text_chunks.clear();
     Ok(())
 }
 
 fn take_prompt_updates(
     updates: &Arc<Mutex<PromptUpdateState>>,
     provider: ProviderId,
-) -> Result<usize> {
+) -> Result<PromptUpdates> {
     let mut updates = updates
         .lock()
         .map_err(|error| unexpected(provider, error.to_string()))?;
     let count = updates.raw_update_count;
+    let agent_text_chunks = std::mem::take(&mut updates.agent_text_chunks);
     updates.active_session = None;
     updates.raw_update_count = 0;
-    Ok(count)
+    Ok(PromptUpdates {
+        raw_update_count: count,
+        agent_text_chunks,
+    })
 }
 
 fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {

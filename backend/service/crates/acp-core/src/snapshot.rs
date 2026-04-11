@@ -61,6 +61,9 @@ pub struct PromptLifecycleSnapshot {
     pub stop_reason: Option<String>,
     /// The number of raw session/update notifications observed during the turn.
     pub raw_update_count: usize,
+    /// Agent-authored text chunks observed through official SDK notifications.
+    #[serde(default)]
+    pub agent_text_chunks: Vec<String>,
 }
 
 /// The current provider snapshot exposed to apps and proof tooling.

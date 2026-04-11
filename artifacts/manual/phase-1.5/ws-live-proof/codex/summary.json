@@ -1,0 +1,95 @@
+{
+  "provider": "codex",
+  "startedAt": "2026-04-11T08:36:14.229Z",
+  "completedAt": "2026-04-11T08:36:19.591Z",
+  "endpoint": "ws://127.0.0.1:4199/api/session",
+  "commands": [
+    {
+      "name": "initialize",
+      "requestFrameId": "codex-initialize-1775896574252-433dc687368178",
+      "responseFrameId": "codex-initialize-1775896574252-433dc687368178",
+      "ok": true,
+      "resultKeys": [
+        "auth_methods",
+        "capabilities",
+        "connection_state",
+        "discovery",
+        "last_prompt",
+        "live_sessions",
+        "provider"
+      ],
+      "snapshotState": "ready"
+    },
+    {
+      "name": "session/new",
+      "requestFrameId": "codex-session-new-1775896574434-f0852af658694",
+      "responseFrameId": "codex-session-new-1775896574434-f0852af658694",
+      "ok": true,
+      "resultKeys": [
+        "configOptions",
+        "modes",
+        "sessionId"
+      ],
+      "snapshotState": "ready"
+    },
+    {
+      "name": "session/prompt",
+      "requestFrameId": "codex-session-prompt-1775896574694-f98d00946b6a08",
+      "responseFrameId": "codex-session-prompt-1775896574694-f98d00946b6a08",
+      "ok": true,
+      "resultKeys": [
+        "stopReason"
+      ],
+      "snapshotState": "ready"
+    },
+    {
+      "name": "snapshot/get",
+      "requestFrameId": "codex-snapshot-get-1775896579580-b795397d3a2f48",
+      "responseFrameId": "codex-snapshot-get-1775896579580-b795397d3a2f48",
+      "ok": true,
+      "resultKeys": [
+        "auth_methods",
+        "capabilities",
+        "connection_state",
+        "discovery",
+        "last_prompt",
+        "live_sessions",
+        "provider"
+      ],
+      "snapshotState": "ready"
+    },
+    {
+      "name": "provider/disconnect",
+      "requestFrameId": "codex-provider-disconnect-1775896579585-fafa6969c4ef4",
+      "responseFrameId": "codex-provider-disconnect-1775896579585-fafa6969c4ef4",
+      "ok": true,
+      "resultKeys": [],
+      "snapshotState": "disconnected"
+    }
+  ],
+  "sessionId": "019d7baf-3a95-7b53-a243-0bbbfa59bdf0",
+  "promptResult": {
+    "stopReason": "end_turn"
+  },
+  "agentText": "conduit-live-proof-codex confirmed.",
+  "promptSnapshot": {
+    "identity": {
+      "provider": "codex",
+      "acp_session_id": "019d7baf-3a95-7b53-a243-0bbbfa59bdf0"
+    },
+    "state": "completed",
+    "stop_reason": "end_turn",
+    "raw_update_count": 9,
+    "agent_text_chunks": [
+      "con",
+      "duit",
+      "-live",
+      "-proof",
+      "-c",
+      "od",
+      "ex",
+      " confirmed",
+      "."
+    ]
+  }
+}

@@ -431,6 +431,9 @@ function normalizePrompt(
     state: raw.state as NonNullable<ProviderSnapshot["lastPrompt"]>["state"],
     stopReason: (raw.stop_reason as string | null | undefined) ?? null,
     rawUpdateCount: Number(raw.raw_update_count ?? 0),
+    agentTextChunks: Array.isArray(raw.agent_text_chunks)
+      ? raw.agent_text_chunks.map(String)
+      : [],
   };
 }
 
