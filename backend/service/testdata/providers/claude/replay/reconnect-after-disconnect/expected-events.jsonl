@@ -1,0 +1,5 @@
+{"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
+{"kind":"session_observed","provider":"claude","session_id":"replay-claude-reconnect-after-disconnect-session-1","payload":{"observed_via":"session/new"}}
+{"kind":"provider_disconnected","provider":"claude","session_id":null,"payload":{}}
+{"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
+{"kind":"session_observed","provider":"claude","session_id":"replay-claude-historical-session-1","payload":{"observed_via":"session/list"}}

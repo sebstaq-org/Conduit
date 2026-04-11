@@ -1,0 +1,133 @@
+{
+  "auth_methods": [
+    {
+      "_meta": {
+        "terminal-auth": {
+          "args": ["login"],
+          "command": "/__conduit_launcher_path__",
+          "label": "Copilot Login"
+        }
+      },
+      "description": "Run `copilot login` in the terminal",
+      "id": "copilot-login",
+      "name": "Log in with Copilot CLI"
+    }
+  ],
+  "capabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": false,
+      "sse": false
+    },
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "list": {}
+    }
+  },
+  "connection_state": "ready",
+  "discovery": {
+    "auth_hints": [
+      "Log in with Copilot CLI: Run `copilot login` in the terminal"
+    ],
+    "initialize_probe": {
+      "elapsed_ms": 0,
+      "payload": {
+        "agentCapabilities": {
+          "loadSession": true,
+          "mcpCapabilities": {
+            "http": false,
+            "sse": false
+          },
+          "promptCapabilities": {
+            "audio": false,
+            "embeddedContext": true,
+            "image": true
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "agentInfo": {
+          "name": "Copilot",
+          "title": "Copilot",
+          "version": "/__dynamic_provider_version__"
+        },
+        "authMethods": [
+          {
+            "_meta": {
+              "terminal-auth": {
+                "args": ["login"],
+                "command": "/__conduit_launcher_path__",
+                "label": "Copilot Login"
+              }
+            },
+            "description": "Run `copilot login` in the terminal",
+            "id": "copilot-login",
+            "name": "Log in with Copilot CLI"
+          }
+        ],
+        "protocolVersion": 1
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "loadSession": true,
+            "mcpCapabilities": {
+              "http": false,
+              "sse": false
+            },
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "Copilot",
+            "title": "Copilot",
+            "version": "/__dynamic_provider_version__"
+          },
+          "authMethods": [
+            {
+              "_meta": {
+                "terminal-auth": {
+                  "args": ["login"],
+                  "command": "/__conduit_launcher_path__",
+                  "label": "Copilot Login"
+                }
+              },
+              "description": "Run `copilot login` in the terminal",
+              "id": "copilot-login",
+              "name": "Log in with Copilot CLI"
+            }
+          ],
+          "protocolVersion": 1
+        }
+      },
+      "stderr_lines": [],
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+    },
+    "initialize_viable": true,
+    "launcher": {
+      "args": ["--acp", "--allow-all", "--no-color", "--no-auto-update"],
+      "display": "copilot --acp --allow-all --no-color --no-auto-update",
+      "executable": "/__dynamic_path__"
+    },
+    "provider": "copilot",
+    "resolved_path": "/__dynamic_path__",
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "version": "/__dynamic_provider_version__"
+  },
+  "last_prompt": null,
+  "live_sessions": [],
+  "provider": "copilot"
+}

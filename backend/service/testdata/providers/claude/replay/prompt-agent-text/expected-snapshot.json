@@ -1,25 +1,126 @@
 {
-  "provider": "claude",
+  "auth_methods": [],
+  "capabilities": {
+    "_meta": {
+      "claudeCode": {
+        "promptQueueing": true
+      }
+    },
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "list": {}
+    }
+  },
   "connection_state": "ready",
+  "discovery": {
+    "auth_hints": [],
+    "initialize_probe": {
+      "elapsed_ms": 0,
+      "payload": {
+        "agentCapabilities": {
+          "_meta": {
+            "claudeCode": {
+              "promptQueueing": true
+            }
+          },
+          "loadSession": true,
+          "mcpCapabilities": {
+            "http": true,
+            "sse": true
+          },
+          "promptCapabilities": {
+            "audio": false,
+            "embeddedContext": true,
+            "image": true
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "agentInfo": {
+          "name": "conduit-replay-claude",
+          "title": "Conduit Replay Claude",
+          "version": "/__dynamic_provider_version__"
+        },
+        "authMethods": [],
+        "protocolVersion": 1
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "_meta": {
+              "claudeCode": {
+                "promptQueueing": true
+              }
+            },
+            "loadSession": true,
+            "mcpCapabilities": {
+              "http": true,
+              "sse": true
+            },
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "conduit-replay-claude",
+            "title": "Conduit Replay Claude",
+            "version": "/__dynamic_provider_version__"
+          },
+          "authMethods": [],
+          "protocolVersion": 1
+        }
+      },
+      "stderr_lines": [],
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+    },
+    "initialize_viable": true,
+    "launcher": {
+      "args": [],
+      "display": "claude-agent-acp",
+      "executable": "/__dynamic_path__"
+    },
+    "provider": "claude",
+    "resolved_path": "/__dynamic_path__",
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "version": "/__dynamic_provider_version__"
+  },
+  "last_prompt": {
+    "agent_text_chunks": ["", "cond", "uit-phase-2-replay-claude observed."],
+    "identity": {
+      "acp_session_id": "replay-claude-session-1",
+      "provider": "claude"
+    },
+    "raw_update_count": 3,
+    "state": "completed",
+    "stop_reason": "end_turn"
+  },
   "live_sessions": [
     {
-      "identity": {
-        "provider": "claude",
-        "acp_session_id": "replay-claude-session-1"
-      },
       "cwd": "/__dynamic_cwd__",
-      "title": null,
-      "observed_via": "new"
+      "identity": {
+        "acp_session_id": "replay-claude-session-1",
+        "provider": "claude"
+      },
+      "observed_via": "new",
+      "title": null
     }
   ],
-  "last_prompt": {
-    "identity": {
-      "provider": "claude",
-      "acp_session_id": "replay-claude-session-1"
-    },
-    "state": "completed",
-    "stop_reason": "end_turn",
-    "raw_update_count": 3,
-    "agent_text_chunks": ["", "cond", "uit-phase-2-replay-claude observed."]
-  }
+  "provider": "claude"
 }

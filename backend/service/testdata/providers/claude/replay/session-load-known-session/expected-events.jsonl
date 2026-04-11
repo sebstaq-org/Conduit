@@ -1,0 +1,2 @@
+{"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
+{"kind":"session_observed","provider":"claude","session_id":"replay-claude-session-load-known-session-session-1","payload":{"observed_via":"session/load"}}
