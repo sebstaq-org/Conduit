@@ -1,15 +1,11 @@
-# Discovery
+# codex protocol launcher capture
 
-Proof workspace: `/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/discovery`
-
-Proof cwd: `/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/discovery/cwd`
-
-Proof home: `/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/discovery/home`
+Capture source: `capture://phase-1/protocol-discovery/codex`
 
 Provider: `codex`
 
-Version: `0.11.1`
+Workspace: `/__conduit_protocol_workspace__`
 
-Initialize viable: `true`
+Cwd: `/__conduit_protocol_cwd__`
 
-Initialize elapsed: `74` ms
+Home: `/__conduit_protocol_home__`
