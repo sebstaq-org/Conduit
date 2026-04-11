@@ -327,8 +327,17 @@ where
         );
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
-            let result = provider_port.session_prompt(target.session_id.clone(), prompt.clone())?;
+            let result = provider_port.session_prompt(target.session_id.clone(), prompt.clone());
             (result, provider_port.snapshot(), provider_port.raw_events())
+        };
+        let result = match result {
+            Ok(result) => result,
+            Err(error) => {
+                self.append_failed_prompt_turn(provider, &target, &prompt)?;
+                self.event_buffer
+                    .capture_raw_events(provider, &raw_events)?;
+                return Err(error);
+            }
         };
         self.event_buffer.emit(
             provider,
@@ -396,6 +405,33 @@ where
         )?;
         self.event_buffer.emit(
             snapshot.provider,
+            RuntimeEventKind::SessionTimelineChanged,
+            Some(target.session_id.clone()),
+            json!({
+                "openSessionId": mutation.open_session_id,
+                "revision": mutation.revision
+            }),
+        );
+        Ok(())
+    }
+
+    fn append_failed_prompt_turn(
+        &mut self,
+        provider: ProviderId,
+        target: &SessionPromptTarget,
+        prompt: &str,
+    ) -> Result<()> {
+        let Some(open_session_id) = target.open_session_id.as_deref() else {
+            return Ok(());
+        };
+        let mutation = self.local_store.append_prompt_turn(
+            open_session_id,
+            prompt,
+            &[],
+            TranscriptItemStatus::Failed,
+        )?;
+        self.event_buffer.emit(
+            provider,
             RuntimeEventKind::SessionTimelineChanged,
             Some(target.session_id.clone()),
             json!({
@@ -599,6 +635,7 @@ fn prompt_status(lifecycle: Option<&acp_core::PromptLifecycleSnapshot>) -> Trans
         Some(acp_core::PromptLifecycleState::Cancelled) => TranscriptItemStatus::Cancelled,
         Some(acp_core::PromptLifecycleState::Running) => TranscriptItemStatus::Streaming,
         Some(acp_core::PromptLifecycleState::Idle) => TranscriptItemStatus::Failed,
-        Some(acp_core::PromptLifecycleState::Completed) | None => TranscriptItemStatus::Complete,
+        Some(acp_core::PromptLifecycleState::Completed) => TranscriptItemStatus::Complete,
+        None => TranscriptItemStatus::Failed,
     }
 }

@@ -13,7 +13,7 @@ use service_runtime::{
     RuntimeEvent, RuntimeEventKind, ServiceRuntime,
 };
 use session_store::LocalStore;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -35,6 +35,8 @@ pub(crate) struct FakeState {
     pub(crate) session_load_requests: Vec<(ProviderId, String)>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
     pub(crate) prompt_agent_text: HashMap<(ProviderId, String), Vec<String>>,
+    pub(crate) prompt_errors: HashMap<(ProviderId, String), String>,
+    pub(crate) prompt_lifecycle_missing: HashSet<(ProviderId, String)>,
     pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
     loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
     last_prompt: Option<PromptLifecycleSnapshot>,
@@ -185,6 +187,12 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        if let Some(error) = state
+            .prompt_errors
+            .get(&(self.provider, session_id.clone()))
+        {
+            return Err(RuntimeError::Provider(error.clone()));
+        }
         let stop_reason = state
             .prompt_stop_reason
             .get(&(self.provider, session_id.clone()))
@@ -200,16 +208,21 @@ impl ProviderPort for FakeProvider {
         } else {
             PromptLifecycleState::Completed
         };
-        state.last_prompt = Some(PromptLifecycleSnapshot {
-            identity: LiveSessionIdentity {
-                provider: self.provider,
-                acp_session_id: session_id.clone(),
-            },
-            state: prompt_state,
-            stop_reason: Some(stop_reason.clone()),
-            raw_update_count: agent_text_chunks.len(),
-            agent_text_chunks,
-        });
+        if !state
+            .prompt_lifecycle_missing
+            .contains(&(self.provider, session_id.clone()))
+        {
+            state.last_prompt = Some(PromptLifecycleSnapshot {
+                identity: LiveSessionIdentity {
+                    provider: self.provider,
+                    acp_session_id: session_id.clone(),
+                },
+                state: prompt_state,
+                stop_reason: Some(stop_reason.clone()),
+                raw_update_count: agent_text_chunks.len(),
+                agent_text_chunks,
+            });
+        }
         Ok(json!({
             "sessionId": session_id,
             "prompt": prompt,

@@ -201,7 +201,7 @@ impl LocalStore {
         )
     }
 
-    /// Appends one completed prompt turn to an opened session timeline.
+    /// Appends one prompt turn to an opened session timeline.
     ///
     /// # Errors
     ///
@@ -227,13 +227,18 @@ impl LocalStore {
         }];
         let agent_text = agent_text_chunks.concat();
         if !agent_text.is_empty() || status != TranscriptItemStatus::Complete {
+            let source_variant = if agent_text.is_empty() {
+                prompt_status_source_variant(status)
+            } else {
+                "agent_message_chunk"
+            };
             items.push(TranscriptItem::Message {
                 id: format!("{turn_id}-agent"),
                 turn_id: Some(turn_id),
                 status: Some(status),
                 role: MessageRole::Agent,
                 text: agent_text,
-                source_variants: vec!["agent_message_chunk".to_owned()],
+                source_variants: vec![source_variant.to_owned()],
             });
         }
         self.append_items(open_session_id, revision, &items)?;
@@ -578,6 +583,15 @@ fn normalize_limit(command: &'static str, limit: Option<u64>) -> Result<usize> {
         parameter: "limit",
         message: "limit must fit the platform pointer width",
     })
+}
+
+fn prompt_status_source_variant(status: TranscriptItemStatus) -> &'static str {
+    match status {
+        TranscriptItemStatus::Complete => "session_prompt",
+        TranscriptItemStatus::Streaming => "session_prompt_streaming",
+        TranscriptItemStatus::Cancelled => "session_prompt_cancelled",
+        TranscriptItemStatus::Failed => "session_prompt_failed",
+    }
 }
 
 fn cursor_end(open_session_id: &str, revision: i64, cursor: &str) -> Result<usize> {
