@@ -1,13 +1,26 @@
-import { StyleSheet } from "react-native";
-import { panelTokens } from "@/ui/tokens";
+import type { ViewStyle } from "react-native";
+import type { Theme } from "@/theme";
 
-const iconSlotStyles = StyleSheet.create({
-  icon: {
+interface IconSlotMetrics {
+  color: string;
+  glyphSize: number;
+}
+
+function iconSlotMetrics(theme: Theme): IconSlotMetrics {
+  return {
+    color: theme.colors.iconMuted,
+    glyphSize: theme.panel.iconGlyph,
+  };
+}
+
+function createIconSlotFrameStyle(theme: Theme): ViewStyle {
+  return {
     alignItems: "center",
-    height: panelTokens.sizes.icon,
+    height: theme.panel.icon,
     justifyContent: "center",
-    width: panelTokens.sizes.icon,
-  },
-});
+    width: theme.panel.icon,
+  };
+}
 
-export { iconSlotStyles };
+export { createIconSlotFrameStyle, iconSlotMetrics };
+export type { IconSlotMetrics };

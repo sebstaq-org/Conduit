@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
-import { listStyles } from "./list.styles";
+import { Box } from "@/theme";
+import { listGap } from "./list.styles";
 
 interface ListProps {
   children: ReactNode;
 }
 
 function List({ children }: ListProps): React.JSX.Element {
-  return <View style={listStyles.list}>{children}</View>;
+  return <Box gap={listGap}>{children}</Box>;
 }
 
 export { List };

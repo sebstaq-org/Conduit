@@ -1,24 +1,19 @@
-import { StyleSheet } from "react-native";
-import { panelTokens } from "@/ui/tokens";
+const sectionActionsFlexDirection = "row" as const;
+const sectionActionsGap = "lg" as const;
+const sectionHeaderAlignItems = "center" as const;
+const sectionHeaderFlexDirection = "row" as const;
+const sectionHeaderJustifyContent = "space-between" as const;
+const sectionHeaderMarginBottom = "xs" as const;
+const sectionHeaderMarginTop = "sectionTop" as const;
+const sectionTitleVariant = "sectionTitle" as const;
 
-const sectionStyles = StyleSheet.create({
-  actions: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  heading: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-    marginTop: panelTokens.space.sectionY,
-  },
-  title: {
-    color: panelTokens.colors.mutedText,
-    fontSize: 14,
-    fontWeight: panelTokens.font.medium,
-    lineHeight: 18,
-  },
-});
-
-export { sectionStyles };
+export {
+  sectionActionsFlexDirection,
+  sectionActionsGap,
+  sectionHeaderAlignItems,
+  sectionHeaderFlexDirection,
+  sectionHeaderJustifyContent,
+  sectionHeaderMarginBottom,
+  sectionHeaderMarginTop,
+  sectionTitleVariant,
+};

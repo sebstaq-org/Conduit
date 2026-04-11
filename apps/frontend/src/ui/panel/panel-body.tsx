@@ -1,13 +1,21 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
-import { panelStyles } from "./panel.styles";
+import { Box } from "@/theme";
+import {
+  panelBodyFlex,
+  panelBodyPaddingTop,
+  panelBodyPaddingX,
+} from "./panel.styles";
 
 interface PanelBodyProps {
   children: ReactNode;
 }
 
 function PanelBody({ children }: PanelBodyProps): React.JSX.Element {
-  return <View style={panelStyles.body}>{children}</View>;
+  return (
+    <Box flex={panelBodyFlex} px={panelBodyPaddingX} pt={panelBodyPaddingTop}>
+      {children}
+    </Box>
+  );
 }
 
 export { PanelBody };

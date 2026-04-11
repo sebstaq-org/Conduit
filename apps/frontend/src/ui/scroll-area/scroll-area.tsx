@@ -1,17 +1,24 @@
 import type { ReactNode } from "react";
+import { useTheme } from "@shopify/restyle";
 import { ScrollView } from "react-native";
-import { scrollAreaStyles } from "./scroll-area.styles";
+import type { Theme } from "@/theme";
+import {
+  createScrollAreaContentStyle,
+  scrollAreaStyle,
+} from "./scroll-area.styles";
 
 interface ScrollAreaProps {
   children: ReactNode;
 }
 
 function ScrollArea({ children }: ScrollAreaProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+
   return (
     <ScrollView
-      contentContainerStyle={scrollAreaStyles.content}
+      contentContainerStyle={createScrollAreaContentStyle(theme)}
       showsVerticalScrollIndicator={false}
-      style={scrollAreaStyles.scrollArea}
+      style={scrollAreaStyle}
     >
       {children}
     </ScrollView>

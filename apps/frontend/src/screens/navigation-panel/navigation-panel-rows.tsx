@@ -1,12 +1,20 @@
-import { Text } from "react-native";
+import { Text } from "@/theme";
+import {
+  navigationPanelHeadingMarginBottom,
+  navigationPanelHeadingVariant,
+} from "./navigation-panel.styles";
 import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
 import { NavigationPanelThreadSection } from "./navigation-panel-thread-section";
-import { navigationPanelStyles } from "./navigation-panel.styles";
 
 function NavigationPanelRows(): React.JSX.Element {
   return (
     <>
-      <Text style={navigationPanelStyles.heading}>Conduit</Text>
+      <Text
+        mb={navigationPanelHeadingMarginBottom}
+        variant={navigationPanelHeadingVariant}
+      >
+        Conduit
+      </Text>
       <NavigationPanelProjectRows />
       <NavigationPanelThreadSection />
     </>
