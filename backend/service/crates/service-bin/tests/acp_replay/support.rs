@@ -130,11 +130,6 @@ impl Drop for TempWorkspace {
     }
 }
 
-pub(crate) struct ReplayProvider {
-    pub(crate) id: &'static str,
-    pub(crate) executable: &'static str,
-}
-
 pub(crate) struct ReplayRun<'a> {
     pub(crate) provider: &'a str,
     pub(crate) sequence: usize,
@@ -152,23 +147,6 @@ impl<'a> ReplayRun<'a> {
         self.sequence += 1;
         self.sequence
     }
-}
-
-pub(crate) fn replay_providers() -> [ReplayProvider; 3] {
-    [
-        ReplayProvider {
-            id: "codex",
-            executable: "codex-acp",
-        },
-        ReplayProvider {
-            id: "copilot",
-            executable: "copilot",
-        },
-        ReplayProvider {
-            id: "claude",
-            executable: "claude-agent-acp",
-        },
-    ]
 }
 
 pub(crate) fn prepare_replay_provider(provider_executable_name: &str) -> TestResult<TempWorkspace> {
@@ -617,24 +595,6 @@ pub(crate) fn expected_event_kind_strings(scenario: &Value) -> TestResult<Vec<St
 
 pub(crate) fn read_json(path: &Path) -> TestResult<Value> {
     Ok(serde_json::from_str(&read_to_string(path)?)?)
-}
-
-pub(crate) fn fixture_paths(provider: &str) -> TestResult<Vec<PathBuf>> {
-    let replay_root = service_root()?.join(format!("testdata/providers/{provider}/replay"));
-    let manifest = read_json(&replay_root.join("manifest.json"))?;
-    manifest
-        .get("scenarios")
-        .and_then(Value::as_array)
-        .ok_or("replay manifest was missing scenarios")?
-        .iter()
-        .map(|scenario| {
-            let path = scenario
-                .get("path")
-                .and_then(Value::as_str)
-                .ok_or("replay manifest scenario was missing path")?;
-            Ok(replay_root.join(path))
-        })
-        .collect()
 }
 
 pub(crate) fn service_root() -> TestResult<PathBuf> {

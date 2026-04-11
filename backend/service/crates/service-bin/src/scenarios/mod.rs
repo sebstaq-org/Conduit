@@ -14,9 +14,10 @@ use crate::error::{Result, ServiceError};
 /// Returns an error when the selected scenario fails.
 pub(crate) fn run(command: Command, args: &[String]) -> Result<()> {
     match command {
-        Command::Runtime { .. } | Command::Serve { .. } | Command::ConsumerProof { .. } => {
-            non_scenario_command()
-        }
+        Command::Runtime { .. }
+        | Command::Serve { .. }
+        | Command::ConsumerProof { .. }
+        | Command::Replay { .. } => non_scenario_command(),
         proof_command => run_proof_command(proof_command, args),
     }
 }
@@ -79,8 +80,9 @@ fn run_proof_command(command: Command, args: &[String]) -> Result<()> {
             root: &artifact_root,
             args,
         }),
-        Command::Runtime { .. } | Command::Serve { .. } | Command::ConsumerProof { .. } => {
-            non_scenario_command()
-        }
+        Command::Runtime { .. }
+        | Command::Serve { .. }
+        | Command::ConsumerProof { .. }
+        | Command::Replay { .. } => non_scenario_command(),
     }
 }
