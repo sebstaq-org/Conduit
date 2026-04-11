@@ -114,7 +114,7 @@ export default defineConfig({
     },
     {
       files: [
-        "apps/mobile/src/app/**/*.tsx",
+        "apps/frontend/src/app/**/*.tsx",
         "**/src/app/**/*.tsx",
         "src/app/**/*.tsx",
       ],

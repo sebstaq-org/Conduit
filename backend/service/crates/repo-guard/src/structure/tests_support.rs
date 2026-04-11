@@ -81,7 +81,7 @@ pub(super) fn ensure_any(
 fn create_roots(repo_root: &Path) -> Result<()> {
     for relative in [
         "apps/desktop/src",
-        "apps/mobile/src",
+        "apps/frontend/src",
         "artifacts/automated",
         "artifacts/manual",
         "backend/service/crates",
@@ -91,8 +91,6 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "docs",
         "packages/app-client/src",
         "packages/app-core/src",
-        "packages/design-system-desktop/src",
-        "packages/design-system-mobile/src",
         "packages/design-system-tokens/src",
         "packages/session-client/src",
         "packages/session-contracts/src",
@@ -162,20 +160,12 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 10] {
+fn workspace_packages() -> [(&'static str, &'static str); 8] {
     [
         ("@conduit/desktop", "apps/desktop"),
-        ("@conduit/mobile", "apps/mobile"),
+        ("@conduit/frontend", "apps/frontend"),
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
-        (
-            "@conduit/design-system-desktop",
-            "packages/design-system-desktop",
-        ),
-        (
-            "@conduit/design-system-mobile",
-            "packages/design-system-mobile",
-        ),
         (
             "@conduit/design-system-tokens",
             "packages/design-system-tokens",

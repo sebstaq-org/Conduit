@@ -10,12 +10,6 @@
       "@conduit/app-client": ["./packages/app-client/src/index.ts"],
       "@conduit/app-core": ["./packages/app-core/src/index.ts"],
       "@conduit/desktop/preload": ["./apps/desktop/src/preload/index.ts"],
-      "@conduit/design-system-desktop": [
-        "./packages/design-system-desktop/src/index.ts"
-      ],
-      "@conduit/design-system-mobile": [
-        "./packages/design-system-mobile/src/index.ts"
-      ],
       "@conduit/design-system-tokens": [
         "./packages/design-system-tokens/src/index.ts"
       ],
@@ -24,7 +18,7 @@
         "./packages/session-contracts/src/index.ts"
       ],
       "@conduit/session-model": ["./packages/session-model/src/index.ts"],
-      "@conduit/mobile/bootstrap": ["./apps/mobile/src/index.ts"]
+      "@conduit/frontend/bootstrap": ["./apps/frontend/src/index.ts"]
     },
     "strict": true,
     "noUncheckedIndexedAccess": true,

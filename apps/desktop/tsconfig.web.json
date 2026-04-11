@@ -3,7 +3,6 @@
   "include": [
     "../../packages/app-client/src/**/*.ts",
     "../../packages/app-core/src/**/*.ts",
-    "../../packages/design-system-desktop/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
     "../../packages/session-client/src/**/*.ts",
     "../../packages/session-contracts/src/**/*.ts",

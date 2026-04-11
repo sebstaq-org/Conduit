@@ -5,7 +5,7 @@ export interface ProofSurfaceCopy {
 }
 
 export function createProofSurfaceCopy(
-  scope: "desktop" | "mobile",
+  scope: "desktop" | "frontend",
 ): ProofSurfaceCopy {
   return {
     title: `Conduit ${scope} ACP proof`,

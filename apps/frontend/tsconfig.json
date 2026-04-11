@@ -6,9 +6,6 @@
       "@/*": ["./src/*"],
       "@conduit/app-client": ["../../packages/app-client/src/index.ts"],
       "@conduit/app-core": ["../../packages/app-core/src/index.ts"],
-      "@conduit/design-system-mobile": [
-        "../../packages/design-system-mobile/src/index.ts"
-      ],
       "@conduit/design-system-tokens": [
         "../../packages/design-system-tokens/src/index.ts"
       ],
@@ -25,7 +22,6 @@
     "../../packages/session-model/src/**/*.ts",
     "../../packages/app-client/src/**/*.ts",
     "../../packages/app-core/src/**/*.ts",
-    "../../packages/design-system-mobile/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",

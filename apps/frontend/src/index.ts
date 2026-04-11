@@ -1,4 +1,5 @@
-import { createMobileSessionSurfaceCopy } from "@conduit/design-system-mobile";
+import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
+import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
 import {
   CONSUMER_COMMANDS,
   PROVIDERS,
@@ -7,18 +8,18 @@ import {
 
 const sessionClient = createSessionClient();
 
-interface MobileBootstrapPlan {
-  appId: "mobile";
-  copy: ReturnType<typeof createMobileSessionSurfaceCopy>;
+interface FrontendBootstrapPlan {
+  appId: "frontend";
+  copy: ProofSurfaceCopy;
   lockedPolicy: "official-acp-only";
   supportedCommands: string[];
   supportedProviders: string[];
 }
 
-export function createMobileBootstrapPlan(): MobileBootstrapPlan {
+export function createFrontendBootstrapPlan(): FrontendBootstrapPlan {
   return {
-    appId: "mobile",
-    copy: createMobileSessionSurfaceCopy(),
+    appId: "frontend",
+    copy: createProofSurfaceCopy("frontend"),
     lockedPolicy: sessionClient.policy,
     supportedCommands: [...CONSUMER_COMMANDS],
     supportedProviders: [...PROVIDERS],

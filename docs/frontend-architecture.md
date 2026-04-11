@@ -1,22 +1,21 @@
 # Frontend Architecture
 
-This document is the canonical frontend architecture note for the current shell-init pass and shared consumer boundary.
+This document is the canonical frontend architecture note for the React Native Web frontend foundation and shared consumer boundary.
 
 ## Decision
 
-Conduit should behave as one product with two shells:
+Conduit should behave as one product with one frontend app:
 
-- desktop in Electron
-- mobile in React Native
+- `apps/frontend` targets React Native and React Native Web
+- `apps/desktop` hosts the frontend web target in Electron
 
 Shared frontend work should prioritize semantics first:
 
 - shared transport and contract adaptation
 - shared framework-neutral feature logic
-- shared component API contracts
-- shared semantic token contracts
+- app-local UI primitives and tokens until extraction is justified
 
-Raw DOM and React Native implementation should remain platform-owned.
+Raw React Native implementation belongs in `apps/frontend/src/ui` primitives and shell integration, not in feature composition.
 
 ## Package Ownership
 
@@ -26,14 +25,10 @@ Raw DOM and React Native implementation should remain platform-owned.
   - framework-neutral provider/session vocabulary, reducers, selectors, and view-model logic only
 - `packages/design-system-tokens`
   - semantic token contracts only; proof-surface copy is allowed for Phase 1 evidence
-- `packages/design-system-desktop`
-  - future desktop primitives behind Conduit-owned component APIs
-- `packages/design-system-mobile`
-  - future mobile primitives behind the same Conduit-owned component APIs
 - `apps/desktop`
-  - Electron shell and desktop integration only, including the minimum runtime wiring needed to launch
-- `apps/mobile`
-  - React Native shell and mobile integration only, including the minimum runtime wiring needed to launch
+  - Electron host and desktop integration only
+- `apps/frontend`
+  - Expo/React Native UI app, app-local tokens, primitives, screens, and local features
 
 ## Hard Rules
 
@@ -41,10 +36,10 @@ Raw DOM and React Native implementation should remain platform-owned.
 - Do not add starter primitives, starter themes, or fake token values.
 - Do not add feature stubs.
 - Do not import one app from the other.
-- Do not put shared feature behavior directly in `apps/*`.
+- Do not put backend-facing shared behavior directly in app feature code.
 - Do not import future backend contracts directly from app or feature code.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
-- Raw DOM and React Native primitives are reserved for design-system and shell boundaries.
+- Raw DOM and React Native primitives are reserved for app UI primitives and shell boundaries.
 
 ## Future Delivery Order
 
@@ -53,7 +48,7 @@ Cross-platform feature work should land in this order:
 1. future app-facing backend boundary
 2. `packages/app-client`
 3. `packages/app-core`
-4. desktop shell integration
-5. mobile shell integration
+4. frontend UI integration
+5. desktop host integration
 
 If a capability is intended for both platforms, it is not complete until both shells exist.

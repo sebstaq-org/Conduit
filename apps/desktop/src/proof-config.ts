@@ -1,6 +1,6 @@
 import { DESKTOP_PROOF_ACTIONS } from "@conduit/app-client";
 import type { DesktopProofConfig } from "@conduit/app-client";
-import { createDesktopProofSurfaceCopy } from "@conduit/design-system-desktop";
+import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
 import { PROVIDERS } from "@conduit/session-model";
 
 export function createDesktopProofConfig(
@@ -10,6 +10,6 @@ export function createDesktopProofConfig(
     providers: [...PROVIDERS],
     actions: [...DESKTOP_PROOF_ACTIONS],
     defaultCwd,
-    copy: createDesktopProofSurfaceCopy(),
+    copy: createProofSurfaceCopy("desktop"),
   };
 }

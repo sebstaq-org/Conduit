@@ -29,10 +29,6 @@ export default defineConfig({
           import.meta.dirname,
           "../../packages/app-core/src/index.ts",
         ),
-        "@conduit/design-system-desktop": resolve(
-          import.meta.dirname,
-          "../../packages/design-system-desktop/src/index.ts",
-        ),
         "@conduit/design-system-tokens": resolve(
           import.meta.dirname,
           "../../packages/design-system-tokens/src/index.ts",

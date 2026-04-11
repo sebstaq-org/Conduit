@@ -1,5 +1,5 @@
 {
-  "name": "@conduit/mobile",
+  "name": "@conduit/frontend",
   "private": true,
   "version": "0.5.0",
   "main": "expo-router/entry",
@@ -10,10 +10,10 @@
     "lint": "oxlint . --config ../../oxlint.config.ts --deny-warnings",
     "start": "expo start",
     "test": "vitest run --config vitest.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "web": "expo start --web"
   },
   "dependencies": {
-    "@conduit/design-system-mobile": "workspace:*",
     "@conduit/design-system-tokens": "workspace:*",
     "@conduit/session-client": "workspace:*",
     "@conduit/session-contracts": "workspace:*",
