@@ -100,6 +100,44 @@ const SessionGroupsQuerySchema = z.object({
 
 type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
 
+type TranscriptMessageRole = "user" | "agent";
+
+interface TranscriptMessageItem {
+  kind: "message";
+  id: string;
+  role: TranscriptMessageRole;
+  text: string;
+  sourceVariants: string[];
+}
+
+interface TranscriptEventItem {
+  kind: "event";
+  id: string;
+  variant: string;
+  title: string;
+  defaultCollapsed: true;
+}
+
+type TranscriptItem = TranscriptMessageItem | TranscriptEventItem;
+
+interface SessionOpenRequest {
+  sessionId: string;
+  cwd: string;
+  limit?: number;
+}
+
+interface SessionHistoryRequest {
+  openSessionId: string;
+  cursor?: string | null;
+  limit?: number;
+}
+
+interface SessionHistoryWindow {
+  openSessionId: string;
+  items: TranscriptItem[];
+  nextCursor: string | null;
+}
+
 interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
@@ -162,5 +200,12 @@ export type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionRow,
+  SessionHistoryRequest,
+  SessionHistoryWindow,
+  SessionOpenRequest,
+  TranscriptEventItem,
+  TranscriptItem,
+  TranscriptMessageItem,
+  TranscriptMessageRole,
   TranscriptUpdateSnapshot,
 };

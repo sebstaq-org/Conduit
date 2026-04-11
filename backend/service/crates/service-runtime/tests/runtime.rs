@@ -17,7 +17,7 @@ use thiserror as _;
 #[test]
 fn dispatch_reuses_provider_between_commands() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(Arc::clone(&state));
+    let mut runtime = runtime(Arc::clone(&state))?;
     let first = runtime.dispatch(command("1", "initialize", "claude", json!({})));
     let second = runtime.dispatch(command(
         "2",
@@ -38,7 +38,7 @@ fn dispatch_reuses_provider_between_commands() -> TestResult<()> {
 #[test]
 fn dispatch_rejects_unknown_provider() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command("1", "initialize", "bad", json!({})));
 
     if response.ok {
@@ -54,7 +54,7 @@ fn dispatch_rejects_unknown_provider() -> TestResult<()> {
 #[test]
 fn disconnect_reconnects_next_provider_access() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(Arc::clone(&state));
+    let mut runtime = runtime(Arc::clone(&state))?;
     assert_ok(&runtime.dispatch(command("1", "initialize", "codex", json!({}))))?;
 
     let disconnected = runtime.dispatch(command("2", "provider/disconnect", "codex", json!({})));
@@ -76,7 +76,7 @@ fn disconnect_reconnects_next_provider_access() -> TestResult<()> {
 #[test]
 fn provider_snapshot_alias_is_not_supported() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command("1", "provider/snapshot", "codex", json!({})));
 
     if response.ok {
@@ -92,7 +92,7 @@ fn provider_snapshot_alias_is_not_supported() -> TestResult<()> {
 #[test]
 fn event_subscription_returns_cursor_and_raw_wire_truth() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command("1", "events/subscribe", "copilot", json!({})));
 
     assert_ok(&response)?;
@@ -111,7 +111,7 @@ fn event_subscription_returns_cursor_and_raw_wire_truth() -> TestResult<()> {
 #[test]
 fn event_subscription_filters_by_cursor() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     assert_ok(&runtime.dispatch(command("1", "initialize", "copilot", json!({}))))?;
     let cursor = runtime.latest_event_sequence();
     assert_ok(&runtime.dispatch(command(
@@ -146,7 +146,7 @@ fn event_subscription_filters_by_cursor() -> TestResult<()> {
 fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -167,7 +167,7 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
 #[test]
 fn grouped_sessions_rejects_params_providers() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -191,7 +191,7 @@ fn grouped_sessions_rejects_params_providers() -> TestResult<()> {
 fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -216,7 +216,7 @@ fn grouped_sessions_fails_when_requested_provider_fails() -> TestResult<()> {
         .map_err(|error| format!("{error}"))?
         .session_list_errors
         .insert(ProviderId::Claude, "claude list failed".to_owned());
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -238,7 +238,7 @@ fn grouped_sessions_fails_when_requested_provider_fails() -> TestResult<()> {
 fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_paginated_session_lists(&state)?;
-    let mut runtime = runtime(Arc::clone(&state));
+    let mut runtime = runtime(Arc::clone(&state))?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -300,7 +300,7 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
                 ]
             }),
         );
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "sessions/grouped",
@@ -320,7 +320,7 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
 #[test]
 fn prompt_dispatch_records_lifecycle_events() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "session/prompt",
@@ -339,7 +339,7 @@ fn prompt_dispatch_records_lifecycle_events() -> TestResult<()> {
 #[test]
 fn cancel_dispatch_records_cancel_without_final_state() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "session/cancel",

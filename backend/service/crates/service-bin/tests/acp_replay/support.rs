@@ -1,6 +1,7 @@
 //! Support code for the ACP replay integration test.
 
 use super::REPLAY_PROVIDER_SCRIPT;
+use super::history_window::assert_history_expectations;
 use super::load_replay::{assert_loaded_replay_context_used, assert_loaded_transcript_variants};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -406,6 +407,7 @@ pub(crate) fn assert_operation_expectations(
             );
         }
     }
+    assert_history_expectations(frame, operation)?;
     assert_loaded_replay_context_used(scenario, operation)?;
     Ok(())
 }

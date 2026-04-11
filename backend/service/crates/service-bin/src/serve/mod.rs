@@ -4,6 +4,7 @@ mod actor;
 mod wire;
 
 use crate::error::Result;
+use crate::local_store::open_product_store;
 use actor::RuntimeActor;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -13,6 +14,7 @@ use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use service_runtime::AppServiceFactory;
+use session_store::LocalStore;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -33,12 +35,12 @@ struct ServeState {
 /// an I/O failure.
 pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
-    axum::serve(listener, router()).await?;
+    axum::serve(listener, router(open_product_store()?)).await?;
     Ok(())
 }
 
-fn router() -> Router {
-    router_with_actor(RuntimeActor::start())
+fn router(local_store: LocalStore) -> Router {
+    router_with_actor(RuntimeActor::start(local_store))
 }
 
 fn router_with_actor(actor: RuntimeActor) -> Router {
@@ -61,10 +63,13 @@ impl Drop for ProofServer {
     }
 }
 
-pub(crate) async fn spawn_proof_server(factory: AppServiceFactory) -> Result<ProofServer> {
+pub(crate) async fn spawn_proof_server(
+    factory: AppServiceFactory,
+    local_store: LocalStore,
+) -> Result<ProofServer> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let address = listener.local_addr()?;
-    let app = router_with_actor(RuntimeActor::start_with_factory(factory));
+    let app = router_with_actor(RuntimeActor::start_with_factory(factory, local_store));
     let handle = tokio::spawn(async move {
         let _result = axum::serve(listener, app).await;
     });
@@ -87,6 +92,8 @@ async fn catalog() -> Json<serde_json::Value> {
             "session/new",
             "session/list",
             "session/load",
+            "session/open",
+            "session/history",
             "session/prompt",
             "session/cancel",
             "snapshot/get",

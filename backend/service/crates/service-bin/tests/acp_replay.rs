@@ -6,15 +6,19 @@ use acp_discovery as _;
 use agent_client_protocol_schema as _;
 use app_api as _;
 use axum as _;
+use directories as _;
 use regex as _;
 use serde as _;
 use serde_json::{Value, json};
 use service_runtime as _;
+use session_store as _;
 use thiserror as _;
 use tower_http as _;
 
 #[path = "acp_replay/fixtures.rs"]
 mod fixtures;
+#[path = "acp_replay/history_window.rs"]
+mod history_window;
 #[path = "acp_replay/load_replay.rs"]
 mod load_replay;
 #[path = "support/replay_oracle.rs"]
@@ -307,7 +311,9 @@ async fn exercise_curated_sequence(
             .unwrap_or(true);
         if expect_ok {
             assert_response_ok(&response)?;
-            assert_snapshot_provider(&response, provider)?;
+            if response_snapshot_value(&response).is_some_and(|snapshot| !snapshot.is_null()) {
+                assert_snapshot_provider(&response, provider)?;
+            }
         } else {
             assert_response_error(&response, operation)?;
         }

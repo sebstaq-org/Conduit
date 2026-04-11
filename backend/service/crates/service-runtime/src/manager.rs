@@ -3,15 +3,19 @@
 use crate::command::{
     ConsumerCommand, ConsumerResponse, session_id_from_value, session_ids_from_list,
 };
-use crate::error::{RuntimeError, optional_u64_param, path_param, string_param};
+use crate::error::{
+    RuntimeError, optional_string_param, optional_u64_param, path_param, string_param,
+};
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::session_groups::{
-    SessionGroupsQuery, grouped_view, next_cursor, providers_from_target, rows_from_session_list,
+    SessionGroupsQuery, grouped_view, next_cursor, normalize_cwd, providers_from_target,
+    rows_from_session_list,
 };
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -21,19 +25,14 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     event_buffer: EventBuffer,
     factory: F,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
+    local_store: LocalStore,
 }
 
 impl ServiceRuntime<AppServiceFactory> {
     /// Creates a consumer runtime backed by real provider services.
     #[must_use]
-    pub fn new() -> Self {
-        Self::with_factory(AppServiceFactory::default())
-    }
-}
-
-impl Default for ServiceRuntime<AppServiceFactory> {
-    fn default() -> Self {
-        Self::new()
+    pub fn new(local_store: LocalStore) -> Self {
+        Self::with_factory(AppServiceFactory::default(), local_store)
     }
 }
 
@@ -42,11 +41,12 @@ where
     F: ProviderFactory,
 {
     /// Creates a consumer runtime with an explicit provider factory.
-    pub fn with_factory(factory: F) -> Self {
+    pub fn with_factory(factory: F, local_store: LocalStore) -> Self {
         Self {
             event_buffer: EventBuffer::new(),
             factory,
             providers: HashMap::new(),
+            local_store,
         }
     }
 
@@ -86,6 +86,8 @@ where
             "session/new" => self.session_new(command.id, provider, &command.params),
             "session/list" => self.session_list(command.id, provider),
             "session/load" => self.session_load(command.id, provider, &command.params),
+            "session/open" => self.session_open(command.id, provider, &command.params),
+            "session/history" => self.session_history(command.id, provider, &command.params),
             "session/prompt" => self.session_prompt(command.id, provider, &command.params),
             "session/cancel" => self.session_cancel(command.id, provider, &command.params),
             "snapshot/get" => self.provider_snapshot(command.id, provider),
@@ -232,6 +234,78 @@ where
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
+    fn session_open(
+        &mut self,
+        id: String,
+        provider: ProviderId,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let session_id = string_param("session/open", params, "sessionId")?;
+        let cwd =
+            absolute_normalized_cwd("session/open", path_param("session/open", params, "cwd")?)?;
+        let limit = HistoryLimit::new(
+            "session/open",
+            optional_u64_param("session/open", params, "limit")?,
+        )?;
+        let key = OpenSessionKey {
+            provider,
+            session_id: session_id.clone(),
+            cwd: cwd.display().to_string(),
+        };
+        let (snapshot, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let _result = provider_port.session_load(session_id.clone(), cwd)?;
+            (provider_port.snapshot(), provider_port.raw_events())
+        };
+        for update in loaded_transcript_updates(&snapshot, &session_id) {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionReplayUpdate,
+                Some(session_id.clone()),
+                update,
+            );
+        }
+        self.event_buffer.emit(
+            provider,
+            RuntimeEventKind::SessionObserved,
+            Some(session_id.clone()),
+            json!({ "observed_via": "session/open" }),
+        );
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
+        let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
+        let result = to_value(self.local_store.open_session(key, updates, limit)?)?;
+        Ok(ConsumerResponse::success_without_snapshot(id, result))
+    }
+
+    fn session_history(
+        &mut self,
+        id: String,
+        provider: ProviderId,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let open_session_id = string_param("session/history", params, "openSessionId")?;
+        let limit = HistoryLimit::new(
+            "session/history",
+            optional_u64_param("session/history", params, "limit")?,
+        )?;
+        if self.local_store.provider_for(&open_session_id)? != Some(provider) {
+            return Err(RuntimeError::InvalidParameter {
+                command: "session/history",
+                parameter: "openSessionId",
+                message: "open session belongs to another provider or is unknown",
+            });
+        }
+        let cursor = optional_string_param("session/history", params, "cursor")?;
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(
+                self.local_store
+                    .history_window(&open_session_id, cursor, limit)?,
+            )?,
+        ))
+    }
+
     fn session_prompt(
         &mut self,
         id: String,
@@ -367,6 +441,17 @@ where
     }
 }
 
+fn absolute_normalized_cwd(command: &'static str, cwd: PathBuf) -> Result<PathBuf> {
+    if !cwd.is_absolute() {
+        return Err(RuntimeError::InvalidParameter {
+            command,
+            parameter: "cwd",
+            message: "cwd must be absolute",
+        });
+    }
+    Ok(PathBuf::from(normalize_cwd(&cwd.display().to_string())))
+}
+
 fn parse_provider(value: &str) -> Result<ProviderId> {
     ProviderId::from_str(value).map_err(|message| RuntimeError::UnknownProvider {
         provider: value.to_owned(),
@@ -420,5 +505,17 @@ fn loaded_transcript_updates(
                 })
                 .collect()
         })
+        .unwrap_or_default()
+}
+
+fn loaded_transcript_snapshot_updates<'a>(
+    snapshot: &'a acp_core::ProviderSnapshot,
+    session_id: &str,
+) -> &'a [acp_core::TranscriptUpdateSnapshot] {
+    snapshot
+        .loaded_transcripts
+        .iter()
+        .find(|transcript| transcript.identity.acp_session_id == session_id)
+        .map(|transcript| transcript.updates.as_slice())
         .unwrap_or_default()
 }

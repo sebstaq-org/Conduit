@@ -15,6 +15,7 @@ mod artifact;
 mod cli;
 mod consumer_proof;
 mod error;
+mod local_store;
 mod proof;
 mod replay_workflow;
 mod runtime;

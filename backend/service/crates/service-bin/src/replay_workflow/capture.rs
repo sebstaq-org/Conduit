@@ -13,6 +13,7 @@ use acp_discovery::ProviderId;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use service_runtime::{AppServiceFactory, ConsumerCommand};
+use session_store::LocalStore;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,7 +33,8 @@ pub(super) async fn capture(
     guard_not_committed_replay_root(&root)?;
     let proof = ProofWorkspace::prepare(provider, &root)?;
     let factory = AppServiceFactory::with_environment(proof.environment().clone());
-    let server = serve::spawn_proof_server(factory).await?;
+    let local_store = LocalStore::open_path(proof.artifact_root().join("local-store.sqlite3"))?;
+    let server = serve::spawn_proof_server(factory, local_store).await?;
     let mut client = CaptureClient::connect(server.address).await?;
     let mut run = CaptureRun::new(provider, scenario, proof.cwd());
     drive_capture_scenario(&mut client, &mut run).await?;

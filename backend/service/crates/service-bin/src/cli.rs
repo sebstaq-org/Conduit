@@ -271,6 +271,13 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
             "session_id": required_value(args, "--session-id")?,
             "cwd": required_value(args, "--cwd")?,
         })),
+        "session/open" => Ok(json!({
+            "sessionId": required_value(args, "--session-id")?,
+            "cwd": required_value(args, "--cwd")?,
+        })),
+        "session/history" => Ok(json!({
+            "openSessionId": required_value(args, "--open-session-id")?,
+        })),
         "session/prompt" => Ok(json!({
             "session_id": required_value(args, "--session-id")?,
             "prompt": required_value(args, "--prompt")?,

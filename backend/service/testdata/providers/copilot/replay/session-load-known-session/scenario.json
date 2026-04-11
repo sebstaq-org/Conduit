@@ -306,6 +306,20 @@
       ]
     },
     {
+      "command": "session/open",
+      "params": {
+        "sessionId": "replay-copilot-session-load-known-session-session-1",
+        "cwd": "/__conduit_replay_cwd__",
+        "limit": 40
+      },
+      "expect_ok": true,
+      "assert_history_item_variants": [
+        "user_message_chunk",
+        "agent_message_chunk"
+      ],
+      "assert_history_next_cursor": null
+    },
+    {
       "command": "session/prompt",
       "params": {
         "session_id": "replay-copilot-session-load-known-session-session-1",
@@ -320,6 +334,9 @@
   ],
   "expected_event_kinds": [
     "provider_connected",
+    "session_replay_update",
+    "session_replay_update",
+    "session_observed",
     "session_replay_update",
     "session_replay_update",
     "session_observed",

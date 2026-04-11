@@ -231,7 +231,13 @@ fn enforce_service_runtime_rules(
     let Some(local_deps) = deps_by_crate.get("service-runtime") else {
         return;
     };
-    let allowed = ["acp-contracts", "acp-core", "acp-discovery", "app-api"];
+    let allowed = [
+        "acp-contracts",
+        "acp-core",
+        "acp-discovery",
+        "app-api",
+        "session-store",
+    ];
     for dependency in local_deps {
         if !allowed.contains(&dependency.as_str()) {
             failures.push(format!(

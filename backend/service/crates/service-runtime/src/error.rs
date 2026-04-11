@@ -57,6 +57,9 @@ pub enum RuntimeError {
     /// The provider operation failed.
     #[error("{0}")]
     Provider(String),
+    /// The local store operation failed.
+    #[error("{0}")]
+    LocalStore(#[from] session_store::Error),
 }
 
 impl RuntimeError {
@@ -69,6 +72,8 @@ impl RuntimeError {
             | Self::InvalidPathParameter { .. }
             | Self::InvalidParameter { .. } => "invalid_params",
             Self::Provider(_) => "provider_error",
+            Self::LocalStore(session_store::Error::InvalidParameter { .. }) => "invalid_params",
+            Self::LocalStore(_) => "local_store_error",
         }
     }
 }
@@ -115,5 +120,22 @@ pub(crate) fn optional_u64_param(
     value
         .as_u64()
         .map(Some)
+        .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
+}
+
+pub(crate) fn optional_string_param(
+    command: &'static str,
+    params: &serde_json::Value,
+    parameter: &'static str,
+) -> Result<Option<String>> {
+    let Some(value) = params.get(parameter) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    value
+        .as_str()
+        .map(|value| Some(value.to_owned()))
         .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
 }
