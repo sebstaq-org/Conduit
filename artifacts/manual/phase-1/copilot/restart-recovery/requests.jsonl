@@ -1,6 +1,0 @@
-{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
-{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/copilot/restart-recovery/cwd","mcpServers":[]}}
-{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Reply with exactly RECOVERY_READY.","type":"text"}],"sessionId":"ae82f40a-1629-4ac6-94aa-b4bd9b8d5092"}}
-{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
-{"id":2,"jsonrpc":"2.0","method":"session/list","params":{}}
-{"id":3,"jsonrpc":"2.0","method":"session/load","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/copilot/restart-recovery/cwd","mcpServers":[],"sessionId":"ae82f40a-1629-4ac6-94aa-b4bd9b8d5092"}}

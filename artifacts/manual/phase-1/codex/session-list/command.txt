@@ -1,1 +1,0 @@
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- session-list --provider codex --artifact-root artifacts/manual/phase-1/codex/session-list

@@ -6,7 +6,7 @@ Add code only inside the approved tree.
 - New desktop or mobile shell code belongs in `apps/`.
 - New Rust service code belongs in `backend/service/crates/`.
 - Pinned external schemas or manifests belong in `vendor/agent-client-protocol/`.
-- Generated proof belongs in `artifacts/manual/` or `artifacts/automated/`.
+- Manual proof belongs outside the repo under `/srv/devops/repos/conduit-artifacts/manual/`; generated CI or scripted proof may go in `artifacts/automated/` when it is explicitly meant to stay in the repo.
 
 Structural rules are enforced by `rtk pnpm run structure:check`, which runs the Rust `repo-guard` crate. If a new package or crate is needed, update the approved tree in the structure check and the architecture docs in the same change. If a task starts to require fallback runtime behavior, a provider-specific Conduit protocol, or duplicated live runtime DTOs above ACP, stop and update the Phase notes instead of inventing a temporary path.
 

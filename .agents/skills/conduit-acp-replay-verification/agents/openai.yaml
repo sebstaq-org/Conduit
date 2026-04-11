@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conduit ACP Replay Verification"
+  short_description: "Capture Conduit ACP live proof and replay fixtures"
+  default_prompt: "Use $conduit-acp-replay-verification to collect live provider proof through service-bin serve, curate replay fixtures, and verify the replay path."

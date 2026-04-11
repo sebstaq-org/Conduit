@@ -1,0 +1,38 @@
+{
+  "provider": "copilot",
+  "connection_state": "ready",
+  "live_sessions": [
+    {
+      "identity": {
+        "provider": "copilot",
+        "acp_session_id": "replay-copilot-session-1"
+      },
+      "cwd": "/__dynamic_cwd__",
+      "title": null,
+      "observed_via": "new"
+    }
+  ],
+  "last_prompt": {
+    "identity": {
+      "provider": "copilot",
+      "acp_session_id": "replay-copilot-session-1"
+    },
+    "state": "completed",
+    "stop_reason": "end_turn",
+    "raw_update_count": 12,
+    "agent_text_chunks": [
+      "con",
+      "duit",
+      "-phase",
+      "-",
+      "2",
+      "-re",
+      "play",
+      "-c",
+      "op",
+      "ilot",
+      " observed",
+      "."
+    ]
+  }
+}

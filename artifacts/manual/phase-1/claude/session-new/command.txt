@@ -1,1 +1,0 @@
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- session-new --provider claude --cwd /srv/devops/repos/w2/Conduit --artifact-root artifacts/manual/phase-1/claude/session-new

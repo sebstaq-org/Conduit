@@ -1,1 +1,0 @@
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- session-cancel --provider copilot --cwd /srv/devops/repos/w2/Conduit --prompt Count from 1 to 1000 slowly. --cancel-after-ms 500 --artifact-root /srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/copilot/session-cancel
