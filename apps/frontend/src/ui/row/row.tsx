@@ -34,10 +34,7 @@ function Row({
 }: RowProps): React.JSX.Element {
   return (
     <View
-      style={[
-        rowStyles.row,
-        { paddingLeft: depth * panelTokens.space.indent },
-      ]}
+      style={[rowStyles.row, { paddingLeft: depth * panelTokens.space.indent }]}
     >
       {icon !== undefined && <IconSlot name={icon} />}
       <Text numberOfLines={1} style={labelStyle(muted)}>

@@ -8,12 +8,18 @@ interface SectionProps {
   title: string;
 }
 
-function Section({ actions, children, title }: SectionProps): React.JSX.Element {
+function Section({
+  actions,
+  children,
+  title,
+}: SectionProps): React.JSX.Element {
   return (
     <View>
       <View style={sectionStyles.heading}>
         <Text style={sectionStyles.title}>{title}</Text>
-        {actions !== undefined && <View style={sectionStyles.actions}>{actions}</View>}
+        {actions !== undefined && (
+          <View style={sectionStyles.actions}>{actions}</View>
+        )}
       </View>
       {children}
     </View>
