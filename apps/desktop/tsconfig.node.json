@@ -2,10 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "include": [
     "electron.vite.config.ts",
+    "../../packages/app-client/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
     "../../packages/session-client/src/**/*.ts",
     "../../packages/session-contracts/src/**/*.ts",
     "../../packages/session-model/src/**/*.ts",
+    "src/proof-config.ts",
     "src/main/**/*",
     "src/preload/**/*",
     "vitest.config.ts"
