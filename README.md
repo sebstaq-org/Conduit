@@ -1,6 +1,7 @@
 # Conduit
 
-Conduit is in a frontend shell-init pass. This pass turns `apps/desktop` and `apps/mobile` into real Electron and Expo shells while keeping product UI, design tokens, primitives, themes, and features out of scope.
+Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime.
+The frontend workspace has runnable Electron and Expo shells while keeping product UI, design tokens, primitives, themes, and features out of scope. `packages/session-client` and `packages/session-contracts` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-*` keep their reserved frontend boundaries.
 
 ## Happy Path
 
@@ -22,11 +23,18 @@ scripts/       frontend registries only; repo guard rails live in backend/servic
 
 ## Rules That Matter
 
-- This pass is frontend-only. Do not build ACP host logic, provider runtime logic, or backend features here.
-- `apps/desktop` and `apps/mobile` are runnable shells only. Shared behavior belongs in `packages/`.
-- `packages/app-client` owns future transport-facing frontend capability clients.
-- `packages/app-core` owns future framework-neutral reducers, selectors, and view-model logic.
-- `packages/design-system-tokens`, `packages/design-system-desktop`, and `packages/design-system-mobile` reserve the UI boundary. Do not add primitives, themes, or tokens yet.
+- Official ACP only is policy: official schema/meta are the contract source and official adapter binaries are the only runtime endpoints.
+- The normal consumer transport is `rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- serve`, which exposes versioned WebSocket frames at `ws://127.0.0.1:4174/api/session`.
+- `backend/` is the only backend root. Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
+- New JS or TS source stays in TypeScript.
+- Rust is blocking by default: curated workspace lints, `clippy -D warnings`, `rustdoc -D warnings`, and crate-edge structure checks all run in the root suite.
+- Apps talk through packages and the app API boundary, never by reaching into backend internals.
+- `artifacts/` and `vendor/` hold generated or pinned evidence, not hand-authored runtime code; volatile proof workspaces are ignored.
+- `apps/desktop` contains the minimal Phase 1 proof surface; `apps/mobile` remains a shell entrypoint. Shared behavior belongs in `packages/`.
+- `packages/session-client` and `packages/session-contracts` own normal runtime command transport and envelopes.
+- `packages/app-client` owns proof-surface contracts only.
+- `packages/app-core` owns provider/session vocabulary and framework-neutral view-model logic.
+- `packages/design-system-tokens`, `packages/design-system-desktop`, and `packages/design-system-mobile` reserve the UI boundary. Do not add speculative primitives, themes, or fake tokens.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - No raw DOM or React Native primitives belong in feature code. That boundary is reserved for the design-system packages.
 

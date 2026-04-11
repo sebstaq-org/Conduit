@@ -1,0 +1,1 @@
+rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- consumer-proof --provider copilot --artifact-root artifacts/manual/phase-1.5/copilot/consumer-api

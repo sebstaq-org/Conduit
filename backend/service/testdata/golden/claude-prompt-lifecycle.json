@@ -1,0 +1,9 @@
+{
+  "identity": {
+    "provider": "claude",
+    "acp_session_id": "d5cb37a1-ea64-49a8-8d70-5da8b8d8b6e3"
+  },
+  "state": "completed",
+  "stop_reason": "end_turn",
+  "raw_update_count": 4
+}

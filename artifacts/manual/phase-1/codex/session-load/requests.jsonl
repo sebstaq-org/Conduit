@@ -1,0 +1,6 @@
+{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
+{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/session-load/cwd","mcpServers":[]}}
+{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Reply with exactly RECOVERY_READY.","type":"text"}],"sessionId":"019d78f0-b347-7d43-a270-bb154b899e10"}}
+{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
+{"id":2,"jsonrpc":"2.0","method":"session/list","params":{}}
+{"id":3,"jsonrpc":"2.0","method":"session/load","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/session-load/cwd","mcpServers":[],"sessionId":"019d78f0-b347-7d43-a270-bb154b899e10"}}

@@ -1,0 +1,2 @@
+{"sequence":1,"stream":"outgoing","kind":"request","payload":"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1}}","method":"initialize","request_id":"1","json":{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}}
+{"sequence":2,"stream":"stderr","kind":"diagnostic","payload":"provider process exited before response","method":null,"request_id":null,"json":null}

@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-This document is the canonical frontend architecture note for the current shell-init pass.
+This document is the canonical frontend architecture note for the current shell-init pass and shared consumer boundary.
 
 ## Decision
 
@@ -21,11 +21,11 @@ Raw DOM and React Native implementation should remain platform-owned.
 ## Package Ownership
 
 - `packages/app-client`
-  - future frontend transport and contract adaptation only
+  - app-facing capability client and contract adaptation only
 - `packages/app-core`
-  - future framework-neutral reducers, selectors, and view-model logic only
+  - framework-neutral provider/session vocabulary, reducers, selectors, and view-model logic only
 - `packages/design-system-tokens`
-  - future semantic token contracts only
+  - semantic token contracts only; proof-surface copy is allowed for Phase 1 evidence
 - `packages/design-system-desktop`
   - future desktop primitives behind Conduit-owned component APIs
 - `packages/design-system-mobile`

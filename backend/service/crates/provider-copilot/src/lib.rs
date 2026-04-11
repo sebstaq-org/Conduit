@@ -11,9 +11,9 @@
     rustdoc::private_intra_doc_links
 )]
 
-/// The fixed bootstrap descriptor for the Copilot ACP adapter.
+/// The fixed Phase 1 descriptor for the Copilot ACP adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProviderBootstrapDescriptor {
+pub struct ProviderDescriptor {
     /// The normalized provider identifier.
     pub provider: &'static str,
     /// The exact launcher command allowed for this provider.
@@ -22,13 +22,13 @@ pub struct ProviderBootstrapDescriptor {
     pub phase_status: &'static str,
 }
 
-/// Returns the bootstrap descriptor for Copilot.
+/// Returns the Phase 1 descriptor for Copilot.
 #[must_use]
-pub const fn descriptor() -> ProviderBootstrapDescriptor {
-    ProviderBootstrapDescriptor {
+pub const fn descriptor() -> ProviderDescriptor {
+    ProviderDescriptor {
         provider: "copilot",
         launcher: "copilot --acp --allow-all --no-color --no-auto-update",
-        phase_status: "bootstrap-only",
+        phase_status: "phase-1-official-acp",
     }
 }
 

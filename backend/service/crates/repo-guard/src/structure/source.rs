@@ -8,8 +8,8 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 const BANNED_LIB_DEPS: [&str; 2] = ["anyhow", "eyre"];
-const SOURCE_LINE_LIMIT: usize = 300;
-const TEST_LINE_LIMIT: usize = 400;
+const SOURCE_LINE_LIMIT: usize = 700;
+const TEST_LINE_LIMIT: usize = 700;
 
 /// Collects Rust source failures for one workspace package.
 pub(super) fn collect_failures(

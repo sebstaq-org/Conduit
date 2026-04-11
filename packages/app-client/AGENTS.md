@@ -1,7 +1,7 @@
 # App Client Guidance
 
-This package is the future frontend transport and contract adaptation boundary.
+This package is the isolated desktop proof client boundary until proof tooling is retired.
 
 - Keep it free of React, React Native, Electron, and app-shell code.
-- This is the only planned frontend boundary where future backend contracts may be adapted.
-- Do not add reducers, view-model logic, primitives, or placeholder APIs yet.
+- Normal runtime session transport belongs in `@conduit/session-client`, not here.
+- Do not add reducers, view-model logic, primitives, or new normal consumer APIs here.

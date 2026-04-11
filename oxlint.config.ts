@@ -134,5 +134,83 @@ export default defineConfig({
         "import/no-nodejs-modules": "off",
       },
     },
+    {
+      files: ["scripts/session-boundary.test.ts"],
+      rules: {
+        "eslint/id-length": "off",
+        "import/no-relative-parent-imports": "off",
+      },
+    },
+    {
+      files: [
+        "**/*.test.ts",
+        "apps/desktop/test/**/*.ts",
+        "test/**/*.ts",
+        "**/test/**/*.ts",
+      ],
+      rules: {
+        "import/no-relative-parent-imports": "off",
+      },
+    },
+    {
+      files: [
+        "apps/desktop/src/client.ts",
+        "apps/desktop/src/server.ts",
+        "src/client.ts",
+        "src/server.ts",
+        "**/src/client.ts",
+        "**/src/server.ts",
+      ],
+      rules: {
+        "eslint/no-ternary": "off",
+        "eslint/default-case": "off",
+        "eslint/id-length": "off",
+        "eslint/max-lines": "off",
+        "eslint/max-lines-per-function": "off",
+        "eslint/max-statements": "off",
+        "eslint/no-use-before-define": "off",
+        "import/consistent-type-specifier-style": "off",
+        "import/no-nodejs-modules": "off",
+        "promise/avoid-new": "off",
+        "oxc/no-async-await": "off",
+        "typescript/consistent-return": "off",
+        "typescript/explicit-function-return-type": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-redundant-type-constituents": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/promise-function-async": "off",
+        "typescript/strict-boolean-expressions": "off",
+        "unicorn/prefer-import-meta-properties": "off",
+        "unicorn/prefer-query-selector": "off",
+        "unicorn/prefer-top-level-await": "off",
+        "unicorn/switch-case-braces": "off",
+      },
+    },
+    {
+      files: [
+        "packages/app-client/src/index.ts",
+        "packages/session-client/src/index.ts",
+      ],
+      rules: {
+        "eslint/id-length": "off",
+        "oxc/no-async-await": "off",
+      },
+    },
+    {
+      files: ["packages/session-contracts/src/index.ts"],
+      rules: {
+        "eslint/id-length": "off",
+      },
+    },
+    {
+      files: ["packages/session-client/src/index.ts"],
+      rules: {
+        "promise/avoid-new": "off",
+      },
+    },
   ],
 });

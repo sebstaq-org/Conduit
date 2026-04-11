@@ -1,4 +1,4 @@
-//! Binary composition root for the Conduit service workspace.
+//! Silent Phase 1 proof runner for Conduit.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -11,19 +11,31 @@
     rustdoc::private_intra_doc_links
 )]
 
-use acp_discovery::PROVIDER_LAUNCHERS;
-use app_api::bootstrap_surface;
-use provider_claude::descriptor as claude_descriptor;
-use provider_codex::descriptor as codex_descriptor;
-use provider_copilot::descriptor as copilot_descriptor;
-use session_store::bootstrap_store_boundary;
+mod artifact;
+mod cli;
+mod consumer_proof;
+mod error;
+mod proof;
+mod runtime;
+mod scenarios;
+mod serve;
+mod support;
 
-/// Resolves the bootstrap composition graph for the service workspace.
-fn main() {
-    let _surface = bootstrap_surface();
-    let _claude = claude_descriptor();
-    let _codex = codex_descriptor();
-    let _copilot = copilot_descriptor();
-    let _launcher_count = PROVIDER_LAUNCHERS.len();
-    let _store_boundary = bootstrap_store_boundary();
+use crate::cli::parse_command;
+use crate::error::Result;
+use std::env;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    let command = parse_command(&args)?;
+    match command {
+        cli::Command::Serve { host, port } => serve::run(&host, port).await,
+        cli::Command::Runtime { command } => runtime::run(command),
+        cli::Command::ConsumerProof {
+            provider,
+            artifact_root,
+        } => consumer_proof::run(provider, &artifact_root, &args).await,
+        proof_command => scenarios::run(proof_command, &args),
+    }
 }

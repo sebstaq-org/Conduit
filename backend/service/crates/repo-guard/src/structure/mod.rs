@@ -22,14 +22,17 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
 const APPROVED_APPS: [&str; 2] = ["desktop", "mobile"];
-const APPROVED_PACKAGES: [&str; 5] = [
+const APPROVED_PACKAGES: [&str; 8] = [
     "app-client",
     "app-core",
     "design-system-desktop",
     "design-system-mobile",
     "design-system-tokens",
+    "session-client",
+    "session-contracts",
+    "session-model",
 ];
-const APPROVED_CRATES: [&str; 10] = [
+const APPROVED_CRATES: [&str; 11] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -39,15 +42,16 @@ const APPROVED_CRATES: [&str; 10] = [
     "provider-copilot",
     "repo-guard",
     "service-bin",
+    "service-runtime",
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
 const APPROVED_VENDOR_ROOTS: [&str; 1] = ["agent-client-protocol"];
 const APPROVED_TESTDATA_ROOTS: [&str; 3] = ["failures", "golden", "providers"];
 const IGNORED_TOP_LEVEL: [&str; 1] = ["node_modules"];
-const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 18] = [
-    "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".log", ".md", ".ndjson",
-    ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
+const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 19] = [
+    "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".jsonl", ".log", ".md",
+    ".ndjson", ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
 ];
 const ALLOWED_VENDOR_EXTENSIONS: [&str; 9] = [
     "", ".gitkeep", ".json", ".lock", ".md", ".toml", ".txt", ".yaml", ".yml",

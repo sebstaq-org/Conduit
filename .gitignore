@@ -10,3 +10,4 @@ web-build/
 apps/mobile/android/
 apps/mobile/ios/
 .DS_Store
+artifacts/manual/phase-1/_proof-workspaces/

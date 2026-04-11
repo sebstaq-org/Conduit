@@ -1,4 +1,4 @@
-//! Provider launcher provenance and discovery policy for Conduit.
+//! Official ACP launcher discovery and initialize probing for Conduit.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -11,52 +11,16 @@
     rustdoc::private_intra_doc_links
 )]
 
-/// Describes the official launcher command and auth source for a provider.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProviderLauncher {
-    /// The normalized provider identifier.
-    pub provider: &'static str,
-    /// The exact launcher command that is allowed for this provider.
-    pub command: &'static str,
-    /// The expected source of adapter authentication state.
-    pub auth_source: &'static str,
-}
+mod environment;
+mod error;
+mod path;
+mod probe;
+mod provider;
 
-/// The fixed launcher catalog allowed by Conduit policy.
-pub const PROVIDER_LAUNCHERS: [ProviderLauncher; 3] = [
-    ProviderLauncher {
-        provider: "claude",
-        command: "claude-agent-acp",
-        auth_source: "local-login-state",
-    },
-    ProviderLauncher {
-        provider: "codex",
-        command: "codex-acp",
-        auth_source: "local-login-state",
-    },
-    ProviderLauncher {
-        provider: "copilot",
-        command: "copilot --acp --allow-all --no-color --no-auto-update",
-        auth_source: "local-login-state",
-    },
-];
-
-/// Returns the registered launcher descriptor for a provider, if any.
-#[must_use]
-pub fn launcher(provider: &str) -> Option<ProviderLauncher> {
-    PROVIDER_LAUNCHERS
-        .iter()
-        .copied()
-        .find(|entry| entry.provider == provider)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{PROVIDER_LAUNCHERS, launcher};
-
-    #[test]
-    fn known_launchers_are_registered() {
-        assert_eq!(PROVIDER_LAUNCHERS.len(), 3);
-        assert!(launcher("claude").is_some());
-    }
-}
+pub use environment::ProcessEnvironment;
+pub use error::{DiscoveryError, Result};
+pub use probe::{
+    DiscoveryCatalog, InitializeProbe, ProviderDiscovery, discover_provider,
+    discover_provider_with_environment, resolve_provider_command,
+};
+pub use provider::{LauncherCommand, ProviderId, ProviderLauncher, provider_launcher};

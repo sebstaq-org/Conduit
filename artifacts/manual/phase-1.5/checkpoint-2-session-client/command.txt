@@ -1,0 +1,4 @@
+rtk pnpm run typecheck
+rtk pnpm run lint
+rtk pnpm run build
+rtk pnpm run check

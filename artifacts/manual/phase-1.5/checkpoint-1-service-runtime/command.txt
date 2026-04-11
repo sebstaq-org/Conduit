@@ -1,0 +1,4 @@
+rtk pnpm run rust:metadata
+rtk pnpm run structure:check
+rtk cargo test --manifest-path backend/service/Cargo.toml -p service-runtime
+rtk pnpm run check

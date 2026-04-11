@@ -95,6 +95,25 @@ fn rejects_forbidden_library_error_aggregators() -> Result<()> {
 }
 
 #[test]
+fn rejects_forbidden_service_runtime_dependencies() -> Result<()> {
+    let mut fixture = fixture()?;
+    if let Some(resolve) = fixture.metadata.resolve.as_mut()
+        && let Some(node) = resolve
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == "service-runtime")
+    {
+        node.dependencies.push("provider-codex".to_owned());
+    }
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "service-runtime may not depend on provider-codex; it must stay above app-api and ACP-facing crates only.",
+    )
+}
+
+#[test]
 fn rejects_missing_crate_docs() -> Result<()> {
     let fixture = fixture()?;
     write_file(
@@ -241,5 +260,50 @@ fn rejects_direct_stdout_imports() -> Result<()> {
         &failures,
         |failure| failure.contains("directly imports forbidden stdout/stderr emission helpers"),
         "expected direct stdout import failure",
+    )
+}
+
+#[test]
+fn accepts_runtime_cli_stdout_boundary() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("backend/service/crates/service-bin/src/runtime.rs"),
+        concat!(
+            "//! Crate docs.\n\n",
+            "fn local_stub() {\n",
+            "    let _ = std::io::stdout();\n",
+            "}\n",
+        ),
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure(
+        failures.is_empty(),
+        "expected runtime CLI stdout boundary to pass",
+    )
+}
+
+#[test]
+fn rejects_runtime_cli_stderr_boundary() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("backend/service/crates/service-bin/src/runtime.rs"),
+        concat!(
+            "//! Crate docs.\n\n",
+            "fn local_stub() {\n",
+            "    let _ = std::io::stderr();\n",
+            "}\n",
+        ),
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_any(
+        &failures,
+        |failure| failure.contains("directly emits to forbidden stdout/stderr output"),
+        "expected runtime CLI stderr boundary failure",
     )
 }

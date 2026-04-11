@@ -13,10 +13,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@conduit/app-client": "workspace:*",
-    "@conduit/app-core": "workspace:*",
     "@conduit/design-system-mobile": "workspace:*",
     "@conduit/design-system-tokens": "workspace:*",
+    "@conduit/session-client": "workspace:*",
+    "@conduit/session-contracts": "workspace:*",
+    "@conduit/session-model": "workspace:*",
     "expo": "~55.0.14",
     "expo-constants": "~55.0.13",
     "expo-linking": "~55.0.12",

@@ -1,0 +1,191 @@
+{
+  "provider": "codex",
+  "connection_state": "ready",
+  "discovery": {
+    "provider": "codex",
+    "launcher": {
+      "executable": "/home/base/.nvm/versions/node/v24.14.0/lib/node_modules/@zed-industries/codex-acp/bin/codex-acp.js",
+      "args": [],
+      "display": "codex-acp"
+    },
+    "resolved_path": "/home/base/.nvm/versions/node/v24.14.0/lib/node_modules/@zed-industries/codex-acp/bin/codex-acp.js",
+    "version": "0.11.1",
+    "auth_hints": [
+      "Login with ChatGPT: Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)",
+      "Use CODEX_API_KEY: Requires setting the `CODEX_API_KEY` environment variable.",
+      "Use OPENAI_API_KEY: Requires setting the `OPENAI_API_KEY` environment variable."
+    ],
+    "initialize_viable": true,
+    "transport_diagnostics": [
+      "codex initialize responded in 64 ms",
+      "stderr lines captured: 0"
+    ],
+    "initialize_probe": {
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "auth": {
+              "logout": {}
+            },
+            "loadSession": true,
+            "mcpCapabilities": {
+              "http": true,
+              "sse": false
+            },
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "close": {},
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "codex-acp",
+            "title": "Codex",
+            "version": "0.11.1"
+          },
+          "authMethods": [
+            {
+              "description": "Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)",
+              "id": "chatgpt",
+              "name": "Login with ChatGPT"
+            },
+            {
+              "description": "Requires setting the `CODEX_API_KEY` environment variable.",
+              "id": "codex-api-key",
+              "name": "Use CODEX_API_KEY",
+              "type": "env_var",
+              "vars": [
+                {
+                  "name": "CODEX_API_KEY"
+                }
+              ]
+            },
+            {
+              "description": "Requires setting the `OPENAI_API_KEY` environment variable.",
+              "id": "openai-api-key",
+              "name": "Use OPENAI_API_KEY",
+              "type": "env_var",
+              "vars": [
+                {
+                  "name": "OPENAI_API_KEY"
+                }
+              ]
+            }
+          ],
+          "protocolVersion": 1
+        }
+      },
+      "payload": {
+        "protocolVersion": 1,
+        "agentCapabilities": {
+          "loadSession": true,
+          "promptCapabilities": {
+            "image": true,
+            "audio": false,
+            "embeddedContext": true
+          },
+          "mcpCapabilities": {
+            "http": true,
+            "sse": false
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "authMethods": [
+          {
+            "id": "chatgpt",
+            "name": "Login with ChatGPT",
+            "description": "Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)"
+          },
+          {
+            "id": "codex-api-key",
+            "name": "Use CODEX_API_KEY",
+            "description": "Requires setting the `CODEX_API_KEY` environment variable."
+          },
+          {
+            "id": "openai-api-key",
+            "name": "Use OPENAI_API_KEY",
+            "description": "Requires setting the `OPENAI_API_KEY` environment variable."
+          }
+        ],
+        "agentInfo": {
+          "name": "codex-acp",
+          "title": "Codex",
+          "version": "0.11.1"
+        }
+      },
+      "stdout_lines": [
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1,\"agentCapabilities\":{\"loadSession\":true,\"promptCapabilities\":{\"image\":true,\"audio\":false,\"embeddedContext\":true},\"mcpCapabilities\":{\"http\":true,\"sse\":false},\"sessionCapabilities\":{\"list\":{},\"close\":{}},\"auth\":{\"logout\":{}}},\"authMethods\":[{\"id\":\"chatgpt\",\"name\":\"Login with ChatGPT\",\"description\":\"Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)\"},{\"type\":\"env_var\",\"id\":\"codex-api-key\",\"name\":\"Use CODEX_API_KEY\",\"description\":\"Requires setting the `CODEX_API_KEY` environment variable.\",\"vars\":[{\"name\":\"CODEX_API_KEY\"}]},{\"type\":\"env_var\",\"id\":\"openai-api-key\",\"name\":\"Use OPENAI_API_KEY\",\"description\":\"Requires setting the `OPENAI_API_KEY` environment variable.\",\"vars\":[{\"name\":\"OPENAI_API_KEY\"}]}],\"agentInfo\":{\"name\":\"codex-acp\",\"title\":\"Codex\",\"version\":\"0.11.1\"}}}"
+      ],
+      "stderr_lines": [],
+      "elapsed_ms": 64
+    }
+  },
+  "capabilities": {
+    "auth": {
+      "logout": {}
+    },
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": false
+    },
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "list": {}
+    }
+  },
+  "auth_methods": [
+    {
+      "description": "Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)",
+      "id": "chatgpt",
+      "name": "Login with ChatGPT"
+    },
+    {
+      "description": "Requires setting the `CODEX_API_KEY` environment variable.",
+      "id": "codex-api-key",
+      "name": "Use CODEX_API_KEY",
+      "type": "env_var",
+      "vars": [
+        {
+          "name": "CODEX_API_KEY"
+        }
+      ]
+    },
+    {
+      "description": "Requires setting the `OPENAI_API_KEY` environment variable.",
+      "id": "openai-api-key",
+      "name": "Use OPENAI_API_KEY",
+      "type": "env_var",
+      "vars": [
+        {
+          "name": "OPENAI_API_KEY"
+        }
+      ]
+    }
+  ],
+  "live_sessions": [
+    {
+      "identity": {
+        "provider": "codex",
+        "acp_session_id": "019d78f0-b347-7d43-a270-bb154b899e10"
+      },
+      "cwd": "/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/session-load/cwd",
+      "title": "Reply with exactly RECOVERY_READY.",
+      "observed_via": "load"
+    }
+  ],
+  "last_prompt": null
+}

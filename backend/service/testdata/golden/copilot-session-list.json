@@ -1,0 +1,11 @@
+[
+  {
+    "identity": {
+      "provider": "copilot",
+      "acp_session_id": "4b9308ef-a1b0-4b79-8931-19936f738d07"
+    },
+    "cwd": "/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/copilot/session-list/cwd",
+    "title": null,
+    "observed_via": "new"
+  }
+]

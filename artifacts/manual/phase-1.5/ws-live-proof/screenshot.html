@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Conduit WebSocket Live Provider Proof</title>
+<style>
+:root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background: #11140f; color: #f2f0e8; }
+body { margin: 0; padding: 40px; background: radial-gradient(circle at top left, #415d35 0, #11140f 36%, #0a0c09 100%); }
+main { max-width: 1180px; margin: 0 auto; }
+h1 { font-size: 44px; line-height: 1.05; margin: 0 0 12px; letter-spacing: -0.04em; }
+.meta { margin: 0 0 28px; color: #c8d4bc; font-size: 15px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.card { border: 1px solid #6e805f; background: rgba(17, 20, 15, 0.84); border-radius: 22px; padding: 24px; box-shadow: 0 22px 90px rgba(0,0,0,0.35); }
+h2 { margin: 0 0 10px; font-size: 30px; }
+.session { color: #bfd8a9; font-size: 13px; }
+.label { margin: 18px 0 6px; color: #bfd8a9; text-transform: uppercase; letter-spacing: 0.09em; font-size: 11px; }
+.answer { margin: 0; font-size: 25px; line-height: 1.35; min-height: 72px; color: #fff8d5; font-weight: 760; }
+.source { color: #c8d4bc; font-size: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 18px; }
+th, td { border-bottom: 1px solid rgba(255,255,255,0.12); padding: 8px 6px; text-align: left; vertical-align: top; }
+th { color: #bfd8a9; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+code { color: #e6e1b5; word-break: break-all; }
+pre { background: #050704; color: #dcefcf; border-radius: 14px; padding: 14px; overflow: auto; max-height: 330px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Conduit live WebSocket provider proof</h1>
+  <p class="meta">Generated 2026-04-11T08:36:26.363Z via <code>ws://127.0.0.1:4199/api/session</code>. Local dev uses ws://; WSS requires TLS termination in front of service-bin.</p>
+  <div class="grid">
+  <section class="card">
+    <h2>codex</h2>
+    <p class="session">session: <code>019d7baf-3a95-7b53-a243-0bbbfa59bdf0</code></p>
+    <p class="label">Provider answer from official SDK session_notification chunks</p>
+    <p class="answer">conduit-live-proof-codex confirmed.</p>
+    <p class="source">source: <code>official SDK session_notification -&gt; snapshot.last_prompt.agent_text_chunks</code></p>
+    <table><thead><tr><th>command</th><th>ok</th><th>correlated frame id</th><th>state</th></tr></thead><tbody><tr><td>initialize</td><td>true</td><td><code>codex-initialize-1775896574252-433dc687368178</code></td><td>ready</td></tr><tr><td>session/new</td><td>true</td><td><code>codex-session-new-1775896574434-f0852af658694</code></td><td>ready</td></tr><tr><td>session/prompt</td><td>true</td><td><code>codex-session-prompt-1775896574694-f98d00946b6a08</code></td><td>ready</td></tr><tr><td>snapshot/get</td><td>true</td><td><code>codex-snapshot-get-1775896579580-b795397d3a2f48</code></td><td>ready</td></tr><tr><td>provider/disconnect</td><td>true</td><td><code>codex-provider-disconnect-1775896579585-fafa6969c4ef4</code></td><td>disconnected</td></tr></tbody></table>
+    <pre>{
+  &quot;promptResult&quot;: {
+    &quot;stopReason&quot;: &quot;end_turn&quot;
+  },
+  &quot;answerChunks&quot;: [
+    &quot;con&quot;,
+    &quot;duit&quot;,
+    &quot;-live&quot;,
+    &quot;-proof&quot;,
+    &quot;-c&quot;,
+    &quot;od&quot;,
+    &quot;ex&quot;,
+    &quot; confirmed&quot;,
+    &quot;.&quot;
+  ]
+}</pre>
+  </section>
+
+  <section class="card">
+    <h2>copilot</h2>
+    <p class="session">session: <code>74ea341c-26f4-4ac0-9fd4-a3dd168e5112</code></p>
+    <p class="label">Provider answer from official SDK session_notification chunks</p>
+    <p class="answer">Here is the requested token: conduit-live-proof-copilot.</p>
+    <p class="source">source: <code>official SDK session_notification -&gt; snapshot.last_prompt.agent_text_chunks</code></p>
+    <table><thead><tr><th>command</th><th>ok</th><th>correlated frame id</th><th>state</th></tr></thead><tbody><tr><td>initialize</td><td>true</td><td><code>copilot-initialize-1775896579609-286d7cca0414a8</code></td><td>ready</td></tr><tr><td>session/new</td><td>true</td><td><code>copilot-session-new-1775896581401-d8ff1614d0d5e8</code></td><td>ready</td></tr><tr><td>session/prompt</td><td>true</td><td><code>copilot-session-prompt-1775896582879-adc1b8baa7543</code></td><td>ready</td></tr><tr><td>snapshot/get</td><td>true</td><td><code>copilot-snapshot-get-1775896586358-ccf6657391e2d</code></td><td>ready</td></tr><tr><td>provider/disconnect</td><td>true</td><td><code>copilot-provider-disconnect-1775896586359-000f62c2711f4</code></td><td>disconnected</td></tr></tbody></table>
+    <pre>{
+  &quot;promptResult&quot;: {
+    &quot;stopReason&quot;: &quot;end_turn&quot;
+  },
+  &quot;answerChunks&quot;: [
+    &quot;Here&quot;,
+    &quot; is&quot;,
+    &quot; the&quot;,
+    &quot; requested&quot;,
+    &quot; token&quot;,
+    &quot;:&quot;,
+    &quot; conduit&quot;,
+    &quot;-live&quot;,
+    &quot;-proof&quot;,
+    &quot;-c&quot;,
+    &quot;op&quot;,
+    &quot;ilot&quot;,
+    &quot;.&quot;
+  ]
+}</pre>
+  </section></div>
+</main>
+</body>
+</html>

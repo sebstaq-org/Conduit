@@ -1,38 +1,40 @@
 # Architecture
 
-Conduit is structured around product boundaries instead of language buckets. The current pass keeps the locked frontend workspace shape and policy, but upgrades `apps/desktop` and `apps/mobile` into real runnable shells without placeholder UI.
+Conduit is structured around product boundaries instead of language buckets. The current pass keeps the locked frontend workspace shape and policy, upgrades `apps/desktop` and `apps/mobile` into real runnable shells without placeholder UI, and layers the Phase 1.5 official-ACP-only consumer API over the Rust backend.
 
 ## Current Pass
 
-This pass includes:
+Phase 1 includes the vendored ACP contract lock, official launcher discovery, raw stdio JSON-RPC host ownership, in-memory live session state, text-only prompt/cancel, and manual proof artifacts. It still excludes fallback runtime paths, provider-specific Conduit protocols, duplicated live DTO families above ACP, and persisted runtime truth.
+
+This pass also includes:
 
 - final frontend package names
 - runnable desktop and mobile shells
+- normal consumer API session package boundaries
 - frontend ownership canon
 - local and repo-wide agent rules
 - empty registry surfaces for future policy enforcement
 - current structure guard rails updated to the target frontend tree
-- Phase 0.5 repository shape, pinned toolchains, check chains, repo bootstrap automation, and compile-safe backend stubs
+- Phase 0.5 repository shape, pinned toolchains, check chains, repo bootstrap automation, and the Phase 1 ACP runtime baseline
 
 This pass explicitly excludes:
 
-- ACP host behavior
-- provider runtime launches
-- session persistence logic
-- generated backend contracts
-- product UI
-- design tokens
-- primitives
-- themes
-- feature implementations
 - fallback runtime paths
+- provider-specific Conduit protocols
+- duplicated live runtime DTO families above ACP
+- persisted runtime truth
+- general product UI beyond the minimal desktop proof surface
+- speculative design tokens, primitives, themes, or feature stubs
 
 ## Frontend Layer
 
 - `apps/desktop` is the Electron shell only.
 - `apps/mobile` is the React Native shell only.
-- `packages/app-client` owns the future frontend transport and contract adaptation boundary.
-- `packages/app-core` owns future framework-neutral reducers, selectors, and view-model logic.
+- `packages/session-client` owns the normal consumer transport boundary.
+- `packages/session-contracts` owns shared consumer command and transport envelopes.
+- `packages/session-model` owns provider/session model vocabulary.
+- `packages/app-client` owns the proof-surface contract boundary.
+- `packages/app-core` owns framework-neutral reducers, selectors, and view-model logic.
 - `packages/design-system-tokens` reserves the semantic design-token contract boundary.
 - `packages/design-system-desktop` reserves desktop primitive implementations behind Conduit-owned component APIs.
 - `packages/design-system-mobile` reserves mobile primitive implementations behind the same Conduit-owned component APIs.
@@ -48,7 +50,7 @@ The frontend rule is strict:
 
 Cross-platform frontend work should land in this order:
 
-1. future app-facing backend boundary
+1. app-facing backend boundary
 2. `packages/app-client`
 3. `packages/app-core`
 4. `apps/desktop` shell integration
@@ -60,20 +62,18 @@ If a capability is intended for both platforms, it should not be treated as comp
 
 - Apps may depend on packages, but apps may not depend on each other.
 - Shared frontend behavior must not live directly under `apps/*`.
-- Feature code must not import backend-owned contracts directly; that future boundary belongs in `packages/app-client`.
+- Feature code must not import backend-owned contracts directly; that boundary belongs in `packages/app-client`.
 - Raw DOM and React Native primitives are reserved for design-system and shell boundaries.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - Placeholder UI is forbidden. Do not create example components, starter themes, fake tokens, or speculative feature stubs.
 
 ## Rust Layer
 
-Backend ownership is unchanged and out of scope for this pass.
-
-- `backend/service/crates/acp-contracts` reserves the vendor-facing contract boundary.
-- `backend/service/crates/acp-core` reserves the ACP runtime ownership boundary.
-- `backend/service/crates/acp-discovery` reserves launcher and readiness provenance.
-- `backend/service/crates/app-api` reserves the app-facing service surface.
-- `backend/service/crates/provider-*` reserve provider-specific adapter homes.
+- `backend/service/crates/acp-contracts` owns the vendor-facing contract lock and locked-subset envelope validation.
+- `backend/service/crates/acp-core` owns ACP process lifecycle, raw JSON-RPC stdio, request tracking, live initialize truth, events, snapshots, sessions, prompt, and cancel.
+- `backend/service/crates/acp-discovery` owns official launcher resolution, initialize viability, raw discovery captures, and transport diagnostics.
+- `backend/service/crates/app-api` owns the app-facing Phase 1 provider/session operations.
+- `backend/service/crates/provider-*` own provider launcher descriptors only.
 - `backend/service/crates/repo-guard` owns repo guard rails as a normal workspace crate under the same Rust policy as every other crate.
 - `backend/service/crates/session-store` reserves read-side and persistence boundaries.
 - `backend/service/crates/service-bin` is the runtime workspace composition root.
@@ -87,3 +87,4 @@ This pass introduces two empty policy surfaces for future Rust enforcement:
 - `scripts/design-system-parity-registry.ts`
 
 They define frontend policy data only. They do not implement product behavior or become a second source of truth next to future Rust policy code.
+Native bridge directories stay deferred until a concrete desktop or mobile bridge exists, so Phase 1 does not create empty platform trees that might force early boundary decisions.

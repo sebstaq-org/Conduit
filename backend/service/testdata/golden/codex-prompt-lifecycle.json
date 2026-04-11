@@ -1,0 +1,9 @@
+{
+  "identity": {
+    "provider": "codex",
+    "acp_session_id": "019d78f7-7e7c-7990-b701-30df96ffb842"
+  },
+  "state": "completed",
+  "stop_reason": "end_turn",
+  "raw_update_count": 6
+}

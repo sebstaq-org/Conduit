@@ -1,0 +1,2 @@
+{"sequence":1,"stream":"outgoing","kind":"request","payload":"{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/prompt\"}","method":"session/prompt","request_id":"2","json":{"jsonrpc":"2.0","id":2,"method":"session/prompt"}}
+{"sequence":2,"stream":"stderr","kind":"diagnostic","payload":"no prompt response before timeout","method":null,"request_id":null,"json":null}

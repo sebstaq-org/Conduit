@@ -1,0 +1,1 @@
+/home/base/.nvm/versions/node/v24.14.0/lib/node_modules/@agentclientprotocol/claude-agent-acp/dist/index.js

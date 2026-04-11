@@ -1,0 +1,235 @@
+//! Live ACP host connection and locked-subset operations.
+
+mod helpers;
+mod sdk_actor;
+
+use self::sdk_actor::{
+    ActorBootstrap, HostCommand, actor_stopped, disconnected_snapshot, receive_result, spawn_actor,
+};
+use crate::error::Result;
+use crate::snapshot::ProviderSnapshot;
+use crate::wire::RawWireEvent;
+use acp_contracts::load_locked_contract_bundle;
+use acp_discovery::{
+    ProcessEnvironment, ProviderDiscovery, ProviderId, discover_provider_with_environment,
+    resolve_provider_command,
+};
+use agent_client_protocol as acp;
+use serde_json::Value;
+use std::path::PathBuf;
+use std::sync::mpsc::{Sender, channel};
+use std::time::Duration;
+use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
+
+/// One live ACP host connection owned by Conduit.
+pub struct AcpHost {
+    discovery: ProviderDiscovery,
+    provider: ProviderId,
+    commands: UnboundedSender<HostCommand>,
+}
+
+impl AcpHost {
+    /// Connects to one official provider launcher and runs a live `initialize`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when discovery fails, the provider process cannot be
+    /// spawned, the vendored ACP contract cannot be loaded, or the live
+    /// `initialize` exchange fails through the official ACP SDK.
+    pub fn connect(provider: ProviderId) -> Result<Self> {
+        Self::connect_with_environment(provider, &ProcessEnvironment::empty())
+    }
+
+    /// Connects to one official provider launcher with explicit process
+    /// environment overrides and runs a live `initialize`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error under the same conditions as [`Self::connect`] while
+    /// also applying the supplied launcher environment overrides.
+    pub fn connect_with_environment(
+        provider: ProviderId,
+        environment: &ProcessEnvironment,
+    ) -> Result<Self> {
+        let discovery = discover_provider_with_environment(provider, environment)?;
+        let launcher = resolve_provider_command(provider)?;
+        let locked_contract = load_locked_contract_bundle()?;
+        std::mem::drop(locked_contract);
+
+        let (commands, command_rx) = unbounded_channel();
+        let (init_tx, init_rx) = channel();
+        spawn_actor(ActorBootstrap {
+            provider,
+            discovery: discovery.clone(),
+            launcher,
+            environment: environment.clone(),
+            commands: command_rx,
+            init: init_tx,
+        })?;
+        receive_result(provider, "initialize", init_rx)?;
+        Ok(Self {
+            discovery,
+            provider,
+            commands,
+        })
+    }
+
+    /// Disconnects the live provider process.
+    pub fn disconnect(&mut self) {
+        let _result = self.request("provider/disconnect", HostCommand::disconnect);
+    }
+
+    /// Returns the current provider snapshot.
+    #[must_use]
+    pub fn snapshot(&self) -> ProviderSnapshot {
+        match self.request("provider/snapshot", HostCommand::snapshot) {
+            Ok(snapshot) => snapshot,
+            Err(_error) => disconnected_snapshot(self.provider, self.discovery.clone()),
+        }
+    }
+
+    /// Returns the raw wire events captured so far.
+    ///
+    /// The official SDK is now the ACP host boundary. This vector is empty
+    /// unless the SDK exposes raw transport capture without custom JSON-RPC
+    /// transport ownership.
+    #[must_use]
+    pub fn raw_events(&self) -> &[RawWireEvent] {
+        &[]
+    }
+
+    /// Returns the outbound ACP envelopes captured so far.
+    ///
+    /// The official SDK owns request encoding, so no Conduit-owned runtime
+    /// envelopes are exposed here.
+    #[must_use]
+    pub fn request_envelopes(&self) -> &[Value] {
+        &[]
+    }
+
+    /// Returns the inbound ACP responses captured so far.
+    ///
+    /// The official SDK owns response decoding, so no Conduit-owned runtime
+    /// envelopes are exposed here.
+    #[must_use]
+    pub fn response_envelopes(&self) -> &[Value] {
+        &[]
+    }
+
+    /// Creates one new ACP session under the current provider connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/new` call.
+    pub fn new_session(&mut self, cwd: impl Into<PathBuf>) -> Result<acp::NewSessionResponse> {
+        let cwd = cwd.into();
+        self.request("session/new", |reply| HostCommand::NewSession {
+            cwd,
+            reply,
+        })
+    }
+
+    /// Lists ACP sessions from the current provider connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/list` call.
+    pub fn list_sessions(&mut self) -> Result<acp::ListSessionsResponse> {
+        self.request("session/list", |reply| HostCommand::ListSessions { reply })
+    }
+
+    /// Loads one ACP session from the current provider connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/load` call.
+    pub fn load_session(
+        &mut self,
+        session_id: impl Into<acp::SessionId>,
+        cwd: impl Into<PathBuf>,
+    ) -> Result<acp::LoadSessionResponse> {
+        let session_id = session_id.into();
+        let cwd = cwd.into();
+        self.request("session/load", |reply| HostCommand::LoadSession {
+            session_id,
+            cwd,
+            reply,
+        })
+    }
+
+    /// Sends one text-only ACP prompt and waits for completion.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the target session is unknown or the provider
+    /// rejects or fails the official SDK `session/prompt` call.
+    pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<acp::PromptResponse> {
+        self.prompt(session_id, text, None)
+    }
+
+    /// Sends one text-only ACP prompt and schedules a cancel notification.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error under the same conditions as [`Self::prompt_text`] and
+    /// also when the scheduled official SDK `session/cancel` notification fails.
+    pub fn prompt_text_with_cancel(
+        &mut self,
+        session_id: &str,
+        text: &str,
+        cancel_after: Duration,
+    ) -> Result<acp::PromptResponse> {
+        self.prompt(session_id, text, Some(cancel_after))
+    }
+
+    /// Sends one `session/cancel` notification on the current connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/cancel` notification.
+    pub fn cancel_prompt(&mut self, session_id: &str) -> Result<()> {
+        self.request("session/cancel", |reply| HostCommand::CancelPrompt {
+            session_id: acp::SessionId::new(session_id),
+            reply,
+        })
+    }
+
+    fn prompt(
+        &mut self,
+        session_id: &str,
+        text: &str,
+        cancel_after: Option<Duration>,
+    ) -> Result<acp::PromptResponse> {
+        self.request("session/prompt", |reply| HostCommand::PromptText {
+            session_id: acp::SessionId::new(session_id),
+            text: text.to_owned(),
+            cancel_after,
+            reply,
+        })
+    }
+
+    fn request<T>(
+        &self,
+        operation: &'static str,
+        command: impl FnOnce(Sender<Result<T>>) -> HostCommand,
+    ) -> Result<T>
+    where
+        T: Send + 'static,
+    {
+        let (reply, response) = channel();
+        self.commands
+            .send(command(reply))
+            .map_err(|_error| actor_stopped(self.provider, operation))?;
+        receive_result(self.provider, operation, response)
+    }
+}
+
+impl Drop for AcpHost {
+    fn drop(&mut self) {
+        self.disconnect();
+    }
+}
