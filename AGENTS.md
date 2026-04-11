@@ -4,6 +4,17 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 
 ## Repo Rules
 
+- This is a public repository. Treat every committed byte, including old
+  artifacts and testdata, as world-readable.
+- Never commit secrets or sensitive material: API keys, access tokens, OAuth
+  tokens, bearer tokens, private keys, passwords, session cookies, credential
+  files, private prompts, private user data, or unredacted environment dumps.
+- Do not commit raw manual artifacts, transcripts, logs, screenshots, or
+  provider captures unless they are explicitly curated for public use and
+  reviewed for secrets, local paths, account metadata, and other sensitive data.
+- Curated fixtures must be normalized and minimal. Prefer stable testdata over
+  raw proof dumps, and document the capture source without exposing private
+  machine details.
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
 - `apps/desktop` and `apps/mobile` are runnable shells only.
 - Shared frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in `apps/*`.
