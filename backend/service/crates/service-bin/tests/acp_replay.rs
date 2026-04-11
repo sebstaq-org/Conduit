@@ -15,6 +15,8 @@ use tower_http as _;
 
 #[path = "acp_replay/fixtures.rs"]
 mod fixtures;
+#[path = "acp_replay/history_window.rs"]
+mod history_window;
 #[path = "acp_replay/load_replay.rs"]
 mod load_replay;
 #[path = "support/replay_oracle.rs"]

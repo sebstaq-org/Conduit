@@ -221,7 +221,5 @@ export type {
   SessionGroupsView,
   TranscriptEventItem,
   TranscriptItem,
-  TranscriptMessageItem,
-  TranscriptMessageRole,
 } from "@conduit/session-model";
 export type { SessionClientOptions, SessionClientPort };

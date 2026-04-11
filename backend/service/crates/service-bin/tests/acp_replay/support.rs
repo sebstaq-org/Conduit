@@ -1,6 +1,7 @@
 //! Support code for the ACP replay integration test.
 
 use super::REPLAY_PROVIDER_SCRIPT;
+use super::history_window::assert_history_expectations;
 use super::load_replay::{assert_loaded_replay_context_used, assert_loaded_transcript_variants};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
@@ -406,54 +407,9 @@ pub(crate) fn assert_operation_expectations(
             );
         }
     }
-    if let Some(expected_variants) = operation
-        .get("assert_history_item_variants")
-        .and_then(Value::as_array)
-    {
-        let variants = expected_variants
-            .iter()
-            .map(|variant| variant.as_str().map(ToOwned::to_owned))
-            .collect::<Option<Vec<_>>>()
-            .ok_or("assert_history_item_variants contained a non-string value")?;
-        assert_history_item_variants(frame, &variants)?;
-    }
-    if let Some(expected_cursor) = operation.get("assert_history_next_cursor") {
-        let actual_cursor = response_result(frame)?
-            .get("nextCursor")
-            .ok_or("history result was missing nextCursor")?;
-        if actual_cursor != expected_cursor {
-            return Err(
-                format!("expected history nextCursor {expected_cursor}, got {actual_cursor}")
-                    .into(),
-            );
-        }
-    }
+    assert_history_expectations(frame, operation)?;
     assert_loaded_replay_context_used(scenario, operation)?;
     Ok(())
-}
-
-fn assert_history_item_variants(frame: &Value, expected: &[String]) -> TestResult<()> {
-    let actual = response_result(frame)?
-        .get("items")
-        .and_then(Value::as_array)
-        .ok_or("history result was missing items")?
-        .iter()
-        .map(history_item_variant)
-        .collect::<TestResult<Vec<_>>>()?;
-    if actual == expected {
-        return Ok(());
-    }
-    Err(format!("expected history item variants {expected:?}, got {actual:?}").into())
-}
-
-fn history_item_variant(item: &Value) -> TestResult<String> {
-    item.get("sourceVariants")
-        .and_then(Value::as_array)
-        .and_then(|variants| variants.first())
-        .and_then(Value::as_str)
-        .or_else(|| item.get("variant").and_then(Value::as_str))
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| format!("history item was missing variant: {item}").into())
 }
 
 pub(crate) fn assert_list_contains_session(

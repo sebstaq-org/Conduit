@@ -7,6 +7,11 @@ import type {
   SessionGroupsView,
   SessionOpenRequest,
 } from "@conduit/session-model";
+import {
+  isSessionGroupsQuery,
+  isSessionHistoryRequest,
+  isSessionOpenRequest,
+} from "./commandParams.js";
 
 let nextCommandSequence = 0;
 
@@ -152,6 +157,64 @@ function toRecordParams(params: object): Record<string, unknown> {
   return record;
 }
 
+function requireProvider(
+  command: ConsumerCommandName,
+  provider: ConsumerCommandTarget,
+): ProviderId {
+  if (provider === "all") {
+    throw new Error(`${command} must target a provider`);
+  }
+  return provider;
+}
+
+function createSessionGroupsCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): SessionGroupsConsumerCommand {
+  if (!isSessionGroupsQuery(params)) {
+    throw new Error("sessions/grouped params are invalid");
+  }
+  return {
+    id,
+    command: "sessions/grouped",
+    provider,
+    params,
+  };
+}
+
+function createSessionOpenCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): SessionOpenConsumerCommand {
+  if (!isSessionOpenRequest(params)) {
+    throw new Error("session/open params are invalid");
+  }
+  return {
+    id,
+    command: "session/open",
+    provider: requireProvider("session/open", provider),
+    params,
+  };
+}
+
+function createSessionHistoryCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): SessionHistoryConsumerCommand {
+  if (!isSessionHistoryRequest(params)) {
+    throw new Error("session/history params are invalid");
+  }
+  return {
+    id,
+    command: "session/history",
+    provider: requireProvider("session/history", provider),
+    params,
+  };
+}
+
 function createConsumerCommand(
   command: SessionGroupsCommandName,
   provider: ConsumerCommandTarget,
@@ -187,31 +250,18 @@ function createConsumerCommand(
 ): ConsumerCommand {
   const id = nextConsumerCommandId();
   if (command === "sessions/grouped") {
-    return {
-      id,
-      command,
-      provider,
-      params: params as SessionGroupsQuery,
-    };
+    return createSessionGroupsCommand(id, provider, params);
   }
-  if (command === "session/open" || command === "session/history") {
-    if (provider === "all") {
-      throw new Error(`${command} must target a provider`);
-    }
-    return {
-      id,
-      command,
-      provider,
-      params,
-    } as SessionOpenConsumerCommand | SessionHistoryConsumerCommand;
+  if (command === "session/open") {
+    return createSessionOpenCommand(id, provider, params);
   }
-  if (provider === "all") {
-    throw new Error(`${command} must target a provider`);
+  if (command === "session/history") {
+    return createSessionHistoryCommand(id, provider, params);
   }
   return {
     id,
     command,
-    provider,
+    provider: requireProvider(command, provider),
     params: toRecordParams(params),
   };
 }
@@ -242,12 +292,8 @@ export type {
   SessionCommandName,
   SessionGroupsCommandName,
   SessionGroupsConsumerCommand,
-  SessionHistoryCommandName,
-  SessionHistoryConsumerCommand,
   SessionHistoryRequest,
   SessionHistoryWindow,
-  SessionOpenCommandName,
-  SessionOpenConsumerCommand,
   SessionOpenRequest,
   SessionGroupsQuery,
   SessionGroupsView,

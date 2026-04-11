@@ -20,6 +20,8 @@ describe("shared session boundary", () => {
       "provider/disconnect",
       "events/subscribe",
       "sessions/grouped",
+      "session/open",
+      "session/history",
     ]);
   });
 
@@ -51,6 +53,29 @@ describe("shared session boundary", () => {
       params: {
         after_sequence: null,
       },
+    });
+  });
+});
+
+describe("shared session history boundary", () => {
+  test("session open and history are explicit provider commands", () => {
+    const opened = createConsumerCommand("session/open", "codex", {
+      sessionId: "session-1",
+      cwd: "/repo",
+      limit: 40,
+    });
+    const history = createConsumerCommand("session/history", "codex", {
+      openSessionId: "open-session-1",
+      cursor: null,
+    });
+
+    expect(opened).toMatchObject({
+      command: "session/open",
+      provider: "codex",
+    });
+    expect(history).toMatchObject({
+      command: "session/history",
+      provider: "codex",
     });
   });
 });
