@@ -137,7 +137,25 @@ impl AcpHost {
     /// Returns an error when the provider rejects or fails the official SDK
     /// `session/list` call.
     pub fn list_sessions(&mut self) -> Result<acp::ListSessionsResponse> {
-        self.request("session/list", |reply| HostCommand::ListSessions { reply })
+        self.list_sessions_filtered(None, None)
+    }
+
+    /// Lists ACP sessions with optional official `cwd` and `cursor` filters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/list` call.
+    pub fn list_sessions_filtered(
+        &mut self,
+        cwd: Option<PathBuf>,
+        cursor: Option<String>,
+    ) -> Result<acp::ListSessionsResponse> {
+        self.request("session/list", |reply| HostCommand::ListSessions {
+            cwd,
+            cursor,
+            reply,
+        })
     }
 
     /// Loads one ACP session from the current provider connection.

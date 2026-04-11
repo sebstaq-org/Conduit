@@ -91,7 +91,8 @@ async fn catalog() -> Json<serde_json::Value> {
             "session/cancel",
             "snapshot/get",
             "provider/disconnect",
-            "events/subscribe"
+            "events/subscribe",
+            "sessions/grouped"
         ],
     }))
 }

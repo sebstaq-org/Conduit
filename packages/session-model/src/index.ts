@@ -66,6 +66,28 @@ interface LoadedTranscriptSnapshot {
   updates: TranscriptUpdateSnapshot[];
 }
 
+interface SessionRow {
+  provider: ProviderId;
+  sessionId: string;
+  title: string | null;
+  updatedAt: string | null;
+}
+
+interface SessionGroup {
+  groupId: string;
+  cwd: string;
+  sessions: SessionRow[];
+}
+
+interface SessionGroupsView {
+  groups: SessionGroup[];
+}
+
+interface SessionGroupsQuery {
+  cwdFilters?: string[];
+  updatedWithinDays?: number | null;
+}
+
 interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
@@ -119,5 +141,9 @@ export type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
+  SessionGroup,
+  SessionGroupsQuery,
+  SessionGroupsView,
+  SessionRow,
   TranscriptUpdateSnapshot,
 };

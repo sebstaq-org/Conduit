@@ -5,11 +5,15 @@ use crate::command::{
 };
 use crate::error::{RuntimeError, optional_u64_param, path_param, string_param};
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
+use crate::session_groups::{
+    SessionGroupsQuery, grouped_view, next_cursor, providers_from_target, rows_from_session_list,
+};
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Consumer API runtime manager keyed by provider.
@@ -73,6 +77,9 @@ where
     }
 
     fn dispatch_result(&mut self, command: ConsumerCommand) -> Result<ConsumerResponse> {
+        if command.command == "sessions/grouped" {
+            return self.sessions_grouped(command.id, &command.provider, &command.params);
+        }
         let provider = parse_provider(&command.provider)?;
         match command.command.as_str() {
             "initialize" => self.initialize(command.id, provider),
@@ -86,6 +93,47 @@ where
             "events/subscribe" => self.events_subscribe(command.id, provider, &command.params),
             _ => Err(RuntimeError::UnsupportedCommand(command.command)),
         }
+    }
+
+    fn sessions_grouped(
+        &mut self,
+        id: String,
+        provider_target: &str,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let query = SessionGroupsQuery::from_params(params)?;
+        let providers = providers_from_target(provider_target)?;
+        let mut rows = Vec::new();
+        for provider in providers {
+            rows.extend(self.grouped_rows_for_provider(provider, &query)?);
+        }
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            grouped_view(rows)?,
+        ))
+    }
+
+    fn grouped_rows_for_provider(
+        &mut self,
+        provider: ProviderId,
+        query: &SessionGroupsQuery,
+    ) -> Result<Vec<crate::session_groups::SessionRowWithCwd>> {
+        let cwd_filters = query.cwd_filters();
+        if cwd_filters.is_empty() {
+            let provider_port = self.provider(provider)?;
+            return paginated_grouped_rows(provider_port.as_mut(), provider, None, query);
+        }
+        let mut rows = Vec::new();
+        for cwd in cwd_filters {
+            let provider_port = self.provider(provider)?;
+            rows.extend(paginated_grouped_rows(
+                provider_port.as_mut(),
+                provider,
+                Some(PathBuf::from(cwd)),
+                query,
+            )?);
+        }
+        Ok(rows)
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -136,7 +184,7 @@ where
     fn session_list(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
-            let result = provider_port.session_list()?;
+            let result = provider_port.session_list(None, None)?;
             (result, provider_port.snapshot(), provider_port.raw_events())
         };
         for session_id in session_ids_from_list(&result) {
@@ -324,6 +372,31 @@ fn parse_provider(value: &str) -> Result<ProviderId> {
         provider: value.to_owned(),
         message,
     })
+}
+
+fn paginated_grouped_rows(
+    provider_port: &mut dyn ProviderPort,
+    provider: ProviderId,
+    cwd: Option<PathBuf>,
+    query: &SessionGroupsQuery,
+) -> Result<Vec<crate::session_groups::SessionRowWithCwd>> {
+    let mut rows = Vec::new();
+    let mut cursor = None;
+    let mut seen_cursors = HashSet::new();
+    loop {
+        let result = provider_port.session_list(cwd.clone(), cursor.clone())?;
+        rows.extend(rows_from_session_list(provider, &result, query)?);
+        cursor = next_cursor(&result)?;
+        let Some(next_cursor) = &cursor else {
+            break;
+        };
+        if !seen_cursors.insert(next_cursor.clone()) {
+            return Err(RuntimeError::Provider(
+                "session/list returned a repeated nextCursor".to_owned(),
+            ));
+        }
+    }
+    Ok(rows)
 }
 
 fn loaded_transcript_updates(

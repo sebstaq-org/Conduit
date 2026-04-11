@@ -14,10 +14,15 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
+pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);
 
 #[derive(Default)]
 pub(crate) struct FakeState {
     pub(crate) connects: HashMap<ProviderId, usize>,
+    pub(crate) session_lists: HashMap<ProviderId, Value>,
+    pub(crate) session_list_pages: HashMap<SessionListKey, Value>,
+    pub(crate) session_list_errors: HashMap<ProviderId, String>,
+    pub(crate) session_list_requests: Vec<SessionListKey>,
     disconnected: bool,
     sessions: usize,
 }
@@ -97,8 +102,25 @@ impl ProviderPort for FakeProvider {
         Ok(json!({ "sessionId": format!("session-{}", state.sessions) }))
     }
 
-    fn session_list(&mut self) -> Result<Value> {
-        Ok(json!({ "sessions": [] }))
+    fn session_list(&mut self, cwd: Option<PathBuf>, cursor: Option<String>) -> Result<Value> {
+        let cwd = cwd.map(|value| value.display().to_string());
+        let key = (self.provider, cwd, cursor);
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        state.session_list_requests.push(key.clone());
+        if let Some(error) = state.session_list_errors.get(&self.provider) {
+            return Err(RuntimeError::Provider(error.to_owned()));
+        }
+        if let Some(page) = state.session_list_pages.get(&key) {
+            return Ok(page.clone());
+        }
+        Ok(state
+            .session_lists
+            .get(&self.provider)
+            .cloned()
+            .unwrap_or_else(|| json!({ "sessions": [] })))
     }
 
     fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {

@@ -44,6 +44,16 @@ pub enum RuntimeError {
         /// Required parameter name.
         parameter: &'static str,
     },
+    /// The request parameter is not accepted by the command.
+    #[error("{command} parameter {parameter} is invalid: {message}")]
+    InvalidParameter {
+        /// Command being handled.
+        command: &'static str,
+        /// Invalid parameter name.
+        parameter: &'static str,
+        /// Human-readable invalidity detail.
+        message: &'static str,
+    },
     /// The provider operation failed.
     #[error("{0}")]
     Provider(String),
@@ -56,7 +66,8 @@ impl RuntimeError {
             Self::UnsupportedCommand(_) => "unsupported_command",
             Self::MissingParameter { .. }
             | Self::InvalidStringParameter { .. }
-            | Self::InvalidPathParameter { .. } => "invalid_params",
+            | Self::InvalidPathParameter { .. }
+            | Self::InvalidParameter { .. } => "invalid_params",
             Self::Provider(_) => "provider_error",
         }
     }

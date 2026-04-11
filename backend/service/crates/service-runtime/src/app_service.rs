@@ -53,8 +53,8 @@ impl ProviderPort for AppServicePort {
         serialize(self.service.new_session(cwd))
     }
 
-    fn session_list(&mut self) -> Result<Value> {
-        serialize(self.service.list_sessions())
+    fn session_list(&mut self, cwd: Option<PathBuf>, cursor: Option<String>) -> Result<Value> {
+        serialize(self.service.list_sessions_filtered(cwd, cursor))
     }
 
     fn session_load(&mut self, session_id: String, cwd: PathBuf) -> Result<Value> {

@@ -19,6 +19,7 @@ describe("shared session boundary", () => {
       "snapshot/get",
       "provider/disconnect",
       "events/subscribe",
+      "sessions/grouped",
     ]);
   });
 
@@ -49,6 +50,36 @@ describe("shared session boundary", () => {
       provider: "codex",
       params: {
         after_sequence: null,
+      },
+    });
+  });
+});
+
+describe("shared session grouping boundary", () => {
+  test("grouped sessions is an explicit all-providers command", () => {
+    const command = createConsumerCommand("sessions/grouped", "all", {
+      updatedWithinDays: 5,
+    });
+
+    expect(command).toMatchObject({
+      command: "sessions/grouped",
+      provider: "all",
+      params: {
+        updatedWithinDays: 5,
+      },
+    });
+  });
+
+  test("grouped sessions can target one provider", () => {
+    const command = createConsumerCommand("sessions/grouped", "codex", {
+      cwdFilters: ["/repo"],
+    });
+
+    expect(command).toMatchObject({
+      command: "sessions/grouped",
+      provider: "codex",
+      params: {
+        cwdFilters: ["/repo"],
       },
     });
   });
