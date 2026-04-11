@@ -1,10 +1,10 @@
+import { SessionList } from "@/features/session-list";
 import { Text } from "@/theme";
 import {
   navigationPanelHeadingMarginBottom,
   navigationPanelHeadingVariant,
 } from "./navigation-panel.styles";
 import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
-import { NavigationPanelThreadSection } from "./navigation-panel-thread-section";
 
 function NavigationPanelRows(): React.JSX.Element {
   return (
@@ -16,7 +16,7 @@ function NavigationPanelRows(): React.JSX.Element {
         Conduit
       </Text>
       <NavigationPanelProjectRows />
-      <NavigationPanelThreadSection />
+      <SessionList />
     </>
   );
 }
