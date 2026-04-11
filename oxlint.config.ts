@@ -121,6 +121,16 @@ export default defineConfig({
     },
     {
       files: [
+        "apps/frontend/src/app-state/**/*.ts",
+        "src/app-state/**/*.ts",
+        "**/src/app-state/**/*.ts",
+      ],
+      rules: {
+        "oxc/no-async-await": "off",
+      },
+    },
+    {
+      files: [
         "apps/frontend/src/app/**/*.tsx",
         "**/src/app/**/*.tsx",
         "src/app/**/*.tsx",

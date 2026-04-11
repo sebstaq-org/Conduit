@@ -1,20 +1,16 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTheme } from "@shopify/restyle";
+import { Pressable } from "react-native";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { IconSlot } from "@/ui/icon-slot";
 import type { IconSlotName } from "@/ui/icon-slot/icon-slot";
 import { Meta } from "@/ui/meta";
 import {
-  createRowIndentStyle,
-  rowAlignItems,
-  rowBorderRadius,
-  rowFlexDirection,
-  rowGap,
+  createRowStyle,
   rowLabelNumberOfLines,
   rowLabelVariant,
-  rowMinHeight,
-  rowPaddingHorizontal,
 } from "./row.styles";
 
 interface RowProps {
@@ -23,29 +19,27 @@ interface RowProps {
   label: string;
   meta?: string | undefined;
   muted?: boolean | undefined;
+  onPress?: (() => void) | undefined;
   trailing?: ReactNode | undefined;
 }
 
-function Row({
-  depth = 0,
+interface RowContentProps {
+  icon?: IconSlotName | undefined;
+  label: string;
+  meta?: string | undefined;
+  muted: boolean;
+  trailing?: ReactNode | undefined;
+}
+
+function renderRowContent({
   icon,
   label,
   meta,
-  muted = false,
+  muted,
   trailing,
-}: RowProps): React.JSX.Element {
-  const theme = useTheme<Theme>();
-
+}: RowContentProps): ReactNode {
   return (
-    <Box
-      alignItems={rowAlignItems}
-      borderRadius={rowBorderRadius}
-      flexDirection={rowFlexDirection}
-      gap={rowGap}
-      minHeight={rowMinHeight(theme)}
-      px={rowPaddingHorizontal}
-      style={createRowIndentStyle(theme, depth)}
-    >
+    <>
       {icon !== undefined && <IconSlot name={icon} />}
       <Text
         numberOfLines={rowLabelNumberOfLines}
@@ -55,6 +49,50 @@ function Row({
       </Text>
       {meta !== undefined && <Meta>{meta}</Meta>}
       {trailing}
+    </>
+  );
+}
+
+function Row({
+  depth = 0,
+  icon,
+  label,
+  meta,
+  muted = false,
+  onPress,
+  trailing,
+}: RowProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+  const [hovered, setHovered] = useState(false);
+
+  const rowChildren = renderRowContent({ icon, label, meta, muted, trailing });
+
+  if (onPress !== undefined) {
+    return (
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        onHoverIn={() => {
+          setHovered(true);
+        }}
+        onHoverOut={() => {
+          setHovered(false);
+        }}
+        onPress={onPress}
+        style={({ pressed }) =>
+          createRowStyle(theme, depth, { hovered, pressed })
+        }
+      >
+        {rowChildren}
+      </Pressable>
+    );
+  }
+
+  return (
+    <Box
+      style={createRowStyle(theme, depth, { hovered: false, pressed: false })}
+    >
+      {rowChildren}
     </Box>
   );
 }

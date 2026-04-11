@@ -4,21 +4,21 @@ function handleMockAction(): boolean {
   return false;
 }
 
-function NavigationPanelThreadActions(): React.JSX.Element {
+function SessionListActions(): React.JSX.Element {
   return (
     <>
       <IconButton
-        accessibilityLabel="Collapse threads"
+        accessibilityLabel="Collapse sessions"
         icon="minimize-2"
         onPress={handleMockAction}
       />
       <IconButton
-        accessibilityLabel="Filter threads"
+        accessibilityLabel="Filter sessions"
         icon="filter"
         onPress={handleMockAction}
       />
       <IconButton
-        accessibilityLabel="Create thread"
+        accessibilityLabel="Create session"
         icon="plus"
         onPress={handleMockAction}
       />
@@ -26,4 +26,4 @@ function NavigationPanelThreadActions(): React.JSX.Element {
   );
 }
 
-export { NavigationPanelThreadActions };
+export { SessionListActions };
