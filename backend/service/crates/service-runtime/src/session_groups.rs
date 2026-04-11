@@ -238,7 +238,7 @@ fn group_id(cwd: &str) -> String {
     format!("cwd:{cwd}")
 }
 
-fn normalize_cwd(cwd: &str) -> String {
+pub(crate) fn normalize_cwd(cwd: &str) -> String {
     let absolute = cwd.starts_with('/');
     let mut segments = Vec::new();
     for segment in cwd.split('/') {

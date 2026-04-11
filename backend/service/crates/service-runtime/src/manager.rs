@@ -8,13 +8,14 @@ use crate::error::{
 };
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::session_groups::{
-    SessionGroupsQuery, grouped_view, next_cursor, providers_from_target, rows_from_session_list,
+    SessionGroupsQuery, grouped_view, next_cursor, normalize_cwd, providers_from_target,
+    rows_from_session_list,
 };
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
-use session_store::{LocalStore, OpenSessionKey};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -240,8 +241,12 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/open", params, "sessionId")?;
-        let cwd = path_param("session/open", params, "cwd")?;
-        let limit = optional_u64_param("session/open", params, "limit")?;
+        let cwd =
+            absolute_normalized_cwd("session/open", path_param("session/open", params, "cwd")?)?;
+        let limit = HistoryLimit::new(
+            "session/open",
+            optional_u64_param("session/open", params, "limit")?,
+        )?;
         let key = OpenSessionKey {
             provider,
             session_id: session_id.clone(),
@@ -280,6 +285,10 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let open_session_id = string_param("session/history", params, "openSessionId")?;
+        let limit = HistoryLimit::new(
+            "session/history",
+            optional_u64_param("session/history", params, "limit")?,
+        )?;
         if self.local_store.provider_for(&open_session_id)? != Some(provider) {
             return Err(RuntimeError::InvalidParameter {
                 command: "session/history",
@@ -288,7 +297,6 @@ where
             });
         }
         let cursor = optional_string_param("session/history", params, "cursor")?;
-        let limit = optional_u64_param("session/history", params, "limit")?;
         Ok(ConsumerResponse::success_without_snapshot(
             id,
             to_value(
@@ -431,6 +439,17 @@ where
             .get_mut(&provider)
             .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
     }
+}
+
+fn absolute_normalized_cwd(command: &'static str, cwd: PathBuf) -> Result<PathBuf> {
+    if !cwd.is_absolute() {
+        return Err(RuntimeError::InvalidParameter {
+            command,
+            parameter: "cwd",
+            message: "cwd must be absolute",
+        });
+    }
+    Ok(PathBuf::from(normalize_cwd(&cwd.display().to_string())))
 }
 
 fn parse_provider(value: &str) -> Result<ProviderId> {

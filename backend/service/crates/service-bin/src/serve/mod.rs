@@ -4,6 +4,7 @@ mod actor;
 mod wire;
 
 use crate::error::Result;
+use crate::local_store::open_product_store;
 use actor::RuntimeActor;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -34,7 +35,7 @@ struct ServeState {
 /// an I/O failure.
 pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
-    axum::serve(listener, router(LocalStore::open_default()?)).await?;
+    axum::serve(listener, router(open_product_store()?)).await?;
     Ok(())
 }
 

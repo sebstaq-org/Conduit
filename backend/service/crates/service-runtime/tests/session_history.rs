@@ -150,6 +150,75 @@ fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> T
     Err(format!("expected repeated provider loads {expected:?}, got {requests:?}").into())
 }
 
+#[test]
+fn session_open_invalid_limit_has_no_provider_or_event_side_effects() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    let response = runtime.dispatch(command(
+        "1",
+        "session/open",
+        "codex",
+        json!({
+            "sessionId": "session-1",
+            "cwd": "/repo",
+            "limit": 0
+        }),
+    ));
+
+    assert_invalid_params(&response)?;
+    let requests = session_load_requests(&state)?;
+    if requests.is_empty() && runtime.drain_events().is_empty() {
+        return Ok(());
+    }
+    Err(format!("invalid limit caused side effects: {requests:?}").into())
+}
+
+#[test]
+fn session_open_requires_absolute_normalized_cwd_identity() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    let relative = runtime.dispatch(command(
+        "1",
+        "session/open",
+        "codex",
+        json!({
+            "sessionId": "session-1",
+            "cwd": "repo",
+            "limit": 40
+        }),
+    ));
+    assert_invalid_params(&relative)?;
+    if !session_load_requests(&state)?.is_empty() {
+        return Err("relative cwd reached provider session/load".into());
+    }
+
+    let dotted = open_session_with_cwd(&mut runtime, "2", "/repo/.", 40);
+    let normalized = open_session_with_cwd(&mut runtime, "3", "/repo", 40);
+
+    assert_ok(&dotted)?;
+    assert_ok(&normalized)?;
+    if string_field(&dotted.result, "openSessionId")?
+        != string_field(&normalized.result, "openSessionId")?
+    {
+        return Err("normalized cwd variants produced different openSessionIds".into());
+    }
+    Ok(())
+}
+
 fn history_fixture_updates() -> Vec<TranscriptUpdateSnapshot> {
     vec![
         transcript_update(0, "user_message_chunk", "old user"),
@@ -199,6 +268,43 @@ fn open_session(
             "limit": limit
         }),
     ))
+}
+
+fn open_session_with_cwd(
+    runtime: &mut ServiceRuntime<FakeFactory>,
+    id: &str,
+    cwd: &str,
+    limit: u64,
+) -> ConsumerResponse {
+    runtime.dispatch(command(
+        id,
+        "session/open",
+        "codex",
+        json!({
+            "sessionId": "session-1",
+            "cwd": cwd,
+            "limit": limit
+        }),
+    ))
+}
+
+fn session_load_requests(state: &Arc<Mutex<FakeState>>) -> TestResult<Vec<(ProviderId, String)>> {
+    Ok(state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .session_load_requests
+        .clone())
+}
+
+fn assert_invalid_params(response: &ConsumerResponse) -> TestResult<()> {
+    if response.ok {
+        return Err(format!("expected invalid_params, got ok response {response:?}").into());
+    }
+    let error_code = response.error.as_ref().map(|error| error.code.as_str());
+    if error_code == Some("invalid_params") {
+        return Ok(());
+    }
+    Err(format!("expected invalid_params, got {error_code:?}").into())
 }
 
 fn transcript_update(index: usize, variant: &str, text: &str) -> TranscriptUpdateSnapshot {

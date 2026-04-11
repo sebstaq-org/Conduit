@@ -5,6 +5,7 @@ use acp_discovery as _;
 use agent_client_protocol_schema as _;
 use app_api as _;
 use axum as _;
+use directories as _;
 use futures_util as _;
 use regex as _;
 use serde as _;

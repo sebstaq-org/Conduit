@@ -2,10 +2,9 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
-use directories as _;
 use serde as _;
 use serde_json::{Value, json};
-use session_store::{LocalStore, OpenSessionKey};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use sha2 as _;
 use std::error::Error;
 use std::fs;
@@ -21,15 +20,15 @@ fn open_session_persists_and_pages_retryable_history_windows() -> TestResult<()>
     let mut store = LocalStore::open_path(&path)?;
     let key = key("session-1");
 
-    let opened = store.open_session(key.clone(), &updates("new"), Some(2))?;
+    let opened = store.open_session(key.clone(), &updates("new"), limit(2)?)?;
     ensure_eq(&opened.items.len(), &2, "open window item count")?;
     let cursor = opened
         .next_cursor
         .clone()
         .ok_or("expected cursor for older history")?;
 
-    let older = store.history_window(&opened.open_session_id, Some(cursor.clone()), Some(2))?;
-    let retried = store.history_window(&opened.open_session_id, Some(cursor), Some(2))?;
+    let older = store.history_window(&opened.open_session_id, Some(cursor.clone()), limit(2)?)?;
+    let retried = store.history_window(&opened.open_session_id, Some(cursor), limit(2)?)?;
 
     ensure_eq(&older, &retried, "retryable history window")?;
     ensure_eq(&older.next_cursor, &None, "older next cursor")?;
@@ -49,16 +48,16 @@ fn repeated_open_replaces_items_and_invalidates_old_cursor() -> TestResult<()> {
     let path = test_db_path()?;
     let mut store = LocalStore::open_path(&path)?;
     let key = key("session-1");
-    let first = store.open_session(key.clone(), &updates("first"), Some(1))?;
+    let first = store.open_session(key.clone(), &updates("first"), limit(1)?)?;
     let old_cursor = first.next_cursor.clone().ok_or("expected first cursor")?;
-    let second = store.open_session(key, &updates("second"), Some(4))?;
+    let second = store.open_session(key, &updates("second"), limit(4)?)?;
 
     ensure_eq(
         &first.open_session_id,
         &second.open_session_id,
         "openSessionId",
     )?;
-    let response = store.history_window(&second.open_session_id, Some(old_cursor), Some(1));
+    let response = store.history_window(&second.open_session_id, Some(old_cursor), limit(1)?);
     if response.is_ok() {
         return Err("stale history cursor unexpectedly succeeded".into());
     }
@@ -90,6 +89,10 @@ where
         return Ok(());
     }
     Err(format!("expected {label} {expected:?}, got {actual:?}").into())
+}
+
+fn limit(value: u64) -> TestResult<HistoryLimit> {
+    Ok(HistoryLimit::new("test", Some(value))?)
 }
 
 fn key(session_id: &str) -> OpenSessionKey {

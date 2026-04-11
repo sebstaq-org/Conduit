@@ -13,7 +13,6 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
-use directories::ProjectDirs;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -36,9 +35,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Errors produced by the local store.
 #[derive(Debug, Error)]
 pub enum Error {
-    /// The operating system did not provide an application data directory.
-    #[error("local store data directory is unavailable")]
-    DataDirectoryUnavailable,
     /// Filesystem setup for the local store failed.
     #[error("failed to prepare local store path {path}")]
     PreparePath {
@@ -161,17 +157,13 @@ struct WindowScope<'a> {
     revision: i64,
 }
 
-impl LocalStore {
-    /// Opens the product local store at the OS application data path.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the OS data directory cannot be resolved or the
-    /// SQLite store cannot be opened.
-    pub fn open_default() -> Result<Self> {
-        Self::open_path(default_database_path()?)
-    }
+/// Validated limit for session history windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryLimit {
+    value: usize,
+}
 
+impl LocalStore {
     /// Opens a local store at an explicit database path.
     ///
     /// # Errors
@@ -197,7 +189,7 @@ impl LocalStore {
         &mut self,
         key: OpenSessionKey,
         updates: &[TranscriptUpdateSnapshot],
-        limit: Option<u64>,
+        limit: HistoryLimit,
     ) -> Result<SessionHistoryWindow> {
         let open_session_id = open_session_id_for(&key);
         let items = project_items(updates);
@@ -222,7 +214,7 @@ impl LocalStore {
         &self,
         open_session_id: &str,
         cursor: Option<String>,
-        limit: Option<u64>,
+        limit: HistoryLimit,
     ) -> Result<SessionHistoryWindow> {
         let revision = self.session_revision("session/history", open_session_id)?;
         self.window_at_revision(
@@ -336,7 +328,7 @@ impl LocalStore {
         &self,
         scope: WindowScope<'_>,
         cursor: Option<&str>,
-        limit: Option<u64>,
+        limit: HistoryLimit,
     ) -> Result<SessionHistoryWindow> {
         let item_count = self.item_count(scope.command, scope.open_session_id)?;
         let end = match cursor {
@@ -350,8 +342,7 @@ impl LocalStore {
                 message: "cursor is outside the loaded transcript",
             });
         }
-        let limit = normalize_limit(scope.command, limit)?;
-        let start = end.saturating_sub(limit);
+        let start = end.saturating_sub(limit.value());
         let items = self.items_between(scope.open_session_id, start, end)?;
         let next_cursor = if start == 0 {
             None
@@ -428,11 +419,20 @@ impl LocalStore {
     }
 }
 
-fn default_database_path() -> Result<PathBuf> {
-    let Some(project_dirs) = ProjectDirs::from("dev", "Conduit", "Conduit") else {
-        return Err(Error::DataDirectoryUnavailable);
-    };
-    Ok(project_dirs.data_dir().join("local-store.sqlite3"))
+impl HistoryLimit {
+    /// Validates a caller-supplied optional history window limit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the limit is zero or exceeds the supported maximum.
+    pub fn new(command: &'static str, limit: Option<u64>) -> Result<Self> {
+        let value = normalize_limit(command, limit)?;
+        Ok(Self { value })
+    }
+
+    fn value(self) -> usize {
+        self.value
+    }
 }
 
 fn prepare_parent(path: &Path) -> Result<()> {

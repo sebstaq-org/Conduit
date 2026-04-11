@@ -24,6 +24,9 @@ pub(crate) enum ServiceError {
     /// Local store operations failed.
     #[error(transparent)]
     LocalStore(#[from] session_store::Error),
+    /// The operating system did not provide an application data directory.
+    #[error("local store data directory is unavailable")]
+    LocalStoreDataDirectory,
     /// Service I/O failed.
     #[error(transparent)]
     Io(#[from] std::io::Error),
