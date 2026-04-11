@@ -21,6 +21,9 @@ pub(crate) enum ServiceError {
     /// JSON serialization failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// Local store operations failed.
+    #[error(transparent)]
+    LocalStore(#[from] session_store::Error),
     /// Service I/O failed.
     #[error(transparent)]
     Io(#[from] std::io::Error),

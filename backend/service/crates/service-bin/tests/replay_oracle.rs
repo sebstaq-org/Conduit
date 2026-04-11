@@ -11,6 +11,7 @@ use regex as _;
 use serde as _;
 use serde_json::json;
 use service_runtime as _;
+use session_store as _;
 use std::error::Error;
 use std::fs::{create_dir_all, remove_dir_all, write};
 use std::path::PathBuf;

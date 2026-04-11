@@ -108,7 +108,6 @@ interface TranscriptMessageItem {
   role: TranscriptMessageRole;
   text: string;
   sourceVariants: string[];
-  createdAt: string | null;
 }
 
 interface TranscriptEventItem {

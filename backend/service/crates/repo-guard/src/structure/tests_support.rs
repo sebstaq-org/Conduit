@@ -205,9 +205,9 @@ fn metadata(repo_root: &Path) -> Metadata {
         ),
         (
             "service-runtime",
-            vec!["acp-core", "acp-discovery", "app-api"],
+            vec!["acp-core", "acp-discovery", "app-api", "session-store"],
         ),
-        ("session-store", Vec::<&str>::new()),
+        ("session-store", vec!["acp-core", "acp-discovery"]),
     ];
 
     Metadata {

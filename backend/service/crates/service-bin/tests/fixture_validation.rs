@@ -10,6 +10,7 @@ use regex as _;
 use serde as _;
 use serde_json as _;
 use service_runtime as _;
+use session_store as _;
 use std::fs::{remove_dir_all, write};
 use std::path::Path;
 use thiserror as _;

@@ -21,7 +21,7 @@ fn session_open_returns_latest_history_window_and_older_cursor() -> TestResult<(
         "session-1",
         history_fixture_updates(),
     )?;
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
 
     let opened = open_session(&mut runtime, "1", "codex", "session-1", 3);
 
@@ -88,7 +88,7 @@ fn session_history_rejects_provider_mismatch() -> TestResult<()> {
         "session-1",
         vec![transcript_update(0, "agent_message_chunk", "loaded")],
     )?;
-    let mut runtime = runtime(state);
+    let mut runtime = runtime(state)?;
     let opened = open_session(&mut runtime, "1", "claude", "session-1", 40);
     assert_ok(&opened)?;
 
@@ -109,6 +109,45 @@ fn session_history_rejects_provider_mismatch() -> TestResult<()> {
         return Ok(());
     }
     Err(format!("expected invalid_params, got {error_code:?}").into())
+}
+
+#[test]
+fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    let first = open_session(&mut runtime, "1", "codex", "session-1", 40);
+    let second = open_session(&mut runtime, "2", "codex", "session-1", 40);
+
+    assert_ok(&first)?;
+    assert_ok(&second)?;
+    if first.snapshot.is_some() || second.snapshot.is_some() {
+        return Err("session/open should return a read-model response without snapshot".into());
+    }
+    if string_field(&first.result, "openSessionId")?
+        != string_field(&second.result, "openSessionId")?
+    {
+        return Err("repeated session/open changed openSessionId".into());
+    }
+    let requests = state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .session_load_requests
+        .clone();
+    let expected = vec![
+        (ProviderId::Codex, "session-1".to_owned()),
+        (ProviderId::Codex, "session-1".to_owned()),
+    ];
+    if requests == expected {
+        return Ok(());
+    }
+    Err(format!("expected repeated provider loads {expected:?}, got {requests:?}").into())
 }
 
 fn history_fixture_updates() -> Vec<TranscriptUpdateSnapshot> {

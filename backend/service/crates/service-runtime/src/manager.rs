@@ -10,11 +10,11 @@ use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::session_groups::{
     SessionGroupsQuery, grouped_view, next_cursor, providers_from_target, rows_from_session_list,
 };
-use crate::session_history::{OpenSessionKey, SessionHistoryStore};
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
+use session_store::{LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -24,20 +24,14 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     event_buffer: EventBuffer,
     factory: F,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
-    session_history: SessionHistoryStore,
+    local_store: LocalStore,
 }
 
 impl ServiceRuntime<AppServiceFactory> {
     /// Creates a consumer runtime backed by real provider services.
     #[must_use]
-    pub fn new() -> Self {
-        Self::with_factory(AppServiceFactory::default())
-    }
-}
-
-impl Default for ServiceRuntime<AppServiceFactory> {
-    fn default() -> Self {
-        Self::new()
+    pub fn new(local_store: LocalStore) -> Self {
+        Self::with_factory(AppServiceFactory::default(), local_store)
     }
 }
 
@@ -46,12 +40,12 @@ where
     F: ProviderFactory,
 {
     /// Creates a consumer runtime with an explicit provider factory.
-    pub fn with_factory(factory: F) -> Self {
+    pub fn with_factory(factory: F, local_store: LocalStore) -> Self {
         Self {
             event_buffer: EventBuffer::new(),
             factory,
             providers: HashMap::new(),
-            session_history: SessionHistoryStore::new(),
+            local_store,
         }
     }
 
@@ -253,12 +247,6 @@ where
             session_id: session_id.clone(),
             cwd: cwd.display().to_string(),
         };
-        if let Some(open_session_id) = self.session_history.existing_open_session_id(&key) {
-            let result =
-                self.session_history
-                    .window("session/open", open_session_id, None, limit)?;
-            return Ok(ConsumerResponse::success_without_snapshot(id, result));
-        }
         let (snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
             let _result = provider_port.session_load(session_id.clone(), cwd)?;
@@ -281,8 +269,8 @@ where
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
-        let result = self.session_history.open(key, updates, limit)?;
-        Ok(ConsumerResponse::success(id, result, snapshot))
+        let result = to_value(self.local_store.open_session(key, updates, limit)?)?;
+        Ok(ConsumerResponse::success_without_snapshot(id, result))
     }
 
     fn session_history(
@@ -292,7 +280,7 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let open_session_id = string_param("session/history", params, "openSessionId")?;
-        if self.session_history.provider_for(&open_session_id) != Some(provider) {
+        if self.local_store.provider_for(&open_session_id)? != Some(provider) {
             return Err(RuntimeError::InvalidParameter {
                 command: "session/history",
                 parameter: "openSessionId",
@@ -303,8 +291,10 @@ where
         let limit = optional_u64_param("session/history", params, "limit")?;
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            self.session_history
-                .window("session/history", open_session_id, cursor, limit)?,
+            to_value(
+                self.local_store
+                    .history_window(&open_session_id, cursor, limit)?,
+            )?,
         ))
     }
 

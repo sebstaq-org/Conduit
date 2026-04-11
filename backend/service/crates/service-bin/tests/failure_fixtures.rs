@@ -10,6 +10,7 @@ use futures_util as _;
 use regex as _;
 use serde as _;
 use service_runtime as _;
+use session_store as _;
 use std::error::Error;
 use std::fs::{read_dir, read_to_string};
 use std::path::{Path, PathBuf};

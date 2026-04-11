@@ -3,6 +3,7 @@
 use service_runtime::{
     AppServiceFactory, ConsumerCommand, ConsumerResponse, RuntimeEvent, ServiceRuntime,
 };
+use session_store::LocalStore;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[derive(Debug)]
@@ -21,16 +22,16 @@ pub(crate) struct RuntimeActor {
 impl RuntimeActor {
     /// Starts one actor that exclusively owns `ServiceRuntime`.
     #[must_use]
-    pub(crate) fn start() -> Self {
-        Self::start_with_factory(AppServiceFactory::default())
+    pub(crate) fn start(local_store: LocalStore) -> Self {
+        Self::start_with_factory(AppServiceFactory::default(), local_store)
     }
 
     /// Starts one actor with an explicit provider factory.
     #[must_use]
-    pub(crate) fn start_with_factory(factory: AppServiceFactory) -> Self {
+    pub(crate) fn start_with_factory(factory: AppServiceFactory, local_store: LocalStore) -> Self {
         let (commands, receiver) = mpsc::channel(32);
         let (events, _) = broadcast::channel(256);
-        tokio::spawn(run_actor(receiver, events.clone(), factory));
+        tokio::spawn(run_actor(receiver, events.clone(), factory, local_store));
         Self { commands, events }
     }
 
@@ -60,8 +61,9 @@ async fn run_actor(
     mut receiver: mpsc::Receiver<ActorRequest>,
     events: broadcast::Sender<RuntimeEvent>,
     factory: AppServiceFactory,
+    local_store: LocalStore,
 ) {
-    let mut runtime = ServiceRuntime::with_factory(factory);
+    let mut runtime = ServiceRuntime::with_factory(factory, local_store);
     while let Some(request) = receiver.recv().await {
         handle_request(&mut runtime, &events, request);
     }

@@ -11,10 +11,12 @@ use service_runtime::{
     ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, RuntimeError,
     RuntimeEvent, RuntimeEventKind, ServiceRuntime,
 };
+use session_store::LocalStore;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);
@@ -26,6 +28,7 @@ pub(crate) struct FakeState {
     pub(crate) session_list_pages: HashMap<SessionListKey, Value>,
     pub(crate) session_list_errors: HashMap<ProviderId, String>,
     pub(crate) session_load_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
+    pub(crate) session_load_requests: Vec<(ProviderId, String)>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
     loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
     disconnected: bool,
@@ -144,6 +147,9 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        state
+            .session_load_requests
+            .push((self.provider, session_id.clone()));
         let updates = state
             .session_load_updates
             .get(&(self.provider, session_id.clone()))
@@ -181,8 +187,11 @@ impl FakeProvider {
     }
 }
 
-pub(crate) fn runtime(state: Arc<Mutex<FakeState>>) -> ServiceRuntime<FakeFactory> {
-    ServiceRuntime::with_factory(FakeFactory::new(state))
+pub(crate) fn runtime(state: Arc<Mutex<FakeState>>) -> TestResult<ServiceRuntime<FakeFactory>> {
+    Ok(ServiceRuntime::with_factory(
+        FakeFactory::new(state),
+        LocalStore::open_path(test_db_path()?)?,
+    ))
 }
 
 pub(crate) fn command(id: &str, command: &str, provider: &str, params: Value) -> ConsumerCommand {
@@ -230,4 +239,12 @@ fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
             elapsed_ms: 1,
         },
     }
+}
+
+fn test_db_path() -> TestResult<PathBuf> {
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    Ok(std::env::temp_dir().join(format!(
+        "conduit-service-runtime-{}-{nanos}.sqlite3",
+        std::process::id()
+    )))
 }

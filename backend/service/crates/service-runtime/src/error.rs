@@ -57,6 +57,9 @@ pub enum RuntimeError {
     /// The provider operation failed.
     #[error("{0}")]
     Provider(String),
+    /// The local store operation failed.
+    #[error("{0}")]
+    LocalStore(#[from] session_store::Error),
 }
 
 impl RuntimeError {
@@ -69,6 +72,8 @@ impl RuntimeError {
             | Self::InvalidPathParameter { .. }
             | Self::InvalidParameter { .. } => "invalid_params",
             Self::Provider(_) => "provider_error",
+            Self::LocalStore(session_store::Error::InvalidParameter { .. }) => "invalid_params",
+            Self::LocalStore(_) => "local_store_error",
         }
     }
 }
