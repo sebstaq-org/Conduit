@@ -1,13 +1,11 @@
-import { Stack } from "expo-router";
-import { ConduitStoreProvider } from "@/app-state";
-import { ConduitThemeProvider } from "@/theme";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { RootLayoutStore } from "@/shell/root-layout-store";
+import { rootLayoutGestureHandlerRootStyle } from "@/shell/root-layout.styles";
 
 export default function RootLayout(): React.JSX.Element {
   return (
-    <ConduitStoreProvider>
-      <ConduitThemeProvider mode="light">
-        <Stack screenOptions={{ headerShown: false }} />
-      </ConduitThemeProvider>
-    </ConduitStoreProvider>
+    <GestureHandlerRootView style={rootLayoutGestureHandlerRootStyle}>
+      <RootLayoutStore />
+    </GestureHandlerRootView>
   );
 }
