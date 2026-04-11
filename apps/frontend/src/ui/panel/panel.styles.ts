@@ -5,6 +5,7 @@ const panelStyles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: panelTokens.space.contentX,
+    paddingTop: panelTokens.space.topY,
   },
   host: {
     backgroundColor: panelTokens.colors.background,

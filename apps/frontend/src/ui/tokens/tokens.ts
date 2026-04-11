@@ -25,7 +25,7 @@ const panelTokens = {
     gap: 12,
     indent: 26,
     sectionY: 18,
-    topY: 34,
+    topY: 22,
   },
 } as const;
 

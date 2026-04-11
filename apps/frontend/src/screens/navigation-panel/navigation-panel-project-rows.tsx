@@ -7,7 +7,7 @@ const projectRows = [
   { icon: "clock", id: "automations", label: "Automations" },
 ] as const;
 
-function PanelPreviewProjectRows(): React.JSX.Element {
+function NavigationPanelProjectRows(): React.JSX.Element {
   return (
     <List>
       {projectRows.map((row) => (
@@ -17,4 +17,4 @@ function PanelPreviewProjectRows(): React.JSX.Element {
   );
 }
 
-export { PanelPreviewProjectRows };
+export { NavigationPanelProjectRows };

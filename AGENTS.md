@@ -28,10 +28,11 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Feature code must not import raw DOM or React Native primitives directly. That boundary is reserved for `apps/frontend/src/ui` primitives and shell code.
 - Future backend contract usage belongs behind `packages/app-client`, not in app or feature code.
 - Product UI should be defined once in `apps/frontend` and hosted by platform shells.
+- `apps/frontend/src/screens/navigation-panel` is composition-only: it may arrange panel sections and temporary local fixtures, but feature behavior and state must move to narrow feature modules when introduced.
 
 ## Current Intent
 
-This pass is about the React Native Web frontend foundation, rules, workspace shape, and a temporary visual preview surface.
+This pass is about the React Native Web frontend foundation, rules, workspace shape, and the first navigation panel screen composition.
 
 Official ACP only remains product policy. In this pass that means boundary reservation and provenance only, not ACP host or provider-runtime implementation.
 

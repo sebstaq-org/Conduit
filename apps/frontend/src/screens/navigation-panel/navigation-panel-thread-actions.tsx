@@ -1,6 +1,6 @@
 import { IconSlot } from "@/ui";
 
-function PanelPreviewThreadActions(): React.JSX.Element {
+function NavigationPanelThreadActions(): React.JSX.Element {
   return (
     <>
       <IconSlot name="minimize-2" />
@@ -10,4 +10,4 @@ function PanelPreviewThreadActions(): React.JSX.Element {
   );
 }
 
-export { PanelPreviewThreadActions };
+export { NavigationPanelThreadActions };

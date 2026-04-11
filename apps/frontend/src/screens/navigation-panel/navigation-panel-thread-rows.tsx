@@ -52,7 +52,7 @@ const threadRows: ThreadRow[] = [
   { depth: 0, icon: "folder", id: "thread-lens-e", label: "thread-lens" },
 ];
 
-function PanelPreviewThreadRows(): React.JSX.Element {
+function NavigationPanelThreadRows(): React.JSX.Element {
   return (
     <List>
       {threadRows.map((row) => (
@@ -69,4 +69,4 @@ function PanelPreviewThreadRows(): React.JSX.Element {
   );
 }
 
-export { PanelPreviewThreadRows };
+export { NavigationPanelThreadRows };
