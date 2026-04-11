@@ -1,8 +1,9 @@
 import Feather from "@expo/vector-icons/Feather";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { View } from "react-native";
-import { panelTokens } from "@/ui/tokens";
-import { iconSlotStyles } from "./icon-slot.styles";
+import { useTheme } from "@shopify/restyle";
+import { Box } from "@/theme";
+import type { Theme } from "@/theme";
+import { createIconSlotFrameStyle, iconSlotMetrics } from "./icon-slot.styles";
 
 type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
 type MaterialCommunityIconName = React.ComponentProps<
@@ -18,26 +19,26 @@ interface IconSlotProps {
 }
 
 function IconSlot({ name }: IconSlotProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+  const metrics = iconSlotMetrics(theme);
+  const frameStyle = createIconSlotFrameStyle(theme);
+
   if (typeof name !== "string") {
     return (
-      <View style={iconSlotStyles.icon}>
+      <Box style={frameStyle}>
         <MaterialCommunityIcons
-          color={panelTokens.colors.icon}
+          color={metrics.color}
           name={name.name}
-          size={panelTokens.sizes.iconGlyph}
+          size={metrics.glyphSize}
         />
-      </View>
+      </Box>
     );
   }
 
   return (
-    <View style={iconSlotStyles.icon}>
-      <Feather
-        color={panelTokens.colors.icon}
-        name={name}
-        size={panelTokens.sizes.iconGlyph}
-      />
-    </View>
+    <Box style={frameStyle}>
+      <Feather color={metrics.color} name={name} size={metrics.glyphSize} />
+    </Box>
   );
 }
 

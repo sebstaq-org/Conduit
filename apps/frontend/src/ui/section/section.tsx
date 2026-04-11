@@ -1,6 +1,15 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
-import { sectionStyles } from "./section.styles";
+import { Box, Text } from "@/theme";
+import {
+  sectionActionsFlexDirection,
+  sectionActionsGap,
+  sectionHeaderAlignItems,
+  sectionHeaderFlexDirection,
+  sectionHeaderJustifyContent,
+  sectionHeaderMarginBottom,
+  sectionHeaderMarginTop,
+  sectionTitleVariant,
+} from "./section.styles";
 
 interface SectionProps {
   actions?: ReactNode | undefined;
@@ -14,15 +23,26 @@ function Section({
   title,
 }: SectionProps): React.JSX.Element {
   return (
-    <View>
-      <View style={sectionStyles.heading}>
-        <Text style={sectionStyles.title}>{title}</Text>
+    <Box>
+      <Box
+        alignItems={sectionHeaderAlignItems}
+        flexDirection={sectionHeaderFlexDirection}
+        justifyContent={sectionHeaderJustifyContent}
+        mb={sectionHeaderMarginBottom}
+        mt={sectionHeaderMarginTop}
+      >
+        <Text variant={sectionTitleVariant}>{title}</Text>
         {actions !== undefined && (
-          <View style={sectionStyles.actions}>{actions}</View>
+          <Box
+            flexDirection={sectionActionsFlexDirection}
+            gap={sectionActionsGap}
+          >
+            {actions}
+          </Box>
         )}
-      </View>
+      </Box>
       {children}
-    </View>
+    </Box>
   );
 }
 

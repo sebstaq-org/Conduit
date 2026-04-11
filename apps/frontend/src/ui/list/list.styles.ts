@@ -1,9 +1,3 @@
-import { StyleSheet } from "react-native";
+const listGap = "xxs" as const;
 
-const listStyles = StyleSheet.create({
-  list: {
-    gap: 2,
-  },
-});
-
-export { listStyles };
+export { listGap };

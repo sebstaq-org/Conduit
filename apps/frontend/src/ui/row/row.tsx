@@ -1,11 +1,21 @@
 import type { ReactNode } from "react";
-import type { StyleProp, TextStyle } from "react-native";
-import { Text, View } from "react-native";
+import { useTheme } from "@shopify/restyle";
+import { Box, Text } from "@/theme";
+import type { Theme } from "@/theme";
 import { IconSlot } from "@/ui/icon-slot";
 import type { IconSlotName } from "@/ui/icon-slot/icon-slot";
 import { Meta } from "@/ui/meta";
-import { panelTokens } from "@/ui/tokens";
-import { rowStyles } from "./row.styles";
+import {
+  createRowIndentStyle,
+  rowAlignItems,
+  rowBorderRadius,
+  rowFlexDirection,
+  rowGap,
+  rowLabelNumberOfLines,
+  rowLabelVariant,
+  rowMinHeight,
+  rowPaddingHorizontal,
+} from "./row.styles";
 
 interface RowProps {
   depth?: number;
@@ -16,14 +26,6 @@ interface RowProps {
   trailing?: ReactNode | undefined;
 }
 
-function labelStyle(muted: boolean): StyleProp<TextStyle> {
-  if (muted) {
-    return [rowStyles.label, rowStyles.mutedLabel];
-  }
-
-  return [rowStyles.label];
-}
-
 function Row({
   depth = 0,
   icon,
@@ -32,17 +34,28 @@ function Row({
   muted = false,
   trailing,
 }: RowProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+
   return (
-    <View
-      style={[rowStyles.row, { paddingLeft: depth * panelTokens.space.indent }]}
+    <Box
+      alignItems={rowAlignItems}
+      borderRadius={rowBorderRadius}
+      flexDirection={rowFlexDirection}
+      gap={rowGap}
+      minHeight={rowMinHeight(theme)}
+      px={rowPaddingHorizontal}
+      style={createRowIndentStyle(theme, depth)}
     >
       {icon !== undefined && <IconSlot name={icon} />}
-      <Text numberOfLines={1} style={labelStyle(muted)}>
+      <Text
+        numberOfLines={rowLabelNumberOfLines}
+        variant={rowLabelVariant(muted)}
+      >
         {label}
       </Text>
       {meta !== undefined && <Meta>{meta}</Meta>}
       {trailing}
-    </View>
+    </Box>
   );
 }
 

@@ -113,6 +113,13 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/frontend/src/**/*.ts", "apps/frontend/src/**/*.tsx"],
+      rules: {
+        "conduit/no-frontend-raw-hex-color": error,
+        "conduit/no-frontend-stylesheet": error,
+      },
+    },
+    {
       files: [
         "apps/frontend/src/app/**/*.tsx",
         "**/src/app/**/*.tsx",

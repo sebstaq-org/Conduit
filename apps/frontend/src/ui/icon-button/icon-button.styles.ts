@@ -1,18 +1,22 @@
-import { StyleSheet } from "react-native";
-import { panelTokens } from "@/ui/tokens";
+import type { ViewStyle } from "react-native";
+import type { Theme } from "@/theme";
 
-const iconButtonStyles = StyleSheet.create({
-  button: {
+function createIconButtonStyle(theme: Theme, pressed: boolean): ViewStyle {
+  const buttonStyle: ViewStyle = {
     alignItems: "center",
-    borderRadius: panelTokens.radii.row,
-    height: panelTokens.sizes.iconButton,
+    borderRadius: theme.borderRadii.row,
+    height: theme.panel.iconButton,
     justifyContent: "center",
-    width: panelTokens.sizes.iconButton,
-  },
-  pressed: {
-    backgroundColor: panelTokens.colors.pressed,
-    opacity: 0.72,
-  },
-});
+    opacity: 1,
+    width: theme.panel.iconButton,
+  };
 
-export { iconButtonStyles };
+  if (pressed) {
+    buttonStyle.backgroundColor = theme.colors.pressedBackground;
+    buttonStyle.opacity = 0.72;
+  }
+
+  return buttonStyle;
+}
+
+export { createIconButtonStyle };

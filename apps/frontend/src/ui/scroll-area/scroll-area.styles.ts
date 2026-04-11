@@ -1,12 +1,10 @@
-import { StyleSheet } from "react-native";
+import type { ViewStyle } from "react-native";
+import type { Theme } from "@/theme";
 
-const scrollAreaStyles = StyleSheet.create({
-  content: {
-    paddingBottom: 24,
-  },
-  scrollArea: {
-    flex: 1,
-  },
-});
+function createScrollAreaContentStyle(theme: Theme): ViewStyle {
+  return { paddingBottom: theme.spacing.scrollBottom };
+}
 
-export { scrollAreaStyles };
+const scrollAreaStyle = { flex: 1 } as const;
+
+export { createScrollAreaContentStyle, scrollAreaStyle };
