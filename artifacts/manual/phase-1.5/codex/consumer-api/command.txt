@@ -1,1 +1,0 @@
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- consumer-proof --provider codex --artifact-root artifacts/manual/phase-1.5/codex/consumer-api

@@ -26,6 +26,8 @@ import { createDesktopProofConfig } from "./proof-config.js";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const distRoot = dirname(fileURLToPath(import.meta.url));
 const clientJsPath = join(distRoot, "client.js");
+const artifactArchiveRoot =
+  process.env.CONDUIT_ARTIFACT_ROOT ?? "/srv/devops/repos/conduit-artifacts";
 const lastSessionIds = new Map<ProviderId, string>();
 
 createServer((request, response) => {
@@ -204,7 +206,7 @@ function artifactRootFor(
     prompt: "session-prompt",
     cancel: "session-cancel",
   }[action];
-  return join(repoRoot, "artifacts/manual/phase-1", provider, suffix);
+  return join(artifactArchiveRoot, "manual/phase-1", provider, suffix);
 }
 
 function requiredSessionId(provider: ProviderId): string {

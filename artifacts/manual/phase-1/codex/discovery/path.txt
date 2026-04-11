@@ -1,1 +1,0 @@
-/home/base/.nvm/versions/node/v24.14.0/lib/node_modules/@zed-industries/codex-acp/bin/codex-acp.js

@@ -1,0 +1,6 @@
+{"kind":"provider_connected","provider":"copilot","session_id":null,"payload":{}}
+{"kind":"session_observed","provider":"copilot","session_id":"replay-copilot-session-1","payload":{"observed_via":"session/new"}}
+{"kind":"prompt_started","provider":"copilot","session_id":"replay-copilot-session-1","payload":{"prompt":"Reply exactly: conduit-phase-2-replay-copilot observed."}}
+{"kind":"prompt_update_observed","provider":"copilot","session_id":"replay-copilot-session-1","payload":{"source":"provider_response"}}
+{"kind":"prompt_completed","provider":"copilot","session_id":"replay-copilot-session-1","payload":{"stopReason":"end_turn"}}
+{"kind":"provider_disconnected","provider":"copilot","session_id":null,"payload":{}}

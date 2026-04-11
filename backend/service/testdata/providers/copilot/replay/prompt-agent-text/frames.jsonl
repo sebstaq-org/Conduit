@@ -1,0 +1,5 @@
+{"stream":"observation","source":"/srv/devops/repos/conduit-artifacts/manual/phase-2/replay-fixtures-first-pass/copilot-live-observation/raw-frames.jsonl","curated":true,"kept":"command order, prompt agent text chunks, final stopReason, events backlog semantics","normalized":"frame ids, command ids, timestamps, session id, cwd, launcher paths, provider version"}
+{"stream":"replay","kind":"initialize","result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"mcpCapabilities":{"http":false,"sse":false},"promptCapabilities":{"audio":false,"embeddedContext":true,"image":true},"sessionCapabilities":{"list":{}}},"authMethods":[],"agentInfo":{"name":"conduit-replay-copilot","title":"Conduit Replay Copilot","version":"0.1.0"}}}
+{"stream":"replay","kind":"session/new","result":{"sessionId":"replay-copilot-session-1"}}
+{"stream":"replay","kind":"session/update","updates":["con","duit","-phase","-","2","-re","play","-c","op","ilot"," observed","."]}
+{"stream":"replay","kind":"session/prompt","result":{"stopReason":"end_turn"}}

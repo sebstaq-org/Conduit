@@ -1,0 +1,20 @@
+{
+  "schema": "conduit.acp_replay.manifest.v1",
+  "provider": "claude",
+  "scenarios": [
+    {
+      "name": "prompt-agent-text",
+      "path": "prompt-agent-text/scenario.json",
+      "capture_source": "/srv/devops/repos/conduit-artifacts/manual/phase-2/replay-fixtures-first-pass/claude-live-observation",
+      "redaction_status": "normalized-no-secrets",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "disconnected_snapshot",
+        "agent_text_chunks",
+        "prompt_stop_reason",
+        "events_subscribe_cursor_backlog"
+      ]
+    }
+  ]
+}

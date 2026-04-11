@@ -1,0 +1,68 @@
+{
+  "schema": "conduit.acp_replay.scenario.v1",
+  "provider": "codex",
+  "name": "prompt-agent-text",
+  "acp_protocol_version": 1,
+  "sdk_dependency": "agent-client-protocol =0.10.4",
+  "capture_source": "/srv/devops/repos/conduit-artifacts/manual/phase-2/replay-fixtures-first-pass/codex-live-observation",
+  "redaction_status": "normalized-no-secrets",
+  "session": {
+    "session_id": "replay-codex-session-1",
+    "cwd": "/__conduit_replay_cwd__"
+  },
+  "initialize": {
+    "agent_info": {
+      "name": "conduit-replay-codex",
+      "title": "Conduit Replay Codex",
+      "version": "0.1.0"
+    },
+    "capabilities": {
+      "loadSession": true,
+      "mcpCapabilities": {
+        "http": true,
+        "sse": false
+      },
+      "promptCapabilities": {
+        "audio": false,
+        "embeddedContext": true,
+        "image": true
+      },
+      "sessionCapabilities": {
+        "list": {}
+      }
+    },
+    "auth_methods": []
+  },
+  "prompt": {
+    "input": "Reply exactly: conduit-phase-2-replay-codex observed.",
+    "agent_text_chunks": [
+      "con",
+      "duit",
+      "-phase",
+      "-",
+      "2",
+      "-re",
+      "play",
+      "-c",
+      "od",
+      "ex",
+      " observed",
+      "."
+    ],
+    "stop_reason": "end_turn",
+    "chunk_delay_ms": 1
+  },
+  "ignored_fields": [
+    "frame_ids",
+    "command_ids",
+    "timestamps",
+    "live_session_ids",
+    "cwd",
+    "launcher_executable",
+    "launcher_resolved_path",
+    "initialize_elapsed_ms",
+    "provider_version",
+    "transport_diagnostics",
+    "exact_event_sequence_values"
+  ]
+}

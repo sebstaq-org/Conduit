@@ -1,5 +1,0 @@
-rtk cargo test --manifest-path backend/service/Cargo.toml -p service-bin
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- runtime initialize --provider codex --json
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- runtime snapshot/get --provider invalid --json
-rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- contracts --artifact-root artifacts/manual/phase-1.5/checkpoint-3-runtime-cli/proof-contracts
-rtk pnpm run check

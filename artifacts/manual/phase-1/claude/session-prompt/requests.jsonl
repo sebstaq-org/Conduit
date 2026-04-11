@@ -1,3 +1,0 @@
-{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
-{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/claude/session-prompt/cwd","mcpServers":[]}}
-{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Reply with exactly CONDUIT_READY.","type":"text"}],"sessionId":"d5cb37a1-ea64-49a8-8d70-5da8b8d8b6e3"}}
