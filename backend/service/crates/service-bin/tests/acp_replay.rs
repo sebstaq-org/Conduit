@@ -13,11 +13,14 @@ use service_runtime as _;
 use thiserror as _;
 use tower_http as _;
 
-#[path = "acp_replay/oracle.rs"]
+#[path = "acp_replay/fixtures.rs"]
+mod fixtures;
+#[path = "support/replay_oracle.rs"]
 mod oracle;
 #[path = "acp_replay/support.rs"]
 mod support;
 
+use fixtures::*;
 use oracle::*;
 use support::*;
 
@@ -146,21 +149,20 @@ for await (const line of lines) {
 
 #[tokio::test]
 async fn curated_acp_replay_drives_public_websocket_flow() -> TestResult<()> {
-    for provider in replay_providers() {
-        for fixture in fixture_paths(provider.id)? {
-            let scenario = read_json(&fixture)?;
-            let workspace = prepare_replay_provider(provider.executable)?;
-            let port = available_port()?;
-            let mut server = ServiceProcess::start(ServiceConfig {
-                port,
-                fixture: &fixture,
-                provider_script: &workspace.provider_script,
-                shim_root: &workspace.path,
-            })?;
-            let mut socket = connect_to_service(port).await?;
-            exercise_replay_sequence(&mut socket, provider.id, &fixture, &scenario).await?;
-            server.stop()?;
-        }
+    for fixture in replay_fixtures()? {
+        let scenario = read_json(&fixture.path)?;
+        let workspace = prepare_replay_provider(fixture.provider_executable)?;
+        let port = available_port()?;
+        let mut server = ServiceProcess::start(ServiceConfig {
+            port,
+            fixture: &fixture.path,
+            provider_script: &workspace.provider_script,
+            shim_root: &workspace.path,
+        })?;
+        let mut socket = connect_to_service(port).await?;
+        exercise_replay_sequence(&mut socket, &fixture.provider_id, &fixture.path, &scenario)
+            .await?;
+        server.stop()?;
     }
     Ok(())
 }

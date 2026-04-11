@@ -1,6 +1,6 @@
 //! Tests for service-bin CLI parsing.
 
-use super::{Command, parse_command};
+use super::{Command, ReplayCommand, parse_command};
 use crate::error::ServiceError;
 use std::error::Error;
 
@@ -73,6 +73,45 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     }
     if port != 4174 {
         return Err(format!("unexpected port {port}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn replay_capture_accepts_default_manual_artifact_root() -> TestResult<()> {
+    let args = strings(&[
+        "replay",
+        "capture",
+        "--provider",
+        "codex",
+        "--scenario",
+        "prompt-agent-text",
+    ]);
+    let Command::Replay {
+        command:
+            ReplayCommand::Capture {
+                provider,
+                scenario,
+                artifact_root,
+            },
+    } = parse_command(&args)?
+    else {
+        return Err("expected replay capture command".into());
+    };
+    if provider.as_str() != "codex" || scenario != "prompt-agent-text" || artifact_root.is_some() {
+        return Err("unexpected replay capture parse result".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn replay_curate_requires_raw_root() -> TestResult<()> {
+    let args = strings(&["replay", "curate"]);
+    let error = parse_command(&args)
+        .err()
+        .ok_or("replay curate unexpectedly parsed")?;
+    if !matches!(error, ServiceError::MissingFlag { ref flag } if flag == "--raw-root") {
+        return Err(format!("unexpected error {error}").into());
     }
     Ok(())
 }

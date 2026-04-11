@@ -16,6 +16,7 @@ mod cli;
 mod consumer_proof;
 mod error;
 mod proof;
+mod replay_workflow;
 mod runtime;
 mod scenarios;
 mod serve;
@@ -36,6 +37,7 @@ async fn main() -> Result<()> {
             provider,
             artifact_root,
         } => consumer_proof::run(provider, &artifact_root, &args).await,
+        cli::Command::Replay { command } => replay_workflow::run(command, &args).await,
         proof_command => scenarios::run(proof_command, &args),
     }
 }

@@ -109,6 +109,38 @@ pub(crate) enum Command {
         /// The artifact root to populate.
         artifact_root: PathBuf,
     },
+    /// Runs the dev-only ACP replay fixture workflow.
+    Replay {
+        /// The replay workflow subcommand.
+        command: ReplayCommand,
+    },
+}
+
+/// Dev-only replay fixture workflow subcommands.
+pub(crate) enum ReplayCommand {
+    /// Captures live observation frames into ignored manual artifacts.
+    Capture {
+        /// The provider being captured.
+        provider: ProviderId,
+        /// The replay scenario name.
+        scenario: String,
+        /// Optional raw artifact root override.
+        artifact_root: Option<PathBuf>,
+    },
+    /// Curates one raw capture into candidate replay fixture files.
+    Curate {
+        /// Raw capture root to read.
+        raw_root: PathBuf,
+        /// Optional candidate output root override.
+        candidate_root: Option<PathBuf>,
+    },
+    /// Promotes one reviewed candidate into committed replay testdata.
+    Promote {
+        /// Candidate fixture root to promote.
+        candidate_root: PathBuf,
+        /// Optional service testdata root override.
+        testdata_root: Option<PathBuf>,
+    },
 }
 
 /// Parses the silent proof CLI arguments.
@@ -128,8 +160,32 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
             provider: required_provider(args, "--provider")?,
             artifact_root: required_path(args, "--artifact-root")?,
         }),
+        "replay" => parse_replay_command(args),
         _ => parse_proof_command(command, args),
     }
+}
+
+fn parse_replay_command(args: &[String]) -> Result<Command> {
+    let Some(action) = args.get(1) else {
+        return Err(missing("<replay-command>"));
+    };
+    let command = match action.as_str() {
+        "capture" => ReplayCommand::Capture {
+            provider: required_provider(args, "--provider")?,
+            scenario: required_value(args, "--scenario")?,
+            artifact_root: optional_path(args, "--artifact-root"),
+        },
+        "curate" => ReplayCommand::Curate {
+            raw_root: required_path(args, "--raw-root")?,
+            candidate_root: optional_path(args, "--candidate-root"),
+        },
+        "promote" => ReplayCommand::Promote {
+            candidate_root: required_path(args, "--candidate-root")?,
+            testdata_root: optional_path(args, "--testdata-root"),
+        },
+        _ => return Err(unsupported(action)),
+    };
+    Ok(Command::Replay { command })
 }
 
 fn parse_proof_command(command: &str, args: &[String]) -> Result<Command> {
@@ -236,6 +292,10 @@ fn required_provider(args: &[String], flag: &str) -> Result<ProviderId> {
 
 fn required_path(args: &[String], flag: &str) -> Result<PathBuf> {
     Ok(PathBuf::from(required_value(args, flag)?))
+}
+
+fn optional_path(args: &[String], flag: &str) -> Option<PathBuf> {
+    optional_value(args, flag).map(PathBuf::from)
 }
 
 fn required_u64(args: &[String], flag: &str) -> Result<u64> {
