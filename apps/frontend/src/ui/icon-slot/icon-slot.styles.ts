@@ -8,12 +8,6 @@ const iconSlotStyles = StyleSheet.create({
     justifyContent: "center",
     width: panelTokens.sizes.icon,
   },
-  mark: {
-    color: panelTokens.colors.icon,
-    fontSize: 16,
-    fontWeight: panelTokens.font.medium,
-    lineHeight: 18,
-  },
 });
 
 export { iconSlotStyles };

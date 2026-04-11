@@ -17,6 +17,7 @@ const panelTokens = {
   sizes: {
     desktopPanelWidth: 414,
     icon: 18,
+    iconGlyph: 16,
     rowHeight: 34,
   },
   space: {

@@ -2,13 +2,14 @@ import type { ReactNode } from "react";
 import type { StyleProp, TextStyle } from "react-native";
 import { Text, View } from "react-native";
 import { IconSlot } from "@/ui/icon-slot";
+import type { IconSlotName } from "@/ui/icon-slot/icon-slot";
 import { Meta } from "@/ui/meta";
 import { panelTokens } from "@/ui/tokens";
 import { rowStyles } from "./row.styles";
 
 interface RowProps {
   depth?: number;
-  icon?: string | undefined;
+  icon?: IconSlotName | undefined;
   label: string;
   meta?: string | undefined;
   muted?: boolean | undefined;
@@ -38,7 +39,7 @@ function Row({
         { paddingLeft: depth * panelTokens.space.indent },
       ]}
     >
-      {icon !== undefined && <IconSlot mark={icon} />}
+      {icon !== undefined && <IconSlot name={icon} />}
       <Text numberOfLines={1} style={labelStyle(muted)}>
         {label}
       </Text>

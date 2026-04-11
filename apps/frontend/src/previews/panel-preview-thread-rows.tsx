@@ -1,8 +1,9 @@
 import { List, Row } from "@/ui";
+import type { IconSlotName } from "@/ui/icon-slot/icon-slot";
 
 interface ThreadRow {
   depth: number;
-  icon?: string | undefined;
+  icon?: IconSlotName | undefined;
   id: string;
   label: string;
   meta?: string | undefined;
@@ -10,8 +11,15 @@ interface ThreadRow {
 }
 
 const threadRows: ThreadRow[] = [
-  { depth: 0, icon: "▱", id: "base", label: "base" },
-  { depth: 0, icon: "▱", id: "thread-lens-a", label: "thread-lens" },
+  {
+    depth: 0,
+    icon: { family: "material-community", name: "pin-outline" },
+    id: "pinned-session",
+    label: "Pinned session",
+    meta: "5d",
+  },
+  { depth: 0, icon: "folder", id: "base", label: "base" },
+  { depth: 0, icon: "folder", id: "thread-lens-a", label: "thread-lens" },
   {
     depth: 1,
     id: "proof-collection",
@@ -36,12 +44,12 @@ const threadRows: ThreadRow[] = [
     label: "Du ska stärka dokumentet /srv/devops/obsidian-not...",
     meta: "3d",
   },
-  { depth: 0, icon: "▱", id: "validaite", label: "validAIte" },
+  { depth: 0, icon: "folder", id: "validaite", label: "validAIte" },
   { depth: 1, id: "no-chats", label: "No chats", muted: true },
-  { depth: 0, icon: "▱", id: "thread-lens-b", label: "thread-lens" },
-  { depth: 0, icon: "▱", id: "thread-lens-c", label: "thread-lens" },
-  { depth: 0, icon: "▱", id: "thread-lens-d", label: "thread-lens" },
-  { depth: 0, icon: "▱", id: "thread-lens-e", label: "thread-lens" },
+  { depth: 0, icon: "folder", id: "thread-lens-b", label: "thread-lens" },
+  { depth: 0, icon: "folder", id: "thread-lens-c", label: "thread-lens" },
+  { depth: 0, icon: "folder", id: "thread-lens-d", label: "thread-lens" },
+  { depth: 0, icon: "folder", id: "thread-lens-e", label: "thread-lens" },
 ];
 
 function PanelPreviewThreadRows(): React.JSX.Element {

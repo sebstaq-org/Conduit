@@ -1,10 +1,10 @@
 import { List, Row } from "@/ui";
 
 const projectRows = [
-  { icon: "✎", id: "new-chat", label: "New chat" },
-  { icon: "⌕", id: "search", label: "Search" },
-  { icon: "⌘", id: "plugins", label: "Plugins" },
-  { icon: "◷", id: "automations", label: "Automations" },
+  { icon: "edit-2", id: "new-chat", label: "New chat" },
+  { icon: "search", id: "search", label: "Search" },
+  { icon: "grid", id: "plugins", label: "Plugins" },
+  { icon: "clock", id: "automations", label: "Automations" },
 ] as const;
 
 function PanelPreviewProjectRows(): React.JSX.Element {

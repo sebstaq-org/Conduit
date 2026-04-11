@@ -3,9 +3,9 @@ import { IconSlot } from "@/ui";
 function PanelPreviewThreadActions(): React.JSX.Element {
   return (
     <>
-      <IconSlot mark="⌖" />
-      <IconSlot mark="≡" />
-      <IconSlot mark="⊞" />
+      <IconSlot name="minimize-2" />
+      <IconSlot name="filter" />
+      <IconSlot name="plus" />
     </>
   );
 }
