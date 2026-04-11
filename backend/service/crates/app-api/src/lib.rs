@@ -98,6 +98,20 @@ impl AppService {
         self.host.list_sessions()
     }
 
+    /// Lists ACP sessions with optional official `cwd` and `cursor` filters.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the underlying live ACP host cannot complete
+    /// `session/list`.
+    pub fn list_sessions_filtered(
+        &mut self,
+        cwd: Option<PathBuf>,
+        cursor: Option<String>,
+    ) -> Result<ListSessionsResponse> {
+        self.host.list_sessions_filtered(cwd, cursor)
+    }
+
     /// Loads one ACP session.
     ///
     /// # Errors

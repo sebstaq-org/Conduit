@@ -43,7 +43,7 @@ pub trait ProviderPort: Send {
     /// # Errors
     ///
     /// Returns an error when the provider rejects or fails the command.
-    fn session_list(&mut self) -> Result<Value>;
+    fn session_list(&mut self, cwd: Option<PathBuf>, cursor: Option<String>) -> Result<Value>;
 
     /// Runs ACP `session/load`.
     ///

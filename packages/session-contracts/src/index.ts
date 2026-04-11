@@ -1,4 +1,9 @@
-import type { ProviderId, ProviderSnapshot } from "@conduit/session-model";
+import type {
+  ProviderId,
+  ProviderSnapshot,
+  SessionGroupsQuery,
+  SessionGroupsView,
+} from "@conduit/session-model";
 
 let nextCommandSequence = 0;
 
@@ -17,6 +22,7 @@ const CONDUIT_COMMANDS = [
   "snapshot/get",
   "provider/disconnect",
   "events/subscribe",
+  "sessions/grouped",
 ] as const;
 
 const CONSUMER_COMMANDS = [...SESSION_COMMANDS, ...CONDUIT_COMMANDS] as const;
@@ -27,12 +33,30 @@ type ConduitCommandName = (typeof CONDUIT_COMMANDS)[number];
 
 type ConsumerCommandName = (typeof CONSUMER_COMMANDS)[number];
 
-interface ConsumerCommand {
+type SessionGroupsCommandName = "sessions/grouped";
+
+type ProviderScopedCommandName = Exclude<
+  ConsumerCommandName,
+  SessionGroupsCommandName
+>;
+
+interface ProviderConsumerCommand {
   id: string;
-  command: ConsumerCommandName;
+  command: ProviderScopedCommandName;
   provider: ProviderId;
   params: Record<string, unknown>;
 }
+
+interface SessionGroupsConsumerCommand {
+  id: string;
+  command: SessionGroupsCommandName;
+  provider: ConsumerCommandTarget;
+  params: SessionGroupsQuery;
+}
+
+type ConsumerCommand = ProviderConsumerCommand | SessionGroupsConsumerCommand;
+
+type ConsumerCommandTarget = ProviderId | "all";
 
 interface ConsumerError {
   code: string;
@@ -93,16 +117,50 @@ function nextConsumerCommandId(): string {
   return `conduit-command-${String(nextCommandSequence)}`;
 }
 
+function toRecordParams(
+  params: Record<string, unknown> | SessionGroupsQuery,
+): Record<string, unknown> {
+  const record: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    record[key] = value;
+  }
+  return record;
+}
+
+function createConsumerCommand(
+  command: SessionGroupsCommandName,
+  provider: ConsumerCommandTarget,
+  params?: SessionGroupsQuery,
+): SessionGroupsConsumerCommand;
+
+function createConsumerCommand(
+  command: ProviderScopedCommandName,
+  provider: ProviderId,
+  params?: Record<string, unknown>,
+): ProviderConsumerCommand;
+
 function createConsumerCommand(
   command: ConsumerCommandName,
-  provider: ProviderId,
-  params: Record<string, unknown> = {},
+  provider: ConsumerCommandTarget,
+  params: Record<string, unknown> | SessionGroupsQuery = {},
 ): ConsumerCommand {
+  const id = nextConsumerCommandId();
+  if (command === "sessions/grouped") {
+    return {
+      id,
+      command,
+      provider,
+      params,
+    };
+  }
+  if (provider === "all") {
+    throw new Error(`${command} must target a provider`);
+  }
   return {
-    id: nextConsumerCommandId(),
+    id,
     command,
     provider,
-    params,
+    params: toRecordParams(params),
   };
 }
 
@@ -119,12 +177,19 @@ export type {
   ConduitCommandName,
   ConsumerCommand,
   ConsumerCommandName,
+  ConsumerCommandTarget,
   ConsumerError,
   ConsumerResponse,
+  ProviderConsumerCommand,
+  ProviderScopedCommandName,
   RuntimeEvent,
   RuntimeEventKind,
   ServerEventFrame,
   ServerFrame,
   ServerResponseFrame,
+  SessionGroupsCommandName,
+  SessionGroupsConsumerCommand,
   SessionCommandName,
+  SessionGroupsQuery,
+  SessionGroupsView,
 };
