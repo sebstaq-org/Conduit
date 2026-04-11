@@ -52,6 +52,18 @@ const threadRows: ThreadRow[] = [
   { depth: 0, icon: "folder", id: "thread-lens-e", label: "thread-lens" },
 ];
 
+function handleMockThreadPress(): boolean {
+  return false;
+}
+
+function pressHandlerForRow(row: ThreadRow): (() => boolean) | undefined {
+  if (row.muted === true) {
+    return undefined;
+  }
+
+  return handleMockThreadPress;
+}
+
 function NavigationPanelThreadRows(): React.JSX.Element {
   return (
     <List>
@@ -63,6 +75,7 @@ function NavigationPanelThreadRows(): React.JSX.Element {
           label={row.label}
           meta={row.meta}
           muted={row.muted}
+          onPress={pressHandlerForRow(row)}
         />
       ))}
     </List>

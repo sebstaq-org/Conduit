@@ -80,6 +80,7 @@ const lightTheme = createTheme({
   colors: {
     background: "#ffffff",
     borderSubtle: "#ececec",
+    hoverBackground: "#f6f6f6",
     iconMuted: "#8d8d8d",
     pressedBackground: "#f1f1f1",
     textMuted: "#b7b7b7",
@@ -96,6 +97,7 @@ const darkTheme = createTheme({
   colors: {
     background: "#101214",
     borderSubtle: "#24282c",
+    hoverBackground: "#181b1f",
     iconMuted: "#9a9fa5",
     pressedBackground: "#1d2126",
     textMuted: "#858b92",

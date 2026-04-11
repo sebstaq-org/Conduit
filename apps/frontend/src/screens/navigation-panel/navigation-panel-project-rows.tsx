@@ -7,11 +7,20 @@ const projectRows = [
   { icon: "clock", id: "automations", label: "Automations" },
 ] as const;
 
+function handleMockRowPress(): boolean {
+  return false;
+}
+
 function NavigationPanelProjectRows(): React.JSX.Element {
   return (
     <List>
       {projectRows.map((row) => (
-        <Row key={row.id} icon={row.icon} label={row.label} />
+        <Row
+          key={row.id}
+          icon={row.icon}
+          label={row.label}
+          onPress={handleMockRowPress}
+        />
       ))}
     </List>
   );

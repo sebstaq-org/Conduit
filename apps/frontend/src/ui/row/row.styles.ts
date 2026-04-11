@@ -3,15 +3,40 @@ import type { Theme } from "@/theme";
 
 type RowLabelVariant = "rowLabel" | "rowLabelMuted";
 
-const rowAlignItems = "center" as const;
-const rowBorderRadius = "row" as const;
-const rowFlexDirection = "row" as const;
-const rowGap = "md" as const;
-const rowLabelNumberOfLines = 1;
-const rowPaddingHorizontal = "none" as const;
+interface RowInteractionState {
+  hovered: boolean;
+  pressed: boolean;
+}
 
-function createRowIndentStyle(theme: Theme, depth: number): ViewStyle {
-  return { paddingLeft: depth * theme.spacing.rowIndent };
+const rowAlignItems = "center" as const;
+const rowFlexDirection = "row" as const;
+const rowLabelNumberOfLines = 1;
+
+function createRowStyle(
+  theme: Theme,
+  depth: number,
+  state: RowInteractionState,
+): ViewStyle {
+  const rowStyle: ViewStyle = {
+    alignItems: rowAlignItems,
+    borderRadius: theme.borderRadii.row,
+    flexDirection: rowFlexDirection,
+    gap: theme.spacing.md,
+    minHeight: theme.panel.rowHeight,
+    paddingLeft: depth * theme.spacing.rowIndent,
+    paddingRight: theme.spacing.none,
+  };
+
+  if (state.hovered) {
+    rowStyle.backgroundColor = theme.colors.hoverBackground;
+  }
+
+  if (state.pressed) {
+    rowStyle.backgroundColor = theme.colors.pressedBackground;
+    rowStyle.opacity = 0.72;
+  }
+
+  return rowStyle;
 }
 
 function rowLabelVariant(muted: boolean): RowLabelVariant {
@@ -22,19 +47,5 @@ function rowLabelVariant(muted: boolean): RowLabelVariant {
   return "rowLabel";
 }
 
-function rowMinHeight(theme: Theme): number {
-  return theme.panel.rowHeight;
-}
-
-export {
-  createRowIndentStyle,
-  rowAlignItems,
-  rowBorderRadius,
-  rowFlexDirection,
-  rowGap,
-  rowLabelNumberOfLines,
-  rowLabelVariant,
-  rowMinHeight,
-  rowPaddingHorizontal,
-};
-export type { RowLabelVariant };
+export { createRowStyle, rowLabelNumberOfLines, rowLabelVariant };
+export type { RowInteractionState, RowLabelVariant };

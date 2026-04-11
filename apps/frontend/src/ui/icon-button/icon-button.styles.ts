@@ -1,7 +1,15 @@
 import type { ViewStyle } from "react-native";
 import type { Theme } from "@/theme";
 
-function createIconButtonStyle(theme: Theme, pressed: boolean): ViewStyle {
+interface IconButtonInteractionState {
+  hovered: boolean;
+  pressed: boolean;
+}
+
+function createIconButtonStyle(
+  theme: Theme,
+  state: IconButtonInteractionState,
+): ViewStyle {
   const buttonStyle: ViewStyle = {
     alignItems: "center",
     borderRadius: theme.borderRadii.row,
@@ -11,7 +19,11 @@ function createIconButtonStyle(theme: Theme, pressed: boolean): ViewStyle {
     width: theme.panel.iconButton,
   };
 
-  if (pressed) {
+  if (state.hovered) {
+    buttonStyle.backgroundColor = theme.colors.hoverBackground;
+  }
+
+  if (state.pressed) {
     buttonStyle.backgroundColor = theme.colors.pressedBackground;
     buttonStyle.opacity = 0.72;
   }
@@ -20,3 +32,4 @@ function createIconButtonStyle(theme: Theme, pressed: boolean): ViewStyle {
 }
 
 export { createIconButtonStyle };
+export type { IconButtonInteractionState };
