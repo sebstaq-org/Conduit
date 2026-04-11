@@ -2,8 +2,9 @@
 
 Add code only inside the approved tree.
 
-- New shared frontend code belongs in `packages/`.
-- New desktop or mobile shell code belongs in `apps/`.
+- New shared backend-facing frontend code belongs in `packages/`.
+- New product UI code belongs in `apps/frontend/src`.
+- New Electron host code belongs in `apps/desktop`.
 - New Rust service code belongs in `backend/service/crates/`.
 - Pinned external schemas or manifests belong in `vendor/agent-client-protocol/`.
 - Manual proof belongs outside the repo under `/srv/devops/repos/conduit-artifacts/manual/`; generated CI or scripted proof may go in `artifacts/automated/` when it is explicitly meant to stay in the repo.
@@ -14,10 +15,10 @@ Rust is intentionally hard-default. Keep new crates in the workspace, satisfy th
 
 For the current frontend shell-init pass:
 
-- `apps/desktop` may contain the minimal Phase 1 proof surface; `apps/mobile` stays shell-only.
+- `apps/frontend` owns the React Native and React Native Web UI app; `apps/desktop` hosts the web target.
 - `packages/session-client` is the normal consumer transport boundary for versioned `service-bin serve` WebSocket frames.
 - `packages/session-contracts` is the shared command/envelope contract boundary.
 - `packages/app-client` is proof-surface-only and must not grow normal runtime APIs.
 - `packages/app-core` is the framework-neutral logic and provider/session vocabulary boundary.
-- `packages/design-system-*` reserve UI boundaries. Do not add speculative components, themes, or fake tokens.
-- Do not create placeholder UI or “temporary” shared abstractions.
+- App-local UI primitives and tokens belong under `apps/frontend/src/ui` until a real second consumer justifies extraction.
+- Do not create placeholder feature behavior or “temporary” shared abstractions.

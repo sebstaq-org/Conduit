@@ -1,4 +1,5 @@
-import { createDesktopSessionSurfaceCopy } from "@conduit/design-system-desktop";
+import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
+import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
 import {
   CONSUMER_COMMANDS,
   PROVIDERS,
@@ -7,7 +8,7 @@ import {
 
 interface DesktopBootstrapPlan {
   appId: "desktop";
-  copy: ReturnType<typeof createDesktopSessionSurfaceCopy>;
+  copy: ProofSurfaceCopy;
   lockedPolicy: "official-acp-only";
   supportedCommands: string[];
   supportedProviders: string[];
@@ -17,7 +18,7 @@ export function createDesktopBootstrapPlan(): DesktopBootstrapPlan {
   const sessionClient = createSessionClient();
   return {
     appId: "desktop",
-    copy: createDesktopSessionSurfaceCopy(),
+    copy: createProofSurfaceCopy("desktop"),
     lockedPolicy: sessionClient.policy,
     supportedCommands: [...CONSUMER_COMMANDS],
     supportedProviders: [...PROVIDERS],

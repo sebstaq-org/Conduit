@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Conduit",
+    "slug": "conduit",
+    "version": "0.5.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android", "web"],
+    "scheme": "conduit",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

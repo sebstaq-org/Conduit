@@ -1,6 +1,6 @@
 # Architecture
 
-Conduit is structured around product boundaries instead of language buckets. The current pass keeps the locked frontend workspace shape and policy, upgrades `apps/desktop` and `apps/mobile` into real runnable shells without placeholder UI, and layers the Phase 1.5 official-ACP-only consumer API over the Rust backend.
+Conduit is structured around product boundaries instead of language buckets. The current pass moves the UI to one Expo/React Native frontend that targets native and web, while Electron becomes a host for the web target.
 
 ## Current Pass
 
@@ -8,8 +8,9 @@ Phase 1 includes the vendored ACP contract lock, official launcher discovery, ra
 
 This pass also includes:
 
-- final frontend package names
-- runnable desktop and mobile shells
+- final frontend app name
+- React Native Web frontend foundation
+- Electron host integration
 - normal consumer API session package boundaries
 - frontend ownership canon
 - local and repo-wide agent rules
@@ -23,28 +24,26 @@ This pass explicitly excludes:
 - provider-specific Conduit protocols
 - duplicated live runtime DTO families above ACP
 - persisted runtime truth
-- general product UI beyond the minimal desktop proof surface
-- speculative design tokens, primitives, themes, or feature stubs
+- product behavior beyond the temporary panel preview
+- speculative themes or feature stubs
 
 ## Frontend Layer
 
-- `apps/desktop` is the Electron shell only.
-- `apps/mobile` is the React Native shell only.
+- `apps/frontend` is the Expo/React Native app for native and web UI.
+- `apps/desktop` is the Electron host only.
 - `packages/session-client` owns the normal consumer transport boundary.
 - `packages/session-contracts` owns shared consumer command and transport envelopes.
 - `packages/session-model` owns provider/session model vocabulary.
 - `packages/app-client` owns the proof-surface contract boundary.
 - `packages/app-core` owns framework-neutral reducers, selectors, and view-model logic.
-- `packages/design-system-tokens` reserves the semantic design-token contract boundary.
-- `packages/design-system-desktop` reserves desktop primitive implementations behind Conduit-owned component APIs.
-- `packages/design-system-mobile` reserves mobile primitive implementations behind the same Conduit-owned component APIs.
+- `packages/design-system-tokens` is retained for existing proof-copy contracts.
+- `apps/frontend/src/ui` owns app-local UI tokens and primitives until extraction is justified.
 
 The frontend rule is strict:
 
-- share semantics
-- share component API
-- share token contracts
-- do not share raw DOM and React Native implementation
+- keep product UI in the frontend app
+- host the same web target in Electron
+- keep raw React Native primitives inside app UI primitives or shell code
 
 ## Frontend Delivery Order
 
@@ -53,19 +52,19 @@ Cross-platform frontend work should land in this order:
 1. app-facing backend boundary
 2. `packages/app-client`
 3. `packages/app-core`
-4. `apps/desktop` shell integration
-5. `apps/mobile` shell integration
+4. `apps/frontend` UI integration
+5. `apps/desktop` host integration
 
 If a capability is intended for both platforms, it should not be treated as complete until both shells exist.
 
 ## Frontend Boundaries
 
 - Apps may depend on packages, but apps may not depend on each other.
-- Shared frontend behavior must not live directly under `apps/*`.
+- Shared backend-facing behavior must not live directly under app feature code.
 - Feature code must not import backend-owned contracts directly; that boundary belongs in `packages/app-client`.
-- Raw DOM and React Native primitives are reserved for design-system and shell boundaries.
+- Raw DOM and React Native primitives are reserved for app UI primitives and shell boundaries.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
-- Placeholder UI is forbidden. Do not create example components, starter themes, fake tokens, or speculative feature stubs.
+- Placeholder feature behavior is forbidden. Temporary visual previews are allowed only when explicitly requested and must stay under `apps/frontend/src/previews`.
 
 ## Rust Layer
 

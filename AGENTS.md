@@ -1,6 +1,6 @@
 # Conduit Agent Notes
 
-Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work out of this frontend shell-init pass unless the task explicitly says otherwise.
+Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work out of this frontend foundation pass unless the task explicitly says otherwise.
 
 ## Repo Rules
 
@@ -16,21 +16,23 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
   raw proof dumps, and document the capture source without exposing private
   machine details.
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
-- `apps/desktop` and `apps/mobile` are runnable shells only.
-- Shared frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in `apps/*`.
+- `apps/frontend` owns the React Native and React Native Web UI app.
+- `apps/desktop` is the Electron host only; it must not own product UI components.
+- Shared backend-facing frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in app feature code.
 - Apps may depend on packages, but they must not import each other or reach into backend internals directly.
 - Do not create placeholder UI, starter components, starter themes, fake tokens, or speculative feature stubs.
 
 ## Frontend Hard Rules
 
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
-- Feature code must not import raw DOM or React Native primitives directly. That boundary is reserved for design-system and shell code.
+- Feature code must not import raw DOM or React Native primitives directly. That boundary is reserved for `apps/frontend/src/ui` primitives and shell code.
 - Future backend contract usage belongs behind `packages/app-client`, not in app or feature code.
-- Shared semantics should be defined once and rendered separately for desktop and mobile.
+- Product UI should be defined once in `apps/frontend` and hosted by platform shells.
+- `apps/frontend/src/screens/navigation-panel` is composition-only: it may arrange panel sections and temporary local fixtures, but feature behavior and state must move to narrow feature modules when introduced.
 
 ## Current Intent
 
-This pass is about runnable shell setup, rules, workspace shape, and guard-rail surfaces. It is not a product UI pass.
+This pass is about the React Native Web frontend foundation, rules, workspace shape, and the first navigation panel screen composition.
 
 Official ACP only remains product policy. In this pass that means boundary reservation and provenance only, not ACP host or provider-runtime implementation.
 

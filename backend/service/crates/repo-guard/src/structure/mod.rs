@@ -21,12 +21,10 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
     "vendor",
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
-const APPROVED_APPS: [&str; 2] = ["desktop", "mobile"];
-const APPROVED_PACKAGES: [&str; 8] = [
+const APPROVED_APPS: [&str; 2] = ["desktop", "frontend"];
+const APPROVED_PACKAGES: [&str; 6] = [
     "app-client",
     "app-core",
-    "design-system-desktop",
-    "design-system-mobile",
     "design-system-tokens",
     "session-client",
     "session-contracts",

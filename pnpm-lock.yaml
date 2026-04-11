@@ -34,9 +34,6 @@ importers:
       "@conduit/app-core":
         specifier: workspace:*
         version: link:../../packages/app-core
-      "@conduit/design-system-desktop":
-        specifier: workspace:*
-        version: link:../../packages/design-system-desktop
       "@conduit/design-system-tokens":
         specifier: workspace:*
         version: link:../../packages/design-system-tokens
@@ -84,11 +81,8 @@ importers:
         specifier: 4.1.4
         version: 4.1.4(@types/node@25.6.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.8.3))
 
-  apps/mobile:
+  apps/frontend:
     dependencies:
-      "@conduit/design-system-mobile":
-        specifier: workspace:*
-        version: link:../../packages/design-system-mobile
       "@conduit/design-system-tokens":
         specifier: workspace:*
         version: link:../../packages/design-system-tokens
@@ -101,12 +95,18 @@ importers:
       "@conduit/session-model":
         specifier: workspace:*
         version: link:../../packages/session-model
+      "@expo/vector-icons":
+        specifier: 15.1.1
+        version: 15.1.1(expo-font@55.0.6)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       expo:
         specifier: ~55.0.14
         version: 55.0.14(@babel/core@7.29.0)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.9)(expo-router@55.0.12)(react-dom@19.2.0(react@19.2.0))(react-native-worklets@0.7.2(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
       expo-constants:
         specifier: ~55.0.13
         version: 55.0.13(expo@55.0.14)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(typescript@5.9.3)
+      expo-font:
+        specifier: ~55.0.6
+        version: 55.0.6(expo@55.0.14)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       expo-linking:
         specifier: ~55.0.12
         version: 55.0.12(expo@55.0.14)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
@@ -168,18 +168,6 @@ importers:
       "@conduit/session-model":
         specifier: workspace:*
         version: link:../session-model
-
-  packages/design-system-desktop:
-    dependencies:
-      "@conduit/design-system-tokens":
-        specifier: workspace:*
-        version: link:../design-system-tokens
-
-  packages/design-system-mobile:
-    dependencies:
-      "@conduit/design-system-tokens":
-        specifier: workspace:*
-        version: link:../design-system-tokens
 
   packages/design-system-tokens: {}
 

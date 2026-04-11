@@ -3,8 +3,6 @@
   "references": [
     { "path": "./packages/app-client" },
     { "path": "./packages/app-core" },
-    { "path": "./packages/design-system-desktop" },
-    { "path": "./packages/design-system-mobile" },
     { "path": "./packages/design-system-tokens" },
     { "path": "./packages/session-model" },
     { "path": "./packages/session-contracts" },

@@ -5,12 +5,6 @@ pub(super) fn violation_message(unit_name: &str, specifier: &str) -> Option<&'st
         "@conduit/app-client" | "@conduit/app-core" | "@conduit/design-system-tokens" => {
             is_frontend_runtime(specifier).then_some("imports forbidden framework or shell runtime")
         }
-        "@conduit/design-system-desktop" => (is_mobile_runtime(specifier)
-            || is_shell_runtime(specifier))
-        .then_some("imports runtime outside the desktop design-system boundary"),
-        "@conduit/design-system-mobile" => (is_desktop_runtime(specifier)
-            || is_shell_runtime(specifier))
-        .then_some("imports runtime outside the mobile design-system boundary"),
         _ => None,
     }
 }
