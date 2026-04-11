@@ -145,5 +145,19 @@
       },
       "agentText": "Here is the requested token: conduit-live-proof-copilot."
     }
+  ],
+  "answers": [
+    {
+      "provider": "codex",
+      "answer": "conduit-live-proof-codex confirmed.",
+      "responseFrameId": "codex-session-prompt-1775896574694-f98d00946b6a08",
+      "source": "official SDK session_notification -> snapshot.last_prompt.agent_text_chunks"
+    },
+    {
+      "provider": "copilot",
+      "answer": "Here is the requested token: conduit-live-proof-copilot.",
+      "responseFrameId": "copilot-session-prompt-1775896582879-adc1b8baa7543",
+      "source": "official SDK session_notification -> snapshot.last_prompt.agent_text_chunks"
+    }
   ]
 }

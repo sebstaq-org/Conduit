@@ -1,0 +1,24 @@
+{
+  "provider": "copilot",
+  "endpoint": "ws://127.0.0.1:4199/api/session",
+  "command": "session/prompt",
+  "responseFrameId": "copilot-session-prompt-1775896582879-adc1b8baa7543",
+  "commandFrameId": "copilot-session-prompt-1775896582879-adc1b8baa7543",
+  "source": "official SDK session_notification -> snapshot.last_prompt.agent_text_chunks",
+  "chunks": [
+    "Here",
+    " is",
+    " the",
+    " requested",
+    " token",
+    ":",
+    " conduit",
+    "-live",
+    "-proof",
+    "-c",
+    "op",
+    "ilot",
+    "."
+  ],
+  "answer": "Here is the requested token: conduit-live-proof-copilot."
+}
