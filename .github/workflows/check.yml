@@ -37,5 +37,8 @@ jobs:
       - name: Verify Cargo metadata
         run: cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null
 
+      - name: Validate replay fixtures
+        run: pnpm run fixtures:check
+
       - name: Run repo checks
         run: pnpm run check

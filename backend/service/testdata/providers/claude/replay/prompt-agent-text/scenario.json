@@ -56,5 +56,30 @@
     "provider_version",
     "transport_diagnostics",
     "exact_event_sequence_values"
-  ]
+  ],
+  "observation": {
+    "provider_caveats": [
+      "Official ACP SDK owns raw JSON-RPC transport; Conduit validates curated replay frames and golden oracles here, not private SDK transport frames."
+    ],
+    "dynamic_ignored_fields": [
+      "frame ids",
+      "command ids",
+      "timestamps",
+      "live ACP session ids",
+      "cwd",
+      "launcher paths",
+      "provider version"
+    ],
+    "raw_capture_safe_to_promote": false,
+    "curated_replay_safe_to_promote": true,
+    "scrubbed_fields": [
+      "frame ids",
+      "command ids",
+      "timestamps",
+      "live ACP session ids",
+      "cwd",
+      "launcher paths",
+      "provider version"
+    ]
+  }
 }

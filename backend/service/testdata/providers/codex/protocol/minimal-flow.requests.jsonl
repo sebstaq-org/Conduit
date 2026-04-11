@@ -1,3 +1,3 @@
 {"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"protocolVersion":1}}
-{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/srv/devops/repos/w2/Conduit/artifacts/manual/phase-1/_proof-workspaces/codex/session-prompt/cwd","mcpServers":[]}}
-{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Reply with exactly CONDUIT_READY.","type":"text"}],"sessionId":"019d78f7-7e7c-7990-b701-30df96ffb842"}}
+{"id":2,"jsonrpc":"2.0","method":"session/new","params":{"cwd":"/__conduit_protocol_cwd__","mcpServers":[]}}
+{"id":3,"jsonrpc":"2.0","method":"session/prompt","params":{"prompt":[{"text":"Reply with exactly fixture-ready.","type":"text"}],"sessionId":"protocol-codex-session-1"}}
