@@ -1,18 +1,16 @@
 import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
 import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
-import {
-  CONSUMER_COMMANDS,
-  PROVIDERS,
-  createSessionClient,
-} from "@conduit/session-client";
+import { createSessionClient } from "@conduit/session-client";
+import { PROVIDERS } from "@conduit/session-model";
 
 const sessionClient = createSessionClient();
+const supportedSessionClientMethods = ["getSessionGroups"] as const;
 
 interface FrontendBootstrapPlan {
   appId: "frontend";
   copy: ProofSurfaceCopy;
   lockedPolicy: "official-acp-only";
-  supportedCommands: string[];
+  supportedClientMethods: string[];
   supportedProviders: string[];
 }
 
@@ -21,7 +19,7 @@ export function createFrontendBootstrapPlan(): FrontendBootstrapPlan {
     appId: "frontend",
     copy: createProofSurfaceCopy("frontend"),
     lockedPolicy: sessionClient.policy,
-    supportedCommands: [...CONSUMER_COMMANDS],
+    supportedClientMethods: [...supportedSessionClientMethods],
     supportedProviders: [...PROVIDERS],
   };
 }

@@ -5,26 +5,17 @@ import {
 import type {
   ConsumerCommand,
   ConsumerResponse,
-  RuntimeEvent,
   ServerFrame,
 } from "@conduit/session-contracts";
 import { SessionGroupsViewSchema } from "@conduit/session-model";
 import type {
-  ProviderId,
   SessionGroupsQuery,
   SessionGroupsView,
 } from "@conduit/session-model";
 
 interface SessionClientPort {
   readonly policy: "official-acp-only";
-  dispatch(command: ConsumerCommand): Promise<ConsumerResponse>;
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
-  initialize(provider: ProviderId): Promise<ConsumerResponse>;
-  subscribe(
-    provider: ProviderId,
-    handler: (event: RuntimeEvent) => void,
-    afterSequence?: number | null,
-  ): Promise<() => void>;
 }
 
 interface SessionClientOptions {
@@ -61,7 +52,6 @@ function parseServerFrame(text: string): ServerFrame | null {
 
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly eventHandlers = new Set<(event: RuntimeEvent) => void>();
   private readonly options: SessionClientOptions;
   private readonly pending = new Map<string, PendingResponse>();
   private connecting: Promise<WebSocket> | null = null;
@@ -71,7 +61,7 @@ class WebSocketSessionClient implements SessionClientPort {
     this.options = options;
   }
 
-  public async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
+  private async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
     const socket = await this.openSocket();
     const response = this.trackResponse(command.id);
     socket.send(
@@ -97,33 +87,6 @@ class WebSocketSessionClient implements SessionClientPort {
       );
     }
     return SessionGroupsViewSchema.parse(response.result);
-  }
-
-  public async initialize(provider: ProviderId): Promise<ConsumerResponse> {
-    const response = await this.dispatch(
-      createConsumerCommand("initialize", provider),
-    );
-    return response;
-  }
-
-  public async subscribe(
-    provider: ProviderId,
-    handler: (event: RuntimeEvent) => void,
-    afterSequence: number | null = null,
-  ): Promise<() => void> {
-    this.eventHandlers.add(handler);
-    const response = await this.dispatch(
-      createConsumerCommand("events/subscribe", provider, {
-        after_sequence: afterSequence,
-      }),
-    );
-    if (!response.ok) {
-      this.eventHandlers.delete(handler);
-      throw new Error(response.error?.message ?? "event subscription failed");
-    }
-    return () => {
-      this.eventHandlers.delete(handler);
-    };
   }
 
   private async openSocket(): Promise<WebSocket> {
@@ -189,10 +152,6 @@ class WebSocketSessionClient implements SessionClientPort {
     if (frame.type === "response") {
       this.pending.get(frame.id)?.resolve(frame.response);
       this.pending.delete(frame.id);
-      return;
-    }
-    for (const handler of this.eventHandlers) {
-      handler(frame.event);
     }
   }
 
@@ -216,48 +175,11 @@ function createSessionClient(
   return new WebSocketSessionClient(options);
 }
 
-export {
-  CONDUIT_COMMANDS,
-  CONDUIT_TRANSPORT_VERSION,
-  CONSUMER_COMMANDS,
-  SESSION_COMMANDS,
-  createConsumerCommand,
-} from "@conduit/session-contracts";
-export {
-  PROVIDER_CATALOG,
-  PROVIDERS,
-  createLiveSessionIdentity,
-  getProviderDescriptor,
-} from "@conduit/session-model";
-export { WebSocketSessionClient, createSessionClient };
+export { createSessionClient };
 
 export type {
-  ClientCommandFrame,
-  ConduitCommandName,
-  ConsumerCommand,
-  ConsumerCommandName,
-  ConsumerError,
-  ConsumerResponse,
-  RuntimeEvent,
-  RuntimeEventKind,
-  ServerEventFrame,
-  ServerFrame,
-  ServerResponseFrame,
-  SessionCommandName,
-} from "@conduit/session-contracts";
-export type {
-  ConnectionState,
-  LiveSessionIdentity,
-  LiveSessionSnapshot,
-  PromptLifecycleSnapshot,
-  PromptLifecycleState,
-  ProviderDescriptor,
   ProviderId,
-  ProviderSnapshot,
-  RawWireEvent,
-  SessionGroup,
   SessionGroupsQuery,
   SessionGroupsView,
-  SessionRow,
 } from "@conduit/session-model";
 export type { SessionClientOptions, SessionClientPort };
