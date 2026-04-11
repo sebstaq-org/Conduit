@@ -56,6 +56,7 @@ interface PromptLifecycleSnapshot {
   stopReason: string | null;
   rawUpdateCount: number;
   agentTextChunks: string[];
+  updates: TranscriptUpdateSnapshot[];
 }
 
 interface TranscriptUpdateSnapshot {

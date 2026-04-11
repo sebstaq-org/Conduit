@@ -247,8 +247,8 @@ pub(crate) fn assert_prompt_turn_status(value: &Value, status: &str) -> TestResu
         .iter()
         .filter(|item| item.get("turnId").and_then(Value::as_str).is_some())
         .collect::<Vec<_>>();
-    if prompt_items.len() != 2 {
-        return Err(format!("expected two prompt turn items, got {prompt_items:?}").into());
+    if prompt_items.len() < 2 {
+        return Err(format!("expected prompt turn items, got {prompt_items:?}").into());
     }
     let turn_id = prompt_items[0]
         .get("turnId")

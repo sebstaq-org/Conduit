@@ -332,6 +332,7 @@ impl SdkHostActor {
             stop_reason: None,
             raw_update_count: 0,
             agent_text_chunks: Vec::new(),
+            updates: Vec::new(),
         });
         Ok(())
     }
@@ -354,6 +355,7 @@ impl SdkHostActor {
             stop_reason,
             raw_update_count: updates.raw_update_count,
             agent_text_chunks: updates.agent_text_chunks,
+            updates: updates.updates,
         });
         Ok(())
     }
@@ -425,13 +427,13 @@ impl acp::Client for SdkClient {
         if updates.active_session.as_deref() == Some(&args.session_id.to_string()) {
             updates.raw_update_count += 1;
             let index = updates.raw_update_count.saturating_sub(1);
-            let variant = session_update_variant(&args.update);
             let update = to_value(&args.update).map_err(|error| {
                 acp::Error::internal_error().data(format!(
                     "session update serialization failed for {}: {error}",
                     self.provider
                 ))
             })?;
+            let variant = session_update_variant(&args.update, &update);
             updates.updates.push(TranscriptUpdateSnapshot {
                 index,
                 variant,
@@ -589,7 +591,7 @@ fn take_session_updates(
     })
 }
 
-fn session_update_variant(update: &acp::SessionUpdate) -> String {
+fn session_update_variant(update: &acp::SessionUpdate, update_value: &Value) -> String {
     let variant = match update {
         acp::SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
         acp::SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
@@ -601,7 +603,10 @@ fn session_update_variant(update: &acp::SessionUpdate) -> String {
         acp::SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
         acp::SessionUpdate::ConfigOptionUpdate(_) => "config_option_update",
         acp::SessionUpdate::SessionInfoUpdate(_) => "session_info_update",
-        _ => "unknown_session_update",
+        _ => update_value
+            .get("sessionUpdate")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown_session_update"),
     };
     variant.to_owned()
 }

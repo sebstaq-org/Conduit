@@ -85,6 +85,31 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
     items
 }
 
+/// Projects live prompt-turn updates into UI transcript items.
+pub(crate) fn project_prompt_turn_items(
+    turn_id: &str,
+    updates: &[TranscriptUpdateSnapshot],
+    status: TranscriptItemStatus,
+) -> Vec<TranscriptItem> {
+    let mut updates = updates.to_vec();
+    updates.sort_by_key(|update| update.index);
+    let mut items = Vec::new();
+    for update in updates {
+        match text_role(&update) {
+            Some((role, text)) => {
+                append_prompt_text_item(&mut items, turn_id, role, text, &update, status);
+            }
+            None => items.push(TranscriptItem::Event {
+                id: format!("{turn_id}-update-{}", update.index),
+                variant: update.variant.clone(),
+                title: event_title(&update),
+                default_collapsed: true,
+            }),
+        }
+    }
+    items
+}
+
 fn append_text_item(
     items: &mut Vec<TranscriptItem>,
     index: usize,
@@ -108,6 +133,40 @@ fn append_text_item(
         id: format!("transcript-update-{index}"),
         turn_id: None,
         status: None,
+        role,
+        text,
+        source_variants: vec![update.variant.clone()],
+    });
+}
+
+fn append_prompt_text_item(
+    items: &mut Vec<TranscriptItem>,
+    turn_id: &str,
+    role: MessageRole,
+    text: String,
+    update: &TranscriptUpdateSnapshot,
+    status: TranscriptItemStatus,
+) {
+    if let Some(TranscriptItem::Message {
+        role: existing_role,
+        text: existing_text,
+        source_variants,
+        ..
+    }) = items.last_mut()
+        && *existing_role == role
+    {
+        existing_text.push_str(&text);
+        source_variants.push(update.variant.clone());
+        return;
+    }
+    let status = match role {
+        MessageRole::User => TranscriptItemStatus::Complete,
+        MessageRole::Agent => status,
+    };
+    items.push(TranscriptItem::Message {
+        id: format!("{turn_id}-update-{}", update.index),
+        turn_id: Some(turn_id.to_owned()),
+        status: Some(status),
         role,
         text,
         source_variants: vec![update.variant.clone()],

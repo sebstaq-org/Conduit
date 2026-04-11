@@ -35,6 +35,7 @@ pub(crate) struct FakeState {
     pub(crate) session_load_requests: Vec<(ProviderId, String)>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
     pub(crate) prompt_agent_text: HashMap<(ProviderId, String), Vec<String>>,
+    pub(crate) prompt_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
     pub(crate) prompt_errors: HashMap<(ProviderId, String), String>,
     pub(crate) prompt_lifecycle_missing: HashSet<(ProviderId, String)>,
     pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
@@ -203,6 +204,27 @@ impl ProviderPort for FakeProvider {
             .get(&(self.provider, session_id.clone()))
             .cloned()
             .unwrap_or_else(|| vec![prompt.clone()]);
+        let updates = state
+            .prompt_updates
+            .get(&(self.provider, session_id.clone()))
+            .cloned()
+            .unwrap_or_else(|| {
+                agent_text_chunks
+                    .iter()
+                    .enumerate()
+                    .map(|(index, text)| TranscriptUpdateSnapshot {
+                        index,
+                        variant: "agent_message_chunk".to_owned(),
+                        update: json!({
+                            "sessionUpdate": "agent_message_chunk",
+                            "content": {
+                                "type": "text",
+                                "text": text
+                            }
+                        }),
+                    })
+                    .collect()
+            });
         let prompt_state = if stop_reason == "cancelled" {
             PromptLifecycleState::Cancelled
         } else {
@@ -219,8 +241,9 @@ impl ProviderPort for FakeProvider {
                 },
                 state: prompt_state,
                 stop_reason: Some(stop_reason.clone()),
-                raw_update_count: agent_text_chunks.len(),
+                raw_update_count: updates.len(),
                 agent_text_chunks,
+                updates,
             });
         }
         Ok(json!({

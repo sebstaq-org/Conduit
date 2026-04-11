@@ -21,7 +21,7 @@ use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use thiserror::Error;
-use transcript::project_items;
+use transcript::{project_items, project_prompt_turn_items};
 
 mod transcript;
 
@@ -207,11 +207,11 @@ impl LocalStore {
     ///
     /// Returns an error when the open session id is unknown or persistence
     /// fails.
-    pub fn append_prompt_turn(
+    pub fn append_prompt_turn_updates(
         &mut self,
         open_session_id: &str,
         prompt: &str,
-        agent_text_chunks: &[String],
+        updates: &[TranscriptUpdateSnapshot],
         status: TranscriptItemStatus,
     ) -> Result<TimelineMutation> {
         let existing = self.session_revision("session/prompt", open_session_id)?;
@@ -225,20 +225,25 @@ impl LocalStore {
             text: prompt.to_owned(),
             source_variants: vec!["session_prompt".to_owned()],
         }];
-        let agent_text = agent_text_chunks.concat();
-        if !agent_text.is_empty() || status != TranscriptItemStatus::Complete {
-            let source_variant = if agent_text.is_empty() {
-                prompt_status_source_variant(status)
-            } else {
-                "agent_message_chunk"
-            };
+        let prompt_update_items = project_prompt_turn_items(&turn_id, updates, status);
+        let has_agent_message = prompt_update_items.iter().any(|item| {
+            matches!(
+                item,
+                TranscriptItem::Message {
+                    role: MessageRole::Agent,
+                    ..
+                }
+            )
+        });
+        items.extend(prompt_update_items);
+        if !has_agent_message && status != TranscriptItemStatus::Complete {
             items.push(TranscriptItem::Message {
-                id: format!("{turn_id}-agent"),
+                id: format!("{turn_id}-terminal"),
                 turn_id: Some(turn_id),
                 status: Some(status),
                 role: MessageRole::Agent,
-                text: agent_text,
-                source_variants: vec![source_variant.to_owned()],
+                text: String::new(),
+                source_variants: vec![prompt_status_source_variant(status).to_owned()],
             });
         }
         self.append_items(open_session_id, revision, &items)?;

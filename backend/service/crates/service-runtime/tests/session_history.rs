@@ -3,6 +3,7 @@
 mod session_history_support;
 mod support;
 
+use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use app_api as _;
 use serde as _;
@@ -213,6 +214,61 @@ fn session_prompt_open_session_appends_to_timeline_and_emits_revision() -> TestR
         return Ok(());
     }
     Err(format!("prompt/history caused unexpected session/load calls: {requests:?}").into())
+}
+
+#[test]
+fn session_prompt_projects_ordered_session_updates_and_extension_events() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_updates
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            vec![
+                transcript_update(0, "agent_message_chunk", "left "),
+                TranscriptUpdateSnapshot {
+                    index: 1,
+                    variant: "usage_update".to_owned(),
+                    update: json!({
+                        "sessionUpdate": "usage_update",
+                        "used": 12,
+                        "size": 100
+                    }),
+                },
+                transcript_update(2, "agent_message_chunk", "right"),
+            ],
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+
+    let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "user prompt");
+
+    assert_ok(&prompt)?;
+    let events = runtime.drain_events();
+    ensure_event(&events, RuntimeEventKind::PromptUpdateObserved)?;
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent_message_chunk", Some("loaded")),
+            ("message", "session_prompt", Some("user prompt")),
+            ("message", "agent_message_chunk", Some("left ")),
+            ("event", "usage_update", None),
+            ("message", "agent_message_chunk", Some("right")),
+        ],
+    )?;
+    assert_prompt_turn_status(&latest.result, "complete")
 }
 
 #[test]

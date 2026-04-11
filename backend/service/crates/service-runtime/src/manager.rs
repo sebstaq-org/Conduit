@@ -339,12 +339,20 @@ where
                 return Err(error);
             }
         };
-        self.event_buffer.emit(
-            provider,
-            RuntimeEventKind::PromptUpdateObserved,
-            Some(target.session_id.clone()),
-            json!({ "source": "provider_response" }),
-        );
+        if let Some(lifecycle) = prompt_lifecycle(&snapshot, &target.session_id) {
+            for update in &lifecycle.updates {
+                self.event_buffer.emit(
+                    provider,
+                    RuntimeEventKind::PromptUpdateObserved,
+                    Some(target.session_id.clone()),
+                    json!({
+                        "update_index": update.index,
+                        "session_update": update.variant,
+                        "update": update.update
+                    }),
+                );
+            }
+        }
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::PromptCompleted,
@@ -395,11 +403,11 @@ where
             return Ok(());
         };
         let lifecycle = prompt_lifecycle(snapshot, &target.session_id);
-        let mutation = self.local_store.append_prompt_turn(
+        let mutation = self.local_store.append_prompt_turn_updates(
             open_session_id,
             prompt,
             lifecycle
-                .map(|value| value.agent_text_chunks.as_slice())
+                .map(|value| value.updates.as_slice())
                 .unwrap_or_default(),
             prompt_status(lifecycle),
         )?;
@@ -424,7 +432,7 @@ where
         let Some(open_session_id) = target.open_session_id.as_deref() else {
             return Ok(());
         };
-        let mutation = self.local_store.append_prompt_turn(
+        let mutation = self.local_store.append_prompt_turn_updates(
             open_session_id,
             prompt,
             &[],

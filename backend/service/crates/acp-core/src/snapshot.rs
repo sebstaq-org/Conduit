@@ -64,10 +64,13 @@ pub struct PromptLifecycleSnapshot {
     /// Agent-authored text chunks observed through official SDK notifications.
     #[serde(default)]
     pub agent_text_chunks: Vec<String>,
+    /// Ordered raw ACP `session/update` notifications observed during the turn.
+    #[serde(default)]
+    pub updates: Vec<TranscriptUpdateSnapshot>,
 }
 
 /// One replayed `session/update` captured during `session/load`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TranscriptUpdateSnapshot {
     /// Zero-based replay order within the loaded transcript.
     pub index: usize,
