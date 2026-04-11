@@ -102,9 +102,13 @@ type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
 
 type TranscriptMessageRole = "user" | "agent";
 
+type TranscriptItemStatus = "complete" | "streaming" | "cancelled" | "failed";
+
 interface TranscriptMessageItem {
   kind: "message";
   id: string;
+  turnId?: string;
+  status?: TranscriptItemStatus;
   role: TranscriptMessageRole;
   text: string;
   sourceVariants: string[];
@@ -132,8 +136,14 @@ interface SessionHistoryRequest {
   limit?: number;
 }
 
+interface SessionPromptRequest {
+  openSessionId: string;
+  prompt: string;
+}
+
 interface SessionHistoryWindow {
   openSessionId: string;
+  revision: number;
   items: TranscriptItem[];
   nextCursor: string | null;
 }
@@ -203,8 +213,10 @@ export type {
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
+  SessionPromptRequest,
   TranscriptEventItem,
   TranscriptItem,
+  TranscriptItemStatus,
   TranscriptMessageItem,
   TranscriptMessageRole,
   TranscriptUpdateSnapshot,

@@ -14,14 +14,18 @@
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use thiserror::Error;
+use transcript::project_items;
+
+mod transcript;
+
+pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
 const SCHEMA_VERSION: i64 = 1;
 const DEFAULT_HISTORY_LIMIT: usize = 40;
@@ -97,52 +101,21 @@ pub struct LocalStore {
 pub struct SessionHistoryWindow {
     /// Opaque Conduit id for the opened session.
     pub open_session_id: String,
+    /// Current timeline revision for this opened session.
+    pub revision: i64,
     /// Window of transcript items in display order.
     pub items: Vec<TranscriptItem>,
     /// Cursor for the next older page, when one exists.
     pub next_cursor: Option<String>,
 }
 
-/// One projected transcript item for UI consumption.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "snake_case",
-    rename_all_fields = "camelCase"
-)]
-pub enum TranscriptItem {
-    /// User or agent text assembled from ACP text chunk updates.
-    Message {
-        /// Stable item id within the loaded transcript.
-        id: String,
-        /// Message author role.
-        role: MessageRole,
-        /// Text content.
-        text: String,
-        /// ACP update variants that contributed to this item.
-        source_variants: Vec<String>,
-    },
-    /// Non-message ACP update represented as a collapsed event.
-    Event {
-        /// Stable item id within the loaded transcript.
-        id: String,
-        /// Official ACP update variant.
-        variant: String,
-        /// Human-readable event title.
-        title: String,
-        /// Whether UI should collapse this event by default.
-        default_collapsed: bool,
-    },
-}
-
-/// Author role for projected transcript messages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageRole {
-    /// User-authored text.
-    User,
-    /// Agent-authored text.
-    Agent,
+/// Result of mutating a session timeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineMutation {
+    /// Opaque Conduit id for the opened session.
+    pub open_session_id: String,
+    /// New timeline revision after the mutation.
+    pub revision: i64,
 }
 
 struct ParsedCursor {
@@ -228,6 +201,48 @@ impl LocalStore {
         )
     }
 
+    /// Appends one completed prompt turn to an opened session timeline.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the open session id is unknown or persistence
+    /// fails.
+    pub fn append_prompt_turn(
+        &mut self,
+        open_session_id: &str,
+        prompt: &str,
+        agent_text_chunks: &[String],
+        status: TranscriptItemStatus,
+    ) -> Result<TimelineMutation> {
+        let existing = self.session_revision("session/prompt", open_session_id)?;
+        let revision = existing + 1;
+        let turn_id = format!("turn-{revision}");
+        let mut items = vec![TranscriptItem::Message {
+            id: format!("{turn_id}-user"),
+            turn_id: Some(turn_id.clone()),
+            status: Some(TranscriptItemStatus::Complete),
+            role: MessageRole::User,
+            text: prompt.to_owned(),
+            source_variants: vec!["session_prompt".to_owned()],
+        }];
+        let agent_text = agent_text_chunks.concat();
+        if !agent_text.is_empty() || status != TranscriptItemStatus::Complete {
+            items.push(TranscriptItem::Message {
+                id: format!("{turn_id}-agent"),
+                turn_id: Some(turn_id),
+                status: Some(status),
+                role: MessageRole::Agent,
+                text: agent_text,
+                source_variants: vec!["agent_message_chunk".to_owned()],
+            });
+        }
+        self.append_items(open_session_id, revision, &items)?;
+        Ok(TimelineMutation {
+            open_session_id: open_session_id.to_owned(),
+            revision,
+        })
+    }
+
     /// Returns the provider that owns an open session id.
     ///
     /// # Errors
@@ -247,6 +262,44 @@ impl LocalStore {
                 ProviderId::from_str(&value).map_err(|message| Error::Invariant { message })
             })
             .transpose()
+    }
+
+    /// Returns the local store identity for an opened session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when stored provider data cannot be parsed.
+    pub fn open_session_key(
+        &self,
+        command: &'static str,
+        open_session_id: &str,
+    ) -> Result<OpenSessionKey> {
+        let key = self
+            .connection
+            .query_row(
+                "SELECT provider, session_id, cwd FROM open_sessions WHERE open_session_id = ?1",
+                params![open_session_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or(Error::InvalidParameter {
+                command,
+                parameter: "openSessionId",
+                message: "unknown open session",
+            })?;
+        let provider =
+            ProviderId::from_str(&key.0).map_err(|message| Error::Invariant { message })?;
+        Ok(OpenSessionKey {
+            provider,
+            session_id: key.1,
+            cwd: key.2,
+        })
     }
 
     fn bootstrap(&self) -> Result<()> {
@@ -324,6 +377,27 @@ impl LocalStore {
         Ok(revision)
     }
 
+    fn append_items(
+        &mut self,
+        open_session_id: &str,
+        revision: i64,
+        items: &[TranscriptItem],
+    ) -> Result<()> {
+        let tx = self.connection.transaction()?;
+        tx.execute(
+            "UPDATE open_sessions SET revision = ?2 WHERE open_session_id = ?1",
+            params![open_session_id, revision],
+        )?;
+        let start = tx.query_row(
+            "SELECT COUNT(*) FROM transcript_items WHERE open_session_id = ?1",
+            params![open_session_id],
+            |row| row.get::<_, i64>(0),
+        )?;
+        insert_items_at(&tx, open_session_id, usize_from_i64(start)?, items)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     fn window_at_revision(
         &self,
         scope: WindowScope<'_>,
@@ -351,6 +425,7 @@ impl LocalStore {
         };
         Ok(SessionHistoryWindow {
             open_session_id: scope.open_session_id.to_owned(),
+            revision: scope.revision,
             items,
             next_cursor,
         })
@@ -461,6 +536,15 @@ fn insert_items(
     open_session_id: &str,
     items: &[TranscriptItem],
 ) -> Result<()> {
+    insert_items_at(tx, open_session_id, 0, items)
+}
+
+fn insert_items_at(
+    tx: &Transaction<'_>,
+    open_session_id: &str,
+    start_ordinal: usize,
+    items: &[TranscriptItem],
+) -> Result<()> {
     for (ordinal, item) in items.iter().enumerate() {
         tx.execute(
             "
@@ -472,82 +556,12 @@ fn insert_items(
             ",
             params![
                 open_session_id,
-                i64_from_usize(ordinal)?,
+                i64_from_usize(start_ordinal + ordinal)?,
                 serde_json::to_string(item)?
             ],
         )?;
     }
     Ok(())
-}
-
-fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<TranscriptItem> {
-    let mut updates = updates.to_vec();
-    updates.sort_by_key(|update| update.index);
-    let mut items = Vec::new();
-    for update in updates {
-        match text_role(&update) {
-            Some((role, text)) => append_text_item(&mut items, update.index, role, text, &update),
-            None => items.push(TranscriptItem::Event {
-                id: format!("transcript-update-{}", update.index),
-                variant: update.variant.clone(),
-                title: event_title(&update),
-                default_collapsed: true,
-            }),
-        }
-    }
-    items
-}
-
-fn append_text_item(
-    items: &mut Vec<TranscriptItem>,
-    index: usize,
-    role: MessageRole,
-    text: String,
-    update: &TranscriptUpdateSnapshot,
-) {
-    if let Some(TranscriptItem::Message {
-        role: existing_role,
-        text: existing_text,
-        source_variants,
-        ..
-    }) = items.last_mut()
-        && *existing_role == role
-    {
-        existing_text.push_str(&text);
-        source_variants.push(update.variant.clone());
-        return;
-    }
-    items.push(TranscriptItem::Message {
-        id: format!("transcript-update-{index}"),
-        role,
-        text,
-        source_variants: vec![update.variant.clone()],
-    });
-}
-
-fn text_role(update: &TranscriptUpdateSnapshot) -> Option<(MessageRole, String)> {
-    let role = match update.variant.as_str() {
-        "user_message_chunk" => MessageRole::User,
-        "agent_message_chunk" => MessageRole::Agent,
-        _ => return None,
-    };
-    let text = update
-        .update
-        .get("content")
-        .and_then(|content| content.get("text"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    Some((role, text))
-}
-
-fn event_title(update: &TranscriptUpdateSnapshot) -> String {
-    update
-        .update
-        .get("title")
-        .and_then(Value::as_str)
-        .unwrap_or(update.variant.as_str())
-        .to_owned()
 }
 
 fn normalize_limit(command: &'static str, limit: Option<u64>) -> Result<usize> {
@@ -655,6 +669,10 @@ fn hex_digit(value: u8) -> char {
 
 fn i64_from_usize(value: usize) -> Result<i64> {
     i64::try_from(value).map_err(int_error)
+}
+
+fn usize_from_i64(value: i64) -> Result<usize> {
+    usize::try_from(value).map_err(int_error)
 }
 
 fn int_error(_error: TryFromIntError) -> Error {

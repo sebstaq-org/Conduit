@@ -1,8 +1,9 @@
 //! Test support for `service-runtime` integration tests.
 
 use acp_core::{
-    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
-    TranscriptUpdateSnapshot, WireKind, WireStream,
+    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
+    PromptLifecycleState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
+    WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
@@ -15,11 +16,14 @@ use session_store::LocalStore;
 use std::collections::HashMap;
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);
+
+static NEXT_TEST_DB: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 pub(crate) struct FakeState {
@@ -30,7 +34,10 @@ pub(crate) struct FakeState {
     pub(crate) session_load_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
     pub(crate) session_load_requests: Vec<(ProviderId, String)>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
+    pub(crate) prompt_agent_text: HashMap<(ProviderId, String), Vec<String>>,
+    pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
     loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
+    last_prompt: Option<PromptLifecycleSnapshot>,
     disconnected: bool,
     sessions: usize,
 }
@@ -76,7 +83,11 @@ impl ProviderPort for FakeProvider {
             capabilities: json!({}),
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
-            last_prompt: None,
+            last_prompt: self
+                .state
+                .lock()
+                .map(|state| state.last_prompt.clone())
+                .unwrap_or_default(),
             loaded_transcripts: self
                 .state
                 .lock()
@@ -170,7 +181,40 @@ impl ProviderPort for FakeProvider {
     }
 
     fn session_prompt(&mut self, session_id: String, prompt: String) -> Result<Value> {
-        Ok(json!({ "sessionId": session_id, "prompt": prompt }))
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        let stop_reason = state
+            .prompt_stop_reason
+            .get(&(self.provider, session_id.clone()))
+            .cloned()
+            .unwrap_or_else(|| "end_turn".to_owned());
+        let agent_text_chunks = state
+            .prompt_agent_text
+            .get(&(self.provider, session_id.clone()))
+            .cloned()
+            .unwrap_or_else(|| vec![prompt.clone()]);
+        let prompt_state = if stop_reason == "cancelled" {
+            PromptLifecycleState::Cancelled
+        } else {
+            PromptLifecycleState::Completed
+        };
+        state.last_prompt = Some(PromptLifecycleSnapshot {
+            identity: LiveSessionIdentity {
+                provider: self.provider,
+                acp_session_id: session_id.clone(),
+            },
+            state: prompt_state,
+            stop_reason: Some(stop_reason.clone()),
+            raw_update_count: agent_text_chunks.len(),
+            agent_text_chunks,
+        });
+        Ok(json!({
+            "sessionId": session_id,
+            "prompt": prompt,
+            "stopReason": stop_reason
+        }))
     }
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
@@ -242,9 +286,10 @@ fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
 }
 
 fn test_db_path() -> TestResult<PathBuf> {
+    let sequence = NEXT_TEST_DB.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     Ok(std::env::temp_dir().join(format!(
-        "conduit-service-runtime-{}-{nanos}.sqlite3",
+        "conduit-service-runtime-{}-{sequence}-{nanos}.sqlite3",
         std::process::id()
     )))
 }

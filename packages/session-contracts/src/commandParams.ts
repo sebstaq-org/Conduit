@@ -2,6 +2,7 @@ import type {
   SessionGroupsQuery,
   SessionHistoryRequest,
   SessionOpenRequest,
+  SessionPromptRequest,
 } from "@conduit/session-model";
 
 function isSessionGroupsQuery(value: unknown): value is SessionGroupsQuery {
@@ -30,4 +31,18 @@ function isSessionHistoryRequest(
   );
 }
 
-export { isSessionGroupsQuery, isSessionHistoryRequest, isSessionOpenRequest };
+function isSessionPromptRequest(value: unknown): value is SessionPromptRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "openSessionId" in value &&
+    "prompt" in value
+  );
+}
+
+export {
+  isSessionGroupsQuery,
+  isSessionHistoryRequest,
+  isSessionOpenRequest,
+  isSessionPromptRequest,
+};

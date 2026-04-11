@@ -11,6 +11,7 @@ function isSessionHistoryWindow(value: unknown): value is SessionHistoryWindow {
   return (
     isRecord(value) &&
     typeof value.openSessionId === "string" &&
+    typeof value.revision === "number" &&
     Array.isArray(value.items) &&
     (typeof value.nextCursor === "string" || value.nextCursor === null)
   );
