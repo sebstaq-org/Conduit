@@ -1,25 +1,92 @@
 {
-  "provider": "codex",
-  "connection_state": "ready",
-  "live_sessions": [
-    {
-      "identity": {
-        "provider": "codex",
-        "acp_session_id": "replay-codex-session-1"
-      },
-      "cwd": "/__dynamic_cwd__",
-      "title": null,
-      "observed_via": "new"
-    }
-  ],
-  "last_prompt": {
-    "identity": {
-      "provider": "codex",
-      "acp_session_id": "replay-codex-session-1"
+  "auth_methods": [],
+  "capabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": false
     },
-    "state": "completed",
-    "stop_reason": "end_turn",
-    "raw_update_count": 12,
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "list": {}
+    }
+  },
+  "connection_state": "ready",
+  "discovery": {
+    "auth_hints": [],
+    "initialize_probe": {
+      "elapsed_ms": 0,
+      "payload": {
+        "agentCapabilities": {
+          "loadSession": true,
+          "mcpCapabilities": {
+            "http": true,
+            "sse": false
+          },
+          "promptCapabilities": {
+            "audio": false,
+            "embeddedContext": true,
+            "image": true
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "agentInfo": {
+          "name": "conduit-replay-codex",
+          "title": "Conduit Replay Codex",
+          "version": "/__dynamic_provider_version__"
+        },
+        "authMethods": [],
+        "protocolVersion": 1
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "loadSession": true,
+            "mcpCapabilities": {
+              "http": true,
+              "sse": false
+            },
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "conduit-replay-codex",
+            "title": "Conduit Replay Codex",
+            "version": "/__dynamic_provider_version__"
+          },
+          "authMethods": [],
+          "protocolVersion": 1
+        }
+      },
+      "stderr_lines": [],
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+    },
+    "initialize_viable": true,
+    "launcher": {
+      "args": [],
+      "display": "codex-acp",
+      "executable": "/__dynamic_path__"
+    },
+    "provider": "codex",
+    "resolved_path": "/__dynamic_path__",
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "version": "/__dynamic_provider_version__"
+  },
+  "last_prompt": {
     "agent_text_chunks": [
       "con",
       "duit",
@@ -33,6 +100,25 @@
       "ex",
       " observed",
       "."
-    ]
-  }
+    ],
+    "identity": {
+      "acp_session_id": "replay-codex-session-1",
+      "provider": "codex"
+    },
+    "raw_update_count": 12,
+    "state": "completed",
+    "stop_reason": "end_turn"
+  },
+  "live_sessions": [
+    {
+      "cwd": "/__dynamic_cwd__",
+      "identity": {
+        "acp_session_id": "replay-codex-session-1",
+        "provider": "codex"
+      },
+      "observed_via": "new",
+      "title": null
+    }
+  ],
+  "provider": "codex"
 }

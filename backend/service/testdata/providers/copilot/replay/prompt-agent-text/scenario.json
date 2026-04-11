@@ -4,7 +4,7 @@
   "name": "prompt-agent-text",
   "acp_protocol_version": 1,
   "sdk_dependency": "agent-client-protocol =0.10.4",
-  "capture_source": "/srv/devops/repos/conduit-artifacts/manual/phase-2/replay-fixtures-first-pass/copilot-live-observation",
+  "capture_source": "capture://phase-2/replay-fixtures-first-pass/copilot-live-observation",
   "redaction_status": "normalized-no-secrets",
   "session": {
     "session_id": "replay-copilot-session-1",

@@ -1,0 +1,319 @@
+{
+  "schema": "conduit.acp_replay.scenario.v1",
+  "provider": "copilot",
+  "name": "session-cancel",
+  "acp_protocol_version": 1,
+  "sdk_dependency": "agent-client-protocol =0.10.4",
+  "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/copilot",
+  "redaction_status": "curated-public-repo-safe-structural-scrub",
+  "session": {
+    "session_id": "replay-copilot-session-cancel-session-1",
+    "cwd": "/__conduit_replay_cwd__"
+  },
+  "initialize": {
+    "agent_info": {
+      "name": "Copilot",
+      "title": "Copilot",
+      "version": "1.0.21"
+    },
+    "capabilities": {
+      "loadSession": true,
+      "mcpCapabilities": {
+        "http": false,
+        "sse": false
+      },
+      "promptCapabilities": {
+        "audio": false,
+        "embeddedContext": true,
+        "image": true
+      },
+      "sessionCapabilities": {
+        "list": {}
+      }
+    },
+    "auth_methods": [
+      {
+        "_meta": {
+          "terminal-auth": {
+            "args": ["login"],
+            "command": "/__conduit_launcher_path__",
+            "label": "Copilot Login"
+          }
+        },
+        "description": "Run `copilot login` in the terminal",
+        "id": "copilot-login",
+        "name": "Log in with Copilot CLI"
+      }
+    ]
+  },
+  "replay": {
+    "session_new": {
+      "result": {
+        "configOptions": [
+          {
+            "category": "mode",
+            "currentValue": "https://agentclientprotocol.com/protocol/session-modes#agent",
+            "id": "mode",
+            "name": "Mode",
+            "options": [
+              {
+                "name": "Agent",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#agent"
+              },
+              {
+                "name": "Plan",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#plan"
+              },
+              {
+                "name": "Autopilot",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "category": "model",
+            "currentValue": "gpt-5-mini",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "name": "GPT-5 mini",
+                "value": "gpt-5-mini"
+              },
+              {
+                "name": "GPT-4.1",
+                "value": "gpt-4.1"
+              },
+              {
+                "name": "Claude Haiku 4.5",
+                "value": "claude-haiku-4.5"
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "category": "thought_level",
+            "currentValue": "medium",
+            "id": "reasoning_effort",
+            "name": "Reasoning Effort",
+            "options": [
+              {
+                "name": "low",
+                "value": "low"
+              },
+              {
+                "name": "medium",
+                "value": "medium"
+              },
+              {
+                "name": "high",
+                "value": "high"
+              }
+            ],
+            "type": "select"
+          }
+        ],
+        "modes": {
+          "availableModes": [
+            {
+              "description": "Default agent mode for conversational interactions",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#agent",
+              "name": "Agent"
+            },
+            {
+              "description": "Plan mode for creating and executing multi-step plans",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#plan",
+              "name": "Plan"
+            },
+            {
+              "description": "Autonomous mode that runs until task completion without user interaction (experimental)",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#autopilot",
+              "name": "Autopilot"
+            }
+          ],
+          "currentModeId": "https://agentclientprotocol.com/protocol/session-modes#agent"
+        },
+        "sessionId": "replay-copilot-session-cancel-session-1"
+      }
+    },
+    "session_list": {
+      "result": {
+        "nextCursor": "/__private_sessions_cursor_omitted__",
+        "sessions": [
+          {
+            "cwd": "/__private_cwd_omitted__",
+            "sessionId": "replay-copilot-historical-session-1",
+            "title": "/__private_title_omitted__",
+            "updatedAt": "/__dynamic_updated_at__"
+          }
+        ]
+      }
+    },
+    "session_load": {
+      "result": {
+        "configOptions": [
+          {
+            "category": "mode",
+            "currentValue": "https://agentclientprotocol.com/protocol/session-modes#agent",
+            "id": "mode",
+            "name": "Mode",
+            "options": [
+              {
+                "name": "Agent",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#agent"
+              },
+              {
+                "name": "Plan",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#plan"
+              },
+              {
+                "name": "Autopilot",
+                "value": "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "category": "model",
+            "currentValue": "gpt-5-mini",
+            "id": "model",
+            "name": "Model",
+            "options": [
+              {
+                "name": "GPT-5 mini",
+                "value": "gpt-5-mini"
+              },
+              {
+                "name": "GPT-4.1",
+                "value": "gpt-4.1"
+              },
+              {
+                "name": "Claude Haiku 4.5",
+                "value": "claude-haiku-4.5"
+              }
+            ],
+            "type": "select"
+          },
+          {
+            "category": "thought_level",
+            "currentValue": "medium",
+            "id": "reasoning_effort",
+            "name": "Reasoning Effort",
+            "options": [
+              {
+                "name": "low",
+                "value": "low"
+              },
+              {
+                "name": "medium",
+                "value": "medium"
+              },
+              {
+                "name": "high",
+                "value": "high"
+              }
+            ],
+            "type": "select"
+          }
+        ],
+        "modes": {
+          "availableModes": [
+            {
+              "description": "Default agent mode for conversational interactions",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#agent",
+              "name": "Agent"
+            },
+            {
+              "description": "Plan mode for creating and executing multi-step plans",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#plan",
+              "name": "Plan"
+            },
+            {
+              "description": "Autonomous mode that runs until task completion without user interaction (experimental)",
+              "id": "https://agentclientprotocol.com/protocol/session-modes#autopilot",
+              "name": "Autopilot"
+            }
+          ],
+          "currentModeId": "https://agentclientprotocol.com/protocol/session-modes#agent"
+        }
+      }
+    },
+    "missing_session_load": {
+      "session_id": "replay-copilot-missing-session-1",
+      "jsonrpc_error": {
+        "code": -32000,
+        "message": "official ACP SDK error from copilot during session/load"
+      },
+      "expected_consumer_error": {
+        "code": "provider_error",
+        "message": "official ACP SDK error from copilot during session/load"
+      }
+    },
+    "session_cancel": {
+      "result": {}
+    }
+  },
+  "consumer_sequence": [
+    {
+      "command": "initialize",
+      "params": {},
+      "expect_ok": true,
+      "assert_snapshot_state": "ready"
+    },
+    {
+      "command": "session/new",
+      "params": {
+        "cwd": "/__conduit_replay_cwd__"
+      },
+      "expect_ok": true
+    },
+    {
+      "command": "session/cancel",
+      "params": {
+        "session_id": "replay-copilot-session-cancel-session-1"
+      },
+      "expect_ok": true
+    }
+  ],
+  "expected_event_kinds": [
+    "provider_connected",
+    "session_observed",
+    "cancel_sent"
+  ],
+  "observation": {
+    "source_scenario": "session-cancel",
+    "command_record_indexes": [14, 15, 16],
+    "snapshots_documented_in": "frames.jsonl response_frame.response.snapshot entries when present",
+    "event_backlog_documented_in": "expected-events.jsonl and events/subscribe replay assertion",
+    "provider_caveats": [
+      "Official ACP SDK owns raw JSON-RPC transport; Conduit observes consumer command/response/event frames at the WebSocket product boundary, not private SDK transport frames.",
+      "Curated replay preserves the scenario-specific response/event semantics while replacing local provider state with scrubbed ids, cwds, and titles."
+    ],
+    "dynamic_ignored_fields": [
+      "frame ids",
+      "command ids",
+      "timestamps",
+      "event sequence values",
+      "live ACP session ids",
+      "cwd",
+      "launcher resolved path",
+      "initialize elapsed diagnostics",
+      "provider version",
+      "prompt text chunks when provider tokenization differs"
+    ],
+    "raw_capture_safe_to_promote": false,
+    "curated_replay_safe_to_promote": true,
+    "scrubbed_fields": [
+      "cwd",
+      "live ACP session ids",
+      "frame ids",
+      "command ids",
+      "timestamps",
+      "launcher paths",
+      "private historical session titles/cwds/session ids",
+      "provider-version paths"
+    ],
+    "blockers": []
+  }
+}

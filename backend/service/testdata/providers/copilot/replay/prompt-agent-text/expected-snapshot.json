@@ -1,25 +1,92 @@
 {
-  "provider": "copilot",
-  "connection_state": "ready",
-  "live_sessions": [
-    {
-      "identity": {
-        "provider": "copilot",
-        "acp_session_id": "replay-copilot-session-1"
-      },
-      "cwd": "/__dynamic_cwd__",
-      "title": null,
-      "observed_via": "new"
-    }
-  ],
-  "last_prompt": {
-    "identity": {
-      "provider": "copilot",
-      "acp_session_id": "replay-copilot-session-1"
+  "auth_methods": [],
+  "capabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": false,
+      "sse": false
     },
-    "state": "completed",
-    "stop_reason": "end_turn",
-    "raw_update_count": 12,
+    "promptCapabilities": {
+      "audio": false,
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "list": {}
+    }
+  },
+  "connection_state": "ready",
+  "discovery": {
+    "auth_hints": [],
+    "initialize_probe": {
+      "elapsed_ms": 0,
+      "payload": {
+        "agentCapabilities": {
+          "loadSession": true,
+          "mcpCapabilities": {
+            "http": false,
+            "sse": false
+          },
+          "promptCapabilities": {
+            "audio": false,
+            "embeddedContext": true,
+            "image": true
+          },
+          "sessionCapabilities": {
+            "list": {}
+          }
+        },
+        "agentInfo": {
+          "name": "conduit-replay-copilot",
+          "title": "Conduit Replay Copilot",
+          "version": "/__dynamic_provider_version__"
+        },
+        "authMethods": [],
+        "protocolVersion": 1
+      },
+      "response": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "agentCapabilities": {
+            "loadSession": true,
+            "mcpCapabilities": {
+              "http": false,
+              "sse": false
+            },
+            "promptCapabilities": {
+              "audio": false,
+              "embeddedContext": true,
+              "image": true
+            },
+            "sessionCapabilities": {
+              "list": {}
+            }
+          },
+          "agentInfo": {
+            "name": "conduit-replay-copilot",
+            "title": "Conduit Replay Copilot",
+            "version": "/__dynamic_provider_version__"
+          },
+          "authMethods": [],
+          "protocolVersion": 1
+        }
+      },
+      "stderr_lines": [],
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
+    },
+    "initialize_viable": true,
+    "launcher": {
+      "args": ["--acp", "--allow-all", "--no-color", "--no-auto-update"],
+      "display": "copilot --acp --allow-all --no-color --no-auto-update",
+      "executable": "/__dynamic_path__"
+    },
+    "provider": "copilot",
+    "resolved_path": "/__dynamic_path__",
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
+    "version": "/__dynamic_provider_version__"
+  },
+  "last_prompt": {
     "agent_text_chunks": [
       "con",
       "duit",
@@ -33,6 +100,25 @@
       "ilot",
       " observed",
       "."
-    ]
-  }
+    ],
+    "identity": {
+      "acp_session_id": "replay-copilot-session-1",
+      "provider": "copilot"
+    },
+    "raw_update_count": 12,
+    "state": "completed",
+    "stop_reason": "end_turn"
+  },
+  "live_sessions": [
+    {
+      "cwd": "/__dynamic_cwd__",
+      "identity": {
+        "acp_session_id": "replay-copilot-session-1",
+        "provider": "copilot"
+      },
+      "observed_via": "new",
+      "title": null
+    }
+  ],
+  "provider": "copilot"
 }

@@ -5,7 +5,7 @@
     {
       "name": "prompt-agent-text",
       "path": "prompt-agent-text/scenario.json",
-      "capture_source": "/srv/devops/repos/conduit-artifacts/manual/phase-2/replay-fixtures-first-pass/codex-live-observation",
+      "capture_source": "capture://phase-2/replay-fixtures-first-pass/codex-live-observation",
       "redaction_status": "normalized-no-secrets",
       "stable_assertions": [
         "frame_correlation",
@@ -14,6 +14,66 @@
         "agent_text_chunks",
         "prompt_stop_reason",
         "events_subscribe_cursor_backlog"
+      ]
+    },
+    {
+      "name": "session-list-after-new",
+      "path": "session-list-after-new/scenario.json",
+      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+      "redaction_status": "curated-public-repo-safe-structural-scrub",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "events_subscribe_cursor_backlog",
+        "session-list-after-new"
+      ]
+    },
+    {
+      "name": "session-load-known-session",
+      "path": "session-load-known-session/scenario.json",
+      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+      "redaction_status": "curated-public-repo-safe-structural-scrub",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "events_subscribe_cursor_backlog",
+        "session-load-known-session"
+      ]
+    },
+    {
+      "name": "session-cancel",
+      "path": "session-cancel/scenario.json",
+      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+      "redaction_status": "curated-public-repo-safe-structural-scrub",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "events_subscribe_cursor_backlog",
+        "session-cancel"
+      ]
+    },
+    {
+      "name": "reconnect-after-disconnect",
+      "path": "reconnect-after-disconnect/scenario.json",
+      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+      "redaction_status": "curated-public-repo-safe-structural-scrub",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "events_subscribe_cursor_backlog",
+        "reconnect-after-disconnect"
+      ]
+    },
+    {
+      "name": "provider-error-load-missing-session",
+      "path": "provider-error-load-missing-session/scenario.json",
+      "capture_source": "capture://phase-2/live-replay-target-scenarios-20260411T114117Z/codex",
+      "redaction_status": "curated-public-repo-safe-structural-scrub",
+      "stable_assertions": [
+        "frame_correlation",
+        "ready_snapshot",
+        "events_subscribe_cursor_backlog",
+        "provider-error-load-missing-session"
       ]
     }
   ]

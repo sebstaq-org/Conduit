@@ -1,0 +1,2 @@
+{"kind":"provider_connected","provider":"copilot","session_id":null,"payload":{}}
+{"kind":"session_observed","provider":"copilot","session_id":"replay-copilot-session-load-known-session-session-1","payload":{"observed_via":"session/load"}}
