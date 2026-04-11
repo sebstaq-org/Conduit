@@ -160,7 +160,7 @@ async fn handle_client_message(
     if frame.command_name() == "events/subscribe" {
         *live_events = live_events.resubscribe();
         *subscribed = true;
-        return send_backlog(sender, &response.result).await;
+        return send_backlog(sender, &response.result, live_events).await;
     }
     true
 }
@@ -181,18 +181,36 @@ async fn send_response(
 async fn send_backlog(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     result: &serde_json::Value,
+    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
 ) -> bool {
-    let events = result
-        .get("events")
-        .cloned()
-        .and_then(|value| serde_json::from_value::<Vec<service_runtime::RuntimeEvent>>(value).ok())
-        .unwrap_or_default();
+    let events = backlog_events(result);
+    discard_buffered_live_events(live_events);
     for event in events {
         if send_event(sender, event).await.is_err() {
             return false;
         }
     }
     true
+}
+
+fn backlog_events(result: &serde_json::Value) -> Vec<service_runtime::RuntimeEvent> {
+    result
+        .get("events")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<Vec<service_runtime::RuntimeEvent>>(value).ok())
+        .unwrap_or_default()
+}
+
+fn discard_buffered_live_events(
+    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
+) {
+    loop {
+        match live_events.try_recv() {
+            Ok(_) | Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {}
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
+            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
+        }
+    }
 }
 
 async fn send_event(
@@ -205,4 +223,58 @@ async fn send_event(
         .send(Message::Text(text.into()))
         .await
         .map_err(|_error| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{backlog_events, discard_buffered_live_events};
+    use acp_discovery::ProviderId;
+    use serde_json::{Value, json, to_value};
+    use service_runtime::{RuntimeEvent, RuntimeEventKind};
+    use std::error::Error;
+    use tokio::sync::broadcast;
+
+    type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
+
+    #[test]
+    fn backlog_events_deserialize_from_subscribe_result() -> TestResult<()> {
+        let event = runtime_event(1, RuntimeEventKind::ProviderConnected);
+        let result = json!({ "events": [to_value(&event)?] });
+        let events = backlog_events(&result);
+
+        if events != vec![event] {
+            return Err("events/subscribe backlog did not deserialize".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn buffered_live_events_are_discarded_before_backlog_replay() -> TestResult<()> {
+        let (events, mut receiver) = broadcast::channel(8);
+        let stale = runtime_event(1, RuntimeEventKind::ProviderConnected);
+        let fresh = runtime_event(2, RuntimeEventKind::PromptStarted);
+
+        let _subscribers = events.send(stale.clone())?;
+        discard_buffered_live_events(&mut receiver);
+        let _subscribers = events.send(fresh.clone())?;
+
+        let received = receiver.try_recv()?;
+        if received != fresh {
+            return Err("stale event was not discarded before backlog replay".into());
+        }
+        if receiver.try_recv().is_ok() {
+            return Err("expected exactly one live event after stale discard".into());
+        }
+        Ok(())
+    }
+
+    fn runtime_event(sequence: u64, kind: RuntimeEventKind) -> RuntimeEvent {
+        RuntimeEvent {
+            sequence,
+            kind,
+            provider: ProviderId::Codex,
+            session_id: None,
+            payload: Value::Null,
+        }
+    }
 }
