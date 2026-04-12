@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { SessionGroupsViewSchema } from "./src/index.js";
+import {
+  ProjectListViewSchema,
+  ProjectSuggestionsViewSchema,
+  SessionGroupsQuerySchema,
+  SessionGroupsViewSchema,
+} from "./src/index.js";
 
 it("accepts the grouped sessions read model", () => {
   const payload = {
@@ -10,6 +15,7 @@ it("accepts the grouped sessions read model", () => {
       {
         groupId: "cwd:/workspace/conduit",
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [
           {
             provider: "codex",
@@ -33,6 +39,7 @@ it("rejects missing group identity", () => {
     groups: [
       {
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [],
       },
     ],
@@ -50,6 +57,7 @@ it("rejects unknown providers", () => {
       {
         groupId: "cwd:/workspace/conduit",
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [
           {
             provider: "unknown",
@@ -63,4 +71,39 @@ it("rejects unknown providers", () => {
   };
 
   expect(() => SessionGroupsViewSchema.parse(payload)).toThrow();
+});
+
+it("accepts the projects read model", () => {
+  const payload = {
+    projects: [
+      {
+        projectId: "cwd:/workspace/conduit",
+        cwd: "/workspace/conduit",
+        displayName: "conduit",
+      },
+    ],
+  };
+
+  expect(ProjectListViewSchema.parse(payload)).toEqual(payload);
+});
+
+it("accepts the project suggestions read model", () => {
+  const payload = {
+    suggestions: [
+      {
+        suggestionId: "cwd:/workspace/conduit",
+        cwd: "/workspace/conduit",
+      },
+    ],
+  };
+
+  expect(ProjectSuggestionsViewSchema.parse(payload)).toEqual(payload);
+});
+
+it("rejects cwd filters in the session groups query", () => {
+  const payload = {
+    cwdFilters: ["/workspace/conduit"],
+  };
+
+  expect(() => SessionGroupsQuerySchema.parse(payload)).toThrow();
 });

@@ -4,8 +4,8 @@ use crate::{Result, RuntimeError};
 use acp_discovery::ProviderId;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json, to_value};
-use session_store::{SessionIndexEntry, SessionIndexSnapshot};
-use std::collections::HashMap;
+use session_store::{ProjectRow, SessionIndexEntry, SessionIndexSnapshot};
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -15,14 +15,7 @@ const ALL_PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot,
 
 #[derive(Debug, Clone)]
 pub(crate) struct SessionGroupsQuery {
-    cwd_filters: Vec<String>,
     updated_since_epoch: Option<u64>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionGroupsParams {
-    cwd_filters: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +41,7 @@ struct SessionRow {
 pub(crate) struct SessionGroup {
     group_id: String,
     cwd: String,
+    display_name: String,
     sessions: Vec<SessionRow>,
 }
 
@@ -69,23 +63,25 @@ impl SessionGroupsQuery {
                 message: "provider scope is selected by command.provider",
             });
         }
+        if params.get("cwdFilters").is_some() {
+            return Err(RuntimeError::InvalidParameter {
+                command: "sessions/grouped",
+                parameter: "cwdFilters",
+                message: "cwd scope is selected by persisted projects",
+            });
+        }
         let updated_within_days = params.get("updatedWithinDays").cloned();
-        let params: SessionGroupsParams =
-            serde_json::from_value(params.clone()).map_err(invalid_params)?;
         Ok(Self {
-            cwd_filters: params
-                .cwd_filters
-                .unwrap_or_default()
-                .into_iter()
-                .map(|cwd| normalize_cwd(&cwd))
-                .collect(),
             updated_since_epoch: updated_since_epoch(updated_within_days)?,
         })
     }
 
-    pub(crate) fn accepts_entry(&self, session: &SessionIndexEntry) -> bool {
-        (self.cwd_filters.is_empty()
-            || self.cwd_filters.iter().any(|filter| filter == &session.cwd))
+    pub(crate) fn accepts_entry(
+        &self,
+        session: &SessionIndexEntry,
+        project_cwds: &HashSet<&str>,
+    ) -> bool {
+        project_cwds.contains(session.cwd.as_str())
             && self.accepts_updated_at(session.updated_at.as_deref())
     }
 
@@ -147,28 +143,38 @@ pub(crate) fn next_cursor(result: &Value) -> Result<Option<String>> {
 pub(crate) fn grouped_view(
     snapshot: SessionIndexSnapshot,
     query: &SessionGroupsQuery,
+    projects: &[ProjectRow],
     is_refreshing: bool,
 ) -> Result<Value> {
-    let mut groups = HashMap::<String, Vec<SessionRow>>::new();
+    let project_cwds = projects
+        .iter()
+        .map(|project| project.cwd.as_str())
+        .collect::<HashSet<_>>();
+    let mut sessions_by_cwd = HashMap::<String, Vec<SessionRow>>::new();
     for entry in snapshot
         .entries
         .into_iter()
-        .filter(|entry| query.accepts_entry(entry))
+        .filter(|entry| query.accepts_entry(entry, &project_cwds))
     {
-        groups.entry(entry.cwd).or_default().push(SessionRow {
-            provider: entry.provider,
-            session_id: entry.session_id,
-            title: entry.title,
-            updated_at: entry.updated_at,
-        });
+        sessions_by_cwd
+            .entry(entry.cwd)
+            .or_default()
+            .push(SessionRow {
+                provider: entry.provider,
+                session_id: entry.session_id,
+                title: entry.title,
+                updated_at: entry.updated_at,
+            });
     }
-    let mut groups = groups
-        .into_iter()
-        .map(|(cwd, mut sessions)| {
+    let mut groups = projects
+        .iter()
+        .map(|project| {
+            let mut sessions = sessions_by_cwd.remove(&project.cwd).unwrap_or_default();
             sessions.sort_by(compare_rows);
             SessionGroup {
-                group_id: group_id(&cwd),
-                cwd,
+                group_id: project.project_id.clone(),
+                cwd: project.cwd.clone(),
+                display_name: project.display_name.clone(),
                 sessions,
             }
         })
@@ -222,6 +228,7 @@ fn compare_groups(left: &SessionGroup, right: &SessionGroup) -> std::cmp::Orderi
         &group_latest_updated_at(left),
         &group_latest_updated_at(right),
     )
+    .then_with(|| left.display_name.cmp(&right.display_name))
     .then_with(|| left.cwd.cmp(&right.cwd))
 }
 
@@ -240,10 +247,6 @@ fn group_latest_updated_at(group: &SessionGroup) -> Option<String> {
         .iter()
         .filter_map(|session| session.updated_at.clone())
         .max()
-}
-
-fn group_id(cwd: &str) -> String {
-    format!("cwd:{cwd}")
 }
 
 pub(crate) fn normalize_cwd(cwd: &str) -> String {

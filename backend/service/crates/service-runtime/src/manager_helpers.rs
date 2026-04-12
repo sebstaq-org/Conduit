@@ -32,12 +32,13 @@ pub(crate) fn parse_provider(value: &str) -> Result<ProviderId> {
 pub(crate) fn paginated_index_entries(
     provider_port: &mut dyn ProviderPort,
     provider: ProviderId,
+    cwd: Option<&str>,
 ) -> Result<Vec<session_store::SessionIndexEntry>> {
     let mut entries = Vec::new();
     let mut cursor = None;
     let mut seen_cursors = HashSet::new();
     loop {
-        let result = provider_port.session_list(None, cursor.clone())?;
+        let result = provider_port.session_list(cwd.map(PathBuf::from), cursor.clone())?;
         entries.extend(entries_from_session_list(provider, &result)?);
         cursor = next_cursor(&result)?;
         let Some(next_cursor) = &cursor else {

@@ -1,16 +1,27 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
   TranscriptItem,
 } from "@conduit/session-client";
 import {
+  addProjectQuery,
+  getProjectSuggestionsQuery,
   getSessionGroupsQuery,
+  listProjectsQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
+  removeProjectQuery,
   sessionClient,
+  updateProjectQuery,
 } from "./session-api-queries";
 import { applyTimelineItems } from "./session-history-cache";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
@@ -52,6 +63,26 @@ type UpdateSessionHistoryItems = (
   update: TimelineItemsUpdate,
 ) => void;
 type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
+type ProjectSuggestionsQueryArg = ProjectSuggestionsQuery | undefined;
+type ProjectUpdateArg = ProjectUpdateRequest;
+
+const projectMutationInvalidations = [
+  { id: "LIST", type: "Projects" },
+  { id: "SUGGESTIONS", type: "Projects" },
+  { id: "LIST", type: "SessionGroups" },
+] as const;
+const projectListEndpoint = {
+  providesTags: [{ id: "LIST", type: "Projects" }],
+  queryFn: listProjectsQuery,
+} as const;
+const projectSuggestionsEndpoint = {
+  providesTags: [{ id: "SUGGESTIONS", type: "Projects" }],
+  queryFn: getProjectSuggestionsQuery,
+} as const;
+const projectUpdateEndpoint = {
+  invalidatesTags: projectMutationInvalidations,
+  queryFn: updateProjectQuery,
+} as const;
 
 let upsertSessionHistory: UpsertSessionHistory = (): void => {
   throw new Error("session history cache upsert is not initialized");
@@ -140,8 +171,26 @@ async function handleSessionGroupsCacheEntryAdded(
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["SessionGroups", "SessionHistory"],
+  tagTypes: ["Projects", "SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
+    listProjects: builder.query<ProjectListView, undefined>(
+      projectListEndpoint,
+    ),
+    addProject: builder.mutation<ProjectListView, ProjectAddRequest>({
+      invalidatesTags: projectMutationInvalidations,
+      queryFn: addProjectQuery,
+    }),
+    removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>({
+      invalidatesTags: projectMutationInvalidations,
+      queryFn: removeProjectQuery,
+    }),
+    updateProject: builder.mutation<ProjectListView, ProjectUpdateArg>(
+      projectUpdateEndpoint,
+    ),
+    getProjectSuggestions: builder.query<
+      ProjectSuggestionsView,
+      ProjectSuggestionsQueryArg
+    >(projectSuggestionsEndpoint),
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
@@ -210,20 +259,30 @@ invalidateSessionGroups = (dispatch): void => {
 };
 
 const {
+  useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
+  useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
+  useRemoveProjectMutation,
+  useUpdateProjectMutation,
 } = conduitApi;
 
 export {
   conduitApi,
+  useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
+  useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
+  useRemoveProjectMutation,
+  useUpdateProjectMutation,
 };
 export type {
   OpenSessionMutationArg,

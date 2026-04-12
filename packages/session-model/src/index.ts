@@ -83,6 +83,7 @@ type SessionRow = z.infer<typeof SessionRowSchema>;
 const SessionGroupSchema = z.object({
   groupId: z.string(),
   cwd: z.string(),
+  displayName: z.string(),
   sessions: z.array(SessionRowSchema),
 });
 
@@ -97,12 +98,58 @@ const SessionGroupsViewSchema = z.object({
 
 type SessionGroupsView = z.infer<typeof SessionGroupsViewSchema>;
 
-const SessionGroupsQuerySchema = z.object({
-  cwdFilters: z.array(z.string()).optional(),
-  updatedWithinDays: z.number().nullable().optional(),
-});
+const SessionGroupsQuerySchema = z
+  .object({
+    updatedWithinDays: z.number().nullable().optional(),
+  })
+  .strict();
 
 type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
+
+const ProjectRowSchema = z.object({
+  projectId: z.string(),
+  cwd: z.string(),
+  displayName: z.string(),
+});
+
+type ProjectRow = z.infer<typeof ProjectRowSchema>;
+
+const ProjectListViewSchema = z.object({
+  projects: z.array(ProjectRowSchema),
+});
+
+type ProjectListView = z.infer<typeof ProjectListViewSchema>;
+
+const ProjectSuggestionSchema = z.object({
+  suggestionId: z.string(),
+  cwd: z.string(),
+});
+
+type ProjectSuggestion = z.infer<typeof ProjectSuggestionSchema>;
+
+const ProjectSuggestionsViewSchema = z.object({
+  suggestions: z.array(ProjectSuggestionSchema),
+});
+
+type ProjectSuggestionsView = z.infer<typeof ProjectSuggestionsViewSchema>;
+
+interface ProjectAddRequest {
+  cwd: string;
+}
+
+interface ProjectRemoveRequest {
+  projectId: string;
+}
+
+interface ProjectUpdateRequest {
+  projectId: string;
+  displayName: string;
+}
+
+interface ProjectSuggestionsQuery {
+  query?: string;
+  limit?: number;
+}
 
 type TranscriptMessageRole = "user" | "agent";
 
@@ -200,6 +247,10 @@ export {
   PROVIDER_CATALOG,
   PROVIDERS,
   ProviderIdSchema,
+  ProjectListViewSchema,
+  ProjectRowSchema,
+  ProjectSuggestionSchema,
+  ProjectSuggestionsViewSchema,
   SessionGroupSchema,
   SessionGroupsQuerySchema,
   SessionGroupsViewSchema,
@@ -218,6 +269,14 @@ export type {
   ProviderDescriptor,
   ProviderId,
   ProviderSnapshot,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectRow,
+  ProjectSuggestion,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
   RawWireEvent,
   SessionGroup,
   SessionGroupsQuery,

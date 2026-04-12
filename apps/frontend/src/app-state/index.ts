@@ -1,10 +1,15 @@
 export {
   conduitApi,
+  useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
+  useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
+  useRemoveProjectMutation,
+  useUpdateProjectMutation,
 } from "./api";
 export {
   canSubmitPrompt,

@@ -2,8 +2,12 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
-import { SessionGroupsViewSchema } from "@conduit/session-model";
 import { readSessionHistoryResponse } from "./historyWindow.js";
+import {
+  readProjectListResponse,
+  readProjectSuggestionsResponse,
+} from "./projectViews.js";
+import { readSessionGroupsResponse } from "./sessionGroupsView.js";
 import type {
   SessionClientOptions,
   SessionClientPort,
@@ -16,6 +20,12 @@ import { parseServerFrame } from "./wireFrame.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
   RuntimeEvent,
   ServerFrame,
   SessionHistoryRequest,
@@ -33,20 +43,15 @@ import type {
   SessionsIndexChanged,
 } from "./timelineEvent.js";
 
-interface TimelineSubscription {
-  openSessionId: string;
-  handler: (event: SessionTimelineChanged) => void;
-}
-
-interface SessionIndexSubscription {
-  handler: (event: SessionsIndexChanged) => void;
-}
-
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly timelineSubscriptions = new Set<TimelineSubscription>();
-  private readonly sessionIndexSubscriptions =
-    new Set<SessionIndexSubscription>();
+  private readonly timelineSubscriptions = new Set<{
+    openSessionId: string;
+    handler: (event: SessionTimelineChanged) => void;
+  }>();
+  private readonly sessionIndexSubscriptions = new Set<{
+    handler: (event: SessionsIndexChanged) => void;
+  }>();
   private readonly options: SessionClientOptions;
   private readonly pending = new Map<
     string,
@@ -59,18 +64,56 @@ class WebSocketSessionClient implements SessionClientPort {
     this.options = options;
   }
 
+  public async listProjects(): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/list", "all"),
+    );
+    return readProjectListResponse(response, "projects list failed");
+  }
+
+  public async addProject(
+    request: ProjectAddRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/add", "all", request),
+    );
+    return readProjectListResponse(response, "project add failed");
+  }
+
+  public async removeProject(
+    request: ProjectRemoveRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/remove", "all", request),
+    );
+    return readProjectListResponse(response, "project remove failed");
+  }
+
+  public async getProjectSuggestions(
+    query: ProjectSuggestionsQuery = {},
+  ): Promise<ProjectSuggestionsView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/suggestions", "all", query),
+    );
+    return readProjectSuggestionsResponse(response);
+  }
+
+  public async updateProject(
+    request: ProjectUpdateRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/update", "all", request),
+    );
+    return readProjectListResponse(response, "project update failed");
+  }
+
   public async getSessionGroups(
     query: SessionGroupsQuery = {},
   ): Promise<SessionGroupsView> {
     const response = await this.dispatch(
       createConsumerCommand("sessions/grouped", "all", query),
     );
-    if (!response.ok) {
-      throw new Error(
-        response.error?.message ?? "session groups request failed",
-      );
-    }
-    return SessionGroupsViewSchema.parse(response.result);
+    return readSessionGroupsResponse(response);
   }
 
   public async openSession(
@@ -253,10 +296,4 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 }
 
-function createSessionClient(
-  options?: SessionClientOptions,
-): SessionClientPort {
-  return new WebSocketSessionClient(options);
-}
-
-export { WebSocketSessionClient, createSessionClient };
+export { WebSocketSessionClient };

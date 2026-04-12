@@ -5,10 +5,16 @@ caching. Feature modules should consume RTK Query hooks from here, not
 `@conduit/session-client`, `@conduit/session-contracts`, WebSocket transport, or
 raw command dispatch directly.
 
-The product session APIs in this checkout are `useGetSessionGroupsQuery`,
-`useOpenSessionMutation`, `useReadSessionHistoryQuery`, and
-`usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
-not raw official ACP provider responses.
+The product session APIs in this checkout are `useListProjectsQuery`,
+`useAddProjectMutation`, `useRemoveProjectMutation`,
+`useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
+`useGetSessionGroupsQuery`, `useOpenSessionMutation`,
+`useReadSessionHistoryQuery`, and `usePromptSessionMutation`. They return
+Conduit read-model shapes for UI state, not raw official ACP provider responses.
+
+`useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI
+should add or remove projects through the project hooks instead of passing cwd
+filters into the sessions query.
 
 Do not wire feature UI to `ProviderSnapshot`, `LoadedTranscriptSnapshot`,
 `lastPrompt`, `RawWireEvent`, raw command dispatch, or backend provider internals.

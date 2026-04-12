@@ -1,5 +1,11 @@
 import type {
   ConsumerResponse,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
@@ -17,7 +23,12 @@ import type {
 
 interface SessionClientPort {
   readonly policy: "official-acp-only";
+  addProject(request: ProjectAddRequest): Promise<ProjectListView>;
+  getProjectSuggestions(
+    query?: ProjectSuggestionsQuery,
+  ): Promise<ProjectSuggestionsView>;
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
+  listProjects(): Promise<ProjectListView>;
   openSession(
     provider: ProviderId,
     request: SessionOpenRequest,
@@ -26,6 +37,8 @@ interface SessionClientPort {
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
   promptSession(request: SessionPromptRequest): Promise<void>;
+  removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
+  updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;
   subscribeTimelineChanges(
     openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,

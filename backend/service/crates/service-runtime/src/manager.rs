@@ -7,11 +7,10 @@ use crate::error::{
 };
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::manager_helpers::{
-    absolute_normalized_cwd, content_blocks_param, current_epoch,
-    loaded_transcript_snapshot_updates, paginated_index_entries, parse_provider, prompt_lifecycle,
-    prompt_status,
+    absolute_normalized_cwd, content_blocks_param, loaded_transcript_snapshot_updates,
+    parse_provider, prompt_lifecycle, prompt_status,
 };
-use crate::session_groups::{SessionGroupsQuery, grouped_view, providers_from_target};
+use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::{ConnectionState, ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
@@ -24,17 +23,15 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
-
 /// Consumer API runtime manager keyed by provider.
 pub struct ServiceRuntime<F = AppServiceFactory> {
-    event_buffer: EventBuffer,
+    pub(crate) event_buffer: EventBuffer,
     factory: F,
     loaded_provider_sessions: HashSet<OpenSessionKey>,
-    session_index_refreshes: HashMap<ProviderId, u64>,
+    pub(crate) session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
-    local_store: LocalStore,
-    store_lock: Arc<Mutex<()>>,
+    pub(crate) local_store: LocalStore,
+    pub(crate) store_lock: Arc<Mutex<()>>,
 }
 
 struct SessionPromptTarget {
@@ -173,6 +170,21 @@ where
         if command.command == "sessions/watch" {
             return self.sessions_watch(command.id);
         }
+        if command.command == "projects/list" {
+            return self.projects_list(command.id);
+        }
+        if command.command == "projects/suggestions" {
+            return self.projects_suggestions(command.id, &command.params);
+        }
+        if command.command == "projects/add" {
+            return self.projects_add(command.id, &command.params);
+        }
+        if command.command == "projects/remove" {
+            return self.projects_remove(command.id, &command.params);
+        }
+        if command.command == "projects/update" {
+            return self.projects_update(command.id, &command.params);
+        }
         if command.command == "session/history" {
             return self.session_history(command.id, &command.params);
         }
@@ -193,30 +205,6 @@ where
             "provider/disconnect" => self.provider_disconnect(command.id, provider),
             _ => Err(RuntimeError::UnsupportedCommand(command.command)),
         }
-    }
-
-    fn sessions_grouped(
-        &mut self,
-        id: String,
-        provider_target: &str,
-        params: &Value,
-    ) -> Result<ConsumerResponse> {
-        let query = SessionGroupsQuery::from_params(params)?;
-        let providers = providers_from_target(provider_target)?;
-        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        let snapshot = self.local_store.session_index(&providers)?;
-        let is_refreshing = snapshot.refreshed_at.is_none();
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            grouped_view(snapshot, &query, is_refreshing)?,
-        ))
-    }
-
-    fn sessions_watch(&self, id: String) -> Result<ConsumerResponse> {
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            json!({ "subscribed": true }),
-        ))
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -584,7 +572,7 @@ where
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
-    fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
+    pub(crate) fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
         if self
             .providers
             .get(&provider)
@@ -622,16 +610,6 @@ where
             .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
     }
 
-    fn session_index_refresh_due(&self, provider: ProviderId) -> bool {
-        self.session_index_refreshes
-            .get(&provider)
-            .is_none_or(|last| {
-                current_epoch()
-                    .saturating_sub(*last)
-                    .ge(&SESSION_INDEX_REFRESH_INTERVAL_SECONDS)
-            })
-    }
-
     fn ensure_provider_session_loaded(&mut self, key: &OpenSessionKey) -> Result<()> {
         if self.loaded_provider_sessions.contains(key) {
             return Ok(());
@@ -643,29 +621,6 @@ where
         };
         result?;
         self.loaded_provider_sessions.insert(key.clone());
-        Ok(())
-    }
-
-    fn refresh_session_index_provider(&mut self, provider: ProviderId) -> Result<()> {
-        let entries = {
-            let provider_port = self.provider(provider)?;
-            paginated_index_entries(provider_port.as_mut(), provider)?
-        };
-        self.session_index_refreshes
-            .insert(provider, current_epoch());
-        let revision = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store
-                .replace_session_index_provider(provider, &entries)?
-        };
-        if let Some(revision) = revision {
-            self.event_buffer.emit(
-                provider,
-                RuntimeEventKind::SessionsIndexChanged,
-                None,
-                json!({ "revision": revision }),
-            );
-        }
         Ok(())
     }
 }
@@ -682,6 +637,6 @@ fn append_snapshot_updates_if_missing(
     }
 }
 
-fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
+pub(crate) fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
     RuntimeError::Provider(format!("local store lock poisoned: {error}"))
 }

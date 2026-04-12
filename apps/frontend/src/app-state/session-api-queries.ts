@@ -2,6 +2,12 @@ import { createSessionClient } from "@conduit/session-client";
 import type {
   ContentBlock,
   ProviderId,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
@@ -44,6 +50,59 @@ async function getSessionGroupsQuery(
 ): QueryResult<SessionGroupsView> {
   try {
     const data = await sessionClient.getSessionGroups(query);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function listProjectsQuery(): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.listProjects();
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function addProjectQuery(
+  request: ProjectAddRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.addProject(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function removeProjectQuery(
+  request: ProjectRemoveRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.removeProject(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function updateProjectQuery(
+  request: ProjectUpdateRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.updateProject(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function getProjectSuggestionsQuery(
+  query: ProjectSuggestionsQuery | undefined,
+): QueryResult<ProjectSuggestionsView> {
+  try {
+    const data = await sessionClient.getProjectSuggestions(query);
     return { data };
   } catch (error) {
     return { error: toQueryError(error) };
@@ -110,11 +169,16 @@ async function promptSessionQuery({
 }
 
 export {
+  addProjectQuery,
+  getProjectSuggestionsQuery,
   getSessionGroupsQuery,
+  listProjectsQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
+  removeProjectQuery,
   sessionClient,
+  updateProjectQuery,
 };
 export type {
   OpenSessionMutationArg,

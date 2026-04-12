@@ -14,6 +14,11 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "session/prompt",
   "session/cancel",
   "provider/disconnect",
+  "projects/add",
+  "projects/list",
+  "projects/remove",
+  "projects/suggestions",
+  "projects/update",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -102,14 +107,50 @@ describe("shared session grouping boundary", () => {
 
   test("grouped sessions can target one provider", () => {
     const command = createConsumerCommand("sessions/grouped", "codex", {
-      cwdFilters: ["/repo"],
+      updatedWithinDays: null,
     });
 
     expect(command).toMatchObject({
       command: "sessions/grouped",
       provider: "codex",
       params: {
-        cwdFilters: ["/repo"],
+        updatedWithinDays: null,
+      },
+    });
+  });
+});
+
+describe("shared project suggestions boundary", () => {
+  test("project suggestions are an explicit all-providers command", () => {
+    const command = createConsumerCommand("projects/suggestions", "all", {
+      query: "repo",
+      limit: 5,
+    });
+
+    expect(command).toMatchObject({
+      command: "projects/suggestions",
+      provider: "all",
+      params: {
+        query: "repo",
+        limit: 5,
+      },
+    });
+  });
+});
+
+describe("shared projects boundary", () => {
+  test("project display names are mutable by project id", () => {
+    const command = createConsumerCommand("projects/update", "all", {
+      projectId: "cwd:/repo",
+      displayName: "Repo",
+    });
+
+    expect(command).toMatchObject({
+      command: "projects/update",
+      provider: "all",
+      params: {
+        projectId: "cwd:/repo",
+        displayName: "Repo",
       },
     });
   });

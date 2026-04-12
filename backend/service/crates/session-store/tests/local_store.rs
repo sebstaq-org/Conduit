@@ -6,7 +6,7 @@ use serde as _;
 use serde_json::{Value, json};
 use session_store::{
     HistoryLimit, LocalStore, OpenSessionKey, PromptTurnReplace, SessionIndexEntry,
-    TranscriptItemStatus,
+    TranscriptItemStatus, project_id_for_cwd,
 };
 use sha2 as _;
 use std::error::Error;
@@ -112,6 +112,114 @@ fn session_index_replaces_provider_rows_and_tracks_revision() -> TestResult<()> 
         &"codex-1".to_owned(),
         "index session id",
     )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+
+    let project = store.add_project("/repo")?;
+    let repeated = store.add_project("/repo")?;
+    let projects = store.projects()?;
+
+    ensure_eq(&project, &repeated, "idempotent project add")?;
+    ensure_eq(
+        &project.project_id,
+        &project_id_for_cwd("/repo"),
+        "project id",
+    )?;
+    ensure_eq(&project.display_name, &"repo".to_owned(), "display name")?;
+    ensure_eq(&projects, &vec![project.clone()], "project list")?;
+
+    store.remove_project(&project.project_id)?;
+    ensure_eq(&store.projects()?.len(), &0, "removed project count")?;
+    let repeated_remove = store.remove_project(&project.project_id);
+    if repeated_remove.is_ok() {
+        return Err("repeated project remove unexpectedly succeeded".into());
+    }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn project_display_name_is_mutable_without_changing_cwd() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let project = store.add_project("/workspace/conduit")?;
+
+    let renamed = store.update_project_display_name(&project.project_id, " Conduit ")?;
+
+    ensure_eq(
+        &renamed.project_id,
+        &project.project_id,
+        "project id remains stable",
+    )?;
+    ensure_eq(&renamed.cwd, &project.cwd, "cwd remains stable")?;
+    ensure_eq(
+        &renamed.display_name,
+        &"Conduit".to_owned(),
+        "display name is trimmed",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn project_display_name_rejects_empty_update() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let project = store.add_project("/repo")?;
+
+    let response = store.update_project_display_name(&project.project_id, " ");
+
+    if response.is_ok() {
+        return Err("empty displayName unexpectedly succeeded".into());
+    }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn project_suggestions_replace_query_limit_and_exclude_projects() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+
+    store.replace_project_suggestions_provider(
+        ProviderId::Codex,
+        &["/repo".to_owned(), "/other".to_owned()],
+    )?;
+    store.replace_project_suggestions_provider(
+        ProviderId::Claude,
+        &["/repo".to_owned(), "/zeta".to_owned()],
+    )?;
+    store.add_project("/repo")?;
+
+    let all = store.project_suggestions(None, 10)?;
+    let filtered = store.project_suggestions(Some("ot"), 10)?;
+    let limited = store.project_suggestions(None, 1)?;
+
+    ensure_eq(
+        &all.iter().map(|row| row.cwd.as_str()).collect::<Vec<_>>(),
+        &vec!["/other", "/zeta"],
+        "deduped addable suggestions",
+    )?;
+    ensure_eq(
+        &all[0].suggestion_id,
+        &project_id_for_cwd("/other"),
+        "suggestion id",
+    )?;
+    ensure_eq(
+        &filtered
+            .iter()
+            .map(|row| row.cwd.as_str())
+            .collect::<Vec<_>>(),
+        &vec!["/other"],
+        "query suggestions",
+    )?;
+    ensure_eq(&limited.len(), &1, "limited suggestions")?;
     fs::remove_file(path)?;
     Ok(())
 }

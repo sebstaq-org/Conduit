@@ -18,6 +18,7 @@ mod event;
 mod manager;
 mod manager_helpers;
 mod port;
+mod session_browser;
 mod session_groups;
 
 #[cfg(test)]
