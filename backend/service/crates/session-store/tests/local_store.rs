@@ -4,7 +4,7 @@ use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use serde as _;
 use serde_json::{Value, json};
-use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey, SessionIndexEntry};
 use sha2 as _;
 use std::error::Error;
 use std::fs;
@@ -72,7 +72,7 @@ fn repeated_open_replaces_items_and_invalidates_old_cursor() -> TestResult<()> {
 fn unsupported_schema_version_fails_hard() -> TestResult<()> {
     let path = test_db_path()?;
     let connection = rusqlite::Connection::open(&path)?;
-    connection.pragma_update(None, "user_version", 2)?;
+    connection.pragma_update(None, "user_version", 1)?;
     drop(connection);
 
     let response = LocalStore::open_path(&path);
@@ -80,6 +80,50 @@ fn unsupported_schema_version_fails_hard() -> TestResult<()> {
     if response.is_ok() {
         return Err("unsupported schema version unexpectedly opened".into());
     }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn session_index_replaces_provider_rows_and_tracks_revision() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let first_revision = store
+        .replace_session_index_provider(
+            ProviderId::Codex,
+            &[index_entry("codex-1", "/repo", Some("Codex one"))],
+        )?
+        .ok_or("expected first index revision")?;
+    let unchanged = store.replace_session_index_provider(
+        ProviderId::Codex,
+        &[index_entry("codex-1", "/repo", Some("Codex one"))],
+    )?;
+
+    ensure_eq(&first_revision, &1, "first index revision")?;
+    ensure_eq(&unchanged, &None, "unchanged index replacement")?;
+    let snapshot = store.session_index(&[ProviderId::Codex])?;
+    ensure_eq(&snapshot.revision, &1, "snapshot revision")?;
+    ensure_eq(&snapshot.entries.len(), &1, "index entry count")?;
+    ensure_eq(
+        &snapshot.entries[0].session_id,
+        &"codex-1".to_owned(),
+        "index session id",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn cached_session_returns_materialized_history_without_replacing_it() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let key = key("session-1");
+    let opened = store.open_session(key.clone(), &updates("first"), limit(4)?)?;
+    let cached = store
+        .cached_session(&key, limit(4)?)?
+        .ok_or("expected cached history")?;
+
+    ensure_eq(&cached, &opened, "cached session history")?;
     fs::remove_file(path)?;
     Ok(())
 }
@@ -103,6 +147,16 @@ fn key(session_id: &str) -> OpenSessionKey {
         provider: ProviderId::Codex,
         session_id: session_id.to_owned(),
         cwd: "/repo".to_owned(),
+    }
+}
+
+fn index_entry(session_id: &str, cwd: &str, title: Option<&str>) -> SessionIndexEntry {
+    SessionIndexEntry {
+        provider: ProviderId::Codex,
+        session_id: session_id.to_owned(),
+        cwd: cwd.to_owned(),
+        title: title.map(ToOwned::to_owned),
+        updated_at: Some("9999-01-01T00:00:00Z".to_owned()),
     }
 }
 

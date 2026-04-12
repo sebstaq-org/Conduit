@@ -8,8 +8,8 @@ use crate::error::{
 };
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::session_groups::{
-    SessionGroupsQuery, grouped_view, next_cursor, normalize_cwd, providers_from_target,
-    rows_from_session_list,
+    SessionGroupsQuery, entries_from_session_list, grouped_view, next_cursor, normalize_cwd,
+    providers_from_target,
 };
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
@@ -21,18 +21,22 @@ use session_store::{
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 
 /// Consumer API runtime manager keyed by provider.
 pub struct ServiceRuntime<F = AppServiceFactory> {
     event_buffer: EventBuffer,
     factory: F,
+    session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     local_store: LocalStore,
 }
 
 struct SessionPromptTarget {
     open_session_id: String,
-    session_id: String,
+    key: OpenSessionKey,
 }
 
 impl ServiceRuntime<AppServiceFactory> {
@@ -52,6 +56,7 @@ where
         Self {
             event_buffer: EventBuffer::new(),
             factory,
+            session_index_refreshes: HashMap::new(),
             providers: HashMap::new(),
             local_store,
         }
@@ -83,6 +88,37 @@ where
         }
     }
 
+    /// Refreshes read models after a fast response has already been sent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when a provider refresh fails.
+    pub fn refresh_after_response(&mut self, command: &ConsumerCommand) -> Result<()> {
+        if command.command != "sessions/grouped" {
+            return Ok(());
+        }
+        let providers = providers_from_target(&command.provider)?;
+        for provider in providers {
+            if self.session_index_refresh_due(provider) {
+                self.refresh_session_index_provider(provider)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Forces a sessions index refresh for a provider target.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider target is invalid or a provider
+    /// refresh fails.
+    pub fn force_refresh_session_index(&mut self, provider_target: &str) -> Result<()> {
+        for provider in providers_from_target(provider_target)? {
+            self.refresh_session_index_provider(provider)?;
+        }
+        Ok(())
+    }
+
     fn dispatch_result(&mut self, command: ConsumerCommand) -> Result<ConsumerResponse> {
         if command.command == "sessions/grouped" {
             return self.sessions_grouped(command.id, &command.provider, &command.params);
@@ -112,37 +148,14 @@ where
     ) -> Result<ConsumerResponse> {
         let query = SessionGroupsQuery::from_params(params)?;
         let providers = providers_from_target(provider_target)?;
-        let mut rows = Vec::new();
-        for provider in providers {
-            rows.extend(self.grouped_rows_for_provider(provider, &query)?);
-        }
+        let is_refreshing = providers
+            .iter()
+            .any(|provider| self.session_index_refresh_due(*provider));
+        let snapshot = self.local_store.session_index(&providers)?;
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            grouped_view(rows)?,
+            grouped_view(snapshot, &query, is_refreshing)?,
         ))
-    }
-
-    fn grouped_rows_for_provider(
-        &mut self,
-        provider: ProviderId,
-        query: &SessionGroupsQuery,
-    ) -> Result<Vec<crate::session_groups::SessionRowWithCwd>> {
-        let cwd_filters = query.cwd_filters();
-        if cwd_filters.is_empty() {
-            let provider_port = self.provider(provider)?;
-            return paginated_grouped_rows(provider_port.as_mut(), provider, None, query);
-        }
-        let mut rows = Vec::new();
-        for cwd in cwd_filters {
-            let provider_port = self.provider(provider)?;
-            rows.extend(paginated_grouped_rows(
-                provider_port.as_mut(),
-                provider,
-                Some(PathBuf::from(cwd)),
-                query,
-            )?);
-        }
-        Ok(rows)
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -259,6 +272,12 @@ where
             session_id: session_id.clone(),
             cwd: cwd.display().to_string(),
         };
+        if let Some(result) = self.local_store.cached_session(&key, limit)? {
+            return Ok(ConsumerResponse::success_without_snapshot(
+                id,
+                to_value(result)?,
+            ));
+        }
         let (snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
             let _result = provider_port.session_load(session_id.clone(), cwd)?;
@@ -324,14 +343,14 @@ where
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::PromptStarted,
-            Some(target.session_id.clone()),
+            Some(target.key.session_id.clone()),
             json!({ "prompt": prompt.clone() }),
         );
         let mut observed_updates = Vec::new();
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
             let result = provider_port.session_prompt(
-                target.session_id.clone(),
+                target.key.session_id.clone(),
                 prompt.clone(),
                 &mut |update| {
                     observed_updates.push(update);
@@ -349,7 +368,7 @@ where
             }
         };
         if observed_updates.is_empty()
-            && let Some(lifecycle) = prompt_lifecycle(&snapshot, &target.session_id)
+            && let Some(lifecycle) = prompt_lifecycle(&snapshot, &target.key.session_id)
         {
             observed_updates.extend(lifecycle.updates.clone());
         }
@@ -357,7 +376,7 @@ where
             self.event_buffer.emit(
                 provider,
                 RuntimeEventKind::PromptUpdateObserved,
-                Some(target.session_id.clone()),
+                Some(target.key.session_id.clone()),
                 json!({
                     "update_index": update.index,
                     "session_update": update.variant,
@@ -368,7 +387,7 @@ where
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::PromptCompleted,
-            Some(target.session_id.clone()),
+            Some(target.key.session_id.clone()),
             result.clone(),
         );
         self.append_prompt_turn_from_updates(&target, &prompt, &snapshot, &observed_updates)?;
@@ -395,7 +414,7 @@ where
         }
         Ok(SessionPromptTarget {
             open_session_id,
-            session_id: key.session_id,
+            key,
         })
     }
 
@@ -406,7 +425,7 @@ where
         snapshot: &acp_core::ProviderSnapshot,
         updates: &[acp_core::TranscriptUpdateSnapshot],
     ) -> Result<()> {
-        let lifecycle = prompt_lifecycle(snapshot, &target.session_id);
+        let lifecycle = prompt_lifecycle(snapshot, &target.key.session_id);
         let mutation = self
             .local_store
             .append_prompt_turn_updates(PromptTurnAppend {
@@ -419,12 +438,25 @@ where
         self.event_buffer.emit(
             snapshot.provider,
             RuntimeEventKind::SessionTimelineChanged,
-            Some(target.session_id.clone()),
+            Some(target.key.session_id.clone()),
             json!({
                 "openSessionId": mutation.open_session_id,
                 "revision": mutation.revision
             }),
         );
+        for update in updates {
+            if let Some(revision) = self
+                .local_store
+                .apply_session_info_update(&target.key, &update.update)?
+            {
+                self.event_buffer.emit(
+                    target.key.provider,
+                    RuntimeEventKind::SessionsIndexChanged,
+                    None,
+                    json!({ "revision": revision }),
+                );
+            }
+        }
         Ok(())
     }
 
@@ -446,7 +478,7 @@ where
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::SessionTimelineChanged,
-            Some(target.session_id.clone()),
+            Some(target.key.session_id.clone()),
             json!({
                 "openSessionId": mutation.open_session_id,
                 "revision": mutation.revision
@@ -552,6 +584,40 @@ where
             .get_mut(&provider)
             .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
     }
+
+    fn session_index_refresh_due(&self, provider: ProviderId) -> bool {
+        self.session_index_refreshes
+            .get(&provider)
+            .is_none_or(|last| {
+                current_epoch()
+                    .saturating_sub(*last)
+                    .ge(&SESSION_INDEX_REFRESH_INTERVAL_SECONDS)
+            })
+    }
+
+    fn refresh_session_index_provider(&mut self, provider: ProviderId) -> Result<()> {
+        let (entries, raw_events) = {
+            let provider_port = self.provider(provider)?;
+            let entries = paginated_index_entries(provider_port.as_mut(), provider)?;
+            (entries, provider_port.raw_events())
+        };
+        self.session_index_refreshes
+            .insert(provider, current_epoch());
+        if let Some(revision) = self
+            .local_store
+            .replace_session_index_provider(provider, &entries)?
+        {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionsIndexChanged,
+                None,
+                json!({ "revision": revision }),
+            );
+        }
+        self.event_buffer
+            .capture_raw_events(provider, &raw_events)?;
+        Ok(())
+    }
 }
 
 fn absolute_normalized_cwd(command: &'static str, cwd: PathBuf) -> Result<PathBuf> {
@@ -572,18 +638,16 @@ fn parse_provider(value: &str) -> Result<ProviderId> {
     })
 }
 
-fn paginated_grouped_rows(
+fn paginated_index_entries(
     provider_port: &mut dyn ProviderPort,
     provider: ProviderId,
-    cwd: Option<PathBuf>,
-    query: &SessionGroupsQuery,
-) -> Result<Vec<crate::session_groups::SessionRowWithCwd>> {
-    let mut rows = Vec::new();
+) -> Result<Vec<session_store::SessionIndexEntry>> {
+    let mut entries = Vec::new();
     let mut cursor = None;
     let mut seen_cursors = HashSet::new();
     loop {
-        let result = provider_port.session_list(cwd.clone(), cursor.clone())?;
-        rows.extend(rows_from_session_list(provider, &result, query)?);
+        let result = provider_port.session_list(None, cursor.clone())?;
+        entries.extend(entries_from_session_list(provider, &result)?);
         cursor = next_cursor(&result)?;
         let Some(next_cursor) = &cursor else {
             break;
@@ -594,7 +658,13 @@ fn paginated_grouped_rows(
             ));
         }
     }
-    Ok(rows)
+    Ok(entries)
+}
+
+fn current_epoch() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs())
 }
 
 fn loaded_transcript_updates(

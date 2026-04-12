@@ -547,7 +547,7 @@ fn session_prompt_open_session_missing_lifecycle_appends_failed_turn() -> TestRe
 }
 
 #[test]
-fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> TestResult<()> {
+fn repeated_session_open_uses_cached_timeline_and_keeps_envelope_shape() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
         &state,
@@ -575,14 +575,11 @@ fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> T
         .map_err(|error| format!("{error}"))?
         .session_load_requests
         .clone();
-    let expected = vec![
-        (ProviderId::Codex, "session-1".to_owned()),
-        (ProviderId::Codex, "session-1".to_owned()),
-    ];
+    let expected = vec![(ProviderId::Codex, "session-1".to_owned())];
     if requests == expected {
         return Ok(());
     }
-    Err(format!("expected repeated provider loads {expected:?}, got {requests:?}").into())
+    Err(format!("expected cached open loads {expected:?}, got {requests:?}").into())
 }
 
 #[test]

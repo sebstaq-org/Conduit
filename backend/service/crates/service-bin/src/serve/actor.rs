@@ -74,6 +74,10 @@ fn handle_request(
     events: &broadcast::Sender<RuntimeEvent>,
     request: ActorRequest,
 ) {
+    if request.command.command == "sessions/grouped" {
+        handle_grouped_sessions_request(runtime, events, request);
+        return;
+    }
     let should_broadcast = request.command.command != "events/subscribe";
     let cursor = runtime.latest_event_sequence();
     let response = runtime.dispatch(request.command);
@@ -82,6 +86,23 @@ fn handle_request(
         broadcast_events(events, produced_events);
     }
     let _response_status = request.respond_to.send(response);
+}
+
+fn handle_grouped_sessions_request(
+    runtime: &mut ServiceRuntime,
+    events: &broadcast::Sender<RuntimeEvent>,
+    request: ActorRequest,
+) {
+    let command = request.command.clone();
+    let cursor = runtime.latest_event_sequence();
+    let response = runtime.dispatch(request.command);
+    let _response_status = request.respond_to.send(response);
+    let produced_events = runtime.events_after(cursor);
+    broadcast_events(events, produced_events);
+    let cursor = runtime.latest_event_sequence();
+    let _refresh_result = runtime.refresh_after_response(&command);
+    let produced_events = runtime.events_after(cursor);
+    broadcast_events(events, produced_events);
 }
 
 fn broadcast_events(events: &broadcast::Sender<RuntimeEvent>, produced_events: Vec<RuntimeEvent>) {

@@ -42,6 +42,8 @@ pub enum RuntimeEventKind {
     PromptCompleted,
     /// The UI-facing session timeline changed.
     SessionTimelineChanged,
+    /// The UI-facing sessions index changed.
+    SessionsIndexChanged,
     /// A cancel command was sent.
     CancelSent,
     /// A raw wire event was captured for debug/proof consumers.
