@@ -6,51 +6,58 @@ import {
   CONSUMER_COMMANDS,
   createConsumerCommand,
 } from "../packages/session-contracts/src/index.js";
+import type { ClientCommandFrame } from "../packages/session-contracts/src/index.js";
+
+const EXPECTED_CONSUMER_COMMANDS = [
+  "initialize",
+  "session/new",
+  "session/prompt",
+  "session/cancel",
+  "provider/disconnect",
+  "sessions/grouped",
+  "sessions/watch",
+  "session/open",
+  "session/history",
+  "session/watch",
+] as const;
 
 describe("shared session boundary", () => {
   test("the shared consumer command set stays canonical", () => {
-    expect(CONSUMER_COMMANDS).toEqual([
-      "initialize",
-      "session/new",
-      "session/prompt",
-      "session/cancel",
-      "snapshot/get",
-      "provider/disconnect",
-      "events/subscribe",
-      "sessions/grouped",
-      "session/open",
-      "session/history",
-    ]);
+    expect(CONSUMER_COMMANDS).toEqual(EXPECTED_CONSUMER_COMMANDS);
   });
 
   test("consumer transport uses versioned correlated websocket frames", () => {
-    const command = createConsumerCommand("snapshot/get", "codex");
-
-    expect(CONDUIT_COMMANDS).toContain("snapshot/get");
-    expect(CONDUIT_COMMANDS).not.toContain("provider/snapshot");
-    expect({
+    const command = createConsumerCommand("provider/disconnect", "codex");
+    const frame: ClientCommandFrame = {
       v: CONDUIT_TRANSPORT_VERSION,
       type: "command",
       id: command.id,
       command,
-    }).toMatchObject({
+    };
+
+    expect(CONDUIT_COMMANDS).not.toContain("snapshot/get");
+    expect(CONDUIT_COMMANDS).not.toContain("events/subscribe");
+    expect(CONDUIT_COMMANDS).not.toContain("provider/snapshot");
+    expect(frame).toMatchObject({
       v: 1,
       type: "command",
       id: command.id,
     });
   });
 
-  test("event subscription is an explicit shared consumer command", () => {
-    const command = createConsumerCommand("events/subscribe", "codex", {
-      after_sequence: null,
+  test("product watches are explicit shared consumer commands", () => {
+    const sessionsWatch = createConsumerCommand("sessions/watch", "all");
+    const sessionWatch = createConsumerCommand("session/watch", "all", {
+      openSessionId: "open-session-1",
     });
 
-    expect(command).toMatchObject({
-      command: "events/subscribe",
-      provider: "codex",
-      params: {
-        after_sequence: null,
-      },
+    expect(sessionsWatch).toMatchObject({
+      command: "sessions/watch",
+      provider: "all",
+    });
+    expect(sessionWatch).toMatchObject({
+      command: "session/watch",
+      provider: "all",
     });
   });
 });
@@ -62,7 +69,7 @@ describe("shared session history boundary", () => {
       cwd: "/repo",
       limit: 40,
     });
-    const history = createConsumerCommand("session/history", "codex", {
+    const history = createConsumerCommand("session/history", "all", {
       openSessionId: "open-session-1",
       cursor: null,
     });
@@ -73,7 +80,7 @@ describe("shared session history boundary", () => {
     });
     expect(history).toMatchObject({
       command: "session/history",
-      provider: "codex",
+      provider: "all",
     });
   });
 });

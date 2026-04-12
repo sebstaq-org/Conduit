@@ -17,7 +17,7 @@ use session_history_support::{
     string_field, transcript_update,
 };
 use std::sync::{Arc, Mutex};
-use support::{FakeFactory, FakeState, TestResult, assert_ok, command, ensure_event, runtime};
+use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
 #[test]
@@ -34,10 +34,7 @@ fn session_open_returns_latest_history_window_and_older_cursor() -> TestResult<(
     let opened = open_session(&mut runtime, "1", "codex", "session-1", 3);
 
     assert_ok(&opened)?;
-    ensure_event(
-        &runtime.drain_events(),
-        RuntimeEventKind::SessionReplayUpdate,
-    )?;
+    runtime.drain_events();
     assert_items(
         &opened.result,
         &[
@@ -88,7 +85,7 @@ fn assert_older_history_page(
 }
 
 #[test]
-fn session_history_rejects_provider_mismatch() -> TestResult<()> {
+fn session_history_uses_open_session_id_as_product_identity() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
         &state,
@@ -109,14 +106,8 @@ fn session_history_rejects_provider_mismatch() -> TestResult<()> {
         }),
     ));
 
-    if response.ok {
-        return Err("session/history unexpectedly accepted provider mismatch".into());
-    }
-    let error_code = response.error.map(|error| error.code);
-    if error_code == Some("invalid_params".to_owned()) {
-        return Ok(());
-    }
-    Err(format!("expected invalid_params, got {error_code:?}").into())
+    assert_ok(&response)?;
+    assert_items(&response.result, &[("message", "agent", Some("loaded"))])
 }
 
 #[test]
@@ -199,6 +190,16 @@ fn session_prompt_open_session_appends_to_timeline_and_emits_revision() -> TestR
     assert_ok(&prompt)?;
     let events = runtime.drain_events();
     assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
+    let timeline_event_count = events
+        .iter()
+        .filter(|event| event.kind == RuntimeEventKind::SessionTimelineChanged)
+        .count();
+    if timeline_event_count < 3 {
+        return Err(format!(
+            "expected streaming timeline updates before final prompt projection, got {events:?}"
+        )
+        .into());
+    }
     let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
     assert_ok(&latest)?;
     assert_items(
@@ -324,12 +325,13 @@ fn session_prompt_projects_ordered_session_updates_and_extension_events() -> Tes
     assert_ok(&opened)?;
     runtime.drain_events();
     let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let revision_before_prompt = number_field(&opened.result, "revision")?;
 
     let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "user prompt");
 
     assert_ok(&prompt)?;
     let events = runtime.drain_events();
-    ensure_event(&events, RuntimeEventKind::PromptUpdateObserved)?;
+    assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
     let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
     assert_ok(&latest)?;
     assert_items(
@@ -353,7 +355,7 @@ fn session_prompt_projects_ordered_session_updates_and_extension_events() -> Tes
 }
 
 #[test]
-fn session_prompt_rejects_open_session_from_other_provider() -> TestResult<()> {
+fn session_prompt_uses_open_session_id_as_product_identity() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
         &state,
@@ -377,12 +379,17 @@ fn session_prompt_rejects_open_session_from_other_provider() -> TestResult<()> {
         }),
     ));
 
-    assert_invalid_params(&prompt)?;
-    let events = runtime.drain_events();
-    if events.is_empty() {
-        return Ok(());
-    }
-    Err(format!("provider mismatch produced events: {events:?}").into())
+    assert_ok(&prompt)?;
+    let latest = read_history(&mut runtime, "3", "all", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("wrong provider")),
+            ("message", "agent", Some("wrong provider")),
+        ],
+    )
 }
 
 #[test]

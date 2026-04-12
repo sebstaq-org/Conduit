@@ -1,5 +1,5 @@
 import { Box, Text } from "@/theme";
-import { List } from "@/ui";
+import { List, Row } from "@/ui";
 import {
   transcriptItemLabel,
   transcriptItemMeta,
@@ -19,8 +19,10 @@ const historyTextVariant = "rowLabel" as const;
 interface SessionHistoryListProps {
   history: SessionHistoryWindow | undefined;
   isError: boolean;
+  isFetchingOlder: boolean;
   isFetching: boolean;
   isLoading: boolean;
+  onLoadOlder: () => void;
   title: string;
 }
 
@@ -44,11 +46,30 @@ function renderStatusText(text: string): React.JSX.Element {
   return <Text variant={historyStatusVariant}>{text}</Text>;
 }
 
+function loadOlderLabel(isFetchingOlder: boolean): string {
+  if (isFetchingOlder) {
+    return "Loading older messages";
+  }
+  return "Load older messages";
+}
+
+function loadOlderPress(
+  isFetchingOlder: boolean,
+  onLoadOlder: () => void,
+): (() => void) | undefined {
+  if (isFetchingOlder) {
+    return undefined;
+  }
+  return onLoadOlder;
+}
+
 function SessionHistoryList({
   history,
   isError,
+  isFetchingOlder,
   isFetching,
   isLoading,
+  onLoadOlder,
   title,
 }: SessionHistoryListProps): React.JSX.Element {
   return (
@@ -57,6 +78,13 @@ function SessionHistoryList({
       {isLoading && renderStatusText("Loading session")}
       {isError && renderStatusText("Session unavailable")}
       {isFetching && !isLoading && renderStatusText("Refreshing session")}
+      {history?.nextCursor !== null && history?.nextCursor !== undefined && (
+        <Row
+          label={loadOlderLabel(isFetchingOlder)}
+          muted={isFetchingOlder}
+          onPress={loadOlderPress(isFetchingOlder, onLoadOlder)}
+        />
+      )}
       {history !== undefined &&
         history.items.length === 0 &&
         renderStatusText("No messages yet")}

@@ -4,7 +4,7 @@ use crate::error::RuntimeError;
 use crate::session_groups::{entries_from_session_list, next_cursor, normalize_cwd};
 use crate::{ProviderPort, Result};
 use acp_discovery::ProviderId;
-use serde_json::{Value, json};
+use serde_json::Value;
 use session_store::TranscriptItemStatus;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -56,30 +56,6 @@ pub(crate) fn current_epoch() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs())
-}
-
-pub(crate) fn loaded_transcript_updates(
-    snapshot: &acp_core::ProviderSnapshot,
-    session_id: &str,
-) -> Vec<Value> {
-    snapshot
-        .loaded_transcripts
-        .iter()
-        .find(|transcript| transcript.identity.acp_session_id == session_id)
-        .map(|transcript| {
-            transcript
-                .updates
-                .iter()
-                .map(|update| {
-                    json!({
-                        "replay_index": update.index,
-                        "session_update": update.variant,
-                        "update": update.update,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 pub(crate) fn loaded_transcript_snapshot_updates<'a>(

@@ -1,55 +1,48 @@
 import type { RuntimeEvent } from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
+import type { TranscriptItem } from "@conduit/session-model";
 
 interface SessionTimelineChanged {
-  sequence: number;
-  provider: ProviderId;
+  items?: TranscriptItem[];
   openSessionId: string;
   revision: number;
 }
 
 interface SessionsIndexChanged {
-  sequence: number;
-  provider: ProviderId;
   revision: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function readSessionTimelineChanged(
   event: RuntimeEvent,
 ): SessionTimelineChanged | null {
-  if (event.kind !== "session_timeline_changed" || !isRecord(event.payload)) {
+  if (event.kind !== "session_timeline_changed") {
     return null;
   }
-  const openSessionId = event.payload.openSessionId;
-  const revision = event.payload.revision;
+  const openSessionId = event.openSessionId;
+  const revision = event.revision;
   if (typeof openSessionId !== "string" || typeof revision !== "number") {
     return null;
   }
-  return {
-    sequence: event.sequence,
-    provider: event.provider,
+  const changed: SessionTimelineChanged = {
     openSessionId,
     revision,
   };
+  if (Array.isArray(event.items)) {
+    changed.items = event.items;
+  }
+  return changed;
 }
 
 function readSessionsIndexChanged(
   event: RuntimeEvent,
 ): SessionsIndexChanged | null {
-  if (event.kind !== "sessions_index_changed" || !isRecord(event.payload)) {
+  if (event.kind !== "sessions_index_changed") {
     return null;
   }
-  const revision = event.payload.revision;
+  const revision = event.revision;
   if (typeof revision !== "number") {
     return null;
   }
   return {
-    sequence: event.sequence,
-    provider: event.provider,
     revision,
   };
 }

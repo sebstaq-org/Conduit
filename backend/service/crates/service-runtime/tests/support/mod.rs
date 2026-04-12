@@ -10,7 +10,7 @@ use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolV
 use serde_json::{Value, json};
 use service_runtime::{
     ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, RuntimeError,
-    RuntimeEvent, RuntimeEventKind, ServiceRuntime,
+    ServiceRuntime,
 };
 use session_store::LocalStore;
 use std::collections::{HashMap, HashSet};
@@ -327,13 +327,6 @@ pub(crate) fn assert_ok(response: &ConsumerResponse) -> TestResult<()> {
         return Err(format!("command failed: {:?}", response.error).into());
     }
     Ok(())
-}
-
-pub(crate) fn ensure_event(events: &[RuntimeEvent], kind: RuntimeEventKind) -> TestResult<()> {
-    if events.iter().any(|event| event.kind == kind) {
-        return Ok(());
-    }
-    Err(format!("missing runtime event {kind:?}").into())
 }
 
 fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {

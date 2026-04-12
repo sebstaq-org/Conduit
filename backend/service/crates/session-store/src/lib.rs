@@ -13,20 +13,25 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
-use ids::{HISTORY_CURSOR_PREFIX, history_cursor, open_session_id_for};
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use ids::{history_cursor, open_session_id_for};
+use prompt_turn::{prompt_turn_items, transcript_item_turn_id};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
-use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use thiserror::Error;
-use transcript::{project_items, project_prompt_turn_items};
+use timeline_storage::{
+    cursor_end, i64_from_usize, insert_items, insert_items_at, next_revision, usize_from_i64,
+};
+use transcript::project_items;
 
 mod history_limit;
 mod ids;
+mod prompt_turn;
 mod session_index;
+mod timeline_storage;
 mod transcript;
 
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
@@ -116,6 +121,8 @@ pub struct TimelineMutation {
     pub open_session_id: String,
     /// New timeline revision after the mutation.
     pub revision: i64,
+    /// Items written by this mutation.
+    pub items: Vec<TranscriptItem>,
 }
 
 /// Input for appending one completed prompt turn.
@@ -133,10 +140,34 @@ pub struct PromptTurnAppend<'a> {
     pub stop_reason: Option<&'a str>,
 }
 
-struct ParsedCursor {
-    open_session_id: String,
-    revision: i64,
-    end: usize,
+/// Result of starting one prompt turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptTurnMutation {
+    /// Opaque Conduit id for the opened session.
+    pub open_session_id: String,
+    /// New timeline revision after the mutation.
+    pub revision: i64,
+    /// Stable id for all items in this prompt turn.
+    pub turn_id: String,
+    /// Items written by this mutation.
+    pub items: Vec<TranscriptItem>,
+}
+
+/// Input for replacing the materialized items for one in-flight prompt turn.
+#[derive(Debug, Clone, Copy)]
+pub struct PromptTurnReplace<'a> {
+    /// Opaque Conduit id for the opened session.
+    pub open_session_id: &'a str,
+    /// Prompt turn id allocated by [`LocalStore::begin_prompt_turn`].
+    pub turn_id: &'a str,
+    /// User prompt ACP content blocks.
+    pub prompt: &'a [Value],
+    /// ACP updates observed so far during the prompt turn.
+    pub updates: &'a [TranscriptUpdateSnapshot],
+    /// Current transcript status for agent-authored prompt items.
+    pub status: TranscriptItemStatus,
+    /// ACP stop reason returned by the provider, when known.
+    pub stop_reason: Option<&'a str>,
 }
 
 struct WindowScope<'a> {
@@ -257,40 +288,78 @@ impl LocalStore {
         let existing = self.session_revision("session/prompt", append.open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");
-        let mut items = vec![TranscriptItem::Message {
-            id: format!("{turn_id}-user"),
-            turn_id: Some(turn_id.clone()),
-            status: Some(TranscriptItemStatus::Complete),
-            stop_reason: None,
-            role: MessageRole::User,
-            content: append.prompt.to_owned(),
-        }];
-        let prompt_update_items =
-            project_prompt_turn_items(&turn_id, append.updates, append.status, append.stop_reason);
-        let has_agent_message = prompt_update_items.iter().any(|item| {
-            matches!(
-                item,
-                TranscriptItem::Message {
-                    role: MessageRole::Agent,
-                    ..
-                }
-            )
-        });
-        items.extend(prompt_update_items);
-        if !has_agent_message && append.status != TranscriptItemStatus::Complete {
-            items.push(TranscriptItem::Message {
-                id: format!("{turn_id}-terminal"),
-                turn_id: Some(turn_id),
-                status: Some(append.status),
-                stop_reason: append.stop_reason.map(ToOwned::to_owned),
-                role: MessageRole::Agent,
-                content: Vec::new(),
-            });
-        }
+        let items = prompt_turn_items(
+            &turn_id,
+            append.prompt,
+            append.updates,
+            append.status,
+            append.stop_reason,
+        );
         self.append_items(append.open_session_id, revision, &items)?;
         Ok(TimelineMutation {
             open_session_id: append.open_session_id.to_owned(),
             revision,
+            items,
+        })
+    }
+
+    /// Starts one prompt turn in an opened session timeline.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the open session id is unknown or persistence
+    /// fails.
+    pub fn begin_prompt_turn(
+        &mut self,
+        open_session_id: &str,
+        prompt: &[Value],
+    ) -> Result<PromptTurnMutation> {
+        let existing = self.session_revision("session/prompt", open_session_id)?;
+        let revision = existing + 1;
+        let turn_id = format!("turn-{revision}");
+        let items = prompt_turn_items(&turn_id, prompt, &[], TranscriptItemStatus::Streaming, None);
+        self.append_items(open_session_id, revision, &items)?;
+        Ok(PromptTurnMutation {
+            open_session_id: open_session_id.to_owned(),
+            revision,
+            turn_id,
+            items,
+        })
+    }
+
+    /// Replaces the materialized items for one in-flight prompt turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the open session id is unknown or persistence
+    /// fails.
+    pub fn replace_prompt_turn_updates(
+        &mut self,
+        replace: PromptTurnReplace<'_>,
+    ) -> Result<TimelineMutation> {
+        let existing = self.session_revision("session/prompt", replace.open_session_id)?;
+        let revision = existing + 1;
+        let item_count = self.item_count("session/prompt", replace.open_session_id)?;
+        let mut items = self.items_between(replace.open_session_id, 0, item_count)?;
+        items.retain(|item| transcript_item_turn_id(item) != Some(replace.turn_id));
+        items.extend(prompt_turn_items(
+            replace.turn_id,
+            replace.prompt,
+            replace.updates,
+            replace.status,
+            replace.stop_reason,
+        ));
+        self.replace_open_session_items(replace.open_session_id, revision, &items)?;
+        Ok(TimelineMutation {
+            open_session_id: replace.open_session_id.to_owned(),
+            revision,
+            items: prompt_turn_items(
+                replace.turn_id,
+                replace.prompt,
+                replace.updates,
+                replace.status,
+                replace.stop_reason,
+            ),
         })
     }
 
@@ -466,6 +535,26 @@ impl LocalStore {
         Ok(())
     }
 
+    fn replace_open_session_items(
+        &mut self,
+        open_session_id: &str,
+        revision: i64,
+        items: &[TranscriptItem],
+    ) -> Result<()> {
+        let tx = self.connection.transaction()?;
+        tx.execute(
+            "UPDATE open_sessions SET revision = ?2 WHERE open_session_id = ?1",
+            params![open_session_id, revision],
+        )?;
+        tx.execute(
+            "DELETE FROM transcript_items WHERE open_session_id = ?1",
+            params![open_session_id],
+        )?;
+        insert_items(&tx, open_session_id, items)?;
+        tx.commit()?;
+        Ok(())
+    }
+
     fn window_at_revision(
         &self,
         scope: WindowScope<'_>,
@@ -575,119 +664,4 @@ fn prepare_parent(path: &Path) -> Result<()> {
         path: parent.to_path_buf(),
         source,
     })
-}
-
-fn next_revision(tx: &Transaction<'_>, open_session_id: &str) -> Result<i64> {
-    let current = tx
-        .query_row(
-            "SELECT revision FROM open_sessions WHERE open_session_id = ?1",
-            params![open_session_id],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()?;
-    Ok(current.unwrap_or(0) + 1)
-}
-
-fn insert_items(
-    tx: &Transaction<'_>,
-    open_session_id: &str,
-    items: &[TranscriptItem],
-) -> Result<()> {
-    insert_items_at(tx, open_session_id, 0, items)
-}
-
-fn insert_items_at(
-    tx: &Transaction<'_>,
-    open_session_id: &str,
-    start_ordinal: usize,
-    items: &[TranscriptItem],
-) -> Result<()> {
-    for (ordinal, item) in items.iter().enumerate() {
-        tx.execute(
-            "
-            INSERT INTO transcript_items (
-                open_session_id,
-                item_ordinal,
-                item_json
-            ) VALUES (?1, ?2, ?3)
-            ",
-            params![
-                open_session_id,
-                i64_from_usize(start_ordinal + ordinal)?,
-                serde_json::to_string(item)?
-            ],
-        )?;
-    }
-    Ok(())
-}
-
-fn cursor_end(open_session_id: &str, revision: i64, cursor: &str) -> Result<usize> {
-    let parsed = parse_cursor(cursor)?;
-    if parsed.open_session_id != open_session_id {
-        return Err(Error::InvalidParameter {
-            command: "session/history",
-            parameter: "cursor",
-            message: "cursor belongs to another open session",
-        });
-    }
-    if parsed.revision != revision {
-        return Err(Error::InvalidParameter {
-            command: "session/history",
-            parameter: "cursor",
-            message: "cursor belongs to an older loaded transcript",
-        });
-    }
-    Ok(parsed.end)
-}
-
-fn parse_cursor(cursor: &str) -> Result<ParsedCursor> {
-    let mut parts = cursor.split(':');
-    let Some(prefix) = parts.next() else {
-        return invalid_cursor();
-    };
-    let Some(open_session_id) = parts.next() else {
-        return invalid_cursor();
-    };
-    let Some(revision) = parts.next() else {
-        return invalid_cursor();
-    };
-    let Some(end) = parts.next() else {
-        return invalid_cursor();
-    };
-    if prefix != HISTORY_CURSOR_PREFIX || parts.next().is_some() {
-        return invalid_cursor();
-    }
-    let revision = revision.parse::<i64>().map_err(|_error| cursor_error())?;
-    let end = end.parse::<usize>().map_err(|_error| cursor_error())?;
-    Ok(ParsedCursor {
-        open_session_id: open_session_id.to_owned(),
-        revision,
-        end,
-    })
-}
-
-fn invalid_cursor<T>() -> Result<T> {
-    Err(cursor_error())
-}
-
-fn cursor_error() -> Error {
-    Error::InvalidParameter {
-        command: "session/history",
-        parameter: "cursor",
-        message: "cursor is invalid",
-    }
-}
-
-fn i64_from_usize(value: usize) -> Result<i64> {
-    i64::try_from(value).map_err(int_error)
-}
-
-fn usize_from_i64(value: i64) -> Result<usize> {
-    usize::try_from(value).map_err(int_error)
-}
-
-fn int_error(_error: TryFromIntError) -> Error {
-    Error::Invariant {
-        message: "integer value is too large for local store",
-    }
 }

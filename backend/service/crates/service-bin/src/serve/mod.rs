@@ -13,12 +13,11 @@ use axum::routing::get;
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use service_runtime::AppServiceFactory;
 use session_store::LocalStore;
-use std::net::SocketAddr;
+use std::collections::HashSet;
+use std::pin::pin;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::task::JoinHandle;
 use tower_http::cors::CorsLayer;
 use wire::{ClientCommandFrame, ServerEventFrame, ServerResponseFrame};
 
@@ -52,30 +51,6 @@ fn router_with_actor(actor: RuntimeActor) -> Router {
         .with_state(Arc::new(ServeState { actor }))
 }
 
-pub(crate) struct ProofServer {
-    pub(crate) address: SocketAddr,
-    handle: JoinHandle<()>,
-}
-
-impl Drop for ProofServer {
-    fn drop(&mut self) {
-        self.handle.abort();
-    }
-}
-
-pub(crate) async fn spawn_proof_server(
-    factory: AppServiceFactory,
-    local_store: LocalStore,
-) -> Result<ProofServer> {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-    let address = listener.local_addr()?;
-    let app = router_with_actor(RuntimeActor::start_with_factory(factory, local_store));
-    let handle = tokio::spawn(async move {
-        let _result = axum::serve(listener, app).await;
-    });
-    Ok(ProofServer { address, handle })
-}
-
 async fn health() -> Json<serde_json::Value> {
     Json(json!({
         "ok": true,
@@ -92,11 +67,11 @@ async fn catalog() -> Json<serde_json::Value> {
             "session/new",
             "session/open",
             "session/history",
+            "session/watch",
             "session/prompt",
             "session/cancel",
-            "snapshot/get",
             "provider/disconnect",
-            "events/subscribe",
+            "sessions/watch",
             "sessions/grouped"
         ],
     }))
@@ -112,7 +87,7 @@ async fn session_socket(
 async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut live_events = state.actor.subscribe();
-    let mut subscribed = false;
+    let mut watches = WatchState::default();
 
     loop {
         tokio::select! {
@@ -125,16 +100,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
                     &state.actor,
                     message,
                     &mut live_events,
-                    &mut subscribed,
+                    &mut watches,
                 ).await {
                     break;
                 }
             }
-            event = live_events.recv(), if subscribed => {
+            event = live_events.recv(), if watches.has_watches() => {
                 let Ok(event) = event else {
                     break;
                 };
-                if send_event(&mut sender, event).await.is_err() {
+                if let Some(event) = watches.product_event(&event)
+                    && send_event(&mut sender, event).await.is_err()
+                {
                     break;
                 }
             }
@@ -147,7 +124,7 @@ async fn handle_client_message(
     actor: &RuntimeActor,
     message: Message,
     live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-    subscribed: &mut bool,
+    watches: &mut WatchState,
 ) -> bool {
     let Ok(text) = message.to_text() else {
         return false;
@@ -155,12 +132,17 @@ async fn handle_client_message(
     let frame = ClientCommandFrame::from_text(text);
     let response = match frame.rejection() {
         Some(rejection) => rejection,
-        None => actor.dispatch(frame.command()).await,
+        None => {
+            let Some(response) =
+                dispatch_with_live_events(sender, actor, frame.command(), live_events, watches)
+                    .await
+            else {
+                return false;
+            };
+            response
+        }
     };
-    if frame.command_name() != "events/subscribe"
-        && *subscribed
-        && !send_buffered_live_events(sender, live_events).await
-    {
+    if !send_buffered_live_events(sender, live_events, watches).await {
         return false;
     }
     if send_response(sender, frame.id(), response.clone())
@@ -169,22 +151,52 @@ async fn handle_client_message(
     {
         return false;
     }
-    if frame.command_name() == "events/subscribe" {
-        *live_events = live_events.resubscribe();
-        *subscribed = true;
-        return send_backlog(sender, &response.result, live_events).await;
+    if response.ok {
+        watches.apply_command(frame.command_name(), &response.result);
+        if frame.command_name() == "sessions/watch" || frame.command_name() == "session/watch" {
+            *live_events = live_events.resubscribe();
+        }
     }
     true
+}
+
+async fn dispatch_with_live_events(
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    actor: &RuntimeActor,
+    command: service_runtime::ConsumerCommand,
+    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
+    watches: &WatchState,
+) -> Option<service_runtime::ConsumerResponse> {
+    let dispatch = actor.dispatch(command);
+    let mut dispatch = pin!(dispatch);
+    loop {
+        tokio::select! {
+            response = &mut dispatch => return Some(response),
+            event = live_events.recv(), if watches.has_watches() => {
+                let Ok(event) = event else {
+                    return None;
+                };
+                if let Some(event) = watches.product_event(&event)
+                    && send_event(sender, event).await.is_err()
+                {
+                    return None;
+                }
+            }
+        }
+    }
 }
 
 async fn send_buffered_live_events(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
+    watches: &WatchState,
 ) -> bool {
     loop {
         match live_events.try_recv() {
             Ok(event) => {
-                if send_event(sender, event).await.is_err() {
+                if let Some(event) = watches.product_event(&event)
+                    && send_event(sender, event).await.is_err()
+                {
                     return false;
                 }
             }
@@ -208,44 +220,9 @@ async fn send_response(
         .map_err(|_error| ())
 }
 
-async fn send_backlog(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    result: &serde_json::Value,
-    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-) -> bool {
-    let events = backlog_events(result);
-    discard_buffered_live_events(live_events);
-    for event in events {
-        if send_event(sender, event).await.is_err() {
-            return false;
-        }
-    }
-    true
-}
-
-fn backlog_events(result: &serde_json::Value) -> Vec<service_runtime::RuntimeEvent> {
-    result
-        .get("events")
-        .cloned()
-        .and_then(|value| serde_json::from_value::<Vec<service_runtime::RuntimeEvent>>(value).ok())
-        .unwrap_or_default()
-}
-
-fn discard_buffered_live_events(
-    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-) {
-    loop {
-        match live_events.try_recv() {
-            Ok(_) | Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {}
-            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
-            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
-        }
-    }
-}
-
 async fn send_event(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    event: service_runtime::RuntimeEvent,
+    event: ProductEvent,
 ) -> std::result::Result<(), ()> {
     let frame = ServerEventFrame::new(event);
     let text = serde_json::to_string(&frame).map_err(|_error| ())?;
@@ -255,56 +232,155 @@ async fn send_event(
         .map_err(|_error| ())
 }
 
+#[derive(Debug, Default)]
+struct WatchState {
+    sessions: bool,
+    timelines: HashSet<String>,
+}
+
+impl WatchState {
+    fn has_watches(&self) -> bool {
+        self.sessions || !self.timelines.is_empty()
+    }
+
+    fn apply_command(&mut self, command: &str, result: &serde_json::Value) {
+        match command {
+            "sessions/watch" => {
+                self.sessions = true;
+            }
+            "session/watch" => {
+                if let Some(open_session_id) = result
+                    .get("openSessionId")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    self.timelines.insert(open_session_id.to_owned());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn product_event(&self, event: &service_runtime::RuntimeEvent) -> Option<ProductEvent> {
+        match event.kind {
+            service_runtime::RuntimeEventKind::SessionsIndexChanged if self.sessions => {
+                let revision = event.payload.get("revision")?.as_i64()?;
+                Some(ProductEvent::SessionsIndexChanged { revision })
+            }
+            service_runtime::RuntimeEventKind::SessionTimelineChanged => {
+                let open_session_id = event.payload.get("openSessionId")?.as_str()?;
+                if !self.timelines.contains(open_session_id) {
+                    return None;
+                }
+                let revision = event.payload.get("revision")?.as_i64()?;
+                let items = event.payload.get("items").cloned();
+                Some(ProductEvent::SessionTimelineChanged {
+                    open_session_id: open_session_id.to_owned(),
+                    revision,
+                    items,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum ProductEvent {
+    SessionsIndexChanged {
+        revision: i64,
+    },
+    SessionTimelineChanged {
+        #[serde(rename = "openSessionId")]
+        open_session_id: String,
+        revision: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        items: Option<serde_json::Value>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{backlog_events, discard_buffered_live_events};
-    use acp_discovery::ProviderId;
-    use serde_json::{Value, json, to_value};
+    use super::WatchState;
+    use serde_json::json;
     use service_runtime::{RuntimeEvent, RuntimeEventKind};
     use std::error::Error;
-    use tokio::sync::broadcast;
 
     type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 
     #[test]
-    fn backlog_events_deserialize_from_subscribe_result() -> TestResult<()> {
-        let event = runtime_event(1, RuntimeEventKind::ProviderConnected);
-        let result = json!({ "events": [to_value(&event)?] });
-        let events = backlog_events(&result);
+    fn sessions_watch_projects_only_index_events() -> TestResult<()> {
+        let mut watches = WatchState::default();
+        watches.apply_command("sessions/watch", &json!({ "subscribed": true }));
+        let event = runtime_event(
+            RuntimeEventKind::SessionsIndexChanged,
+            json!({ "revision": 4 }),
+        )?;
+        let product_event = watches.product_event(&event);
 
-        if events != vec![event] {
-            return Err("events/subscribe backlog did not deserialize".into());
+        if serde_json::to_value(product_event)?
+            == json!({
+                "kind": "sessions_index_changed",
+                "revision": 4
+            })
+        {
+            return Ok(());
         }
-        Ok(())
+        Err("sessions watch did not project a minimal index event".into())
     }
 
     #[test]
-    fn buffered_live_events_are_discarded_before_backlog_replay() -> TestResult<()> {
-        let (events, mut receiver) = broadcast::channel(8);
-        let stale = runtime_event(1, RuntimeEventKind::ProviderConnected);
-        let fresh = runtime_event(2, RuntimeEventKind::PromptStarted);
+    fn session_watch_filters_by_open_session_id() -> TestResult<()> {
+        let mut watches = WatchState::default();
+        watches.apply_command(
+            "session/watch",
+            &json!({
+                "subscribed": true,
+                "openSessionId": "open-session-1"
+            }),
+        );
+        let ignored_event = runtime_event(
+            RuntimeEventKind::SessionTimelineChanged,
+            json!({
+                "openSessionId": "open-session-2",
+                "revision": 4
+            }),
+        )?;
+        let projected_event = runtime_event(
+            RuntimeEventKind::SessionTimelineChanged,
+            json!({
+                "openSessionId": "open-session-1",
+                "revision": 5
+            }),
+        )?;
+        let ignored = watches.product_event(&ignored_event);
+        let projected = watches.product_event(&projected_event);
 
-        let _subscribers = events.send(stale.clone())?;
-        discard_buffered_live_events(&mut receiver);
-        let _subscribers = events.send(fresh.clone())?;
-
-        let received = receiver.try_recv()?;
-        if received != fresh {
-            return Err("stale event was not discarded before backlog replay".into());
+        if ignored.is_some() {
+            return Err("session watch projected another open session".into());
         }
-        if receiver.try_recv().is_ok() {
-            return Err("expected exactly one live event after stale discard".into());
+        if serde_json::to_value(projected)?
+            == json!({
+                "kind": "session_timeline_changed",
+                "openSessionId": "open-session-1",
+                "revision": 5
+            })
+        {
+            return Ok(());
         }
-        Ok(())
+        Err("session watch did not project a minimal timeline event".into())
     }
 
-    fn runtime_event(sequence: u64, kind: RuntimeEventKind) -> RuntimeEvent {
-        RuntimeEvent {
-            sequence,
-            kind,
-            provider: ProviderId::Codex,
-            session_id: None,
-            payload: Value::Null,
-        }
+    fn runtime_event(
+        kind: RuntimeEventKind,
+        payload: serde_json::Value,
+    ) -> TestResult<RuntimeEvent> {
+        Ok(serde_json::from_value(json!({
+            "sequence": 1,
+            "kind": kind,
+            "provider": "codex",
+            "session_id": null,
+            "payload": payload
+        }))?)
     }
 }

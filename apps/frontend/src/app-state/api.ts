@@ -1,37 +1,25 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
-import { createSessionClient } from "@conduit/session-client";
 import type {
-  ContentBlock,
-  ProviderId,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
+  TranscriptItem,
 } from "@conduit/session-client";
+import {
+  getSessionGroupsQuery,
+  openSessionQuery,
+  promptSessionQuery,
+  readSessionHistoryQuery,
+  sessionClient,
+} from "./session-api-queries";
+import { applyTimelineItems } from "./session-history-cache";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
 import { activeSessionOpened } from "./session-selection";
-
-const sessionClient = createSessionClient();
-
-interface OpenSessionMutationArg {
-  provider: ProviderId;
-  sessionId: string;
-  cwd: string;
-  title: string | null;
-  limit?: number;
-}
-
-interface ReadSessionHistoryQueryArg {
-  provider: ProviderId;
-  openSessionId: string;
-  cursor?: string | null;
-  limit?: number;
-}
-
-interface PromptSessionMutationArg {
-  provider: ProviderId;
-  openSessionId: string;
-  prompt: ContentBlock[];
-}
+import type {
+  OpenSessionMutationArg,
+  PromptSessionMutationArg,
+  ReadSessionHistoryQueryArg,
+} from "./session-api-queries";
 
 interface OpenSessionLifecycleApi {
   dispatch: (action: unknown) => unknown;
@@ -47,17 +35,23 @@ interface CacheLifecycleApi {
 type DispatchLike = (action: unknown) => unknown;
 type UpsertSessionHistory = (
   dispatch: DispatchLike,
-  provider: ProviderId,
   history: SessionHistoryWindow,
 ) => void;
 type InvalidateSessionHistory = (
   dispatch: DispatchLike,
   openSessionId: string,
 ) => void;
+interface TimelineItemsUpdate {
+  openSessionId: string;
+  revision: number;
+  items: TranscriptItem[];
+}
+
+type UpdateSessionHistoryItems = (
+  dispatch: DispatchLike,
+  update: TimelineItemsUpdate,
+) => void;
 type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
-type QueryResult<ResponseData> = Promise<
-  { data: ResponseData } | { error: string }
->;
 
 let upsertSessionHistory: UpsertSessionHistory = (): void => {
   throw new Error("session history cache upsert is not initialized");
@@ -65,88 +59,12 @@ let upsertSessionHistory: UpsertSessionHistory = (): void => {
 let invalidateSessionHistory: InvalidateSessionHistory = (): void => {
   throw new Error("session history invalidation is not initialized");
 };
+let updateSessionHistoryItems: UpdateSessionHistoryItems = (): void => {
+  throw new Error("session history cache item update is not initialized");
+};
 let invalidateSessionGroups: InvalidateSessionGroups = (): void => {
   throw new Error("session groups invalidation is not initialized");
 };
-
-function toQueryError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "session request failed";
-}
-
-async function getSessionGroupsQuery(
-  query: SessionGroupsQuery | undefined,
-): QueryResult<SessionGroupsView> {
-  try {
-    const data = await sessionClient.getSessionGroups(query);
-    return { data };
-  } catch (error) {
-    return { error: toQueryError(error) };
-  }
-}
-
-async function openSessionQuery({
-  cwd,
-  limit,
-  provider,
-  sessionId,
-}: OpenSessionMutationArg): QueryResult<SessionHistoryWindow> {
-  try {
-    const response = await sessionClient.openSession(provider, {
-      cwd,
-      limit,
-      sessionId,
-    });
-    if (!response.ok) {
-      return { error: response.error?.message ?? "session open failed" };
-    }
-    if (response.result === null) {
-      return { error: "session open returned no history" };
-    }
-    return { data: response.result };
-  } catch (error) {
-    return { error: toQueryError(error) };
-  }
-}
-
-async function readSessionHistoryQuery({
-  cursor,
-  limit,
-  openSessionId,
-  provider,
-}: ReadSessionHistoryQueryArg): QueryResult<SessionHistoryWindow> {
-  try {
-    const response = await sessionClient.readSessionHistory(provider, {
-      cursor,
-      limit,
-      openSessionId,
-    });
-    if (!response.ok) {
-      return { error: response.error?.message ?? "session history failed" };
-    }
-    if (response.result === null) {
-      return { error: "session history returned no window" };
-    }
-    return { data: response.result };
-  } catch (error) {
-    return { error: toQueryError(error) };
-  }
-}
-
-async function promptSessionQuery({
-  openSessionId,
-  prompt,
-  provider,
-}: PromptSessionMutationArg): QueryResult<null> {
-  try {
-    await sessionClient.promptSession(provider, { openSessionId, prompt });
-    return { data: null };
-  } catch (error) {
-    return { error: toQueryError(error) };
-  }
-}
 
 async function handleOpenSessionStarted(
   { cwd, provider, sessionId, title }: OpenSessionMutationArg,
@@ -163,23 +81,31 @@ async function handleOpenSessionStarted(
         title,
       }),
     );
-    upsertSessionHistory(dispatch, provider, data);
+    upsertSessionHistory(dispatch, data);
   } catch {
     // The query result already carries the user-visible failure.
   }
 }
 
 async function handleSessionHistoryCacheEntryAdded(
-  { openSessionId, provider }: ReadSessionHistoryQueryArg,
+  { openSessionId }: ReadSessionHistoryQueryArg,
   { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
 ): Promise<void> {
   let unsubscribe: (() => void) | null = null;
   try {
     await cacheDataLoaded;
     unsubscribe = await sessionClient.subscribeTimelineChanges(
-      provider,
+      openSessionId,
       (event) => {
         if (event.openSessionId !== openSessionId) {
+          return;
+        }
+        if (event.items !== undefined) {
+          updateSessionHistoryItems(dispatch, {
+            items: event.items,
+            openSessionId,
+            revision: event.revision,
+          });
           return;
         }
         invalidateSessionHistory(dispatch, openSessionId);
@@ -249,11 +175,11 @@ const conduitApi = createApi({
   }),
 });
 
-upsertSessionHistory = (dispatch, provider, history): void => {
+upsertSessionHistory = (dispatch, history): void => {
   void dispatch(
     conduitApi.util.upsertQueryData(
       "readSessionHistory",
-      { openSessionId: history.openSessionId, provider },
+      { openSessionId: history.openSessionId },
       history,
     ),
   );
@@ -267,6 +193,16 @@ invalidateSessionHistory = (dispatch, openSessionId): void => {
   );
 };
 
+updateSessionHistoryItems = (dispatch, update): void => {
+  void dispatch(
+    conduitApi.util.updateQueryData(
+      "readSessionHistory",
+      { openSessionId: update.openSessionId },
+      (history) => applyTimelineItems(history, update.revision, update.items),
+    ),
+  );
+};
+
 invalidateSessionGroups = (dispatch): void => {
   void dispatch(
     conduitApi.util.invalidateTags([{ id: "LIST", type: "SessionGroups" }]),
@@ -275,6 +211,7 @@ invalidateSessionGroups = (dispatch): void => {
 
 const {
   useGetSessionGroupsQuery,
+  useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
@@ -283,6 +220,7 @@ const {
 export {
   conduitApi,
   useGetSessionGroupsQuery,
+  useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,

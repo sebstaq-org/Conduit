@@ -52,7 +52,6 @@ async function submitPrompt({
     await promptSession({
       openSessionId: activeSession.openSessionId,
       prompt: [{ text, type: "text" }],
-      provider: activeSession.provider,
     }).unwrap();
     setDraft("");
   } catch {

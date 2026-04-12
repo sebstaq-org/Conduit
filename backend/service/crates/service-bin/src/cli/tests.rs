@@ -1,6 +1,6 @@
 //! Tests for service-bin CLI parsing.
 
-use super::{Command, ReplayCommand, parse_command};
+use super::{Command, parse_command};
 use crate::error::ServiceError;
 use std::error::Error;
 
@@ -39,24 +39,13 @@ fn runtime_session_new_does_not_require_artifact_root() -> TestResult<()> {
 }
 
 #[test]
-fn proof_session_new_still_requires_artifact_root() -> TestResult<()> {
-    let args = strings(&["session-new", "--provider", "codex", "--cwd", "/repo"]);
-    let error = parse_command(&args)
-        .err()
-        .ok_or("proof command unexpectedly parsed")?;
-    if !matches!(error, ServiceError::MissingFlag { ref flag } if flag == "--artifact-root") {
-        return Err(format!("unexpected error {error}").into());
-    }
-    Ok(())
-}
-
-#[test]
-fn consumer_proof_requires_artifact_root() -> TestResult<()> {
+fn consumer_proof_is_not_a_product_command() -> TestResult<()> {
     let args = strings(&["consumer-proof", "--provider", "codex"]);
     let error = parse_command(&args)
         .err()
         .ok_or("consumer proof unexpectedly parsed")?;
-    if !matches!(error, ServiceError::MissingFlag { ref flag } if flag == "--artifact-root") {
+    if !matches!(error, ServiceError::UnsupportedCommand { ref command } if command == "consumer-proof")
+    {
         return Err(format!("unexpected error {error}").into());
     }
     Ok(())
@@ -78,39 +67,12 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
 }
 
 #[test]
-fn replay_capture_accepts_default_manual_artifact_root() -> TestResult<()> {
-    let args = strings(&[
-        "replay",
-        "capture",
-        "--provider",
-        "codex",
-        "--scenario",
-        "prompt-agent-text",
-    ]);
-    let Command::Replay {
-        command:
-            ReplayCommand::Capture {
-                provider,
-                scenario,
-                artifact_root,
-            },
-    } = parse_command(&args)?
-    else {
-        return Err("expected replay capture command".into());
-    };
-    if provider.as_str() != "codex" || scenario != "prompt-agent-text" || artifact_root.is_some() {
-        return Err("unexpected replay capture parse result".into());
-    }
-    Ok(())
-}
-
-#[test]
-fn replay_curate_requires_raw_root() -> TestResult<()> {
+fn replay_is_not_a_product_command() -> TestResult<()> {
     let args = strings(&["replay", "curate"]);
     let error = parse_command(&args)
         .err()
         .ok_or("replay curate unexpectedly parsed")?;
-    if !matches!(error, ServiceError::MissingFlag { ref flag } if flag == "--raw-root") {
+    if !matches!(error, ServiceError::UnsupportedCommand { ref command } if command == "replay") {
         return Err(format!("unexpected error {error}").into());
     }
     Ok(())

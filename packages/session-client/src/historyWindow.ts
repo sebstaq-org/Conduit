@@ -26,7 +26,6 @@ function readSessionHistoryResponse(
       ok: response.ok,
       result: null,
       error: response.error,
-      snapshot: response.snapshot,
     };
   }
   if (!isSessionHistoryWindow(response.result)) {
@@ -37,7 +36,6 @@ function readSessionHistoryResponse(
     ok: response.ok,
     result: response.result,
     error: response.error,
-    snapshot: response.snapshot,
   };
 }
 

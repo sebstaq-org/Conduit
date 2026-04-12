@@ -34,7 +34,7 @@ import type {
 } from "./timelineEvent.js";
 
 interface TimelineSubscription {
-  provider: ProviderId;
+  openSessionId: string;
   handler: (event: SessionTimelineChanged) => void;
 }
 
@@ -84,21 +84,17 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 
   public async readSessionHistory(
-    provider: ProviderId,
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
     const response = await this.dispatch(
-      createConsumerCommand("session/history", provider, request),
+      createConsumerCommand("session/history", "all", request),
     );
     return readSessionHistoryResponse(response);
   }
 
-  public async promptSession(
-    provider: ProviderId,
-    request: SessionPromptRequest,
-  ): Promise<void> {
+  public async promptSession(request: SessionPromptRequest): Promise<void> {
     const response = await this.dispatch(
-      createConsumerCommand("session/prompt", provider, request),
+      createConsumerCommand("session/prompt", "all", request),
     );
     if (!response.ok) {
       throw new Error(response.error?.message ?? "session prompt failed");
@@ -106,16 +102,13 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 
   public async subscribeTimelineChanges(
-    provider: ProviderId,
+    openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,
-    afterSequence: number | null = null,
   ): Promise<() => void> {
-    const subscription = { provider, handler };
+    const subscription = { openSessionId, handler };
     this.timelineSubscriptions.add(subscription);
     const response = await this.dispatch(
-      createConsumerCommand("events/subscribe", provider, {
-        after_sequence: afterSequence,
-      }),
+      createConsumerCommand("session/watch", "all", { openSessionId }),
     );
     if (!response.ok) {
       this.timelineSubscriptions.delete(subscription);
@@ -127,16 +120,12 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 
   public async subscribeSessionIndexChanges(
-    provider: ProviderId,
     handler: (event: SessionsIndexChanged) => void,
-    afterSequence: number | null = null,
   ): Promise<() => void> {
     const subscription = { handler };
     this.sessionIndexSubscriptions.add(subscription);
     const response = await this.dispatch(
-      createConsumerCommand("events/subscribe", provider, {
-        after_sequence: afterSequence,
-      }),
+      createConsumerCommand("sessions/watch", "all"),
     );
     if (!response.ok) {
       this.sessionIndexSubscriptions.delete(subscription);
@@ -234,7 +223,7 @@ class WebSocketSessionClient implements SessionClientPort {
     const event = readSessionTimelineChanged(eventFrame);
     if (event) {
       for (const subscription of this.timelineSubscriptions) {
-        if (subscription.provider === event.provider) {
+        if (subscription.openSessionId === event.openSessionId) {
           subscription.handler(event);
         }
       }

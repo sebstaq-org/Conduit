@@ -128,6 +128,9 @@ interface TranscriptMessageItem {
 interface TranscriptEventItem {
   kind: "event";
   id: string;
+  turnId?: string;
+  status?: TranscriptItemStatus;
+  stopReason?: string;
   variant: string;
   data: unknown;
 }

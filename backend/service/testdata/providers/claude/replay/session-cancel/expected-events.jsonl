@@ -1,3 +1,0 @@
-{"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
-{"kind":"session_observed","provider":"claude","session_id":"replay-claude-session-cancel-session-1","payload":{"observed_via":"session/new"}}
-{"kind":"cancel_sent","provider":"claude","session_id":"replay-claude-session-cancel-session-1","payload":{"command":"session/cancel"}}

@@ -5,16 +5,16 @@ caching. Feature modules should consume RTK Query hooks from here, not
 `@conduit/session-client`, `@conduit/session-contracts`, WebSocket transport, or
 raw command dispatch directly.
 
-The product-ready session API in this checkout is `useGetSessionGroupsQuery`.
-It returns grouped sessions for the navigation UI through the Conduit read-model
-shape, not the official ACP `session/list` shape.
+The product session APIs in this checkout are `useGetSessionGroupsQuery`,
+`useOpenSessionMutation`, `useReadSessionHistoryQuery`, and
+`usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
+not raw official ACP provider responses.
 
-The session transcript screen is still UI-only fixture work in this checkout.
-Do not wire it to `ProviderSnapshot`, `LoadedTranscriptSnapshot`, `lastPrompt`,
-`RawWireEvent`, `snapshot/get`, or `events/subscribe`; those are diagnostic or
-transport surfaces until a timeline read-model endpoint exists here.
+Do not wire feature UI to `ProviderSnapshot`, `LoadedTranscriptSnapshot`,
+`lastPrompt`, `RawWireEvent`, raw command dispatch, or backend provider internals.
+The product event path is `sessions/watch` and `session/watch`, surfaced through
+the client subscription methods in `src/app-state`.
 
-When session history is added, expose it here as RTK Query endpoints that read a
-single timeline model. `session/load` replay, live `session/prompt` output, and
-cancel completion should be projected by backend/client code before feature UI
-renders it.
+Session history is cursor-windowed. The latest window is fetched without a
+cursor, older windows use `nextCursor`, and live `session/prompt` output is
+projected into the same timeline model before feature UI renders it.

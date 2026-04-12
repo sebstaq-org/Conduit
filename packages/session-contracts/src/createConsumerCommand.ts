@@ -22,6 +22,10 @@ import type {
   SessionPromptCommandName,
   SessionPromptConsumerCommand,
   SessionPromptRequest,
+  SessionsWatchCommandName,
+  SessionsWatchConsumerCommand,
+  SessionWatchCommandName,
+  SessionWatchConsumerCommand,
 } from "./wire.js";
 import type { ProviderId } from "@conduit/session-model";
 
@@ -82,6 +86,18 @@ function createSessionOpenCommand(
   };
 }
 
+function createSessionsWatchCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+): SessionsWatchConsumerCommand {
+  return {
+    id,
+    command: "sessions/watch",
+    provider,
+    params: {},
+  };
+}
+
 function createSessionHistoryCommand(
   id: string,
   provider: ConsumerCommandTarget,
@@ -93,7 +109,23 @@ function createSessionHistoryCommand(
   return {
     id,
     command: "session/history",
-    provider: requireProvider("session/history", provider),
+    provider,
+    params,
+  };
+}
+
+function createSessionWatchCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): SessionWatchConsumerCommand {
+  if (!isSessionHistoryRequest(params)) {
+    throw new Error("session/watch params are invalid");
+  }
+  return {
+    id,
+    command: "session/watch",
+    provider,
     params,
   };
 }
@@ -109,9 +141,54 @@ function createSessionPromptCommand(
   return {
     id,
     command: "session/prompt",
-    provider: requireProvider("session/prompt", provider),
+    provider,
     params,
   };
+}
+
+type ConduitFactory = (
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+) => ConsumerCommand;
+
+type KnownConduitCommandName =
+  | SessionGroupsCommandName
+  | SessionsWatchCommandName
+  | SessionOpenCommandName
+  | SessionHistoryCommandName
+  | SessionWatchCommandName
+  | SessionPromptCommandName;
+
+interface KnownConduitCommandInput {
+  command: KnownConduitCommandName;
+  id: string;
+  params: unknown;
+  provider: ConsumerCommandTarget;
+}
+
+const conduitFactories: Record<KnownConduitCommandName, ConduitFactory> = {
+  "session/history": createSessionHistoryCommand,
+  "session/open": createSessionOpenCommand,
+  "session/prompt": createSessionPromptCommand,
+  "session/watch": createSessionWatchCommand,
+  "sessions/grouped": createSessionGroupsCommand,
+  "sessions/watch": createSessionsWatchCommand,
+};
+
+function isKnownConduitCommandName(
+  command: ConsumerCommandName,
+): command is KnownConduitCommandName {
+  return command in conduitFactories;
+}
+
+function createKnownConduitCommand({
+  command,
+  id,
+  params,
+  provider,
+}: KnownConduitCommandInput): ConsumerCommand {
+  return conduitFactories[command](id, provider, params);
 }
 
 function createConsumerCommand(
@@ -127,14 +204,25 @@ function createConsumerCommand(
 ): SessionOpenConsumerCommand;
 
 function createConsumerCommand(
+  command: SessionsWatchCommandName,
+  provider: ConsumerCommandTarget,
+): SessionsWatchConsumerCommand;
+
+function createConsumerCommand(
   command: SessionHistoryCommandName,
-  provider: ProviderId,
+  provider: ConsumerCommandTarget,
   params: SessionHistoryRequest,
 ): SessionHistoryConsumerCommand;
 
 function createConsumerCommand(
+  command: SessionWatchCommandName,
+  provider: ConsumerCommandTarget,
+  params: SessionHistoryRequest,
+): SessionWatchConsumerCommand;
+
+function createConsumerCommand(
   command: SessionPromptCommandName,
-  provider: ProviderId,
+  provider: ConsumerCommandTarget,
   params: SessionPromptRequest,
 ): SessionPromptConsumerCommand;
 
@@ -155,17 +243,13 @@ function createConsumerCommand(
     | SessionPromptRequest = {},
 ): ConsumerCommand {
   const id = nextConsumerCommandId();
-  if (command === "sessions/grouped") {
-    return createSessionGroupsCommand(id, provider, params);
-  }
-  if (command === "session/open") {
-    return createSessionOpenCommand(id, provider, params);
-  }
-  if (command === "session/history") {
-    return createSessionHistoryCommand(id, provider, params);
-  }
-  if (command === "session/prompt") {
-    return createSessionPromptCommand(id, provider, params);
+  if (isKnownConduitCommandName(command)) {
+    return createKnownConduitCommand({
+      id,
+      command,
+      provider,
+      params,
+    });
   }
   return {
     id,

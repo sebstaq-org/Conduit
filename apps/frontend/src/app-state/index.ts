@@ -1,6 +1,7 @@
 export {
   conduitApi,
   useGetSessionGroupsQuery,
+  useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,

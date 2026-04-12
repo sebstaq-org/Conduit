@@ -2,16 +2,12 @@
 
 mod support;
 
-use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use app_api as _;
 use serde as _;
 use serde_json::{Value, json};
-use service_runtime::{RuntimeEvent, RuntimeEventKind};
-use std::fs::read_to_string;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use support::{FakeState, TestResult, assert_ok, command, ensure_event, runtime};
+use support::{FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
 #[test]
@@ -58,14 +54,15 @@ fn disconnect_reconnects_next_provider_access() -> TestResult<()> {
     assert_ok(&runtime.dispatch(command("1", "initialize", "codex", json!({}))))?;
 
     let disconnected = runtime.dispatch(command("2", "provider/disconnect", "codex", json!({})));
-    let snapshot = runtime.dispatch(command("3", "snapshot/get", "codex", json!({})));
+    let reconnected = runtime.dispatch(command(
+        "3",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo" }),
+    ));
 
     assert_ok(&disconnected)?;
-    assert_ok(&snapshot)?;
-    let connection_state = snapshot.snapshot.map(|value| value.connection_state);
-    if connection_state != Some(ConnectionState::Ready) {
-        return Err(format!("expected reconnected snapshot, got {connection_state:?}").into());
-    }
+    assert_ok(&reconnected)?;
     let connect_count = connect_count(&state, ProviderId::Codex)?;
     if connect_count != Some(2) {
         return Err(format!("expected reconnect after disconnect, got {connect_count:?}").into());
@@ -90,56 +87,37 @@ fn provider_snapshot_alias_is_not_supported() -> TestResult<()> {
 }
 
 #[test]
-fn event_subscription_returns_cursor_and_raw_wire_truth() -> TestResult<()> {
+fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command("1", "events/subscribe", "copilot", json!({})));
+    let response = runtime.dispatch(command("1", "sessions/watch", "all", json!({})));
 
     assert_ok(&response)?;
-    ensure_array(&response.result, "events")?;
-    ensure_array(&response.result, "raw_wire_events")?;
-    if !response
-        .result
-        .get("next_sequence")
-        .is_some_and(serde_json::Value::is_u64)
-    {
-        return Err(format!("expected next sequence, got {}", response.result).into());
+    if response.result == json!({ "subscribed": true }) {
+        return Ok(());
     }
-    Ok(())
+    Err(format!("unexpected sessions/watch result {}", response.result).into())
 }
 
 #[test]
-fn event_subscription_filters_by_cursor() -> TestResult<()> {
+fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
-    assert_ok(&runtime.dispatch(command("1", "initialize", "copilot", json!({}))))?;
-    let cursor = runtime.latest_event_sequence();
-    assert_ok(&runtime.dispatch(command(
-        "2",
-        "session/new",
-        "copilot",
-        json!({ "cwd": "/repo" }),
-    )))?;
     let response = runtime.dispatch(command(
-        "3",
+        "1",
         "events/subscribe",
         "copilot",
-        json!({ "after_sequence": cursor }),
+        json!({ "after_sequence": 0 }),
     ));
 
-    assert_ok(&response)?;
-    let events = response
-        .result
-        .get("events")
-        .and_then(serde_json::Value::as_array)
-        .ok_or("events result was not an array")?;
-    if events
-        .iter()
-        .any(|event| event.get("sequence").and_then(serde_json::Value::as_u64) <= Some(cursor))
-    {
-        return Err("events/subscribe replayed history before cursor".into());
+    if response.ok {
+        return Err("events/subscribe unexpectedly succeeded".into());
     }
-    Ok(())
+    let error_code = response.error.map(|error| error.code);
+    if error_code == Some("unsupported_command".to_owned()) {
+        return Ok(());
+    }
+    Err(format!("expected unsupported_command, got {error_code:?}").into())
 }
 
 #[test]
@@ -360,32 +338,10 @@ fn cancel_dispatch_records_cancel_without_final_state() -> TestResult<()> {
 
     assert_ok(&response)?;
     let events = runtime.drain_events();
-    ensure_event(&events, RuntimeEventKind::CancelSent)?;
-    if events
-        .iter()
-        .any(|event| event.kind == RuntimeEventKind::PromptCompleted)
-    {
-        return Err("cancel invented a provider-independent prompt completion".into());
+    if events.is_empty() {
+        return Ok(());
     }
-    Ok(())
-}
-
-#[test]
-fn golden_consumer_event_stream_deserializes() -> TestResult<()> {
-    let contents = read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(2)
-            .ok_or("could not resolve backend service root")?
-            .join("testdata/golden/consumer-events.json"),
-    )?;
-    let events: Vec<RuntimeEvent> = serde_json::from_str(&contents)?;
-    if events.len() < 4 {
-        return Err("golden consumer event stream is too small".into());
-    }
-    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
-    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
-    Ok(())
+    Err(format!("cancel produced product events: {events:?}").into())
 }
 
 fn connect_count(state: &Arc<Mutex<FakeState>>, provider: ProviderId) -> TestResult<Option<usize>> {
@@ -405,13 +361,6 @@ fn dispatch_after_group_refresh(
     assert_ok(&loading)?;
     runtime.refresh_after_response(&request)?;
     Ok(runtime.dispatch(request))
-}
-
-fn ensure_array(value: &Value, field: &str) -> TestResult<()> {
-    if value.get(field).is_some_and(serde_json::Value::is_array) {
-        return Ok(());
-    }
-    Err(format!("expected array field {field}, got {value}").into())
 }
 
 fn seed_grouped_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {

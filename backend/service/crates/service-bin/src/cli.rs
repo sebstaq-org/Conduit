@@ -1,13 +1,10 @@
-//! Minimal argument parsing for silent Phase 1 proof commands.
+//! Minimal argument parsing for product service commands.
 
 use crate::error::{Result, ServiceError};
-use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::ConsumerCommand;
-use std::path::PathBuf;
-use std::str::FromStr;
 
-/// The supported silent proof commands.
+/// The supported service commands.
 pub(crate) enum Command {
     /// Runs the normal product WebSocket service boundary.
     Serve {
@@ -21,129 +18,9 @@ pub(crate) enum Command {
         /// The runtime command envelope.
         command: ConsumerCommand,
     },
-    /// Runs one consumer API proof sequence and writes artifacts.
-    ConsumerProof {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes Part 1 contract lock artifacts.
-    Contracts {
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes discovery artifacts for one provider.
-    Discovery {
-        /// The provider being probed.
-        provider: ProviderId,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes initialize artifacts for one provider.
-    Initialize {
-        /// The provider being initialized.
-        provider: ProviderId,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes session/new artifacts for one provider.
-    SessionNew {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The working directory requested from ACP.
-        cwd: PathBuf,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes session/list artifacts for one provider.
-    SessionList {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes session/load artifacts for one provider.
-    SessionLoad {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The working directory used for loading.
-        cwd: PathBuf,
-        /// The optional ACP session id to load.
-        session_id: Option<String>,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes restart recovery artifacts for one provider.
-    RestartRecovery {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The working directory used for loading.
-        cwd: PathBuf,
-        /// The optional ACP session id to recover.
-        session_id: Option<String>,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes session/prompt artifacts for one provider.
-    SessionPrompt {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The text prompt to send.
-        prompt: String,
-        /// Optional ACP session id to reuse.
-        session_id: Option<String>,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Writes session/cancel artifacts for one provider.
-    SessionCancel {
-        /// The provider being used.
-        provider: ProviderId,
-        /// The text prompt to send before cancellation.
-        prompt: String,
-        /// Optional ACP session id to reuse.
-        session_id: Option<String>,
-        /// Delay before `session/cancel`.
-        cancel_after_ms: u64,
-        /// The artifact root to populate.
-        artifact_root: PathBuf,
-    },
-    /// Runs the dev-only ACP replay fixture workflow.
-    Replay {
-        /// The replay workflow subcommand.
-        command: ReplayCommand,
-    },
 }
 
-/// Dev-only replay fixture workflow subcommands.
-pub(crate) enum ReplayCommand {
-    /// Captures live observation frames into ignored manual artifacts.
-    Capture {
-        /// The provider being captured.
-        provider: ProviderId,
-        /// The replay scenario name.
-        scenario: String,
-        /// Optional raw artifact root override.
-        artifact_root: Option<PathBuf>,
-    },
-    /// Curates one raw capture into candidate replay fixture files.
-    Curate {
-        /// Raw capture root to read.
-        raw_root: PathBuf,
-        /// Optional candidate output root override.
-        candidate_root: Option<PathBuf>,
-    },
-    /// Promotes one reviewed candidate into committed replay testdata.
-    Promote {
-        /// Candidate fixture root to promote.
-        candidate_root: PathBuf,
-        /// Optional service testdata root override.
-        testdata_root: Option<PathBuf>,
-    },
-}
-
-/// Parses the silent proof CLI arguments.
+/// Parses service CLI arguments.
 pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
     let Some(command) = args.first() else {
         return Err(unsupported("missing command"));
@@ -156,88 +33,6 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,
         }),
-        "consumer-proof" => Ok(Command::ConsumerProof {
-            provider: required_provider(args, "--provider")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "replay" => parse_replay_command(args),
-        _ => parse_proof_command(command, args),
-    }
-}
-
-fn parse_replay_command(args: &[String]) -> Result<Command> {
-    let Some(action) = args.get(1) else {
-        return Err(missing("<replay-command>"));
-    };
-    let command = match action.as_str() {
-        "capture" => ReplayCommand::Capture {
-            provider: required_provider(args, "--provider")?,
-            scenario: required_value(args, "--scenario")?,
-            artifact_root: optional_path(args, "--artifact-root"),
-        },
-        "curate" => ReplayCommand::Curate {
-            raw_root: required_path(args, "--raw-root")?,
-            candidate_root: optional_path(args, "--candidate-root"),
-        },
-        "promote" => ReplayCommand::Promote {
-            candidate_root: required_path(args, "--candidate-root")?,
-            testdata_root: optional_path(args, "--testdata-root"),
-        },
-        _ => return Err(unsupported(action)),
-    };
-    Ok(Command::Replay { command })
-}
-
-fn parse_proof_command(command: &str, args: &[String]) -> Result<Command> {
-    match command {
-        "contracts" => Ok(Command::Contracts {
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "discovery" => Ok(Command::Discovery {
-            provider: required_provider(args, "--provider")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "initialize" => Ok(Command::Initialize {
-            provider: required_provider(args, "--provider")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "session-new" => Ok(Command::SessionNew {
-            provider: required_provider(args, "--provider")?,
-            cwd: required_path(args, "--cwd")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "session-list" => Ok(Command::SessionList {
-            provider: required_provider(args, "--provider")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "session-load" => Ok(Command::SessionLoad {
-            provider: required_provider(args, "--provider")?,
-            cwd: required_path(args, "--cwd")?,
-            session_id: optional_value(args, "--session-id"),
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "restart-recovery" => Ok(Command::RestartRecovery {
-            provider: required_provider(args, "--provider")?,
-            cwd: required_path(args, "--cwd")?,
-            session_id: optional_value(args, "--session-id"),
-            artifact_root: required_path(args, "--artifact-root")?,
-        }),
-        "session-prompt" => Ok(Command::SessionPrompt {
-            provider: required_provider(args, "--provider")?,
-            artifact_root: required_path(args, "--artifact-root")?,
-            prompt: required_value(args, "--prompt")?,
-            session_id: optional_value(args, "--session-id"),
-        }),
-        "session-cancel" => {
-            let _proof_cwd = required_path(args, "--cwd")?;
-            Ok(Command::SessionCancel {
-                provider: required_provider(args, "--provider")?,
-                prompt: required_value(args, "--prompt")?,
-                session_id: optional_value(args, "--session-id"),
-                cancel_after_ms: required_u64(args, "--cancel-after-ms")?,
-                artifact_root: required_path(args, "--artifact-root")?,
-            })
-        }
         _ => Err(unsupported(command)),
     }
 }
@@ -259,11 +54,7 @@ fn runtime_command(args: &[String]) -> Result<ConsumerCommand> {
 
 fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
     match command {
-        "initialize"
-        | "session/list"
-        | "snapshot/get"
-        | "provider/disconnect"
-        | "events/subscribe" => Ok(json!({})),
+        "initialize" | "session/list" | "provider/disconnect" | "sessions/watch" => Ok(json!({})),
         "session/new" => Ok(json!({
             "cwd": required_value(args, "--cwd")?,
         })),
@@ -278,42 +69,16 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
         "session/history" => Ok(json!({
             "openSessionId": required_value(args, "--open-session-id")?,
         })),
+        "session/watch" => Ok(json!({
+            "openSessionId": required_value(args, "--open-session-id")?,
+        })),
         "session/prompt" => Ok(json!({
             "openSessionId": required_value(args, "--open-session-id")?,
             "prompt": [{ "type": "text", "text": required_value(args, "--prompt")? }],
         })),
-        "session/cancel" => Ok(json!({
-            "session_id": required_value(args, "--session-id")?,
-        })),
+        "session/cancel" => Ok(json!({ "session_id": required_value(args, "--session-id")? })),
         _ => Err(unsupported(command)),
     }
-}
-
-fn required_provider(args: &[String], flag: &str) -> Result<ProviderId> {
-    let value = required_value(args, flag)?;
-    ProviderId::from_str(&value).map_err(|message| ServiceError::InvalidProvider {
-        provider: value,
-        message: message.to_owned(),
-    })
-}
-
-fn required_path(args: &[String], flag: &str) -> Result<PathBuf> {
-    Ok(PathBuf::from(required_value(args, flag)?))
-}
-
-fn optional_path(args: &[String], flag: &str) -> Option<PathBuf> {
-    optional_value(args, flag).map(PathBuf::from)
-}
-
-fn required_u64(args: &[String], flag: &str) -> Result<u64> {
-    let value = required_value(args, flag)?;
-    value
-        .parse::<u64>()
-        .map_err(|source| ServiceError::InvalidFlagValue {
-            flag: flag.to_owned(),
-            value,
-            message: source.to_string(),
-        })
 }
 
 fn optional_u16(args: &[String], flag: &str) -> Result<Option<u16>> {

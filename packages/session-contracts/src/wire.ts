@@ -1,12 +1,12 @@
 import type {
   ProviderId,
-  ProviderSnapshot,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
   SessionPromptRequest,
+  TranscriptItem,
 } from "@conduit/session-model";
 
 const CONDUIT_TRANSPORT_VERSION = 1 as const;
@@ -20,12 +20,12 @@ const SESSION_COMMANDS = [
 ] as const;
 
 const CONDUIT_COMMANDS = [
-  "snapshot/get",
   "provider/disconnect",
-  "events/subscribe",
   "sessions/grouped",
+  "sessions/watch",
   "session/open",
   "session/history",
+  "session/watch",
 ] as const;
 
 const CONSUMER_COMMANDS = [...SESSION_COMMANDS, ...CONDUIT_COMMANDS] as const;
@@ -38,17 +38,23 @@ type ConsumerCommandName = (typeof CONSUMER_COMMANDS)[number];
 
 type SessionGroupsCommandName = "sessions/grouped";
 
+type SessionsWatchCommandName = "sessions/watch";
+
 type SessionOpenCommandName = "session/open";
 
 type SessionHistoryCommandName = "session/history";
+
+type SessionWatchCommandName = "session/watch";
 
 type SessionPromptCommandName = "session/prompt";
 
 type ProviderScopedCommandName = Exclude<
   ConsumerCommandName,
   | SessionGroupsCommandName
+  | SessionsWatchCommandName
   | SessionOpenCommandName
   | SessionHistoryCommandName
+  | SessionWatchCommandName
   | SessionPromptCommandName
 >;
 
@@ -73,25 +79,41 @@ interface SessionOpenConsumerCommand {
   params: SessionOpenRequest;
 }
 
+interface SessionsWatchConsumerCommand {
+  id: string;
+  command: SessionsWatchCommandName;
+  provider: ConsumerCommandTarget;
+  params: Record<string, never>;
+}
+
 interface SessionHistoryConsumerCommand {
   id: string;
   command: SessionHistoryCommandName;
-  provider: ProviderId;
+  provider: ConsumerCommandTarget;
+  params: SessionHistoryRequest;
+}
+
+interface SessionWatchConsumerCommand {
+  id: string;
+  command: SessionWatchCommandName;
+  provider: ConsumerCommandTarget;
   params: SessionHistoryRequest;
 }
 
 interface SessionPromptConsumerCommand {
   id: string;
   command: SessionPromptCommandName;
-  provider: ProviderId;
+  provider: ConsumerCommandTarget;
   params: SessionPromptRequest;
 }
 
 type ConsumerCommand =
   | ProviderConsumerCommand
   | SessionGroupsConsumerCommand
+  | SessionsWatchConsumerCommand
   | SessionOpenConsumerCommand
   | SessionHistoryConsumerCommand
+  | SessionWatchConsumerCommand
   | SessionPromptConsumerCommand;
 
 type ConsumerCommandTarget = ProviderId | "all";
@@ -106,28 +128,15 @@ interface ConsumerResponse<Result = unknown> {
   ok: boolean;
   result: Result;
   error: ConsumerError | null;
-  snapshot: ProviderSnapshot | null;
 }
 
-type RuntimeEventKind =
-  | "provider_connected"
-  | "provider_disconnected"
-  | "session_observed"
-  | "session_replay_update"
-  | "prompt_started"
-  | "prompt_update_observed"
-  | "prompt_completed"
-  | "session_timeline_changed"
-  | "sessions_index_changed"
-  | "cancel_sent"
-  | "raw_wire_event_captured";
+type RuntimeEventKind = "session_timeline_changed" | "sessions_index_changed";
 
 interface RuntimeEvent {
-  sequence: number;
   kind: RuntimeEventKind;
-  provider: ProviderId;
-  session_id: string | null;
-  payload: unknown;
+  openSessionId?: string;
+  revision: number;
+  items?: TranscriptItem[];
 }
 
 interface ClientCommandFrame {
@@ -189,4 +198,8 @@ export type {
   SessionPromptCommandName,
   SessionPromptConsumerCommand,
   SessionPromptRequest,
+  SessionsWatchCommandName,
+  SessionsWatchConsumerCommand,
+  SessionWatchCommandName,
+  SessionWatchConsumerCommand,
 };

@@ -64,51 +64,29 @@ async fn run_actor(
     local_store: LocalStore,
 ) {
     let mut runtime = ServiceRuntime::with_factory(factory, local_store);
+    let live_events = events.clone();
+    runtime.set_event_sink(Box::new(move |event| {
+        let _subscriber_count = live_events.send(event);
+    }));
     while let Some(request) = receiver.recv().await {
-        handle_request(&mut runtime, &events, request);
+        handle_request(&mut runtime, request);
     }
 }
 
-fn handle_request(
-    runtime: &mut ServiceRuntime,
-    events: &broadcast::Sender<RuntimeEvent>,
-    request: ActorRequest,
-) {
+fn handle_request(runtime: &mut ServiceRuntime, request: ActorRequest) {
     if request.command.command == "sessions/grouped" {
-        handle_grouped_sessions_request(runtime, events, request);
+        handle_grouped_sessions_request(runtime, request);
         return;
     }
-    let should_broadcast = request.command.command != "events/subscribe";
-    let cursor = runtime.latest_event_sequence();
     let response = runtime.dispatch(request.command);
-    let produced_events = runtime.events_after(cursor);
-    if should_broadcast {
-        broadcast_events(events, produced_events);
-    }
     let _response_status = request.respond_to.send(response);
 }
 
-fn handle_grouped_sessions_request(
-    runtime: &mut ServiceRuntime,
-    events: &broadcast::Sender<RuntimeEvent>,
-    request: ActorRequest,
-) {
+fn handle_grouped_sessions_request(runtime: &mut ServiceRuntime, request: ActorRequest) {
     let command = request.command.clone();
-    let cursor = runtime.latest_event_sequence();
     let response = runtime.dispatch(request.command);
     let _response_status = request.respond_to.send(response);
-    let produced_events = runtime.events_after(cursor);
-    broadcast_events(events, produced_events);
-    let cursor = runtime.latest_event_sequence();
     let _refresh_result = runtime.refresh_after_response(&command);
-    let produced_events = runtime.events_after(cursor);
-    broadcast_events(events, produced_events);
-}
-
-fn broadcast_events(events: &broadcast::Sender<RuntimeEvent>, produced_events: Vec<RuntimeEvent>) {
-    for event in produced_events {
-        let _subscriber_count = events.send(event);
-    }
 }
 
 fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {

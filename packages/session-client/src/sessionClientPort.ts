@@ -23,22 +23,15 @@ interface SessionClientPort {
     request: SessionOpenRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
   readSessionHistory(
-    provider: ProviderId,
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
-  promptSession(
-    provider: ProviderId,
-    request: SessionPromptRequest,
-  ): Promise<void>;
+  promptSession(request: SessionPromptRequest): Promise<void>;
   subscribeTimelineChanges(
-    provider: ProviderId,
+    openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,
-    afterSequence?: number | null,
   ): Promise<() => void>;
   subscribeSessionIndexChanges(
-    provider: ProviderId,
     handler: (event: SessionsIndexChanged) => void,
-    afterSequence?: number | null,
   ): Promise<() => void>;
 }
 

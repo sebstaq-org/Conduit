@@ -31,4 +31,8 @@ export type {
   SessionPromptCommandName,
   SessionPromptConsumerCommand,
   SessionPromptRequest,
+  SessionsWatchCommandName,
+  SessionsWatchConsumerCommand,
+  SessionWatchCommandName,
+  SessionWatchConsumerCommand,
 } from "./wire.js";

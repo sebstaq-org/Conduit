@@ -34,6 +34,15 @@ pub enum TranscriptItem {
     Event {
         /// Stable item id within the loaded transcript.
         id: String,
+        /// Prompt turn id when the item belongs to a live prompt turn.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        turn_id: Option<String>,
+        /// Live prompt item status when the item is part of a prompt turn.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<TranscriptItemStatus>,
+        /// ACP stop reason for the completed turn, when known.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stop_reason: Option<String>,
         /// Official ACP update variant.
         variant: String,
         /// Structured ACP update payload.
@@ -77,6 +86,9 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
             }
             None => items.push(TranscriptItem::Event {
                 id: format!("transcript-update-{}", update.index),
+                turn_id: None,
+                status: None,
+                stop_reason: None,
                 variant: update.variant.clone(),
                 data: update.update.clone(),
             }),
@@ -112,6 +124,9 @@ pub(crate) fn project_prompt_turn_items(
             }
             None => items.push(TranscriptItem::Event {
                 id: format!("{turn_id}-update-{}", update.index),
+                turn_id: Some(turn_id.to_owned()),
+                status: Some(status),
+                stop_reason: stop_reason.map(ToOwned::to_owned),
                 variant: update.variant.clone(),
                 data: update.update.clone(),
             }),
