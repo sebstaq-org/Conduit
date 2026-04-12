@@ -16,6 +16,7 @@ export {
   openSessionRow,
   submitPrompt,
 } from "./session-commands";
+export { addProjectPath } from "./project-commands";
 export { selectActiveSession } from "./session-selection";
 export type {
   OpenSessionMutationArg,

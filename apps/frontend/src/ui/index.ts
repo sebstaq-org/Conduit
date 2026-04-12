@@ -1,4 +1,4 @@
-export { Autocomplete, AutocompletePopoverMock } from "./autocomplete";
+export { Autocomplete } from "./autocomplete";
 export type {
   AutocompleteProps,
   AutocompleteRenderItemState,

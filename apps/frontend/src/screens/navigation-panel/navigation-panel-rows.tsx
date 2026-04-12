@@ -5,6 +5,7 @@ import {
   navigationPanelHeadingVariant,
 } from "./navigation-panel.styles";
 import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
+import { NavigationPanelThreadActions } from "./navigation-panel-thread-actions";
 
 interface NavigationPanelRowsProps {
   onSessionSelected?: (() => void) | undefined;
@@ -22,7 +23,10 @@ function NavigationPanelRows({
         Conduit
       </Text>
       <NavigationPanelProjectRows />
-      <SessionList onSessionSelected={onSessionSelected} />
+      <SessionList
+        actions={<NavigationPanelThreadActions />}
+        onSessionSelected={onSessionSelected}
+      />
     </>
   );
 }

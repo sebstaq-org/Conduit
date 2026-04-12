@@ -1,10 +1,11 @@
-import { AutocompletePopoverMock, IconButton } from "@/ui";
+import { ProjectPickerTrigger } from "@/features/project-picker";
+import { IconButton } from "@/ui";
 
 function handleMockAction(): boolean {
   return false;
 }
 
-function SessionListActions(): React.JSX.Element {
+function NavigationPanelThreadActions(): React.JSX.Element {
   return (
     <>
       <IconButton
@@ -17,9 +18,9 @@ function SessionListActions(): React.JSX.Element {
         icon="filter"
         onPress={handleMockAction}
       />
-      <AutocompletePopoverMock />
+      <ProjectPickerTrigger />
     </>
   );
 }
 
-export { SessionListActions };
+export { NavigationPanelThreadActions };
