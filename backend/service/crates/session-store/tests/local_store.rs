@@ -136,6 +136,10 @@ fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
 
     store.remove_project(&project.project_id)?;
     ensure_eq(&store.projects()?.len(), &0, "removed project count")?;
+    let repeated_remove = store.remove_project(&project.project_id);
+    if repeated_remove.is_ok() {
+        return Err("repeated project remove unexpectedly succeeded".into());
+    }
     fs::remove_file(path)?;
     Ok(())
 }

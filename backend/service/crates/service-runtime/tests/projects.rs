@@ -44,7 +44,14 @@ fn projects_add_list_and_remove_drive_group_scope() -> TestResult<()> {
     )))?;
     let removed = runtime.dispatch(command("removed", "sessions/grouped", "all", json!({})));
     assert_ok(&removed)?;
-    assert_group_count(&removed.result, 0)
+    assert_group_count(&removed.result, 0)?;
+    let repeated_remove = runtime.dispatch(command(
+        "remove-again",
+        "projects/remove",
+        "all",
+        json!({ "projectId": "cwd:/repo" }),
+    ));
+    assert_invalid_params(&repeated_remove)
 }
 
 #[test]

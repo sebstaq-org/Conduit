@@ -89,12 +89,19 @@ impl LocalStore {
     ///
     /// # Errors
     ///
-    /// Returns an error when the project row cannot be deleted.
+    /// Returns an error when the project row cannot be deleted or does not exist.
     pub fn remove_project(&mut self, project_id: &str) -> Result<()> {
-        self.connection.execute(
+        let removed = self.connection.execute(
             "DELETE FROM projects WHERE project_id = ?1",
             params![project_id],
         )?;
+        if removed == 0 {
+            return Err(crate::Error::InvalidParameter {
+                command: "projects/remove",
+                parameter: "projectId",
+                message: "unknown project",
+            });
+        }
         Ok(())
     }
 
