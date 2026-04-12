@@ -13,9 +13,9 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
+use ids::{HISTORY_CURSOR_PREFIX, history_cursor, open_session_id_for};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
@@ -23,6 +23,7 @@ use std::str::FromStr;
 use thiserror::Error;
 use transcript::{project_items, project_prompt_turn_items};
 
+mod ids;
 mod transcript;
 
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
@@ -30,8 +31,6 @@ pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 const SCHEMA_VERSION: i64 = 1;
 const DEFAULT_HISTORY_LIMIT: usize = 40;
 const MAX_HISTORY_LIMIT: usize = 100;
-const OPEN_SESSION_PREFIX: &str = "open-session-";
-const HISTORY_CURSOR_PREFIX: &str = "history-cursor-v1";
 
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -653,36 +652,6 @@ fn cursor_error() -> Error {
         command: "session/history",
         parameter: "cursor",
         message: "cursor is invalid",
-    }
-}
-
-fn history_cursor(open_session_id: &str, revision: i64, end: usize) -> String {
-    format!("{HISTORY_CURSOR_PREFIX}:{open_session_id}:{revision}:{end}")
-}
-
-fn open_session_id_for(key: &OpenSessionKey) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(key.provider.as_str().as_bytes());
-    hasher.update([0]);
-    hasher.update(key.session_id.as_bytes());
-    hasher.update([0]);
-    hasher.update(key.cwd.as_bytes());
-    format!("{OPEN_SESSION_PREFIX}{}", hex_encode(&hasher.finalize()))
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(hex_digit(byte >> 4));
-        output.push(hex_digit(byte & 0x0f));
-    }
-    output
-}
-
-fn hex_digit(value: u8) -> char {
-    match value {
-        0..=9 => char::from(b'0' + value),
-        _ => char::from(b'a' + value - 10),
     }
 }
 
