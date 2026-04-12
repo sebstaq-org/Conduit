@@ -2,10 +2,16 @@ import { PanelBody } from "@/ui";
 import { NavigationPanelScrollContent } from "./navigation-panel-scroll-content";
 import { NavigationPanelSettings } from "./navigation-panel-settings";
 
-function NavigationPanelContent(): React.JSX.Element {
+interface NavigationPanelContentProps {
+  onSessionSelected?: (() => void) | undefined;
+}
+
+function NavigationPanelContent({
+  onSessionSelected,
+}: NavigationPanelContentProps): React.JSX.Element {
   return (
     <PanelBody>
-      <NavigationPanelScrollContent />
+      <NavigationPanelScrollContent onSessionSelected={onSessionSelected} />
       <NavigationPanelSettings />
     </PanelBody>
   );

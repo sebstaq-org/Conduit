@@ -1,4 +1,5 @@
 import { SessionComposer } from "@/features/session-composer";
+import { SessionHistory } from "@/features/session-history";
 import { Box } from "@/theme";
 import { IconButton, KeyboardLift } from "@/ui";
 import {
@@ -34,6 +35,7 @@ function SessionScreen({
             onPress={onOpenNavigationPanel}
           />
         )}
+        <SessionHistory />
         <SessionComposer />
       </Box>
     </KeyboardLift>
