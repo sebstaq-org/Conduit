@@ -12,8 +12,6 @@ describe("shared session boundary", () => {
     expect(CONSUMER_COMMANDS).toEqual([
       "initialize",
       "session/new",
-      "session/list",
-      "session/load",
       "session/prompt",
       "session/cancel",
       "snapshot/get",

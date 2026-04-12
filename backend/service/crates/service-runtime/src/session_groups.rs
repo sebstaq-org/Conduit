@@ -83,10 +83,6 @@ impl SessionGroupsQuery {
         })
     }
 
-    pub(crate) fn cwd_filters(&self) -> &[String] {
-        &self.cwd_filters
-    }
-
     pub(crate) fn accepts_entry(&self, session: &SessionIndexEntry) -> bool {
         (self.cwd_filters.is_empty()
             || self.cwd_filters.iter().any(|filter| filter == &session.cwd))

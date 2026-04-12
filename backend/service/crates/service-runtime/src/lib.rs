@@ -16,6 +16,7 @@ mod command;
 mod error;
 mod event;
 mod manager;
+mod manager_helpers;
 mod port;
 mod session_groups;
 
