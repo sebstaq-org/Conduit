@@ -22,6 +22,7 @@ use session_store::{
 };
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 
@@ -33,6 +34,7 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     local_store: LocalStore,
+    store_lock: Arc<Mutex<()>>,
 }
 
 struct SessionPromptTarget {
@@ -82,6 +84,15 @@ where
 {
     /// Creates a consumer runtime with an explicit provider factory.
     pub fn with_factory(factory: F, local_store: LocalStore) -> Self {
+        Self::with_factory_and_store_lock(factory, local_store, Arc::new(Mutex::new(())))
+    }
+
+    /// Creates a consumer runtime with an explicit provider factory and shared store lock.
+    pub fn with_factory_and_store_lock(
+        factory: F,
+        local_store: LocalStore,
+        store_lock: Arc<Mutex<()>>,
+    ) -> Self {
         Self {
             event_buffer: EventBuffer::new(),
             factory,
@@ -89,6 +100,7 @@ where
             session_index_refreshes: HashMap::new(),
             providers: HashMap::new(),
             local_store,
+            store_lock,
         }
     }
 
@@ -191,6 +203,7 @@ where
     ) -> Result<ConsumerResponse> {
         let query = SessionGroupsQuery::from_params(params)?;
         let providers = providers_from_target(provider_target)?;
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         let snapshot = self.local_store.session_index(&providers)?;
         let is_refreshing = snapshot.refreshed_at.is_none();
         Ok(ConsumerResponse::success_without_snapshot(
@@ -282,7 +295,10 @@ where
             session_id: session_id.clone(),
             cwd: cwd.display().to_string(),
         };
-        if let Some(result) = self.local_store.cached_session(&key, limit)? {
+        if let Some(result) = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.cached_session(&key, limit)?
+        } {
             return Ok(ConsumerResponse::success_without_snapshot(
                 id,
                 to_value(result)?,
@@ -295,7 +311,10 @@ where
         };
         self.loaded_provider_sessions.insert(key.clone());
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
-        let result = to_value(self.local_store.open_session(key, updates, limit)?)?;
+        let result = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            to_value(self.local_store.open_session(key, updates, limit)?)?
+        };
         Ok(ConsumerResponse::success_without_snapshot(id, result))
     }
 
@@ -306,17 +325,19 @@ where
             optional_u64_param("session/history", params, "limit")?,
         )?;
         let cursor = optional_string_param("session/history", params, "cursor")?;
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
+        let result = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             to_value(
                 self.local_store
                     .history_window(&open_session_id, cursor, limit)?,
-            )?,
-        ))
+            )?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(id, result))
     }
 
     fn session_watch(&self, id: String, params: &Value) -> Result<ConsumerResponse> {
         let open_session_id = string_param("session/watch", params, "openSessionId")?;
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         if self.local_store.provider_for(&open_session_id)?.is_none() {
             return Err(RuntimeError::InvalidParameter {
                 command: "session/watch",
@@ -379,6 +400,7 @@ where
 
     fn session_prompt_target(&self, params: &Value) -> Result<SessionPromptTarget> {
         let open_session_id = string_param("session/prompt", params, "openSessionId")?;
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         let key = self
             .local_store
             .open_session_key("session/prompt", &open_session_id)?;
@@ -394,9 +416,11 @@ where
         target: &SessionPromptTarget,
         prompt: &[Value],
     ) -> Result<PromptTurnMutation> {
-        let mutation = self
-            .local_store
-            .begin_prompt_turn(&target.open_session_id, prompt)?;
+        let mutation = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .begin_prompt_turn(&target.open_session_id, prompt)?
+        };
         self.emit_timeline_mutation(TimelineMutationEvent {
             provider,
             session_id: &target.key.session_id,
@@ -444,16 +468,18 @@ where
         &mut self,
         projection: PromptTurnProjection<'_>,
     ) -> Result<()> {
-        let mutation = self
-            .local_store
-            .replace_prompt_turn_updates(PromptTurnReplace {
-                open_session_id: &projection.context.target.open_session_id,
-                turn_id: projection.context.turn_id,
-                prompt: projection.context.prompt,
-                updates: projection.updates,
-                status: projection.status,
-                stop_reason: projection.stop_reason,
-            })?;
+        let mutation = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .replace_prompt_turn_updates(PromptTurnReplace {
+                    open_session_id: &projection.context.target.open_session_id,
+                    turn_id: projection.context.turn_id,
+                    prompt: projection.context.prompt,
+                    updates: projection.updates,
+                    status: projection.status,
+                    stop_reason: projection.stop_reason,
+                })?
+        };
         self.emit_timeline_mutation(TimelineMutationEvent {
             provider: projection.context.provider,
             session_id: &projection.context.target.key.session_id,
@@ -483,10 +509,12 @@ where
         updates: &[acp_core::TranscriptUpdateSnapshot],
     ) -> Result<()> {
         for update in updates {
-            if let Some(revision) = self
-                .local_store
-                .apply_session_info_update(&target.key, &update.update)?
-            {
+            let revision = {
+                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                self.local_store
+                    .apply_session_info_update(&target.key, &update.update)?
+            };
+            if let Some(revision) = revision {
                 self.event_buffer.emit(
                     target.key.provider,
                     RuntimeEventKind::SessionsIndexChanged,
@@ -504,15 +532,17 @@ where
         target: &SessionPromptTarget,
         prompt: &[Value],
     ) -> Result<()> {
-        let mutation = self
-            .local_store
-            .append_prompt_turn_updates(PromptTurnAppend {
-                open_session_id: &target.open_session_id,
-                prompt,
-                updates: &[],
-                status: TranscriptItemStatus::Failed,
-                stop_reason: None,
-            })?;
+        let mutation = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .append_prompt_turn_updates(PromptTurnAppend {
+                    open_session_id: &target.open_session_id,
+                    prompt,
+                    updates: &[],
+                    status: TranscriptItemStatus::Failed,
+                    stop_reason: None,
+                })?
+        };
         self.emit_timeline_mutation(TimelineMutationEvent {
             provider,
             session_id: &target.key.session_id,
@@ -623,10 +653,12 @@ where
         };
         self.session_index_refreshes
             .insert(provider, current_epoch());
-        if let Some(revision) = self
-            .local_store
-            .replace_session_index_provider(provider, &entries)?
-        {
+        let revision = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .replace_session_index_provider(provider, &entries)?
+        };
+        if let Some(revision) = revision {
             self.event_buffer.emit(
                 provider,
                 RuntimeEventKind::SessionsIndexChanged,
@@ -648,4 +680,8 @@ fn append_snapshot_updates_if_missing(
     {
         observed_updates.extend(lifecycle.updates.clone());
     }
+}
+
+fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
+    RuntimeError::Provider(format!("local store lock poisoned: {error}"))
 }

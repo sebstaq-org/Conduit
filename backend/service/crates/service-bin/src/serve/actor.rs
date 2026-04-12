@@ -5,8 +5,9 @@ use service_runtime::{
     ServiceRuntime,
 };
 use session_store::LocalStore;
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[derive(Debug)]
@@ -42,7 +43,7 @@ impl RuntimeActor {
         )
     }
 
-    fn start_with_store_opener<F>(
+    pub(super) fn start_with_store_opener<F>(
         factory: F,
         local_store: LocalStore,
         refresh_store: StoreOpener,
@@ -52,14 +53,22 @@ impl RuntimeActor {
     {
         let (commands, receiver) = mpsc::channel(32);
         let (events, _) = broadcast::channel(256);
-        let refreshes = RefreshWorker::start(factory.clone(), events.clone(), refresh_store);
-        tokio::spawn(run_actor(
-            receiver,
+        let store_lock = Arc::new(Mutex::new(()));
+        let refreshes = RefreshWorker::start(
+            factory.clone(),
             events.clone(),
+            Arc::clone(&refresh_store),
+            Arc::clone(&store_lock),
+        );
+        tokio::spawn(run_actor(ActorContext {
+            receiver,
+            events: events.clone(),
             factory,
             local_store,
+            store: refresh_store,
+            store_lock,
             refreshes,
-        ));
+        }));
         Self { commands, events }
     }
 
@@ -86,6 +95,7 @@ impl RuntimeActor {
 }
 
 type StoreOpener = Arc<dyn Fn() -> crate::error::Result<LocalStore> + Send + Sync>;
+type StoreLock = Arc<Mutex<()>>;
 
 #[derive(Clone)]
 struct RefreshWorker {
@@ -97,12 +107,19 @@ impl RefreshWorker {
         factory: F,
         events: broadcast::Sender<RuntimeEvent>,
         refresh_store: StoreOpener,
+        store_lock: StoreLock,
     ) -> Self
     where
         F: ProviderFactory + 'static,
     {
         let (requests, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(run_refresh_worker(receiver, events, factory, refresh_store));
+        tokio::spawn(run_refresh_worker(
+            receiver,
+            events,
+            factory,
+            refresh_store,
+            store_lock,
+        ));
         Self { requests }
     }
 
@@ -111,22 +128,141 @@ impl RefreshWorker {
     }
 }
 
-async fn run_actor<F>(
-    mut receiver: mpsc::Receiver<ActorRequest>,
+struct PromptLanes<F> {
+    events: broadcast::Sender<RuntimeEvent>,
+    factory: F,
+    lanes: HashMap<String, PromptLane>,
+    store: StoreOpener,
+    store_lock: StoreLock,
+}
+
+impl<F> PromptLanes<F>
+where
+    F: Clone + ProviderFactory + 'static,
+{
+    fn new(
+        factory: F,
+        events: broadcast::Sender<RuntimeEvent>,
+        store: StoreOpener,
+        store_lock: StoreLock,
+    ) -> Self {
+        Self {
+            events,
+            factory,
+            lanes: HashMap::new(),
+            store,
+            store_lock,
+        }
+    }
+
+    fn dispatch(&mut self, open_session_id: &str, request: ActorRequest) {
+        let lane = self.lane(open_session_id);
+        lane.dispatch(request);
+    }
+
+    fn lane(&mut self, open_session_id: &str) -> PromptLane {
+        self.lanes
+            .entry(open_session_id.to_owned())
+            .or_insert_with(|| {
+                PromptLane::start(
+                    self.factory.clone(),
+                    self.events.clone(),
+                    Arc::clone(&self.store),
+                    Arc::clone(&self.store_lock),
+                )
+            })
+            .clone()
+    }
+}
+
+#[derive(Clone)]
+struct PromptLane {
+    active: Arc<AtomicBool>,
+    requests: mpsc::UnboundedSender<ActorRequest>,
+}
+
+impl PromptLane {
+    fn start<F>(
+        factory: F,
+        events: broadcast::Sender<RuntimeEvent>,
+        store: StoreOpener,
+        store_lock: StoreLock,
+    ) -> Self
+    where
+        F: ProviderFactory + 'static,
+    {
+        let active = Arc::new(AtomicBool::new(false));
+        let (requests, receiver) = mpsc::unbounded_channel();
+        tokio::spawn(run_prompt_lane(PromptLaneContext {
+            receiver,
+            events,
+            factory,
+            store,
+            store_lock,
+            active: Arc::clone(&active),
+        }));
+        Self { active, requests }
+    }
+
+    fn dispatch(&self, request: ActorRequest) {
+        if self.active.swap(true, Ordering::AcqRel) {
+            let id = request.command.id;
+            let _response_status = request.respond_to.send(failure(
+                id,
+                "session_prompt_active",
+                "session already has an active prompt turn",
+            ));
+            return;
+        }
+        if let Err(error) = self.requests.send(request) {
+            self.active.store(false, Ordering::Release);
+            let request = error.0;
+            let id = request.command.id;
+            let _response_status = request.respond_to.send(failure(
+                id,
+                "runtime_unavailable",
+                "prompt lane is unavailable",
+            ));
+        }
+    }
+}
+
+struct ActorContext<F> {
+    receiver: mpsc::Receiver<ActorRequest>,
     events: broadcast::Sender<RuntimeEvent>,
     factory: F,
     local_store: LocalStore,
+    store: StoreOpener,
+    store_lock: StoreLock,
     refreshes: RefreshWorker,
-) where
-    F: ProviderFactory,
+}
+
+async fn run_actor<F>(context: ActorContext<F>)
+where
+    F: Clone + ProviderFactory + 'static,
 {
-    let mut runtime = ServiceRuntime::with_factory(factory, local_store);
+    let ActorContext {
+        mut receiver,
+        events,
+        factory,
+        local_store,
+        store,
+        store_lock,
+        refreshes,
+    } = context;
+    let mut prompt_lanes = PromptLanes::new(
+        factory.clone(),
+        events.clone(),
+        store,
+        Arc::clone(&store_lock),
+    );
+    let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
     let live_events = events.clone();
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
     while let Some(request) = receiver.recv().await {
-        handle_request(&mut runtime, request, &refreshes);
+        handle_request(&mut runtime, request, &refreshes, &mut prompt_lanes);
     }
 }
 
@@ -135,19 +271,72 @@ async fn run_refresh_worker<F>(
     events: broadcast::Sender<RuntimeEvent>,
     factory: F,
     refresh_store: StoreOpener,
+    store_lock: StoreLock,
 ) where
     F: ProviderFactory,
 {
     let Ok(local_store) = refresh_store() else {
         return;
     };
-    let mut runtime = ServiceRuntime::with_factory(factory, local_store);
+    let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
     let live_events = events.clone();
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
     while let Some(provider_target) = receiver.recv().await {
         refresh_index_targets(&mut runtime, &mut receiver, provider_target);
+    }
+}
+
+struct PromptLaneContext<F> {
+    receiver: mpsc::UnboundedReceiver<ActorRequest>,
+    events: broadcast::Sender<RuntimeEvent>,
+    factory: F,
+    store: StoreOpener,
+    store_lock: StoreLock,
+    active: Arc<AtomicBool>,
+}
+
+async fn run_prompt_lane<F>(context: PromptLaneContext<F>)
+where
+    F: ProviderFactory,
+{
+    let PromptLaneContext {
+        mut receiver,
+        events,
+        factory,
+        store,
+        store_lock,
+        active,
+    } = context;
+    let Ok(local_store) = store() else {
+        fail_prompt_lane_requests(receiver, active).await;
+        return;
+    };
+    let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
+    let live_events = events.clone();
+    runtime.set_event_sink(Box::new(move |event| {
+        let _subscriber_count = live_events.send(event);
+    }));
+    while let Some(request) = receiver.recv().await {
+        let response = runtime.dispatch(request.command);
+        let _response_status = request.respond_to.send(response);
+        active.store(false, Ordering::Release);
+    }
+}
+
+async fn fail_prompt_lane_requests(
+    mut receiver: mpsc::UnboundedReceiver<ActorRequest>,
+    active: Arc<AtomicBool>,
+) {
+    while let Some(request) = receiver.recv().await {
+        let id = request.command.id;
+        let _response_status = request.respond_to.send(failure(
+            id,
+            "runtime_unavailable",
+            "prompt lane store is unavailable",
+        ));
+        active.store(false, Ordering::Release);
     }
 }
 
@@ -176,11 +365,16 @@ fn handle_request<F>(
     runtime: &mut ServiceRuntime<F>,
     request: ActorRequest,
     refreshes: &RefreshWorker,
+    prompt_lanes: &mut PromptLanes<F>,
 ) where
-    F: ProviderFactory,
+    F: Clone + ProviderFactory + 'static,
 {
     if request.command.command == "sessions/grouped" {
         handle_grouped_sessions_request(runtime, request, refreshes);
+        return;
+    }
+    if let Some(open_session_id) = prompt_open_session_id(&request.command) {
+        prompt_lanes.dispatch(&open_session_id, request);
         return;
     }
     let response = runtime.dispatch(request.command);
@@ -200,6 +394,17 @@ fn handle_grouped_sessions_request<F>(
     refreshes.request(&provider_target);
 }
 
+fn prompt_open_session_id(command: &ConsumerCommand) -> Option<String> {
+    if command.command != "session/prompt" {
+        return None;
+    }
+    command
+        .params
+        .get("openSessionId")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+}
+
 fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {
     ConsumerResponse {
         id,
@@ -212,6 +417,9 @@ fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {
         snapshot: None,
     }
 }
+
+#[cfg(test)]
+mod prompt_lane_tests;
 
 #[cfg(test)]
 mod tests {

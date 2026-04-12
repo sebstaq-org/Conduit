@@ -15,9 +15,9 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use session_store::LocalStore;
 use std::collections::HashSet;
-use std::pin::pin;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::{Mutex, mpsc};
 use tower_http::cors::CorsLayer;
 use wire::{ClientCommandFrame, ServerEventFrame, ServerResponseFrame};
 
@@ -86,124 +86,119 @@ async fn session_socket(
 
 async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     let (mut sender, mut receiver) = socket.split();
-    let mut live_events = state.actor.subscribe();
-    let mut watches = WatchState::default();
-
+    let (outbound, mut outbound_receiver) = mpsc::unbounded_channel();
+    let watches = Arc::new(Mutex::new(WatchState::default()));
+    let event_forwarder = tokio::spawn(forward_live_events(
+        state.actor.subscribe(),
+        Arc::clone(&watches),
+        outbound.clone(),
+    ));
     loop {
         tokio::select! {
             message = receiver.next() => {
                 let Some(Ok(message)) = message else {
                     break;
                 };
-                if !handle_client_message(
-                    &mut sender,
-                    &state.actor,
-                    message,
-                    &mut live_events,
-                    &mut watches,
-                ).await {
+                if !handle_client_message(&state.actor, message, Arc::clone(&watches), outbound.clone()) {
                     break;
                 }
             }
-            event = live_events.recv(), if watches.has_watches() => {
-                let Ok(event) = event else {
+            outbound = outbound_receiver.recv() => {
+                let Some(outbound) = outbound else {
                     break;
                 };
-                if let Some(event) = watches.product_event(&event)
-                    && send_event(&mut sender, event).await.is_err()
-                {
+                if send_outbound(&mut sender, outbound).await.is_err() {
                     break;
                 }
             }
         }
     }
+    event_forwarder.abort();
 }
 
-async fn handle_client_message(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+fn handle_client_message(
     actor: &RuntimeActor,
     message: Message,
-    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-    watches: &mut WatchState,
+    watches: SharedWatchState,
+    outbound: OutboundSender,
 ) -> bool {
     let Ok(text) = message.to_text() else {
         return false;
     };
     let frame = ClientCommandFrame::from_text(text);
-    let response = match frame.rejection() {
-        Some(rejection) => rejection,
-        None => {
-            let Some(response) =
-                dispatch_with_live_events(sender, actor, frame.command(), live_events, watches)
-                    .await
-            else {
-                return false;
-            };
-            response
-        }
-    };
-    if !send_buffered_live_events(sender, live_events, watches).await {
-        return false;
-    }
-    if send_response(sender, frame.id(), response.clone())
-        .await
-        .is_err()
-    {
-        return false;
-    }
-    if response.ok {
-        watches.apply_command(frame.command_name(), &response.result);
-        if frame.command_name() == "sessions/watch" || frame.command_name() == "session/watch" {
-            *live_events = live_events.resubscribe();
-        }
-    }
+    let actor = actor.clone();
+    tokio::spawn(dispatch_client_frame(actor, frame, watches, outbound));
     true
 }
 
-async fn dispatch_with_live_events(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    actor: &RuntimeActor,
-    command: service_runtime::ConsumerCommand,
-    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-    watches: &WatchState,
-) -> Option<service_runtime::ConsumerResponse> {
-    let dispatch = actor.dispatch(command);
-    let mut dispatch = pin!(dispatch);
+type SharedWatchState = Arc<Mutex<WatchState>>;
+type OutboundSender = mpsc::UnboundedSender<OutboundFrame>;
+
+#[derive(Debug)]
+enum OutboundFrame {
+    Event(ProductEvent),
+    Response {
+        id: String,
+        response: Box<service_runtime::ConsumerResponse>,
+    },
+}
+
+async fn dispatch_client_frame(
+    actor: RuntimeActor,
+    frame: ClientCommandFrame,
+    watches: SharedWatchState,
+    outbound: OutboundSender,
+) {
+    let command_name = frame.command_name().to_owned();
+    let id = frame.id();
+    let response = match frame.rejection() {
+        Some(rejection) => rejection,
+        None => actor.dispatch(frame.command()).await,
+    };
+    if response.ok {
+        watches
+            .lock()
+            .await
+            .apply_command(&command_name, &response.result);
+    }
+    let _send_status = outbound.send(OutboundFrame::Response {
+        id,
+        response: Box::new(response),
+    });
+}
+
+async fn forward_live_events(
+    mut live_events: tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
+    watches: SharedWatchState,
+    outbound: OutboundSender,
+) {
     loop {
-        tokio::select! {
-            response = &mut dispatch => return Some(response),
-            event = live_events.recv(), if watches.has_watches() => {
-                let Ok(event) = event else {
-                    return None;
-                };
-                if let Some(event) = watches.product_event(&event)
-                    && send_event(sender, event).await.is_err()
-                {
-                    return None;
-                }
+        let Ok(event) = live_events.recv().await else {
+            return;
+        };
+        let product_event = {
+            let watches = watches.lock().await;
+            if !watches.has_watches() {
+                None
+            } else {
+                watches.product_event(&event)
             }
+        };
+        if let Some(event) = product_event
+            && outbound.send(OutboundFrame::Event(event)).is_err()
+        {
+            return;
         }
     }
 }
 
-async fn send_buffered_live_events(
+async fn send_outbound(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
-    watches: &WatchState,
-) -> bool {
-    loop {
-        match live_events.try_recv() {
-            Ok(event) => {
-                if let Some(event) = watches.product_event(&event)
-                    && send_event(sender, event).await.is_err()
-                {
-                    return false;
-                }
-            }
-            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {}
-            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return true,
-            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => return false,
-        }
+    outbound: OutboundFrame,
+) -> std::result::Result<(), ()> {
+    match outbound {
+        OutboundFrame::Event(event) => send_event(sender, event).await,
+        OutboundFrame::Response { id, response } => send_response(sender, id, *response).await,
     }
 }
 
@@ -301,12 +296,87 @@ enum ProductEvent {
 
 #[cfg(test)]
 mod tests {
-    use super::WatchState;
+    use super::{OutboundFrame, WatchState, handle_client_message};
+    use crate::serve::actor::RuntimeActor;
+    use acp_core::{
+        ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
+        WireStream,
+    };
+    use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
+    use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+    use axum::extract::ws::Message;
     use serde_json::json;
-    use service_runtime::{RuntimeEvent, RuntimeEventKind};
+    use service_runtime::{
+        ProviderFactory, ProviderPort, Result, RuntimeError, RuntimeEvent, RuntimeEventKind,
+    };
+    use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
     use std::error::Error;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use tokio::sync::mpsc as tokio_mpsc;
 
     type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
+
+    #[derive(Clone)]
+    struct BlockingPromptFactory {
+        release: Arc<(Mutex<bool>, Condvar)>,
+        started: mpsc::Sender<()>,
+    }
+
+    struct BlockingPromptProvider {
+        provider: ProviderId,
+        release: Arc<(Mutex<bool>, Condvar)>,
+        started: mpsc::Sender<()>,
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn socket_handler_accepts_following_command_while_prompt_response_is_pending()
+    -> TestResult<()> {
+        let path = test_db_path()?;
+        let open_session_id = seed_open_session(&path)?;
+        let refresh_path = path.clone();
+        let (started, started_rx) = mpsc::channel();
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let actor = RuntimeActor::start_with_store_opener(
+            BlockingPromptFactory {
+                release: Arc::clone(&release),
+                started,
+            },
+            LocalStore::open_path(&path)?,
+            Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+        );
+        let watches = Arc::new(tokio::sync::Mutex::new(WatchState::default()));
+        let (outbound, mut outbound_rx) = tokio_mpsc::unbounded_channel();
+
+        if !handle_client_message(
+            &actor,
+            command_message(
+                "prompt-1",
+                "session/prompt",
+                "all",
+                prompt_params(&open_session_id),
+            ),
+            Arc::clone(&watches),
+            outbound.clone(),
+        ) {
+            return Err("prompt frame was rejected".into());
+        }
+        started_rx.recv_timeout(Duration::from_secs(5))?;
+        if !handle_client_message(
+            &actor,
+            command_message("watch-1", "sessions/watch", "all", json!({})),
+            watches,
+            outbound,
+        ) {
+            return Err("watch frame was rejected".into());
+        }
+
+        let response = tokio::time::timeout(Duration::from_millis(250), outbound_rx.recv()).await?;
+        release_prompt(&release)?;
+        ensure_response_id(response, "watch-1")
+    }
 
     #[test]
     fn sessions_watch_projects_only_index_events() -> TestResult<()> {
@@ -382,5 +452,178 @@ mod tests {
             "session_id": null,
             "payload": payload
         }))?)
+    }
+
+    impl ProviderFactory for BlockingPromptFactory {
+        fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
+            Ok(Box::new(BlockingPromptProvider {
+                provider,
+                release: Arc::clone(&self.release),
+                started: self.started.clone(),
+            }))
+        }
+    }
+
+    impl ProviderPort for BlockingPromptProvider {
+        fn snapshot(&self) -> ProviderSnapshot {
+            ProviderSnapshot {
+                provider: self.provider,
+                connection_state: ConnectionState::Ready,
+                discovery: fake_discovery(self.provider),
+                capabilities: json!({}),
+                auth_methods: Vec::new(),
+                live_sessions: Vec::new(),
+                last_prompt: None,
+                loaded_transcripts: Vec::new(),
+            }
+        }
+
+        fn raw_events(&self) -> Vec<RawWireEvent> {
+            vec![RawWireEvent {
+                sequence: 1,
+                stream: WireStream::Outgoing,
+                kind: WireKind::Request,
+                payload: "{}".to_owned(),
+                method: Some("session/prompt".to_owned()),
+                request_id: Some("1".to_owned()),
+                json: Some(json!({})),
+            }]
+        }
+
+        fn disconnect(&mut self) -> Result<()> {
+            Ok(())
+        }
+
+        fn session_new(&mut self, _cwd: PathBuf) -> Result<serde_json::Value> {
+            Ok(json!({ "sessionId": "session-1" }))
+        }
+
+        fn session_list(
+            &mut self,
+            _cwd: Option<PathBuf>,
+            _cursor: Option<String>,
+        ) -> Result<serde_json::Value> {
+            Ok(json!({ "sessions": [] }))
+        }
+
+        fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<serde_json::Value> {
+            Ok(json!({ "sessionId": session_id }))
+        }
+
+        fn session_prompt(
+            &mut self,
+            session_id: String,
+            _prompt: Vec<serde_json::Value>,
+            _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+        ) -> Result<serde_json::Value> {
+            let _send_status = self.started.send(());
+            let (released, condvar) = &*self.release;
+            let mut released = released
+                .lock()
+                .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+            while !*released {
+                released = condvar.wait(released).map_err(|error| {
+                    RuntimeError::Provider(format!("fake state poisoned: {error}"))
+                })?;
+            }
+            Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
+        }
+
+        fn session_cancel(&mut self, session_id: String) -> Result<serde_json::Value> {
+            Ok(json!({ "sessionId": session_id }))
+        }
+    }
+
+    fn ensure_response_id(response: Option<OutboundFrame>, expected_id: &str) -> TestResult<()> {
+        match response {
+            Some(OutboundFrame::Response { id, response }) if id == expected_id && response.ok => {
+                Ok(())
+            }
+            Some(frame) => Err(format!("unexpected outbound frame: {frame:?}").into()),
+            None => Err("outbound channel closed".into()),
+        }
+    }
+
+    fn seed_open_session(path: &PathBuf) -> TestResult<String> {
+        let mut store = LocalStore::open_path(path)?;
+        let opened = store.open_session(
+            OpenSessionKey {
+                provider: ProviderId::Codex,
+                session_id: "session-1".to_owned(),
+                cwd: "/repo".to_owned(),
+            },
+            &[],
+            HistoryLimit::new("test", Some(8))?,
+        )?;
+        Ok(opened.open_session_id)
+    }
+
+    fn command_message(
+        id: &str,
+        command: &str,
+        provider: &str,
+        params: serde_json::Value,
+    ) -> Message {
+        Message::Text(
+            json!({
+                "v": 1,
+                "type": "command",
+                "id": id,
+                "command": {
+                    "id": id,
+                    "command": command,
+                    "provider": provider,
+                    "params": params
+                }
+            })
+            .to_string()
+            .into(),
+        )
+    }
+
+    fn prompt_params(open_session_id: &str) -> serde_json::Value {
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "user prompt" }]
+        })
+    }
+
+    fn release_prompt(release: &Arc<(Mutex<bool>, Condvar)>) -> TestResult<()> {
+        let (released, condvar) = &**release;
+        *released.lock().map_err(|error| format!("{error}"))? = true;
+        condvar.notify_all();
+        Ok(())
+    }
+
+    fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
+        ProviderDiscovery {
+            provider,
+            launcher: LauncherCommand {
+                executable: PathBuf::from(provider.as_str()),
+                args: Vec::new(),
+                display: provider.as_str().to_owned(),
+            },
+            resolved_path: provider.as_str().to_owned(),
+            version: "fake".to_owned(),
+            auth_hints: Vec::new(),
+            initialize_viable: true,
+            transport_diagnostics: Vec::new(),
+            initialize_probe: InitializeProbe {
+                response: json!({}),
+                payload: InitializeResponse::new(ProtocolVersion::V1)
+                    .agent_info(Implementation::new("fake-agent", "0.5.0")),
+                stdout_lines: Vec::new(),
+                stderr_lines: Vec::new(),
+                elapsed_ms: 1,
+            },
+        }
+    }
+
+    fn test_db_path() -> TestResult<PathBuf> {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        Ok(std::env::temp_dir().join(format!(
+            "conduit-service-bin-socket-{}-{nanos}.sqlite3",
+            std::process::id()
+        )))
     }
 }
