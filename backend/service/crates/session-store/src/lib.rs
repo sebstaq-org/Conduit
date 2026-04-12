@@ -30,15 +30,17 @@ use transcript::project_items;
 
 mod history_limit;
 mod ids;
+mod projects;
 mod prompt_turn;
 mod session_index;
 mod timeline_storage;
 mod transcript;
 
+pub use projects::{ProjectRow, project_id_for_cwd};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -462,7 +464,12 @@ impl LocalStore {
                         updated_at TEXT,
                         PRIMARY KEY(provider, session_id, cwd)
                     );
-                    PRAGMA user_version = 2;
+                    CREATE TABLE projects (
+                        project_id TEXT PRIMARY KEY,
+                        cwd TEXT NOT NULL UNIQUE,
+                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                    );
+                    PRAGMA user_version = 3;
                     ",
                 )?;
                 Ok(())

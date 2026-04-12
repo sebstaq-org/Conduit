@@ -6,7 +6,7 @@ use serde as _;
 use serde_json::{Value, json};
 use session_store::{
     HistoryLimit, LocalStore, OpenSessionKey, PromptTurnReplace, SessionIndexEntry,
-    TranscriptItemStatus,
+    TranscriptItemStatus, project_id_for_cwd,
 };
 use sha2 as _;
 use std::error::Error;
@@ -112,6 +112,29 @@ fn session_index_replaces_provider_rows_and_tracks_revision() -> TestResult<()> 
         &"codex-1".to_owned(),
         "index session id",
     )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+
+    let project = store.add_project("/repo")?;
+    let repeated = store.add_project("/repo")?;
+    let projects = store.projects()?;
+
+    ensure_eq(&project, &repeated, "idempotent project add")?;
+    ensure_eq(
+        &project.project_id,
+        &project_id_for_cwd("/repo"),
+        "project id",
+    )?;
+    ensure_eq(&projects, &vec![project.clone()], "project list")?;
+
+    store.remove_project(&project.project_id)?;
+    ensure_eq(&store.projects()?.len(), &0, "removed project count")?;
     fs::remove_file(path)?;
     Ok(())
 }
