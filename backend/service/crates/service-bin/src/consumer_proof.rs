@@ -78,11 +78,30 @@ async fn seed_session(
     )
     .await?;
     let session_id = session_id_from_result(&created.result)?;
+    let opened = submit(
+        capture,
+        provider,
+        "session/open",
+        json!({
+            "sessionId": session_id,
+            "cwd": proof.cwd().display().to_string(),
+        }),
+    )
+    .await?;
+    let open_session_id = opened
+        .result
+        .get("openSessionId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid_capture("session/open did not return openSessionId"))?
+        .to_owned();
     submit(
         capture,
         provider,
         "session/prompt",
-        json!({ "session_id": session_id, "prompt": READY_PROMPT }),
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": READY_PROMPT }]
+        }),
     )
     .await?;
     submit(capture, provider, "session/list", json!({})).await?;

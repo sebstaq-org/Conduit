@@ -1,6 +1,7 @@
 {"kind":"provider_connected","provider":"codex","session_id":null,"payload":{}}
 {"kind":"session_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"observed_via":"session/new"}}
-{"kind":"prompt_started","provider":"codex","session_id":"replay-codex-session-1","payload":{"prompt":"Reply exactly: conduit-phase-2-replay-codex observed."}}
+{"kind":"session_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"observed_via":"session/open"}}
+{"kind":"prompt_started","provider":"codex","session_id":"replay-codex-session-1","payload":{"prompt":[{"type":"text","text":"Reply exactly: conduit-phase-2-replay-codex observed."}]}}
 {"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"update_index":0,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"con"}}}}
 {"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"update_index":1,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"duit"}}}}
 {"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"update_index":2,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"-phase"}}}}
@@ -14,3 +15,4 @@
 {"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"update_index":10,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" observed"}}}}
 {"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"update_index":11,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"."}}}}
 {"kind":"prompt_completed","provider":"codex","session_id":"replay-codex-session-1","payload":{"stopReason":"end_turn"}}
+{"kind":"session_timeline_changed","provider":"codex","session_id":"replay-codex-session-1","payload":{"openSessionId":"open-session-7270dd0afa48caed8724289b2c5441bcf70fa1c2624865eba73a872a1eef567d","revision":2}}

@@ -153,8 +153,18 @@
         "acp_session_id": "replay-claude-session-1",
         "provider": "claude"
       },
-      "observed_via": "new",
+      "observed_via": "load",
       "title": null
+    }
+  ],
+  "loaded_transcripts": [
+    {
+      "identity": {
+        "acp_session_id": "replay-claude-session-1",
+        "provider": "claude"
+      },
+      "raw_update_count": 0,
+      "updates": []
     }
   ],
   "provider": "claude"

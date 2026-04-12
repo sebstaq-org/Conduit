@@ -1,7 +1,7 @@
 //! Provider runtime ports used by the consumer manager.
 
 use crate::Result;
-use acp_core::{ProviderSnapshot, RawWireEvent};
+use acp_core::{ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -57,7 +57,12 @@ pub trait ProviderPort: Send {
     /// # Errors
     ///
     /// Returns an error when the provider rejects or fails the command.
-    fn session_prompt(&mut self, session_id: String, prompt: String) -> Result<Value>;
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value>;
 
     /// Runs ACP `session/cancel`.
     ///

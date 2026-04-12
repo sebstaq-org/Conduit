@@ -55,6 +55,7 @@ pub(crate) async fn assert_subscribe_backlog(
     let mut expected = vec![
         "provider_connected".to_owned(),
         "session_observed".to_owned(),
+        "session_observed".to_owned(),
         "prompt_started".to_owned(),
     ];
     expected.extend(
@@ -63,6 +64,7 @@ pub(crate) async fn assert_subscribe_backlog(
             .map(|_| "prompt_update_observed".to_owned()),
     );
     expected.push("prompt_completed".to_owned());
+    expected.push("session_timeline_changed".to_owned());
     assert_event_kind_strings(&backlog_frames, &expected)?;
     Ok(backlog_frames)
 }

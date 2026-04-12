@@ -159,6 +159,12 @@ async fn handle_client_message(
         Some(rejection) => rejection,
         None => actor.dispatch(frame.command()).await,
     };
+    if frame.command_name() != "events/subscribe"
+        && *subscribed
+        && !send_buffered_live_events(sender, live_events).await
+    {
+        return false;
+    }
     if send_response(sender, frame.id(), response.clone())
         .await
         .is_err()
@@ -171,6 +177,24 @@ async fn handle_client_message(
         return send_backlog(sender, &response.result, live_events).await;
     }
     true
+}
+
+async fn send_buffered_live_events(
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    live_events: &mut tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
+) -> bool {
+    loop {
+        match live_events.try_recv() {
+            Ok(event) => {
+                if send_event(sender, event).await.is_err() {
+                    return false;
+                }
+            }
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(_)) => {}
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return true,
+            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => return false,
+        }
+    }
 }
 
 async fn send_response(

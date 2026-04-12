@@ -34,9 +34,12 @@ fn open_session_persists_and_pages_retryable_history_windows() -> TestResult<()>
     ensure_eq(&older.next_cursor, &None, "older next cursor")?;
     let item_text = serde_json::to_value(&older.items)?
         .get(0)
-        .and_then(|item| item.get("text"))
+        .and_then(|item| item.get("content"))
+        .and_then(Value::as_array)
+        .and_then(|content| content.first())
+        .and_then(|content| content.get("text"))
         .and_then(Value::as_str)
-        .ok_or("missing text")?
+        .ok_or("missing content text")?
         .to_owned();
     ensure_eq(&item_text, &"old user".to_owned(), "older item text")?;
     fs::remove_file(path)?;

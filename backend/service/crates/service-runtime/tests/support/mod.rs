@@ -183,7 +183,12 @@ impl ProviderPort for FakeProvider {
         Ok(json!({ "sessionId": session_id }))
     }
 
-    fn session_prompt(&mut self, session_id: String, prompt: String) -> Result<Value> {
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
         let mut state = self
             .state
             .lock()
@@ -199,12 +204,16 @@ impl ProviderPort for FakeProvider {
             .get(&(self.provider, session_id.clone()))
             .cloned()
             .unwrap_or_else(|| "end_turn".to_owned());
+        let prompt = prompt_text(&prompt);
         let (agent_text_chunks, updates) =
             fake_prompt_updates(&state, self.provider, &session_id, &prompt);
         if !state
             .prompt_lifecycle_missing
             .contains(&(self.provider, session_id.clone()))
         {
+            for update in &updates {
+                update_sink(update.clone());
+            }
             state.last_prompt = Some(PromptLifecycleSnapshot {
                 identity: LiveSessionIdentity {
                     provider: self.provider,
@@ -227,6 +236,19 @@ impl ProviderPort for FakeProvider {
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
         Ok(json!({ "sessionId": session_id }))
     }
+}
+
+fn prompt_text(prompt: &[Value]) -> String {
+    prompt
+        .iter()
+        .filter_map(|block| {
+            if block.get("type").and_then(Value::as_str) == Some("text") {
+                return block.get("text").and_then(Value::as_str);
+            }
+            None
+        })
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 fn fake_prompt_updates(

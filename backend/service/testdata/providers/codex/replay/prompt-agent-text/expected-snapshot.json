@@ -250,8 +250,18 @@
         "acp_session_id": "replay-codex-session-1",
         "provider": "codex"
       },
-      "observed_via": "new",
+      "observed_via": "load",
       "title": null
+    }
+  ],
+  "loaded_transcripts": [
+    {
+      "identity": {
+        "acp_session_id": "replay-codex-session-1",
+        "provider": "codex"
+      },
+      "raw_update_count": 0,
+      "updates": []
     }
   ],
   "provider": "codex"

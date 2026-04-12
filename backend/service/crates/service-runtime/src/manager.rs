@@ -15,7 +15,9 @@ use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
-use session_store::{HistoryLimit, LocalStore, OpenSessionKey, TranscriptItemStatus};
+use session_store::{
+    HistoryLimit, LocalStore, OpenSessionKey, PromptTurnAppend, TranscriptItemStatus,
+};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -29,7 +31,7 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
 }
 
 struct SessionPromptTarget {
-    open_session_id: Option<String>,
+    open_session_id: String,
     session_id: String,
 }
 
@@ -318,16 +320,23 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let target = self.session_prompt_target(provider, params)?;
-        let prompt = string_param("session/prompt", params, "prompt")?;
+        let prompt = content_blocks_param("session/prompt", params, "prompt")?;
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::PromptStarted,
             Some(target.session_id.clone()),
-            json!({ "prompt": prompt }),
+            json!({ "prompt": prompt.clone() }),
         );
+        let mut observed_updates = Vec::new();
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
-            let result = provider_port.session_prompt(target.session_id.clone(), prompt.clone());
+            let result = provider_port.session_prompt(
+                target.session_id.clone(),
+                prompt.clone(),
+                &mut |update| {
+                    observed_updates.push(update);
+                },
+            );
             (result, provider_port.snapshot(), provider_port.raw_events())
         };
         let result = match result {
@@ -339,19 +348,22 @@ where
                 return Err(error);
             }
         };
-        if let Some(lifecycle) = prompt_lifecycle(&snapshot, &target.session_id) {
-            for update in &lifecycle.updates {
-                self.event_buffer.emit(
-                    provider,
-                    RuntimeEventKind::PromptUpdateObserved,
-                    Some(target.session_id.clone()),
-                    json!({
-                        "update_index": update.index,
-                        "session_update": update.variant,
-                        "update": update.update
-                    }),
-                );
-            }
+        if observed_updates.is_empty()
+            && let Some(lifecycle) = prompt_lifecycle(&snapshot, &target.session_id)
+        {
+            observed_updates.extend(lifecycle.updates.clone());
+        }
+        for update in &observed_updates {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::PromptUpdateObserved,
+                Some(target.session_id.clone()),
+                json!({
+                    "update_index": update.index,
+                    "session_update": update.variant,
+                    "update": update.update
+                }),
+            );
         }
         self.event_buffer.emit(
             provider,
@@ -359,7 +371,7 @@ where
             Some(target.session_id.clone()),
             result.clone(),
         );
-        self.append_prompt_turn_from_snapshot(&target, &prompt, &snapshot)?;
+        self.append_prompt_turn_from_updates(&target, &prompt, &snapshot, &observed_updates)?;
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
@@ -370,47 +382,40 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<SessionPromptTarget> {
-        let open_session_id = optional_string_param("session/prompt", params, "openSessionId")?;
-        let session_id = match &open_session_id {
-            Some(open_session_id) => {
-                let key = self
-                    .local_store
-                    .open_session_key("session/prompt", open_session_id)?;
-                if key.provider != provider {
-                    return Err(RuntimeError::InvalidParameter {
-                        command: "session/prompt",
-                        parameter: "openSessionId",
-                        message: "open session belongs to another provider",
-                    });
-                }
-                key.session_id
-            }
-            None => string_param("session/prompt", params, "session_id")?,
-        };
+        let open_session_id = string_param("session/prompt", params, "openSessionId")?;
+        let key = self
+            .local_store
+            .open_session_key("session/prompt", &open_session_id)?;
+        if key.provider != provider {
+            return Err(RuntimeError::InvalidParameter {
+                command: "session/prompt",
+                parameter: "openSessionId",
+                message: "open session belongs to another provider",
+            });
+        }
         Ok(SessionPromptTarget {
             open_session_id,
-            session_id,
+            session_id: key.session_id,
         })
     }
 
-    fn append_prompt_turn_from_snapshot(
+    fn append_prompt_turn_from_updates(
         &mut self,
         target: &SessionPromptTarget,
-        prompt: &str,
+        prompt: &[Value],
         snapshot: &acp_core::ProviderSnapshot,
+        updates: &[acp_core::TranscriptUpdateSnapshot],
     ) -> Result<()> {
-        let Some(open_session_id) = target.open_session_id.as_deref() else {
-            return Ok(());
-        };
         let lifecycle = prompt_lifecycle(snapshot, &target.session_id);
-        let mutation = self.local_store.append_prompt_turn_updates(
-            open_session_id,
-            prompt,
-            lifecycle
-                .map(|value| value.updates.as_slice())
-                .unwrap_or_default(),
-            prompt_status(lifecycle),
-        )?;
+        let mutation = self
+            .local_store
+            .append_prompt_turn_updates(PromptTurnAppend {
+                open_session_id: &target.open_session_id,
+                prompt,
+                updates,
+                status: prompt_status(lifecycle),
+                stop_reason: lifecycle.and_then(|value| value.stop_reason.as_deref()),
+            })?;
         self.event_buffer.emit(
             snapshot.provider,
             RuntimeEventKind::SessionTimelineChanged,
@@ -427,17 +432,17 @@ where
         &mut self,
         provider: ProviderId,
         target: &SessionPromptTarget,
-        prompt: &str,
+        prompt: &[Value],
     ) -> Result<()> {
-        let Some(open_session_id) = target.open_session_id.as_deref() else {
-            return Ok(());
-        };
-        let mutation = self.local_store.append_prompt_turn_updates(
-            open_session_id,
-            prompt,
-            &[],
-            TranscriptItemStatus::Failed,
-        )?;
+        let mutation = self
+            .local_store
+            .append_prompt_turn_updates(PromptTurnAppend {
+                open_session_id: &target.open_session_id,
+                prompt,
+                updates: &[],
+                status: TranscriptItemStatus::Failed,
+                stop_reason: None,
+            })?;
         self.event_buffer.emit(
             provider,
             RuntimeEventKind::SessionTimelineChanged,
@@ -626,6 +631,24 @@ fn loaded_transcript_snapshot_updates<'a>(
         .find(|transcript| transcript.identity.acp_session_id == session_id)
         .map(|transcript| transcript.updates.as_slice())
         .unwrap_or_default()
+}
+
+fn content_blocks_param(
+    command: &'static str,
+    params: &Value,
+    parameter: &'static str,
+) -> Result<Vec<Value>> {
+    let Some(value) = params.get(parameter) else {
+        return Err(RuntimeError::MissingParameter { command, parameter });
+    };
+    value
+        .as_array()
+        .cloned()
+        .ok_or(RuntimeError::InvalidParameter {
+            command,
+            parameter,
+            message: "must be a ContentBlock array",
+        })
 }
 
 fn prompt_lifecycle<'a>(

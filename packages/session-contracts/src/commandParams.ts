@@ -36,7 +36,8 @@ function isSessionPromptRequest(value: unknown): value is SessionPromptRequest {
     typeof value === "object" &&
     value !== null &&
     "openSessionId" in value &&
-    "prompt" in value
+    "prompt" in value &&
+    Array.isArray(value.prompt)
   );
 }
 

@@ -278,6 +278,7 @@ export type {
   SessionPromptRequest,
 } from "@conduit/session-contracts";
 export type {
+  ContentBlock,
   ProviderId,
   SessionGroupsQuery,
   SessionGroupsView,

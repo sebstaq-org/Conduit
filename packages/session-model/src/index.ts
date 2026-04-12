@@ -105,22 +105,28 @@ type TranscriptMessageRole = "user" | "agent";
 
 type TranscriptItemStatus = "complete" | "streaming" | "cancelled" | "failed";
 
+interface TextContentBlock {
+  type: "text";
+  text: string;
+}
+
+type ContentBlock = TextContentBlock | Record<string, unknown>;
+
 interface TranscriptMessageItem {
   kind: "message";
   id: string;
   turnId?: string;
   status?: TranscriptItemStatus;
+  stopReason?: string;
   role: TranscriptMessageRole;
-  text: string;
-  sourceVariants: string[];
+  content: ContentBlock[];
 }
 
 interface TranscriptEventItem {
   kind: "event";
   id: string;
   variant: string;
-  title: string;
-  defaultCollapsed: true;
+  data: unknown;
 }
 
 type TranscriptItem = TranscriptMessageItem | TranscriptEventItem;
@@ -139,7 +145,7 @@ interface SessionHistoryRequest {
 
 interface SessionPromptRequest {
   openSessionId: string;
-  prompt: string;
+  prompt: ContentBlock[];
 }
 
 interface SessionHistoryWindow {
@@ -211,6 +217,7 @@ export type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionRow,
+  ContentBlock,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,

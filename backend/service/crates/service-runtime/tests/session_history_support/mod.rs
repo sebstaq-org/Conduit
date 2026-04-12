@@ -201,7 +201,7 @@ pub(crate) fn prompt_open_session(
         "codex",
         json!({
             "openSessionId": open_session_id,
-            "prompt": prompt
+            "prompt": [{ "type": "text", "text": prompt }]
         }),
     ))
 }
@@ -221,21 +221,86 @@ pub(crate) fn assert_items(
                 .get("kind")
                 .and_then(Value::as_str)
                 .ok_or_else(|| format!("missing item kind: {item}"))?;
-            let variant = item
-                .get("sourceVariants")
-                .and_then(Value::as_array)
-                .and_then(|variants| variants.first())
-                .and_then(Value::as_str)
-                .or_else(|| item.get("variant").and_then(Value::as_str))
-                .ok_or_else(|| format!("missing item variant: {item}"))?;
-            let text = item.get("text").and_then(Value::as_str);
-            Ok((kind, variant, text))
+            let identity = history_item_identity(item)?;
+            let text = item_content_text(item);
+            Ok((kind, identity, text))
         })
         .collect::<TestResult<Vec<_>>>()?;
+    let expected = expected
+        .iter()
+        .map(|(kind, identity, text)| {
+            (*kind, *identity, text.map(std::string::ToString::to_string))
+        })
+        .collect::<Vec<_>>();
     if actual == expected {
         return Ok(());
     }
     Err(format!("expected items {expected:?}, got {actual:?}").into())
+}
+
+fn history_item_identity(item: &Value) -> TestResult<&str> {
+    match item.get("kind").and_then(Value::as_str) {
+        Some("message") => item
+            .get("role")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("message item was missing role: {item}").into()),
+        Some("event") => item
+            .get("variant")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("event item was missing variant: {item}").into()),
+        _ => Err(format!("history item had unsupported kind: {item}").into()),
+    }
+}
+
+fn item_content_text(item: &Value) -> Option<String> {
+    let content = item.get("content").and_then(Value::as_array)?;
+    let text = content
+        .iter()
+        .filter_map(|content| content.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    Some(text)
+}
+
+pub(crate) fn assert_prompt_content(value: &Value, expected: &Value) -> TestResult<()> {
+    let items = value
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing items: {value}"))?;
+    let prompt_item = items
+        .iter()
+        .find(|item| {
+            item.get("kind").and_then(Value::as_str) == Some("message")
+                && item.get("role").and_then(Value::as_str) == Some("user")
+                && item.get("turnId").and_then(Value::as_str).is_some()
+        })
+        .ok_or_else(|| format!("missing session_prompt item: {items:?}"))?;
+    if prompt_item.get("content") == Some(expected) {
+        return Ok(());
+    }
+    Err(
+        format!("prompt content was not preserved: expected {expected}, got {prompt_item:?}")
+            .into(),
+    )
+}
+
+pub(crate) fn event_data_field(
+    value: &Value,
+    variant: &str,
+    field: &str,
+) -> TestResult<Option<i64>> {
+    let items = value
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing items: {value}"))?;
+    let event = items
+        .iter()
+        .find(|item| item.get("variant").and_then(Value::as_str) == Some(variant))
+        .ok_or_else(|| format!("missing event variant {variant}: {items:?}"))?;
+    Ok(event
+        .get("data")
+        .and_then(|data| data.get(field))
+        .and_then(Value::as_i64))
 }
 
 pub(crate) fn assert_prompt_turn_status(value: &Value, status: &str) -> TestResult<()> {
@@ -266,4 +331,19 @@ pub(crate) fn assert_prompt_turn_status(value: &Value, status: &str) -> TestResu
         return Ok(());
     }
     Err(format!("prompt turn metadata mismatch: {prompt_items:?}").into())
+}
+
+pub(crate) fn assert_turn_stop_reason(value: &Value, stop_reason: &str) -> TestResult<()> {
+    let items = value
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing items: {value}"))?;
+    let prompt_item = items
+        .iter()
+        .rfind(|item| item.get("turnId").and_then(Value::as_str).is_some())
+        .ok_or_else(|| format!("expected prompt turn items: {items:?}"))?;
+    if prompt_item.get("stopReason").and_then(Value::as_str) == Some(stop_reason) {
+        return Ok(());
+    }
+    Err(format!("prompt turn did not preserve stopReason {stop_reason}: {prompt_item:?}").into())
 }

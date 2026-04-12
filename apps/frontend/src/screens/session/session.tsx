@@ -1,4 +1,3 @@
-import { SessionTranscript } from "@/features/session-transcript";
 import { Box } from "@/theme";
 import {
   sessionScreenBackgroundColor,
@@ -14,9 +13,7 @@ function SessionScreen(): React.JSX.Element {
       flex={sessionScreenFlex}
       px={sessionScreenPaddingX}
       py={sessionScreenPaddingY}
-    >
-      <SessionTranscript />
-    </Box>
+    />
   );
 }
 

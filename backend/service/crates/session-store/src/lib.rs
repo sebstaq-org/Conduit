@@ -16,6 +16,7 @@ use acp_discovery::ProviderId;
 use ids::{HISTORY_CURSOR_PREFIX, history_cursor, open_session_id_for};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
+use serde_json::Value;
 use std::fs;
 use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
@@ -117,6 +118,21 @@ pub struct TimelineMutation {
     pub revision: i64,
 }
 
+/// Input for appending one completed prompt turn.
+#[derive(Debug, Clone, Copy)]
+pub struct PromptTurnAppend<'a> {
+    /// Opaque Conduit id for the opened session.
+    pub open_session_id: &'a str,
+    /// User prompt ACP content blocks.
+    pub prompt: &'a [Value],
+    /// ACP updates observed during the prompt turn.
+    pub updates: &'a [TranscriptUpdateSnapshot],
+    /// Terminal transcript status for agent-authored prompt items.
+    pub status: TranscriptItemStatus,
+    /// ACP stop reason returned by the provider, when known.
+    pub stop_reason: Option<&'a str>,
+}
+
 struct ParsedCursor {
     open_session_id: String,
     revision: i64,
@@ -208,23 +224,21 @@ impl LocalStore {
     /// fails.
     pub fn append_prompt_turn_updates(
         &mut self,
-        open_session_id: &str,
-        prompt: &str,
-        updates: &[TranscriptUpdateSnapshot],
-        status: TranscriptItemStatus,
+        append: PromptTurnAppend<'_>,
     ) -> Result<TimelineMutation> {
-        let existing = self.session_revision("session/prompt", open_session_id)?;
+        let existing = self.session_revision("session/prompt", append.open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");
         let mut items = vec![TranscriptItem::Message {
             id: format!("{turn_id}-user"),
             turn_id: Some(turn_id.clone()),
             status: Some(TranscriptItemStatus::Complete),
+            stop_reason: None,
             role: MessageRole::User,
-            text: prompt.to_owned(),
-            source_variants: vec!["session_prompt".to_owned()],
+            content: append.prompt.to_owned(),
         }];
-        let prompt_update_items = project_prompt_turn_items(&turn_id, updates, status);
+        let prompt_update_items =
+            project_prompt_turn_items(&turn_id, append.updates, append.status, append.stop_reason);
         let has_agent_message = prompt_update_items.iter().any(|item| {
             matches!(
                 item,
@@ -235,19 +249,19 @@ impl LocalStore {
             )
         });
         items.extend(prompt_update_items);
-        if !has_agent_message && status != TranscriptItemStatus::Complete {
+        if !has_agent_message && append.status != TranscriptItemStatus::Complete {
             items.push(TranscriptItem::Message {
                 id: format!("{turn_id}-terminal"),
                 turn_id: Some(turn_id),
-                status: Some(status),
+                status: Some(append.status),
+                stop_reason: append.stop_reason.map(ToOwned::to_owned),
                 role: MessageRole::Agent,
-                text: String::new(),
-                source_variants: vec![prompt_status_source_variant(status).to_owned()],
+                content: Vec::new(),
             });
         }
-        self.append_items(open_session_id, revision, &items)?;
+        self.append_items(append.open_session_id, revision, &items)?;
         Ok(TimelineMutation {
-            open_session_id: open_session_id.to_owned(),
+            open_session_id: append.open_session_id.to_owned(),
             revision,
         })
     }
@@ -587,15 +601,6 @@ fn normalize_limit(command: &'static str, limit: Option<u64>) -> Result<usize> {
         parameter: "limit",
         message: "limit must fit the platform pointer width",
     })
-}
-
-fn prompt_status_source_variant(status: TranscriptItemStatus) -> &'static str {
-    match status {
-        TranscriptItemStatus::Complete => "session_prompt",
-        TranscriptItemStatus::Streaming => "session_prompt_streaming",
-        TranscriptItemStatus::Cancelled => "session_prompt_cancelled",
-        TranscriptItemStatus::Failed => "session_prompt_failed",
-    }
 }
 
 fn cursor_end(open_session_id: &str, revision: i64, cursor: &str) -> Result<usize> {

@@ -279,8 +279,8 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
             "openSessionId": required_value(args, "--open-session-id")?,
         })),
         "session/prompt" => Ok(json!({
-            "session_id": required_value(args, "--session-id")?,
-            "prompt": required_value(args, "--prompt")?,
+            "openSessionId": required_value(args, "--open-session-id")?,
+            "prompt": [{ "type": "text", "text": required_value(args, "--prompt")? }],
         })),
         "session/cancel" => Ok(json!({
             "session_id": required_value(args, "--session-id")?,

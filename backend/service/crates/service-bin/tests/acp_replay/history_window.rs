@@ -5,16 +5,16 @@ use serde_json::Value;
 use super::support::{TestResult, response_result};
 
 pub(crate) fn assert_history_expectations(frame: &Value, operation: &Value) -> TestResult<()> {
-    if let Some(expected_variants) = operation
-        .get("assert_history_item_variants")
+    if let Some(expected_sequence) = operation
+        .get("assert_history_item_sequence")
         .and_then(Value::as_array)
     {
-        let variants = expected_variants
+        let sequence = expected_sequence
             .iter()
-            .map(|variant| variant.as_str().map(ToOwned::to_owned))
+            .map(|item| item.as_str().map(ToOwned::to_owned))
             .collect::<Option<Vec<_>>>()
-            .ok_or("assert_history_item_variants contained a non-string value")?;
-        assert_history_item_variants(frame, &variants)?;
+            .ok_or("assert_history_item_sequence contained a non-string value")?;
+        assert_history_item_sequence(frame, &sequence)?;
     }
     if let Some(expected_cursor) = operation.get("assert_history_next_cursor") {
         let actual_cursor = response_result(frame)?
@@ -30,26 +30,32 @@ pub(crate) fn assert_history_expectations(frame: &Value, operation: &Value) -> T
     Ok(())
 }
 
-pub(crate) fn assert_history_item_variants(frame: &Value, expected: &[String]) -> TestResult<()> {
+pub(crate) fn assert_history_item_sequence(frame: &Value, expected: &[String]) -> TestResult<()> {
     let actual = response_result(frame)?
         .get("items")
         .and_then(Value::as_array)
         .ok_or("history result was missing items")?
         .iter()
-        .map(history_item_variant)
+        .map(history_item_identity)
         .collect::<TestResult<Vec<_>>>()?;
     if actual == expected {
         return Ok(());
     }
-    Err(format!("expected history item variants {expected:?}, got {actual:?}").into())
+    Err(format!("expected history item sequence {expected:?}, got {actual:?}").into())
 }
 
-fn history_item_variant(item: &Value) -> TestResult<String> {
-    item.get("sourceVariants")
-        .and_then(Value::as_array)
-        .and_then(|variants| variants.first())
-        .and_then(Value::as_str)
-        .or_else(|| item.get("variant").and_then(Value::as_str))
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| format!("history item was missing variant: {item}").into())
+fn history_item_identity(item: &Value) -> TestResult<String> {
+    match item.get("kind").and_then(Value::as_str) {
+        Some("message") => item
+            .get("role")
+            .and_then(Value::as_str)
+            .map(|role| format!("message:{role}"))
+            .ok_or_else(|| format!("message item was missing role: {item}").into()),
+        Some("event") => item
+            .get("variant")
+            .and_then(Value::as_str)
+            .map(|variant| format!("event:{variant}"))
+            .ok_or_else(|| format!("event item was missing variant: {item}").into()),
+        _ => Err(format!("history item had unsupported kind: {item}").into()),
+    }
 }

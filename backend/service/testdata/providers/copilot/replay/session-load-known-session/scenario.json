@@ -327,17 +327,19 @@
         "limit": 40
       },
       "expect_ok": true,
-      "assert_history_item_variants": [
-        "user_message_chunk",
-        "agent_message_chunk"
-      ],
+      "assert_history_item_sequence": ["message:user", "message:agent"],
       "assert_history_next_cursor": null
     },
     {
       "command": "session/prompt",
       "params": {
         "openSessionId": "$lastOpenSessionId",
-        "prompt": "Neutral continuation check."
+        "prompt": [
+          {
+            "type": "text",
+            "text": "Neutral continuation check."
+          }
+        ]
       },
       "expect_ok": true,
       "assert_result_equals": {
@@ -352,12 +354,12 @@
         "limit": 40
       },
       "expect_ok": true,
-      "assert_history_item_variants": [
-        "user_message_chunk",
-        "agent_message_chunk",
-        "session_prompt",
-        "available_commands_update",
-        "agent_message_chunk"
+      "assert_history_item_sequence": [
+        "message:user",
+        "message:agent",
+        "message:user",
+        "event:available_commands_update",
+        "message:agent"
       ],
       "assert_history_next_cursor": null
     }

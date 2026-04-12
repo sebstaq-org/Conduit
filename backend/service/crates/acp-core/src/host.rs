@@ -1,13 +1,14 @@
 //! Live ACP host connection and locked-subset operations.
 
 mod helpers;
+mod prompt;
 mod sdk_actor;
 
 use self::sdk_actor::{
     ActorBootstrap, HostCommand, actor_stopped, disconnected_snapshot, receive_result, spawn_actor,
 };
 use crate::error::Result;
-use crate::snapshot::ProviderSnapshot;
+use crate::snapshot::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use crate::wire::RawWireEvent;
 use acp_contracts::load_locked_contract_bundle;
 use acp_discovery::{
@@ -15,9 +16,9 @@ use acp_discovery::{
     resolve_provider_command,
 };
 use agent_client_protocol as acp;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::PathBuf;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::Duration;
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
@@ -185,7 +186,11 @@ impl AcpHost {
     /// Returns an error when the target session is unknown or the provider
     /// rejects or fails the official SDK `session/prompt` call.
     pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<acp::PromptResponse> {
-        self.prompt(session_id, text, None)
+        self.prompt_content_blocks(
+            session_id,
+            vec![json!({ "type": "text", "text": text })],
+            &mut |_update| {},
+        )
     }
 
     /// Sends one text-only ACP prompt and schedules a cancel notification.
@@ -200,7 +205,28 @@ impl AcpHost {
         text: &str,
         cancel_after: Duration,
     ) -> Result<acp::PromptResponse> {
-        self.prompt(session_id, text, Some(cancel_after))
+        self.prompt(
+            session_id,
+            vec![json!({ "type": "text", "text": text })],
+            Some(cancel_after),
+            &mut |_update| {},
+        )
+    }
+
+    /// Sends one ACP content-block prompt and reports observed prompt updates
+    /// while the prompt request is in flight.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when content blocks cannot be decoded into the official
+    /// ACP schema or the provider rejects or fails `session/prompt`.
+    pub fn prompt_content_blocks(
+        &mut self,
+        session_id: &str,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<acp::PromptResponse> {
+        self.prompt(session_id, prompt, None, update_sink)
     }
 
     /// Sends one `session/cancel` notification on the current connection.
@@ -219,15 +245,22 @@ impl AcpHost {
     fn prompt(
         &mut self,
         session_id: &str,
-        text: &str,
+        prompt: Vec<Value>,
         cancel_after: Option<Duration>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<acp::PromptResponse> {
-        self.request("session/prompt", |reply| HostCommand::PromptText {
-            session_id: acp::SessionId::new(session_id),
-            text: text.to_owned(),
-            cancel_after,
-            reply,
-        })
+        let (reply, response) = channel();
+        let (updates, prompt_updates) = channel();
+        self.commands
+            .send(HostCommand::PromptContent {
+                session_id: acp::SessionId::new(session_id),
+                prompt,
+                cancel_after,
+                updates,
+                reply,
+            })
+            .map_err(|_error| actor_stopped(self.provider, "session/prompt"))?;
+        receive_prompt_result(self.provider, response, prompt_updates, update_sink)
     }
 
     fn request<T>(
@@ -249,5 +282,30 @@ impl AcpHost {
 impl Drop for AcpHost {
     fn drop(&mut self) {
         self.disconnect();
+    }
+}
+
+fn receive_prompt_result(
+    provider: ProviderId,
+    response: Receiver<Result<acp::PromptResponse>>,
+    prompt_updates: Receiver<TranscriptUpdateSnapshot>,
+    update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+) -> Result<acp::PromptResponse> {
+    loop {
+        for update in prompt_updates.try_iter() {
+            update_sink(update);
+        }
+        match response.recv_timeout(Duration::from_millis(10)) {
+            Ok(result) => {
+                for update in prompt_updates.try_iter() {
+                    update_sink(update);
+                }
+                return result;
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(actor_stopped(provider, "session/prompt"));
+            }
+        }
     }
 }

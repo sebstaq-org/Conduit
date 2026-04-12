@@ -1,7 +1,9 @@
 {"kind":"provider_connected","provider":"claude","session_id":null,"payload":{}}
 {"kind":"session_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"observed_via":"session/new"}}
-{"kind":"prompt_started","provider":"claude","session_id":"replay-claude-session-1","payload":{"prompt":"Reply exactly: conduit-phase-2-replay-claude observed."}}
+{"kind":"session_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"observed_via":"session/open"}}
+{"kind":"prompt_started","provider":"claude","session_id":"replay-claude-session-1","payload":{"prompt":[{"type":"text","text":"Reply exactly: conduit-phase-2-replay-claude observed."}]}}
 {"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":0,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":""}}}}
 {"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":1,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"cond"}}}}
 {"kind":"prompt_update_observed","provider":"claude","session_id":"replay-claude-session-1","payload":{"update_index":2,"session_update":"agent_message_chunk","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"uit-phase-2-replay-claude observed."}}}}
 {"kind":"prompt_completed","provider":"claude","session_id":"replay-claude-session-1","payload":{"stopReason":"end_turn"}}
+{"kind":"session_timeline_changed","provider":"claude","session_id":"replay-claude-session-1","payload":{"openSessionId":"open-session-1512bb0dae79015dfc8e8eded22d85b9a899c837dddc7233149d9d0351a09ca3","revision":2}}

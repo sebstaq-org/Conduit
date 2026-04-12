@@ -1,6 +1,7 @@
 //! Official ACP SDK actor for one provider connection.
 
 use super::helpers::{identity, session_update_variant, unexpected};
+use super::prompt::{permission_response, prompt_content_blocks, stop_reason_string};
 use crate::error::{AcpError, Result};
 use crate::snapshot::{
     ConnectionState, LiveSessionSnapshot, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
@@ -39,10 +40,11 @@ pub(super) enum HostCommand {
         cwd: PathBuf,
         reply: Sender<Result<acp::LoadSessionResponse>>,
     },
-    PromptText {
+    PromptContent {
         session_id: acp::SessionId,
-        text: String,
+        prompt: Vec<Value>,
         cancel_after: Option<Duration>,
+        updates: Sender<TranscriptUpdateSnapshot>,
         reply: Sender<Result<acp::PromptResponse>>,
     },
     CancelPrompt {
@@ -133,13 +135,16 @@ impl SdkHostActor {
                 let result = self.load_session(session_id, cwd).await;
                 send_reply(reply, result);
             }
-            HostCommand::PromptText {
+            HostCommand::PromptContent {
                 session_id,
-                text,
+                prompt,
                 cancel_after,
+                updates,
                 reply,
             } => {
-                let result = self.prompt_text(session_id, text, cancel_after).await;
+                let result = self
+                    .prompt_content(session_id, prompt, cancel_after, updates)
+                    .await;
                 send_reply(reply, result);
             }
             HostCommand::CancelPrompt { session_id, reply } => {
@@ -223,6 +228,7 @@ impl SdkHostActor {
             &self.updates,
             Some(session_id.to_string()),
             0,
+            None,
             self.provider,
         )?;
         let response = self
@@ -259,16 +265,18 @@ impl SdkHostActor {
         Ok(response)
     }
 
-    async fn prompt_text(
+    async fn prompt_content(
         &mut self,
         session_id: acp::SessionId,
-        text: String,
+        prompt: Vec<Value>,
         cancel_after: Option<Duration>,
+        updates: Sender<TranscriptUpdateSnapshot>,
     ) -> Result<acp::PromptResponse> {
         self.ensure_known_session(&session_id)?;
-        self.start_prompt(&session_id)?;
+        let prompt = prompt_content_blocks(self.provider, prompt)?;
+        self.start_prompt(&session_id, updates)?;
         let response = self
-            .prompt_with_optional_cancel(&session_id, text, cancel_after)
+            .prompt_with_optional_cancel(&session_id, prompt, cancel_after)
             .await?;
         self.finish_prompt(&session_id, &response)?;
         Ok(response)
@@ -277,13 +285,12 @@ impl SdkHostActor {
     async fn prompt_with_optional_cancel(
         &self,
         session_id: &acp::SessionId,
-        text: String,
+        prompt: Vec<acp::ContentBlock>,
         cancel_after: Option<Duration>,
     ) -> Result<acp::PromptResponse> {
-        let prompt = self.connection()?.prompt(acp::PromptRequest::new(
-            session_id.clone(),
-            vec![text.into()],
-        ));
+        let prompt = self
+            .connection()?
+            .prompt(acp::PromptRequest::new(session_id.clone(), prompt));
         tokio::pin!(prompt);
         if let Some(after) = cancel_after {
             return self.cancel_during_prompt(session_id, after, prompt).await;
@@ -319,11 +326,16 @@ impl SdkHostActor {
         }
     }
 
-    fn start_prompt(&mut self, session_id: &acp::SessionId) -> Result<()> {
+    fn start_prompt(
+        &mut self,
+        session_id: &acp::SessionId,
+        update_sender: Sender<TranscriptUpdateSnapshot>,
+    ) -> Result<()> {
         update_session_tracker(
             &self.updates,
             Some(session_id.to_string()),
             0,
+            Some(update_sender),
             self.provider,
         )?;
         self.last_prompt = Some(PromptLifecycleSnapshot {
@@ -394,6 +406,7 @@ struct PromptUpdateState {
     raw_update_count: usize,
     agent_text_chunks: Vec<String>,
     updates: Vec<TranscriptUpdateSnapshot>,
+    update_sender: Option<Sender<TranscriptUpdateSnapshot>>,
 }
 
 struct PromptUpdates {
@@ -412,9 +425,9 @@ struct SdkClient {
 impl acp::Client for SdkClient {
     async fn request_permission(
         &self,
-        _args: acp::RequestPermissionRequest,
+        args: acp::RequestPermissionRequest,
     ) -> acp::Result<acp::RequestPermissionResponse> {
-        Err(acp::Error::method_not_found())
+        Ok(permission_response(args))
     }
 
     async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
@@ -434,11 +447,15 @@ impl acp::Client for SdkClient {
                 ))
             })?;
             let variant = session_update_variant(&args.update, &update);
-            updates.updates.push(TranscriptUpdateSnapshot {
+            let snapshot = TranscriptUpdateSnapshot {
                 index,
                 variant,
                 update,
-            });
+            };
+            if let Some(update_sender) = &updates.update_sender {
+                let _result = update_sender.send(snapshot.clone());
+            }
+            updates.updates.push(snapshot);
             if let acp::SessionUpdate::AgentMessageChunk(chunk) = &args.update
                 && let acp::ContentBlock::Text(text) = &chunk.content
             {
@@ -560,6 +577,7 @@ fn update_session_tracker(
     updates: &Arc<Mutex<PromptUpdateState>>,
     active_session: Option<String>,
     raw_update_count: usize,
+    update_sender: Option<Sender<TranscriptUpdateSnapshot>>,
     provider: ProviderId,
 ) -> Result<()> {
     let mut updates = updates
@@ -569,6 +587,7 @@ fn update_session_tracker(
     updates.raw_update_count = raw_update_count;
     updates.agent_text_chunks.clear();
     updates.updates.clear();
+    updates.update_sender = update_sender;
     Ok(())
 }
 
@@ -584,6 +603,7 @@ fn take_session_updates(
     let captured_updates = std::mem::take(&mut updates.updates);
     updates.active_session = None;
     updates.raw_update_count = 0;
+    updates.update_sender = None;
     Ok(PromptUpdates {
         raw_update_count: count,
         agent_text_chunks,
@@ -597,12 +617,6 @@ fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {
         .and_then(|process| process.try_wait().ok())
         .flatten()
         .is_some()
-}
-
-fn stop_reason_string(response: &acp::PromptResponse) -> Option<String> {
-    to_value(response.stop_reason)
-        .ok()
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
 }
 
 fn to_values<T>(provider: ProviderId, values: Vec<T>, field: &str) -> Result<Vec<Value>>

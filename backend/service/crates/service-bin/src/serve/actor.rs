@@ -78,10 +78,10 @@ fn handle_request(
     let cursor = runtime.latest_event_sequence();
     let response = runtime.dispatch(request.command);
     let produced_events = runtime.events_after(cursor);
-    let _response_status = request.respond_to.send(response);
     if should_broadcast {
         broadcast_events(events, produced_events);
     }
+    let _response_status = request.respond_to.send(response);
 }
 
 fn broadcast_events(events: &broadcast::Sender<RuntimeEvent>, produced_events: Vec<RuntimeEvent>) {

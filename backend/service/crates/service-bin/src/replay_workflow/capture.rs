@@ -236,11 +236,30 @@ async fn capture_prompt_agent_text(client: &mut CaptureClient, run: &mut Capture
     initialize(client, run).await?;
     session_new(client, run).await?;
     let session_id = required_session_id(run)?;
+    let opened = client
+        .dispatch(
+            run.provider,
+            "session/open",
+            json!({
+                "sessionId": session_id,
+                "cwd": run.cwd.display().to_string(),
+            }),
+        )
+        .await?;
+    let open_session_id = opened
+        .get("result")
+        .and_then(|result| result.get("openSessionId"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| invalid_capture("session/open did not return openSessionId"))?
+        .to_owned();
     client
         .dispatch(
             run.provider,
             "session/prompt",
-            json!({ "session_id": session_id, "prompt": run.prompt() }),
+            json!({
+                "openSessionId": open_session_id,
+                "prompt": [{ "type": "text", "text": run.prompt() }]
+            }),
         )
         .await?;
     client

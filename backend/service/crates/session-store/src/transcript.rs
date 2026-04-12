@@ -12,7 +12,7 @@ use serde_json::Value;
     rename_all_fields = "camelCase"
 )]
 pub enum TranscriptItem {
-    /// User or agent text assembled from ACP text chunk updates.
+    /// User or agent ACP content.
     Message {
         /// Stable item id within the loaded transcript.
         id: String,
@@ -22,12 +22,13 @@ pub enum TranscriptItem {
         /// Live prompt item status when the item is part of a prompt turn.
         #[serde(skip_serializing_if = "Option::is_none")]
         status: Option<TranscriptItemStatus>,
+        /// ACP stop reason for the completed turn, when known.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stop_reason: Option<String>,
         /// Message author role.
         role: MessageRole,
-        /// Text content.
-        text: String,
-        /// ACP update variants that contributed to this item.
-        source_variants: Vec<String>,
+        /// ACP content blocks in transcript order.
+        content: Vec<Value>,
     },
     /// Non-message ACP update represented as a collapsed event.
     Event {
@@ -35,10 +36,8 @@ pub enum TranscriptItem {
         id: String,
         /// Official ACP update variant.
         variant: String,
-        /// Human-readable event title.
-        title: String,
-        /// Whether UI should collapse this event by default.
-        default_collapsed: bool,
+        /// Structured ACP update payload.
+        data: Value,
     },
 }
 
@@ -73,12 +72,13 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
     let mut items = Vec::new();
     for update in updates {
         match text_role(&update) {
-            Some((role, text)) => append_text_item(&mut items, update.index, role, text, &update),
+            Some((role, content)) => {
+                append_content_item(&mut items, update.index, role, content);
+            }
             None => items.push(TranscriptItem::Event {
                 id: format!("transcript-update-{}", update.index),
                 variant: update.variant.clone(),
-                title: event_title(&update),
-                default_collapsed: true,
+                data: update.update.clone(),
             }),
         }
     }
@@ -90,83 +90,82 @@ pub(crate) fn project_prompt_turn_items(
     turn_id: &str,
     updates: &[TranscriptUpdateSnapshot],
     status: TranscriptItemStatus,
+    stop_reason: Option<&str>,
 ) -> Vec<TranscriptItem> {
     let mut updates = updates.to_vec();
     updates.sort_by_key(|update| update.index);
     let mut items = Vec::new();
     for update in updates {
         match text_role(&update) {
-            Some((role, text)) => {
-                append_prompt_text_item(
+            Some((role, content)) => {
+                append_prompt_content_item(
                     &mut items,
-                    PromptTextItem {
+                    PromptContentItem {
                         turn_id,
                         role,
-                        text,
+                        content,
                         update: &update,
                         status,
+                        stop_reason,
                     },
                 );
             }
             None => items.push(TranscriptItem::Event {
                 id: format!("{turn_id}-update-{}", update.index),
                 variant: update.variant.clone(),
-                title: event_title(&update),
-                default_collapsed: true,
+                data: update.update.clone(),
             }),
         }
     }
     items
 }
 
-fn append_text_item(
+fn append_content_item(
     items: &mut Vec<TranscriptItem>,
     index: usize,
     role: MessageRole,
-    text: String,
-    update: &TranscriptUpdateSnapshot,
+    content: Value,
 ) {
     if let Some(TranscriptItem::Message {
         role: existing_role,
-        text: existing_text,
-        source_variants,
+        content: existing_content,
         ..
     }) = items.last_mut()
         && *existing_role == role
     {
-        existing_text.push_str(&text);
-        source_variants.push(update.variant.clone());
+        existing_content.push(content);
         return;
     }
     items.push(TranscriptItem::Message {
         id: format!("transcript-update-{index}"),
         turn_id: None,
         status: None,
+        stop_reason: None,
         role,
-        text,
-        source_variants: vec![update.variant.clone()],
+        content: vec![content],
     });
 }
 
-struct PromptTextItem<'a> {
+struct PromptContentItem<'a> {
     turn_id: &'a str,
     role: MessageRole,
-    text: String,
+    content: Value,
     update: &'a TranscriptUpdateSnapshot,
     status: TranscriptItemStatus,
+    stop_reason: Option<&'a str>,
 }
 
-fn append_prompt_text_item(items: &mut Vec<TranscriptItem>, input: PromptTextItem<'_>) {
+fn append_prompt_content_item(items: &mut Vec<TranscriptItem>, input: PromptContentItem<'_>) {
     if let Some(TranscriptItem::Message {
         role: existing_role,
-        text: existing_text,
-        source_variants,
+        content,
+        stop_reason,
         ..
     }) = items.last_mut()
         && *existing_role == input.role
     {
-        existing_text.push_str(&input.text);
-        source_variants.push(input.update.variant.clone());
+        content.push(input.content);
+        *stop_reason = input.stop_reason.map(ToOwned::to_owned);
         return;
     }
     let status = match input.role {
@@ -177,33 +176,18 @@ fn append_prompt_text_item(items: &mut Vec<TranscriptItem>, input: PromptTextIte
         id: format!("{}-update-{}", input.turn_id, input.update.index),
         turn_id: Some(input.turn_id.to_owned()),
         status: Some(status),
+        stop_reason: input.stop_reason.map(ToOwned::to_owned),
         role: input.role,
-        text: input.text,
-        source_variants: vec![input.update.variant.clone()],
+        content: vec![input.content],
     });
 }
 
-fn text_role(update: &TranscriptUpdateSnapshot) -> Option<(MessageRole, String)> {
+fn text_role(update: &TranscriptUpdateSnapshot) -> Option<(MessageRole, Value)> {
     let role = match update.variant.as_str() {
         "user_message_chunk" => MessageRole::User,
         "agent_message_chunk" => MessageRole::Agent,
         _ => return None,
     };
-    let text = update
-        .update
-        .get("content")
-        .and_then(|content| content.get("text"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    Some((role, text))
-}
-
-fn event_title(update: &TranscriptUpdateSnapshot) -> String {
-    update
-        .update
-        .get("title")
-        .and_then(Value::as_str)
-        .unwrap_or(update.variant.as_str())
-        .to_owned()
+    let content = update.update.get("content")?.clone();
+    Some((role, content))
 }

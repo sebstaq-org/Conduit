@@ -464,13 +464,27 @@ async fn prompt_replay_session(
     session_id: &str,
     event_frames: &mut Vec<Value>,
 ) -> TestResult<()> {
+    let opened = dispatch(
+        socket,
+        run,
+        "session/open",
+        json!({
+            "sessionId": session_id,
+            "cwd": scenario["session"]["cwd"].clone(),
+            "limit": 40,
+        }),
+        event_frames,
+    )
+    .await?;
+    assert_response_ok(&opened)?;
+    let open_session_id = open_session_id(&opened)?;
     let prompt = dispatch(
         socket,
         run,
         "session/prompt",
         json!({
-            "session_id": session_id,
-            "prompt": scenario["prompt"]["input"].clone(),
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": scenario["prompt"]["input"].clone() }],
         }),
         event_frames,
     )

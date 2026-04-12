@@ -318,21 +318,20 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
 }
 
 #[test]
-fn prompt_dispatch_records_lifecycle_events() -> TestResult<()> {
+fn prompt_dispatch_rejects_raw_session_id_product_path() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "session/prompt",
         "codex",
-        json!({ "session_id": "session-1", "prompt": "hello" }),
+        json!({ "session_id": "session-1", "prompt": [{ "type": "text", "text": "hello" }] }),
     ));
 
-    assert_ok(&response)?;
-    let events = runtime.drain_events();
-    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
-    ensure_event(&events, RuntimeEventKind::PromptUpdateObserved)?;
-    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
+    assert_invalid_params(&response)?;
+    if !runtime.drain_events().is_empty() {
+        return Err("raw session_id prompt produced events".into());
+    }
     Ok(())
 }
 
@@ -544,4 +543,15 @@ fn assert_session_updated_at(
         return Ok(());
     }
     Err(format!("expected updatedAt {expected_updated_at}, got {updated_at}").into())
+}
+
+fn assert_invalid_params(response: &service_runtime::ConsumerResponse) -> TestResult<()> {
+    if response.ok {
+        return Err(format!("expected invalid_params, got ok response {response:?}").into());
+    }
+    let error_code = response.error.as_ref().map(|error| error.code.as_str());
+    if error_code == Some("invalid_params") {
+        return Ok(());
+    }
+    Err(format!("expected invalid_params, got {error_code:?}").into())
 }
