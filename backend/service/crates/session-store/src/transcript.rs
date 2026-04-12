@@ -97,7 +97,16 @@ pub(crate) fn project_prompt_turn_items(
     for update in updates {
         match text_role(&update) {
             Some((role, text)) => {
-                append_prompt_text_item(&mut items, turn_id, role, text, &update, status);
+                append_prompt_text_item(
+                    &mut items,
+                    PromptTextItem {
+                        turn_id,
+                        role,
+                        text,
+                        update: &update,
+                        status,
+                    },
+                );
             }
             None => items.push(TranscriptItem::Event {
                 id: format!("{turn_id}-update-{}", update.index),
@@ -139,37 +148,38 @@ fn append_text_item(
     });
 }
 
-fn append_prompt_text_item(
-    items: &mut Vec<TranscriptItem>,
-    turn_id: &str,
+struct PromptTextItem<'a> {
+    turn_id: &'a str,
     role: MessageRole,
     text: String,
-    update: &TranscriptUpdateSnapshot,
+    update: &'a TranscriptUpdateSnapshot,
     status: TranscriptItemStatus,
-) {
+}
+
+fn append_prompt_text_item(items: &mut Vec<TranscriptItem>, input: PromptTextItem<'_>) {
     if let Some(TranscriptItem::Message {
         role: existing_role,
         text: existing_text,
         source_variants,
         ..
     }) = items.last_mut()
-        && *existing_role == role
+        && *existing_role == input.role
     {
-        existing_text.push_str(&text);
-        source_variants.push(update.variant.clone());
+        existing_text.push_str(&input.text);
+        source_variants.push(input.update.variant.clone());
         return;
     }
-    let status = match role {
+    let status = match input.role {
         MessageRole::User => TranscriptItemStatus::Complete,
-        MessageRole::Agent => status,
+        MessageRole::Agent => input.status,
     };
     items.push(TranscriptItem::Message {
-        id: format!("{turn_id}-update-{}", update.index),
-        turn_id: Some(turn_id.to_owned()),
+        id: format!("{}-update-{}", input.turn_id, input.update.index),
+        turn_id: Some(input.turn_id.to_owned()),
         status: Some(status),
-        role,
-        text,
-        source_variants: vec![update.variant.clone()],
+        role: input.role,
+        text: input.text,
+        source_variants: vec![input.update.variant.clone()],
     });
 }
 
