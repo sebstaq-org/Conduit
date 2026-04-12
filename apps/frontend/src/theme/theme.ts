@@ -11,6 +11,8 @@ const baseTheme = {
     web: 768,
   },
   panel: {
+    composerInputMinHeight: 40,
+    composerSurfaceMinHeight: 98,
     icon: 18,
     iconButton: 28,
     iconGlyph: 16,
@@ -80,7 +82,11 @@ const lightTheme = createTheme({
   colors: {
     background: "#ffffff",
     borderSubtle: "#ececec",
+    composerControlBackground: "#eeeeee",
+    composerSurface: "#f6f6f6",
     hoverBackground: "#f6f6f6",
+    iconButtonFilledBackground: "#d8d8d8",
+    iconButtonFilledIcon: "#3d3d3d",
     iconMuted: "#8d8d8d",
     pressedBackground: "#f1f1f1",
     textMuted: "#b7b7b7",
@@ -97,7 +103,11 @@ const darkTheme = createTheme({
   colors: {
     background: "#101214",
     borderSubtle: "#24282c",
+    composerControlBackground: "#36383a",
+    composerSurface: "#2a2c2e",
     hoverBackground: "#181b1f",
+    iconButtonFilledBackground: "#a7a7a7",
+    iconButtonFilledIcon: "#101214",
     iconMuted: "#9a9fa5",
     pressedBackground: "#1d2126",
     textMuted: "#858b92",

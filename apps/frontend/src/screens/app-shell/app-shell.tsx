@@ -66,7 +66,11 @@ function AppShellScreen(): React.JSX.Element {
       swipeEdgeWidth={appShellSwipeEdgeWidth}
       swipeEnabled={appShellSwipeEnabled}
     >
-      <SessionScreen />
+      <SessionScreen
+        onOpenNavigationPanel={() => {
+          setDrawerOpen(true);
+        }}
+      />
     </Drawer>
   );
 }

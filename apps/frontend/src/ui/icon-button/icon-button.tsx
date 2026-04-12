@@ -5,15 +5,30 @@ import type { Theme } from "@/theme";
 import { IconSlot } from "@/ui/icon-slot";
 import type { IconSlotName } from "@/ui/icon-slot/icon-slot";
 import { createIconButtonStyle } from "./icon-button.styles";
+import type { IconButtonAppearance } from "./icon-button.styles";
 
 interface IconButtonProps {
   accessibilityLabel: string;
+  appearance?: IconButtonAppearance | undefined;
+  disabled?: boolean | undefined;
   icon: IconSlotName;
   onPress: () => void;
 }
 
+function iconColorForAppearance(
+  appearance: IconButtonAppearance,
+): "iconButtonFilledIcon" | undefined {
+  if (appearance === "filled") {
+    return "iconButtonFilledIcon";
+  }
+
+  return undefined;
+}
+
 function IconButton({
   accessibilityLabel,
+  appearance = "ghost",
+  disabled = false,
   icon,
   onPress,
 }: IconButtonProps): React.JSX.Element {
@@ -24,7 +39,11 @@ function IconButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      disabled={disabled}
       onHoverIn={() => {
+        if (disabled) {
+          return;
+        }
         setHovered(true);
       }}
       onHoverOut={() => {
@@ -32,10 +51,10 @@ function IconButton({
       }}
       onPress={onPress}
       style={({ pressed }) =>
-        createIconButtonStyle(theme, { hovered, pressed })
+        createIconButtonStyle(theme, appearance, { disabled, hovered, pressed })
       }
     >
-      <IconSlot name={icon} />
+      <IconSlot color={iconColorForAppearance(appearance)} name={icon} />
     </Pressable>
   );
 }

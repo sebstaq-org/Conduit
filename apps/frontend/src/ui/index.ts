@@ -1,7 +1,9 @@
 export { IconButton } from "./icon-button";
 export { IconSlot } from "./icon-slot";
+export { KeyboardLift } from "./keyboard-lift";
 export { List } from "./list";
 export { Meta } from "./meta";
+export { MultilineInput } from "./multiline-input";
 export {
   PanelBody,
   PanelFooter,
