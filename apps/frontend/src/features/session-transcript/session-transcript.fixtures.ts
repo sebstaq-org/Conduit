@@ -13,7 +13,7 @@ const mockSessionTranscript: SessionTranscriptView = {
       id: "agent-1",
       kind: "message",
       role: "agent",
-      text: "Agreed. Start with transcript messages and keep composer, tools, and live state out of this slice.\n\n## Markdown proof\n\nThis row is rendered with **react-native-enriched-markdown** after `remend` normalizes the text.\n\n- lists should render as list items\n- inline code should render as code\n\n```ts\ntype Proof = {\n  renderer: \"enriched-markdown\";\n  normalizedBy: \"remend\";\n};\n```",
+      text: 'Agreed. Start with transcript messages and keep composer, tools, and live state out of this slice.\n\n## Markdown proof\n\nThis row is rendered with **react-native-streamdown** while markdown stays readable.\n\n- lists should render as list items\n- inline code should render as code\n\n```ts\ntype Proof = {\n  renderer: "streamdown";\n  status: "working";\n};\n```',
     },
     {
       id: "agent-2",

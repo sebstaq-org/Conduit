@@ -93,10 +93,15 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["**/*.config.ts", "oxlint.config.ts"],
+      files: ["**/*.config.ts", "**/*.config.mts", "oxlint.config.ts"],
       rules: {
         "import/no-nodejs-modules": "off",
         "import/no-default-export": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
       },
     },
     {

@@ -7,9 +7,7 @@ const sessionTranscriptMetaVariant = "sectionTitle" as const;
 const sessionTranscriptRowGap = "xs" as const;
 const sessionTranscriptTextVariant = "rowLabel" as const;
 
-function createSessionTranscriptMarkdownStyle(
-  theme: Theme,
-): MarkdownStyle {
+function createSessionTranscriptMarkdownStyle(theme: Theme): MarkdownStyle {
   return {
     code: {
       backgroundColor: theme.colors.composerSurface,
