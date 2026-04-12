@@ -4,7 +4,14 @@ import { createSessionClient } from "@conduit/session-client";
 import { PROVIDERS } from "@conduit/session-model";
 
 const sessionClient = createSessionClient();
-const supportedSessionClientMethods = ["getSessionGroups"] as const;
+const supportedSessionClientMethods = [
+  "getSessionGroups",
+  "openSession",
+  "readSessionHistory",
+  "promptSession",
+  "subscribeSessionIndexChanges",
+  "subscribeTimelineChanges",
+] as const;
 
 interface FrontendBootstrapPlan {
   appId: "frontend";

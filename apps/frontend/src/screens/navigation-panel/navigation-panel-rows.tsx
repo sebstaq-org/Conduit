@@ -6,7 +6,13 @@ import {
 } from "./navigation-panel.styles";
 import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
 
-function NavigationPanelRows(): React.JSX.Element {
+interface NavigationPanelRowsProps {
+  onSessionSelected?: (() => void) | undefined;
+}
+
+function NavigationPanelRows({
+  onSessionSelected,
+}: NavigationPanelRowsProps): React.JSX.Element {
   return (
     <>
       <Text
@@ -16,7 +22,7 @@ function NavigationPanelRows(): React.JSX.Element {
         Conduit
       </Text>
       <NavigationPanelProjectRows />
-      <SessionList />
+      <SessionList onSessionSelected={onSessionSelected} />
     </>
   );
 }

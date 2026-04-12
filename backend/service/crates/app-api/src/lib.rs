@@ -12,7 +12,7 @@
 )]
 
 use acp_contracts::LOCKED_ACP_METHODS;
-use acp_core::{AcpHost, ProviderSnapshot, RawWireEvent};
+use acp_core::{AcpHost, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use agent_client_protocol_schema::{
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
@@ -134,6 +134,22 @@ impl AppService {
     /// `session/prompt`.
     pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<PromptResponse> {
         self.host.prompt_text(session_id, text)
+    }
+
+    /// Sends one ACP content-block prompt without cancellation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the content blocks do not match the official ACP
+    /// schema or the underlying live ACP host cannot complete `session/prompt`.
+    pub fn prompt_content_blocks(
+        &mut self,
+        session_id: &str,
+        prompt: Vec<serde_json::Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<PromptResponse> {
+        self.host
+            .prompt_content_blocks(session_id, prompt, update_sink)
     }
 
     /// Sends one text-only prompt and schedules a cancel notification.

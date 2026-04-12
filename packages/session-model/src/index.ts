@@ -56,6 +56,7 @@ interface PromptLifecycleSnapshot {
   stopReason: string | null;
   rawUpdateCount: number;
   agentTextChunks: string[];
+  updates: TranscriptUpdateSnapshot[];
 }
 
 interface TranscriptUpdateSnapshot {
@@ -88,6 +89,9 @@ const SessionGroupSchema = z.object({
 type SessionGroup = z.infer<typeof SessionGroupSchema>;
 
 const SessionGroupsViewSchema = z.object({
+  revision: z.number(),
+  refreshedAt: z.string().nullable(),
+  isRefreshing: z.boolean(),
   groups: z.array(SessionGroupSchema),
 });
 
@@ -102,20 +106,33 @@ type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
 
 type TranscriptMessageRole = "user" | "agent";
 
+type TranscriptItemStatus = "complete" | "streaming" | "cancelled" | "failed";
+
+interface TextContentBlock {
+  type: "text";
+  text: string;
+}
+
+type ContentBlock = TextContentBlock | Record<string, unknown>;
+
 interface TranscriptMessageItem {
   kind: "message";
   id: string;
+  turnId?: string;
+  status?: TranscriptItemStatus;
+  stopReason?: string;
   role: TranscriptMessageRole;
-  text: string;
-  sourceVariants: string[];
+  content: ContentBlock[];
 }
 
 interface TranscriptEventItem {
   kind: "event";
   id: string;
+  turnId?: string;
+  status?: TranscriptItemStatus;
+  stopReason?: string;
   variant: string;
-  title: string;
-  defaultCollapsed: true;
+  data: unknown;
 }
 
 type TranscriptItem = TranscriptMessageItem | TranscriptEventItem;
@@ -132,8 +149,14 @@ interface SessionHistoryRequest {
   limit?: number;
 }
 
+interface SessionPromptRequest {
+  openSessionId: string;
+  prompt: ContentBlock[];
+}
+
 interface SessionHistoryWindow {
   openSessionId: string;
+  revision: number;
   items: TranscriptItem[];
   nextCursor: string | null;
 }
@@ -200,11 +223,14 @@ export type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionRow,
+  ContentBlock,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
+  SessionPromptRequest,
   TranscriptEventItem,
   TranscriptItem,
+  TranscriptItemStatus,
   TranscriptMessageItem,
   TranscriptMessageRole,
   TranscriptUpdateSnapshot,

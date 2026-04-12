@@ -1,7 +1,7 @@
 //! `app-api` backed provider runtime adapter.
 
 use crate::{ProviderFactory, ProviderPort, Result, RuntimeError};
-use acp_core::{ProviderSnapshot, RawWireEvent};
+use acp_core::{ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use app_api::AppService;
 use serde::Serialize;
@@ -61,8 +61,16 @@ impl ProviderPort for AppServicePort {
         serialize(self.service.load_session(session_id, cwd))
     }
 
-    fn session_prompt(&mut self, session_id: String, prompt: String) -> Result<Value> {
-        serialize(self.service.prompt_text(&session_id, &prompt))
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
+        serialize(
+            self.service
+                .prompt_content_blocks(&session_id, prompt, update_sink),
+        )
     }
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {

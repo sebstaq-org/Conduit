@@ -1,30 +1,29 @@
 import { useState } from "react";
 import { useTheme } from "@shopify/restyle";
 import { useWindowDimensions } from "react-native";
-import { Drawer } from "react-native-drawer-layout";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
 import { NavigationPanelContent } from "@/screens/navigation-panel/navigation-panel-content";
 import { SessionScreen } from "@/screens/session";
 import { PanelFrame } from "@/ui";
+import { MobileAppShell } from "./mobile-app-shell";
 import {
   appShellBackgroundColor,
-  appShellDrawerAccessibilityLabel,
-  appShellDrawerPosition,
-  appShellDrawerType,
   appShellFlex,
   appShellFlexDirection,
-  appShellSwipeEdgeWidth,
-  appShellSwipeEnabled,
-  createAppShellDrawerStyle,
-  createAppShellRootStyle,
   isWideAppShellLayout,
 } from "./app-shell.styles";
 
-function renderNavigationPanel(): React.JSX.Element {
+interface RenderNavigationPanelOptions {
+  onSessionSelected?: (() => void) | undefined;
+}
+
+function renderNavigationPanel({
+  onSessionSelected,
+}: RenderNavigationPanelOptions = {}): React.JSX.Element {
   return (
     <PanelFrame>
-      <NavigationPanelContent />
+      <NavigationPanelContent onSessionSelected={onSessionSelected} />
     </PanelFrame>
   );
 }
@@ -33,6 +32,14 @@ function AppShellScreen(): React.JSX.Element {
   const theme = useTheme<Theme>();
   const { height, width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  function closeDrawer(): void {
+    setDrawerOpen(false);
+  }
+
+  function openDrawer(): void {
+    setDrawerOpen(true);
+  }
 
   if (isWideAppShellLayout(theme, width)) {
     return (
@@ -48,30 +55,17 @@ function AppShellScreen(): React.JSX.Element {
   }
 
   return (
-    <Drawer
-      drawerPosition={appShellDrawerPosition}
-      drawerStyle={createAppShellDrawerStyle(theme, width)}
-      drawerType={appShellDrawerType}
-      layout={{ height, width }}
-      onClose={() => {
-        setDrawerOpen(false);
-      }}
-      onOpen={() => {
-        setDrawerOpen(true);
-      }}
-      open={drawerOpen}
-      overlayAccessibilityLabel={appShellDrawerAccessibilityLabel}
-      renderDrawerContent={renderNavigationPanel}
-      style={createAppShellRootStyle(theme)}
-      swipeEdgeWidth={appShellSwipeEdgeWidth}
-      swipeEnabled={appShellSwipeEnabled}
-    >
-      <SessionScreen
-        onOpenNavigationPanel={() => {
-          setDrawerOpen(true);
-        }}
-      />
-    </Drawer>
+    <MobileAppShell
+      drawerOpen={drawerOpen}
+      height={height}
+      onCloseDrawer={closeDrawer}
+      onOpenDrawer={openDrawer}
+      renderNavigationPanel={(onSessionSelected) =>
+        renderNavigationPanel({ onSessionSelected })
+      }
+      theme={theme}
+      width={width}
+    />
   );
 }
 

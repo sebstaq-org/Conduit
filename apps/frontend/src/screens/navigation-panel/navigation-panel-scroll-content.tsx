@@ -1,10 +1,16 @@
 import { ScrollArea } from "@/ui";
 import { NavigationPanelRows } from "./navigation-panel-rows";
 
-function NavigationPanelScrollContent(): React.JSX.Element {
+interface NavigationPanelScrollContentProps {
+  onSessionSelected?: (() => void) | undefined;
+}
+
+function NavigationPanelScrollContent({
+  onSessionSelected,
+}: NavigationPanelScrollContentProps): React.JSX.Element {
   return (
     <ScrollArea>
-      <NavigationPanelRows />
+      <NavigationPanelRows onSessionSelected={onSessionSelected} />
     </ScrollArea>
   );
 }

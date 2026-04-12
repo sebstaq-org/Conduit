@@ -9,11 +9,6 @@ const sessionComposerAccessibilityLabel = "Session message";
 const sessionComposerBackgroundColor = "composerSurface" as const;
 const sessionComposerBorderColor = "borderSubtle" as const;
 const sessionComposerBorderRadius = "panel" as const;
-const sessionComposerPreviewControls: SessionComposerPreviewControl[] = [
-  { label: "Provider", value: "Codex" },
-  { label: "Model", value: "GPT-5.4" },
-  { label: "Effort", value: "High" },
-];
 const sessionComposerControlBackgroundColor =
   "composerControlBackground" as const;
 const sessionComposerControlBorderRadius = "row" as const;
@@ -71,7 +66,6 @@ export {
   sessionComposerPaddingX,
   sessionComposerPaddingY,
   sessionComposerPlaceholder,
-  sessionComposerPreviewControls,
   sessionComposerRowAlignItems,
   sessionComposerRowFlexDirection,
   sessionComposerRowJustifyContent,

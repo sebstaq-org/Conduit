@@ -4,6 +4,7 @@ use crate::{Result, RuntimeError};
 use acp_discovery::ProviderId;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json, to_value};
+use session_store::{SessionIndexEntry, SessionIndexSnapshot};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -42,15 +43,9 @@ struct SessionRow {
     updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SessionRowWithCwd {
-    cwd: String,
-    row: SessionRow,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SessionGroup {
+pub(crate) struct SessionGroup {
     group_id: String,
     cwd: String,
     sessions: Vec<SessionRow>,
@@ -59,6 +54,9 @@ struct SessionGroup {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionGroupsView {
+    revision: i64,
+    refreshed_at: Option<String>,
+    is_refreshing: bool,
     groups: Vec<SessionGroup>,
 }
 
@@ -85,12 +83,9 @@ impl SessionGroupsQuery {
         })
     }
 
-    pub(crate) fn cwd_filters(&self) -> &[String] {
-        &self.cwd_filters
-    }
-
-    fn accepts(&self, cwd: &str, session: &ListedSession) -> bool {
-        (self.cwd_filters.is_empty() || self.cwd_filters.iter().any(|filter| filter == cwd))
+    pub(crate) fn accepts_entry(&self, session: &SessionIndexEntry) -> bool {
+        (self.cwd_filters.is_empty()
+            || self.cwd_filters.iter().any(|filter| filter == &session.cwd))
             && self.accepts_updated_at(session.updated_at.as_deref())
     }
 
@@ -116,29 +111,23 @@ pub(crate) fn providers_from_target(target: &str) -> Result<Vec<ProviderId>> {
         })
 }
 
-pub(crate) fn rows_from_session_list(
+pub(crate) fn entries_from_session_list(
     provider: ProviderId,
     result: &Value,
-    query: &SessionGroupsQuery,
-) -> Result<Vec<SessionRowWithCwd>> {
+) -> Result<Vec<SessionIndexEntry>> {
     let sessions = result.get("sessions").cloned().unwrap_or_else(|| json!([]));
     let sessions: Vec<ListedSession> = serde_json::from_value(sessions).map_err(invalid_params)?;
     sessions
         .into_iter()
-        .filter_map(|session| {
+        .map(|session| {
             let cwd = normalize_cwd(&session.cwd);
-            if !query.accepts(&cwd, &session) {
-                return None;
-            }
-            Some(Ok(SessionRowWithCwd {
+            Ok(SessionIndexEntry {
+                provider,
+                session_id: session.session_id,
                 cwd,
-                row: SessionRow {
-                    provider,
-                    session_id: session.session_id,
-                    title: session.title,
-                    updated_at: session.updated_at,
-                },
-            }))
+                title: session.title,
+                updated_at: session.updated_at,
+            })
         })
         .collect()
 }
@@ -155,10 +144,23 @@ pub(crate) fn next_cursor(result: &Value) -> Result<Option<String>> {
     }
 }
 
-pub(crate) fn grouped_view(rows: Vec<SessionRowWithCwd>) -> Result<Value> {
+pub(crate) fn grouped_view(
+    snapshot: SessionIndexSnapshot,
+    query: &SessionGroupsQuery,
+    is_refreshing: bool,
+) -> Result<Value> {
     let mut groups = HashMap::<String, Vec<SessionRow>>::new();
-    for row in rows {
-        groups.entry(row.cwd).or_default().push(row.row);
+    for entry in snapshot
+        .entries
+        .into_iter()
+        .filter(|entry| query.accepts_entry(entry))
+    {
+        groups.entry(entry.cwd).or_default().push(SessionRow {
+            provider: entry.provider,
+            session_id: entry.session_id,
+            title: entry.title,
+            updated_at: entry.updated_at,
+        });
     }
     let mut groups = groups
         .into_iter()
@@ -172,7 +174,13 @@ pub(crate) fn grouped_view(rows: Vec<SessionRowWithCwd>) -> Result<Value> {
         })
         .collect::<Vec<_>>();
     groups.sort_by(compare_groups);
-    to_value(SessionGroupsView { groups }).map_err(RuntimeError::from)
+    to_value(SessionGroupsView {
+        revision: snapshot.revision,
+        refreshed_at: snapshot.refreshed_at,
+        is_refreshing,
+        groups,
+    })
+    .map_err(RuntimeError::from)
 }
 
 fn updated_since_epoch(updated_within_days: Option<Value>) -> Result<Option<u64>> {

@@ -1,4 +1,23 @@
-export { conduitApi, useGetSessionGroupsQuery } from "./api";
+export {
+  conduitApi,
+  useGetSessionGroupsQuery,
+  useLazyReadSessionHistoryQuery,
+  useOpenSessionMutation,
+  usePromptSessionMutation,
+  useReadSessionHistoryQuery,
+} from "./api";
+export {
+  canSubmitPrompt,
+  openSessionRow,
+  submitPrompt,
+} from "./session-commands";
+export { selectActiveSession } from "./session-selection";
+export type {
+  OpenSessionMutationArg,
+  PromptSessionMutationArg,
+  ReadSessionHistoryQueryArg,
+} from "./api";
+export type { ActiveSession } from "./session-selection";
 export { ConduitStoreProvider } from "./provider";
 export { store } from "./store";
 export type { AppDispatch, RootState } from "./store";

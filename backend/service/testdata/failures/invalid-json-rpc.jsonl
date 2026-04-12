@@ -1,2 +1,0 @@
-{"sequence":1,"stream":"incoming","kind":"diagnostic","payload":"not-json","method":null,"request_id":null,"json":null}
-{"sequence":2,"stream":"stderr","kind":"diagnostic","payload":"JSON parse failure before ACP response validation","method":null,"request_id":null,"json":null}

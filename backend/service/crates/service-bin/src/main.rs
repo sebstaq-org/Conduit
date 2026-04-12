@@ -1,4 +1,4 @@
-//! Silent Phase 1 proof runner for Conduit.
+//! Product runtime entrypoint for Conduit.
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -11,17 +11,11 @@
     rustdoc::private_intra_doc_links
 )]
 
-mod artifact;
 mod cli;
-mod consumer_proof;
 mod error;
 mod local_store;
-mod proof;
-mod replay_workflow;
 mod runtime;
-mod scenarios;
 mod serve;
-mod support;
 
 use crate::cli::parse_command;
 use crate::error::Result;
@@ -34,11 +28,5 @@ async fn main() -> Result<()> {
     match command {
         cli::Command::Serve { host, port } => serve::run(&host, port).await,
         cli::Command::Runtime { command } => runtime::run(command),
-        cli::Command::ConsumerProof {
-            provider,
-            artifact_root,
-        } => consumer_proof::run(provider, &artifact_root, &args).await,
-        cli::Command::Replay { command } => replay_workflow::run(command, &args).await,
-        proof_command => scenarios::run(proof_command, &args),
     }
 }

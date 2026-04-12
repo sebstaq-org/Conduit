@@ -2,16 +2,12 @@
 
 mod support;
 
-use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use app_api as _;
 use serde as _;
 use serde_json::{Value, json};
-use service_runtime::{RuntimeEvent, RuntimeEventKind};
-use std::fs::read_to_string;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use support::{FakeState, TestResult, assert_ok, command, ensure_event, runtime};
+use support::{FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
 #[test]
@@ -58,14 +54,15 @@ fn disconnect_reconnects_next_provider_access() -> TestResult<()> {
     assert_ok(&runtime.dispatch(command("1", "initialize", "codex", json!({}))))?;
 
     let disconnected = runtime.dispatch(command("2", "provider/disconnect", "codex", json!({})));
-    let snapshot = runtime.dispatch(command("3", "snapshot/get", "codex", json!({})));
+    let reconnected = runtime.dispatch(command(
+        "3",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo" }),
+    ));
 
     assert_ok(&disconnected)?;
-    assert_ok(&snapshot)?;
-    let connection_state = snapshot.snapshot.map(|value| value.connection_state);
-    if connection_state != Some(ConnectionState::Ready) {
-        return Err(format!("expected reconnected snapshot, got {connection_state:?}").into());
-    }
+    assert_ok(&reconnected)?;
     let connect_count = connect_count(&state, ProviderId::Codex)?;
     if connect_count != Some(2) {
         return Err(format!("expected reconnect after disconnect, got {connect_count:?}").into());
@@ -90,56 +87,37 @@ fn provider_snapshot_alias_is_not_supported() -> TestResult<()> {
 }
 
 #[test]
-fn event_subscription_returns_cursor_and_raw_wire_truth() -> TestResult<()> {
+fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command("1", "events/subscribe", "copilot", json!({})));
+    let response = runtime.dispatch(command("1", "sessions/watch", "all", json!({})));
 
     assert_ok(&response)?;
-    ensure_array(&response.result, "events")?;
-    ensure_array(&response.result, "raw_wire_events")?;
-    if !response
-        .result
-        .get("next_sequence")
-        .is_some_and(serde_json::Value::is_u64)
-    {
-        return Err(format!("expected next sequence, got {}", response.result).into());
+    if response.result == json!({ "subscribed": true }) {
+        return Ok(());
     }
-    Ok(())
+    Err(format!("unexpected sessions/watch result {}", response.result).into())
 }
 
 #[test]
-fn event_subscription_filters_by_cursor() -> TestResult<()> {
+fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
-    assert_ok(&runtime.dispatch(command("1", "initialize", "copilot", json!({}))))?;
-    let cursor = runtime.latest_event_sequence();
-    assert_ok(&runtime.dispatch(command(
-        "2",
-        "session/new",
-        "copilot",
-        json!({ "cwd": "/repo" }),
-    )))?;
     let response = runtime.dispatch(command(
-        "3",
+        "1",
         "events/subscribe",
         "copilot",
-        json!({ "after_sequence": cursor }),
+        json!({ "after_sequence": 0 }),
     ));
 
-    assert_ok(&response)?;
-    let events = response
-        .result
-        .get("events")
-        .and_then(serde_json::Value::as_array)
-        .ok_or("events result was not an array")?;
-    if events
-        .iter()
-        .any(|event| event.get("sequence").and_then(serde_json::Value::as_u64) <= Some(cursor))
-    {
-        return Err("events/subscribe replayed history before cursor".into());
+    if response.ok {
+        return Err("events/subscribe unexpectedly succeeded".into());
     }
-    Ok(())
+    let error_code = response.error.map(|error| error.code);
+    if error_code == Some("unsupported_command".to_owned()) {
+        return Ok(());
+    }
+    Err(format!("expected unsupported_command, got {error_code:?}").into())
 }
 
 #[test]
@@ -147,15 +125,18 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command(
-        "1",
-        "sessions/grouped",
-        "all",
-        json!({
-            "cwdFilters": ["/repo"],
-            "updatedWithinDays": 5
-        }),
-    ));
+    let response = dispatch_after_group_refresh(
+        &mut runtime,
+        command(
+            "1",
+            "sessions/grouped",
+            "all",
+            json!({
+                "cwdFilters": ["/repo"],
+                "updatedWithinDays": 5
+            }),
+        ),
+    )?;
 
     assert_ok(&response)?;
     assert_group_identity(&response.result, "/repo", "cwd:/repo")?;
@@ -192,15 +173,18 @@ fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command(
-        "1",
-        "sessions/grouped",
-        "codex",
-        json!({
-            "cwdFilters": ["/repo"],
-            "updatedWithinDays": null
-        }),
-    ));
+    let response = dispatch_after_group_refresh(
+        &mut runtime,
+        command(
+            "1",
+            "sessions/grouped",
+            "codex",
+            json!({
+                "cwdFilters": ["/repo"],
+                "updatedWithinDays": null
+            }),
+        ),
+    )?;
 
     assert_ok(&response)?;
     assert_group_identity(&response.result, "/repo", "cwd:/repo")?;
@@ -209,27 +193,32 @@ fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
 }
 
 #[test]
-fn grouped_sessions_fails_when_requested_provider_fails() -> TestResult<()> {
+fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_grouped_session_lists(&state)?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let request = command(
+        "1",
+        "sessions/grouped",
+        "all",
+        json!({ "updatedWithinDays": null }),
+    );
+    let response = dispatch_after_group_refresh(&mut runtime, request.clone())?;
+    assert_ok(&response)?;
     state
         .lock()
         .map_err(|error| format!("{error}"))?
         .session_list_errors
         .insert(ProviderId::Claude, "claude list failed".to_owned());
-    let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command(
-        "1",
-        "sessions/grouped",
-        "all",
-        json!({ "updatedWithinDays": null }),
-    ));
-
-    if response.ok {
-        return Err("sessions/grouped unexpectedly swallowed provider failure".into());
-    }
-    let error_code = response.error.map(|error| error.code);
-    if error_code != Some("provider_error".to_owned()) {
-        return Err(format!("expected provider_error, got {error_code:?}").into());
+    let cached = runtime.dispatch(request.clone());
+    assert_ok(&cached)?;
+    assert_session_ids(
+        grouped_sessions(&cached.result, "/repo")?,
+        &["claude-recent", "codex-recent", "copilot-old"],
+    )?;
+    let refresh = runtime.force_refresh_session_index("all");
+    if refresh.is_ok() {
+        return Err("sessions/grouped refresh unexpectedly swallowed provider failure".into());
     }
     Ok(())
 }
@@ -239,15 +228,18 @@ fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_paginated_session_lists(&state)?;
     let mut runtime = runtime(Arc::clone(&state))?;
-    let response = runtime.dispatch(command(
-        "1",
-        "sessions/grouped",
-        "codex",
-        json!({
-            "cwdFilters": ["/repo/.", "/other//"],
-            "updatedWithinDays": null
-        }),
-    ));
+    let response = dispatch_after_group_refresh(
+        &mut runtime,
+        command(
+            "1",
+            "sessions/grouped",
+            "codex",
+            json!({
+                "cwdFilters": ["/repo/.", "/other//"],
+                "updatedWithinDays": null
+            }),
+        ),
+    )?;
 
     assert_ok(&response)?;
     assert_group_identity(&response.result, "/repo", "cwd:/repo")?;
@@ -266,13 +258,8 @@ fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()
         .session_list_requests
         .clone();
     let expected = vec![
-        (ProviderId::Codex, Some("/repo".to_owned()), None),
-        (
-            ProviderId::Codex,
-            Some("/repo".to_owned()),
-            Some("repo-page-2".to_owned()),
-        ),
-        (ProviderId::Codex, Some("/other".to_owned()), None),
+        (ProviderId::Codex, None, None),
+        (ProviderId::Codex, None, Some("repo-page-2".to_owned())),
     ];
     if requests != expected {
         return Err(format!("expected list requests {expected:?}, got {requests:?}").into());
@@ -301,15 +288,18 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
             }),
         );
     let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command(
-        "1",
-        "sessions/grouped",
-        "copilot",
-        json!({
-            "cwdFilters": ["/repo"],
-            "updatedWithinDays": null
-        }),
-    ));
+    let response = dispatch_after_group_refresh(
+        &mut runtime,
+        command(
+            "1",
+            "sessions/grouped",
+            "copilot",
+            json!({
+                "cwdFilters": ["/repo"],
+                "updatedWithinDays": null
+            }),
+        ),
+    )?;
 
     assert_ok(&response)?;
     assert_group_identity(&response.result, "/repo", "cwd:/repo")?;
@@ -318,21 +308,20 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
 }
 
 #[test]
-fn prompt_dispatch_records_lifecycle_events() -> TestResult<()> {
+fn prompt_dispatch_rejects_raw_session_id_product_path() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
     let response = runtime.dispatch(command(
         "1",
         "session/prompt",
         "codex",
-        json!({ "session_id": "session-1", "prompt": "hello" }),
+        json!({ "session_id": "session-1", "prompt": [{ "type": "text", "text": "hello" }] }),
     ));
 
-    assert_ok(&response)?;
-    let events = runtime.drain_events();
-    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
-    ensure_event(&events, RuntimeEventKind::PromptUpdateObserved)?;
-    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
+    assert_invalid_params(&response)?;
+    if !runtime.drain_events().is_empty() {
+        return Err("raw session_id prompt produced events".into());
+    }
     Ok(())
 }
 
@@ -349,32 +338,10 @@ fn cancel_dispatch_records_cancel_without_final_state() -> TestResult<()> {
 
     assert_ok(&response)?;
     let events = runtime.drain_events();
-    ensure_event(&events, RuntimeEventKind::CancelSent)?;
-    if events
-        .iter()
-        .any(|event| event.kind == RuntimeEventKind::PromptCompleted)
-    {
-        return Err("cancel invented a provider-independent prompt completion".into());
+    if events.is_empty() {
+        return Ok(());
     }
-    Ok(())
-}
-
-#[test]
-fn golden_consumer_event_stream_deserializes() -> TestResult<()> {
-    let contents = read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(2)
-            .ok_or("could not resolve backend service root")?
-            .join("testdata/golden/consumer-events.json"),
-    )?;
-    let events: Vec<RuntimeEvent> = serde_json::from_str(&contents)?;
-    if events.len() < 4 {
-        return Err("golden consumer event stream is too small".into());
-    }
-    ensure_event(&events, RuntimeEventKind::PromptStarted)?;
-    ensure_event(&events, RuntimeEventKind::PromptCompleted)?;
-    Ok(())
+    Err(format!("cancel produced product events: {events:?}").into())
 }
 
 fn connect_count(state: &Arc<Mutex<FakeState>>, provider: ProviderId) -> TestResult<Option<usize>> {
@@ -386,11 +353,14 @@ fn connect_count(state: &Arc<Mutex<FakeState>>, provider: ProviderId) -> TestRes
         .copied())
 }
 
-fn ensure_array(value: &Value, field: &str) -> TestResult<()> {
-    if value.get(field).is_some_and(serde_json::Value::is_array) {
-        return Ok(());
-    }
-    Err(format!("expected array field {field}, got {value}").into())
+fn dispatch_after_group_refresh(
+    runtime: &mut service_runtime::ServiceRuntime<support::FakeFactory>,
+    request: service_runtime::ConsumerCommand,
+) -> TestResult<service_runtime::ConsumerResponse> {
+    let loading = runtime.dispatch(request.clone());
+    assert_ok(&loading)?;
+    runtime.refresh_after_response(&request)?;
+    Ok(runtime.dispatch(request))
 }
 
 fn seed_grouped_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
@@ -446,27 +416,20 @@ fn seed_grouped_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
 fn seed_paginated_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
     let mut state = state.lock().map_err(|error| format!("{error}"))?;
     state.session_list_pages.insert(
-        (ProviderId::Codex, Some("/repo".to_owned()), None),
+        (ProviderId::Codex, None, None),
         json!({
             "sessions": [session_list_row("repo-page-1", "/repo", "9999-01-01T00:00:00Z")],
             "nextCursor": "repo-page-2"
         }),
     );
     state.session_list_pages.insert(
-        (
-            ProviderId::Codex,
-            Some("/repo".to_owned()),
-            Some("repo-page-2".to_owned()),
-        ),
+        (ProviderId::Codex, None, Some("repo-page-2".to_owned())),
         json!({
-            "sessions": [session_list_row("repo-page-2", "/repo", "9999-01-02T00:00:00Z")],
+            "sessions": [
+                session_list_row("repo-page-2", "/repo", "9999-01-02T00:00:00Z"),
+                session_list_row("other-page-1", "/other", "9999-01-03T00:00:00Z")
+            ],
             "nextCursor": null
-        }),
-    );
-    state.session_list_pages.insert(
-        (ProviderId::Codex, Some("/other".to_owned()), None),
-        json!({
-            "sessions": [session_list_row("other-page-1", "/other", "9999-01-03T00:00:00Z")]
         }),
     );
     Ok(())
@@ -544,4 +507,15 @@ fn assert_session_updated_at(
         return Ok(());
     }
     Err(format!("expected updatedAt {expected_updated_at}, got {updated_at}").into())
+}
+
+fn assert_invalid_params(response: &service_runtime::ConsumerResponse) -> TestResult<()> {
+    if response.ok {
+        return Err(format!("expected invalid_params, got ok response {response:?}").into());
+    }
+    let error_code = response.error.as_ref().map(|error| error.code.as_str());
+    if error_code == Some("invalid_params") {
+        return Ok(());
+    }
+    Err(format!("expected invalid_params, got {error_code:?}").into())
 }

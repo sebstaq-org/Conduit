@@ -1,0 +1,303 @@
+//! Prompt lane regression tests.
+
+use super::RuntimeActor;
+use acp_core::{
+    ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind, WireStream,
+};
+use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
+use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+use serde_json::{Value, json};
+use service_runtime::{ConsumerCommand, ProviderFactory, ProviderPort, Result, RuntimeError};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Clone)]
+struct BlockingPromptFactory {
+    release: Arc<(Mutex<bool>, Condvar)>,
+    started: mpsc::Sender<String>,
+}
+
+struct BlockingPromptProvider {
+    provider: ProviderId,
+    release: Arc<(Mutex<bool>, Condvar)>,
+    started: mpsc::Sender<String>,
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn blocking_prompt_does_not_block_following_history_or_queue_same_session() -> TestResult<()>
+{
+    let path = test_db_path()?;
+    let open_session_id = seed_open_session(&path, ProviderId::Codex, "session-1")?;
+    let refresh_path = path.clone();
+    let (started, started_rx) = mpsc::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let actor = RuntimeActor::start_with_store_opener(
+        BlockingPromptFactory {
+            release: Arc::clone(&release),
+            started,
+        },
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+    let prompt = spawn_prompt(actor.clone(), "1", &open_session_id);
+    let started_session = started_rx.recv_timeout(Duration::from_secs(5))?;
+
+    let history = tokio::time::timeout(
+        Duration::from_millis(250),
+        actor.dispatch(command(
+            "2",
+            "session/history",
+            "all",
+            json!({
+                "openSessionId": open_session_id,
+                "limit": 8
+            }),
+        )),
+    )
+    .await?;
+    let duplicate = actor
+        .dispatch(prompt_command("3", "all", &open_session_id))
+        .await;
+
+    release_prompt(&release)?;
+    let prompt = tokio::time::timeout(Duration::from_secs(5), prompt).await??;
+    if started_session != "session-1" {
+        return Err(format!("unexpected started session: {started_session}").into());
+    }
+    ensure_ok(&history)?;
+    ensure_error_code(&duplicate, "session_prompt_active")?;
+    ensure_ok(&prompt)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn prompt_lanes_run_different_open_sessions_in_parallel() -> TestResult<()> {
+    let path = test_db_path()?;
+    let first_open_session_id = seed_open_session(&path, ProviderId::Codex, "session-1")?;
+    let second_open_session_id = seed_open_session(&path, ProviderId::Codex, "session-2")?;
+    let refresh_path = path.clone();
+    let (started, started_rx) = mpsc::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let actor = RuntimeActor::start_with_store_opener(
+        BlockingPromptFactory {
+            release: Arc::clone(&release),
+            started,
+        },
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+    let first_prompt = spawn_prompt(actor.clone(), "1", &first_open_session_id);
+    let second_prompt = spawn_prompt(actor, "2", &second_open_session_id);
+    let started_sessions = [
+        started_rx.recv_timeout(Duration::from_secs(5))?,
+        started_rx.recv_timeout(Duration::from_secs(5))?,
+    ];
+
+    release_prompt(&release)?;
+    let first_prompt = tokio::time::timeout(Duration::from_secs(5), first_prompt).await??;
+    let second_prompt = tokio::time::timeout(Duration::from_secs(5), second_prompt).await??;
+    ensure_started_sessions(&started_sessions)?;
+    ensure_ok(&first_prompt)?;
+    ensure_ok(&second_prompt)
+}
+
+impl ProviderFactory for BlockingPromptFactory {
+    fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
+        Ok(Box::new(BlockingPromptProvider {
+            provider,
+            release: Arc::clone(&self.release),
+            started: self.started.clone(),
+        }))
+    }
+}
+
+impl ProviderPort for BlockingPromptProvider {
+    fn snapshot(&self) -> ProviderSnapshot {
+        ProviderSnapshot {
+            provider: self.provider,
+            connection_state: ConnectionState::Ready,
+            discovery: fake_discovery(self.provider),
+            capabilities: json!({}),
+            auth_methods: Vec::new(),
+            live_sessions: Vec::new(),
+            last_prompt: None,
+            loaded_transcripts: Vec::new(),
+        }
+    }
+
+    fn raw_events(&self) -> Vec<RawWireEvent> {
+        vec![RawWireEvent {
+            sequence: 1,
+            stream: WireStream::Outgoing,
+            kind: WireKind::Request,
+            payload: "{}".to_owned(),
+            method: Some("session/prompt".to_owned()),
+            request_id: Some("1".to_owned()),
+            json: Some(json!({})),
+        }]
+    }
+
+    fn disconnect(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
+        Ok(json!({ "sessionId": "session-1" }))
+    }
+
+    fn session_list(&mut self, _cwd: Option<PathBuf>, _cursor: Option<String>) -> Result<Value> {
+        Ok(json!({ "sessions": [] }))
+    }
+
+    fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {
+        Ok(json!({ "sessionId": session_id }))
+    }
+
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        _prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
+        let _send_status = self.started.send(session_id.clone());
+        let (released, condvar) = &*self.release;
+        let mut released = released
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        while !*released {
+            released = condvar
+                .wait(released)
+                .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        }
+        update_sink(TranscriptUpdateSnapshot {
+            index: 0,
+            variant: "agent_message_chunk".to_owned(),
+            update: json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": "agent reply"
+                }
+            }),
+        });
+        Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
+    }
+
+    fn session_cancel(&mut self, session_id: String) -> Result<Value> {
+        Ok(json!({ "sessionId": session_id }))
+    }
+}
+
+fn ensure_ok(response: &service_runtime::ConsumerResponse) -> TestResult<()> {
+    if response.ok {
+        return Ok(());
+    }
+    Err(format!("command failed: {:?}", response.error).into())
+}
+
+fn ensure_error_code(response: &service_runtime::ConsumerResponse, code: &str) -> TestResult<()> {
+    if response.error.as_ref().map(|error| error.code.as_str()) == Some(code) {
+        return Ok(());
+    }
+    Err(format!("unexpected response: {response:?}").into())
+}
+
+fn ensure_started_sessions(started_sessions: &[String; 2]) -> TestResult<()> {
+    let mut started_sessions = started_sessions.to_vec();
+    started_sessions.sort();
+    if started_sessions == vec!["session-1".to_owned(), "session-2".to_owned()] {
+        return Ok(());
+    }
+    Err(format!("unexpected started sessions: {started_sessions:?}").into())
+}
+
+fn seed_open_session(path: &PathBuf, provider: ProviderId, session_id: &str) -> TestResult<String> {
+    let mut store = LocalStore::open_path(path)?;
+    let opened = store.open_session(
+        OpenSessionKey {
+            provider,
+            session_id: session_id.to_owned(),
+            cwd: "/repo".to_owned(),
+        },
+        &[],
+        HistoryLimit::new("test", Some(8))?,
+    )?;
+    Ok(opened.open_session_id)
+}
+
+fn spawn_prompt(
+    actor: RuntimeActor,
+    id: &'static str,
+    open_session_id: &str,
+) -> tokio::task::JoinHandle<service_runtime::ConsumerResponse> {
+    let open_session_id = open_session_id.to_owned();
+    tokio::spawn(async move {
+        actor
+            .dispatch(prompt_command(id, "all", &open_session_id))
+            .await
+    })
+}
+
+fn prompt_command(id: &str, provider: &str, open_session_id: &str) -> ConsumerCommand {
+    command(
+        id,
+        "session/prompt",
+        provider,
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "user prompt" }]
+        }),
+    )
+}
+
+fn command(id: &str, command: &str, provider: &str, params: Value) -> ConsumerCommand {
+    ConsumerCommand {
+        id: id.to_owned(),
+        command: command.to_owned(),
+        provider: provider.to_owned(),
+        params,
+    }
+}
+
+fn release_prompt(release: &Arc<(Mutex<bool>, Condvar)>) -> TestResult<()> {
+    let (released, condvar) = &**release;
+    *released.lock().map_err(|error| format!("{error}"))? = true;
+    condvar.notify_all();
+    Ok(())
+}
+
+fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
+    ProviderDiscovery {
+        provider,
+        launcher: LauncherCommand {
+            executable: PathBuf::from(provider.as_str()),
+            args: Vec::new(),
+            display: provider.as_str().to_owned(),
+        },
+        resolved_path: provider.as_str().to_owned(),
+        version: "fake".to_owned(),
+        auth_hints: Vec::new(),
+        initialize_viable: true,
+        transport_diagnostics: Vec::new(),
+        initialize_probe: InitializeProbe {
+            response: json!({}),
+            payload: InitializeResponse::new(ProtocolVersion::V1)
+                .agent_info(Implementation::new("fake-agent", "0.5.0")),
+            stdout_lines: Vec::new(),
+            stderr_lines: Vec::new(),
+            elapsed_ms: 1,
+        },
+    }
+}
+
+fn test_db_path() -> TestResult<PathBuf> {
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    Ok(std::env::temp_dir().join(format!(
+        "conduit-service-bin-prompt-lane-{}-{nanos}.sqlite3",
+        std::process::id()
+    )))
+}

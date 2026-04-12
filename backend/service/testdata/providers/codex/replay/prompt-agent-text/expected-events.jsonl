@@ -1,5 +1,0 @@
-{"kind":"provider_connected","provider":"codex","session_id":null,"payload":{}}
-{"kind":"session_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"observed_via":"session/new"}}
-{"kind":"prompt_started","provider":"codex","session_id":"replay-codex-session-1","payload":{"prompt":"Reply exactly: conduit-phase-2-replay-codex observed."}}
-{"kind":"prompt_update_observed","provider":"codex","session_id":"replay-codex-session-1","payload":{"source":"provider_response"}}
-{"kind":"prompt_completed","provider":"codex","session_id":"replay-codex-session-1","payload":{"stopReason":"end_turn"}}

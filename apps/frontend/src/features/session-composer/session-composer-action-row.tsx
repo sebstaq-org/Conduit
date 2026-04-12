@@ -11,12 +11,14 @@ import {
 
 interface SessionComposerActionRowProps {
   canSend: boolean;
-  onMockSend: () => void;
+  onSend: () => void;
+  provider?: string | undefined;
 }
 
 function SessionComposerActionRow({
   canSend,
-  onMockSend,
+  onSend,
+  provider,
 }: SessionComposerActionRowProps): React.JSX.Element {
   return (
     <Box
@@ -24,13 +26,13 @@ function SessionComposerActionRow({
       flexDirection={sessionComposerRowFlexDirection}
       justifyContent={sessionComposerRowJustifyContent}
     >
-      <SessionComposerControls />
+      <SessionComposerControls provider={provider} />
       <IconButton
         accessibilityLabel={sessionComposerSendAccessibilityLabel}
         appearance="filled"
         disabled={!canSend}
         icon={sessionComposerSendIcon}
-        onPress={onMockSend}
+        onPress={onSend}
       />
     </Box>
   );

@@ -1,7 +1,7 @@
 //! Versioned WebSocket envelopes for the consumer runtime API.
 
 use serde::{Deserialize, Serialize};
-use service_runtime::{ConsumerCommand, ConsumerError, ConsumerResponse, RuntimeEvent};
+use service_runtime::{ConsumerCommand, ConsumerError, ConsumerResponse};
 
 const PROTOCOL_VERSION: u8 = 1;
 
@@ -80,17 +80,17 @@ impl ServerResponseFrame {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ServerEventFrame {
+pub(crate) struct ServerEventFrame<T> {
     v: u8,
     #[serde(rename = "type")]
     frame_type: &'static str,
-    event: RuntimeEvent,
+    event: T,
 }
 
-impl ServerEventFrame {
+impl<T> ServerEventFrame<T> {
     /// Creates one event frame.
     #[must_use]
-    pub(crate) fn new(event: RuntimeEvent) -> Self {
+    pub(crate) fn new(event: T) -> Self {
         Self {
             v: PROTOCOL_VERSION,
             frame_type: "event",
@@ -163,8 +163,8 @@ mod tests {
                 "id": "wire-1",
                 "command": {
                     "id": "caller-id",
-                    "command": "snapshot/get",
-                    "provider": "codex",
+                    "command": "sessions/watch",
+                    "provider": "all",
                     "params": {}
                 }
             }"#,
@@ -188,8 +188,8 @@ mod tests {
                 "id": "wire-2",
                 "command": {
                     "id": "wire-2",
-                    "command": "snapshot/get",
-                    "provider": "codex",
+                    "command": "sessions/watch",
+                    "provider": "all",
                     "params": {}
                 }
             }"#,

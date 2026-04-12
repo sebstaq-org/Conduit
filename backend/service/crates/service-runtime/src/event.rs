@@ -1,11 +1,8 @@
 //! Consumer-visible runtime events.
 
-use crate::Result;
-use acp_core::RawWireEvent;
 use acp_discovery::ProviderId;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, to_value};
-use std::collections::HashMap;
+use serde_json::Value;
 
 /// One consumer-visible runtime event.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -26,31 +23,17 @@ pub struct RuntimeEvent {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeEventKind {
-    /// A provider runtime was initialized and connected.
-    ProviderConnected,
-    /// A provider runtime was disconnected.
-    ProviderDisconnected,
-    /// A session was observed through an ACP command.
-    SessionObserved,
-    /// A replayed load-time `session/update` was exposed to consumers.
-    SessionReplayUpdate,
-    /// A prompt command started.
-    PromptStarted,
-    /// A prompt update was observed.
-    PromptUpdateObserved,
-    /// A prompt command completed.
-    PromptCompleted,
-    /// A cancel command was sent.
-    CancelSent,
-    /// A raw wire event was captured for debug/proof consumers.
-    RawWireEventCaptured,
+    /// The UI-facing session timeline changed.
+    SessionTimelineChanged,
+    /// The UI-facing sessions index changed.
+    SessionsIndexChanged,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct EventBuffer {
     events: Vec<RuntimeEvent>,
     next_sequence: u64,
-    raw_event_offsets: HashMap<ProviderId, usize>,
+    sink: Option<Box<dyn FnMut(RuntimeEvent) + Send>>,
 }
 
 impl EventBuffer {
@@ -58,8 +41,12 @@ impl EventBuffer {
         Self {
             events: Vec::new(),
             next_sequence: 1,
-            raw_event_offsets: HashMap::new(),
+            sink: None,
         }
+    }
+
+    pub(crate) fn set_sink(&mut self, sink: Box<dyn FnMut(RuntimeEvent) + Send>) {
+        self.sink = Some(sink);
     }
 
     pub(crate) fn events_after(&self, sequence: u64) -> Vec<RuntimeEvent> {
@@ -78,24 +65,6 @@ impl EventBuffer {
         std::mem::take(&mut self.events)
     }
 
-    pub(crate) fn capture_raw_events(
-        &mut self,
-        provider: ProviderId,
-        raw_events: &[RawWireEvent],
-    ) -> Result<()> {
-        let offset = self.raw_event_offsets.get(&provider).copied().unwrap_or(0);
-        for event in raw_events.iter().skip(offset) {
-            self.emit(
-                provider,
-                RuntimeEventKind::RawWireEventCaptured,
-                None,
-                to_value(event)?,
-            );
-        }
-        self.raw_event_offsets.insert(provider, raw_events.len());
-        Ok(())
-    }
-
     pub(crate) fn emit(
         &mut self,
         provider: ProviderId,
@@ -105,12 +74,16 @@ impl EventBuffer {
     ) {
         let sequence = self.next_sequence;
         self.next_sequence += 1;
-        self.events.push(RuntimeEvent {
+        let event = RuntimeEvent {
             sequence,
             kind,
             provider,
             session_id,
             payload,
-        });
+        };
+        self.events.push(event.clone());
+        if let Some(sink) = self.sink.as_mut() {
+            sink(event);
+        }
     }
 }

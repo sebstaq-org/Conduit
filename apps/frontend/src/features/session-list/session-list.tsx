@@ -2,10 +2,16 @@ import { Section } from "@/ui";
 import { SessionListActions } from "./session-list-actions";
 import { SessionListRows } from "./session-list-rows";
 
-function SessionList(): React.JSX.Element {
+interface SessionListProps {
+  onSessionSelected?: (() => void) | undefined;
+}
+
+function SessionList({
+  onSessionSelected,
+}: SessionListProps): React.JSX.Element {
   return (
     <Section actions={<SessionListActions />} title="Threads">
-      <SessionListRows />
+      <SessionListRows onSessionSelected={onSessionSelected} />
     </Section>
   );
 }

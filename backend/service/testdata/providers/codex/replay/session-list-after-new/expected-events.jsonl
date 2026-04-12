@@ -1,3 +1,0 @@
-{"kind":"provider_connected","provider":"codex","session_id":null,"payload":{}}
-{"kind":"session_observed","provider":"codex","session_id":"replay-codex-session-list-after-new-session-1","payload":{"observed_via":"session/new"}}
-{"kind":"session_observed","provider":"codex","session_id":"replay-codex-historical-session-1","payload":{"observed_via":"session/list"}}

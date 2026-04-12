@@ -34,7 +34,7 @@
     "desktop:typecheck": "pnpm --filter @conduit/desktop run typecheck",
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
-    "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p service-bin --test fixture_validation",
+    "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p acp-contracts --test protocol_captures && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test golden_testdata",
     "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "frontend:android": "pnpm --filter @conduit/frontend run android",
     "frontend:doctor": "pnpm --filter @conduit/frontend run doctor",

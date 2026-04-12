@@ -1,25 +1,29 @@
 //! Test support for `service-runtime` integration tests.
 
 use acp_core::{
-    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
-    TranscriptUpdateSnapshot, WireKind, WireStream,
+    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
+    PromptLifecycleState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
+    WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
 use serde_json::{Value, json};
 use service_runtime::{
     ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, RuntimeError,
-    RuntimeEvent, RuntimeEventKind, ServiceRuntime,
+    ServiceRuntime,
 };
 use session_store::LocalStore;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);
+
+static NEXT_TEST_DB: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
 pub(crate) struct FakeState {
@@ -30,7 +34,13 @@ pub(crate) struct FakeState {
     pub(crate) session_load_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
     pub(crate) session_load_requests: Vec<(ProviderId, String)>,
     pub(crate) session_list_requests: Vec<SessionListKey>,
+    pub(crate) prompt_agent_text: HashMap<(ProviderId, String), Vec<String>>,
+    pub(crate) prompt_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
+    pub(crate) prompt_errors: HashMap<(ProviderId, String), String>,
+    pub(crate) prompt_lifecycle_missing: HashSet<(ProviderId, String)>,
+    pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
     loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
+    last_prompt: Option<PromptLifecycleSnapshot>,
     disconnected: bool,
     sessions: usize,
 }
@@ -76,7 +86,11 @@ impl ProviderPort for FakeProvider {
             capabilities: json!({}),
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
-            last_prompt: None,
+            last_prompt: self
+                .state
+                .lock()
+                .map(|state| state.last_prompt.clone())
+                .unwrap_or_default(),
             loaded_transcripts: self
                 .state
                 .lock()
@@ -169,12 +183,117 @@ impl ProviderPort for FakeProvider {
         Ok(json!({ "sessionId": session_id }))
     }
 
-    fn session_prompt(&mut self, session_id: String, prompt: String) -> Result<Value> {
-        Ok(json!({ "sessionId": session_id, "prompt": prompt }))
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        if let Some(error) = state
+            .prompt_errors
+            .get(&(self.provider, session_id.clone()))
+        {
+            return Err(RuntimeError::Provider(error.clone()));
+        }
+        let stop_reason = state
+            .prompt_stop_reason
+            .get(&(self.provider, session_id.clone()))
+            .cloned()
+            .unwrap_or_else(|| "end_turn".to_owned());
+        let prompt = prompt_text(&prompt);
+        let (agent_text_chunks, updates) =
+            fake_prompt_updates(&state, self.provider, &session_id, &prompt);
+        if !state
+            .prompt_lifecycle_missing
+            .contains(&(self.provider, session_id.clone()))
+        {
+            for update in &updates {
+                update_sink(update.clone());
+            }
+            state.last_prompt = Some(PromptLifecycleSnapshot {
+                identity: LiveSessionIdentity {
+                    provider: self.provider,
+                    acp_session_id: session_id.clone(),
+                },
+                state: fake_prompt_lifecycle_state(&stop_reason),
+                stop_reason: Some(stop_reason.clone()),
+                raw_update_count: updates.len(),
+                agent_text_chunks,
+                updates,
+            });
+        }
+        Ok(json!({
+            "sessionId": session_id,
+            "prompt": prompt,
+            "stopReason": stop_reason
+        }))
     }
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
         Ok(json!({ "sessionId": session_id }))
+    }
+}
+
+fn prompt_text(prompt: &[Value]) -> String {
+    prompt
+        .iter()
+        .filter_map(|block| {
+            if block.get("type").and_then(Value::as_str) == Some("text") {
+                return block.get("text").and_then(Value::as_str);
+            }
+            None
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+fn fake_prompt_updates(
+    state: &FakeState,
+    provider: ProviderId,
+    session_id: &str,
+    prompt: &str,
+) -> (Vec<String>, Vec<TranscriptUpdateSnapshot>) {
+    let key = (provider, session_id.to_owned());
+    let agent_text_chunks = state
+        .prompt_agent_text
+        .get(&key)
+        .cloned()
+        .unwrap_or_else(|| vec![prompt.to_owned()]);
+    let updates = state
+        .prompt_updates
+        .get(&key)
+        .cloned()
+        .unwrap_or_else(|| prompt_updates_from_chunks(&agent_text_chunks));
+    (agent_text_chunks, updates)
+}
+
+fn prompt_updates_from_chunks(chunks: &[String]) -> Vec<TranscriptUpdateSnapshot> {
+    chunks
+        .iter()
+        .enumerate()
+        .map(|(index, text)| TranscriptUpdateSnapshot {
+            index,
+            variant: "agent_message_chunk".to_owned(),
+            update: json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": text
+                }
+            }),
+        })
+        .collect()
+}
+
+fn fake_prompt_lifecycle_state(stop_reason: &str) -> PromptLifecycleState {
+    if stop_reason == "cancelled" {
+        PromptLifecycleState::Cancelled
+    } else {
+        PromptLifecycleState::Completed
     }
 }
 
@@ -210,13 +329,6 @@ pub(crate) fn assert_ok(response: &ConsumerResponse) -> TestResult<()> {
     Ok(())
 }
 
-pub(crate) fn ensure_event(events: &[RuntimeEvent], kind: RuntimeEventKind) -> TestResult<()> {
-    if events.iter().any(|event| event.kind == kind) {
-        return Ok(());
-    }
-    Err(format!("missing runtime event {kind:?}").into())
-}
-
 fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
     ProviderDiscovery {
         provider,
@@ -242,9 +354,10 @@ fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
 }
 
 fn test_db_path() -> TestResult<PathBuf> {
+    let sequence = NEXT_TEST_DB.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     Ok(std::env::temp_dir().join(format!(
-        "conduit-service-runtime-{}-{nanos}.sqlite3",
+        "conduit-service-runtime-{}-{sequence}-{nanos}.sqlite3",
         std::process::id()
     )))
 }

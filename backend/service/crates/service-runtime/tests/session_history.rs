@@ -1,5 +1,6 @@
 //! Integration tests for the loaded session history read model.
 
+mod session_history_support;
 mod support;
 
 use acp_core::TranscriptUpdateSnapshot;
@@ -7,9 +8,16 @@ use acp_discovery::ProviderId;
 use app_api as _;
 use serde as _;
 use serde_json::{Value, json};
-use service_runtime::{ConsumerResponse, RuntimeEventKind, ServiceRuntime};
+use service_runtime::{RuntimeEventKind, ServiceRuntime};
+use session_history_support::{
+    assert_invalid_params, assert_items, assert_prompt_content, assert_prompt_turn_status,
+    assert_provider_error, assert_timeline_event_advanced, assert_turn_stop_reason,
+    event_data_field, history_fixture_updates, number_field, open_session, open_session_with_cwd,
+    prompt_open_session, read_history, seed_session_load_updates, session_load_requests,
+    string_field, transcript_update,
+};
 use std::sync::{Arc, Mutex};
-use support::{FakeFactory, FakeState, TestResult, assert_ok, command, ensure_event, runtime};
+use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
 #[test]
@@ -26,16 +34,13 @@ fn session_open_returns_latest_history_window_and_older_cursor() -> TestResult<(
     let opened = open_session(&mut runtime, "1", "codex", "session-1", 3);
 
     assert_ok(&opened)?;
-    ensure_event(
-        &runtime.drain_events(),
-        RuntimeEventKind::SessionReplayUpdate,
-    )?;
+    runtime.drain_events();
     assert_items(
         &opened.result,
         &[
             ("event", "tool_call", None),
-            ("message", "user_message_chunk", Some("new user")),
-            ("message", "agent_message_chunk", Some("new agent")),
+            ("message", "user", Some("new user")),
+            ("message", "agent", Some("new agent")),
         ],
     )?;
     let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
@@ -65,8 +70,8 @@ fn assert_older_history_page(
     assert_items(
         &older.result,
         &[
-            ("message", "user_message_chunk", Some("old user")),
-            ("message", "agent_message_chunk", Some("old agent")),
+            ("message", "user", Some("old user")),
+            ("message", "agent", Some("old agent")),
         ],
     )?;
     if older.result.get("nextCursor").is_some_and(Value::is_null) {
@@ -80,7 +85,7 @@ fn assert_older_history_page(
 }
 
 #[test]
-fn session_history_rejects_provider_mismatch() -> TestResult<()> {
+fn session_history_uses_open_session_id_as_product_identity() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
         &state,
@@ -101,18 +106,455 @@ fn session_history_rejects_provider_mismatch() -> TestResult<()> {
         }),
     ));
 
-    if response.ok {
-        return Err("session/history unexpectedly accepted provider mismatch".into());
-    }
-    let error_code = response.error.map(|error| error.code);
-    if error_code == Some("invalid_params".to_owned()) {
-        return Ok(());
-    }
-    Err(format!("expected invalid_params, got {error_code:?}").into())
+    assert_ok(&response)?;
+    assert_items(&response.result, &[("message", "agent", Some("loaded"))])
 }
 
 #[test]
-fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> TestResult<()> {
+fn session_history_without_cursor_returns_latest_window_without_provider_load() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        history_fixture_updates(),
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 2);
+    assert_ok(&opened)?;
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let loads_after_open = session_load_requests(&state)?.len();
+
+    let latest = runtime.dispatch(command(
+        "2",
+        "session/history",
+        "codex",
+        json!({
+            "openSessionId": open_session_id,
+            "limit": 2
+        }),
+    ));
+
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "user", Some("new user")),
+            ("message", "agent", Some("new agent")),
+        ],
+    )?;
+    let loads_after_history = session_load_requests(&state)?.len();
+    if loads_after_history == loads_after_open {
+        return Ok(());
+    }
+    Err(format!(
+        "session/history without cursor caused provider load: {loads_after_open} -> {loads_after_history}"
+    )
+    .into())
+}
+
+#[test]
+fn session_prompt_open_session_appends_to_timeline_and_emits_revision() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_agent_text
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            vec!["agent ".to_owned(), "reply".to_owned()],
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let revision_before_prompt = number_field(&opened.result, "revision")?;
+
+    let prompt = runtime.dispatch(command(
+        "2",
+        "session/prompt",
+        "codex",
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "user prompt" }]
+        }),
+    ));
+
+    assert_ok(&prompt)?;
+    let events = runtime.drain_events();
+    assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
+    let timeline_event_count = events
+        .iter()
+        .filter(|event| event.kind == RuntimeEventKind::SessionTimelineChanged)
+        .count();
+    if timeline_event_count < 3 {
+        return Err(format!(
+            "expected streaming timeline updates before final prompt projection, got {events:?}"
+        )
+        .into());
+    }
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("user prompt")),
+            ("message", "agent", Some("agent reply")),
+        ],
+    )?;
+    assert_prompt_turn_status(&latest.result, "complete")?;
+    let requests = session_load_requests(&state)?;
+    if requests == vec![(ProviderId::Codex, "session-1".to_owned())] {
+        return Ok(());
+    }
+    Err(format!("prompt/history caused unexpected session/load calls: {requests:?}").into())
+}
+
+#[test]
+fn session_prompt_history_preserves_non_text_content_blocks() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_agent_text
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            vec!["agent reply".to_owned()],
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let prompt_content = json!([
+        { "type": "text", "text": "inspect this " },
+        {
+            "type": "resource",
+            "resource": {
+                "uri": "file:///repo/example.rs",
+                "mimeType": "text/rust",
+                "text": "fn main() {}"
+            }
+        }
+    ]);
+
+    let prompt = runtime.dispatch(command(
+        "2",
+        "session/prompt",
+        "codex",
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": prompt_content
+        }),
+    ));
+
+    assert_ok(&prompt)?;
+    runtime.drain_events();
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_prompt_content(&latest.result, &prompt_content)
+}
+
+#[test]
+fn session_prompt_rejects_raw_session_id_target() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    let prompt = runtime.dispatch(command(
+        "1",
+        "session/prompt",
+        "codex",
+        json!({
+            "session_id": "session-1",
+            "prompt": [{ "type": "text", "text": "raw target" }]
+        }),
+    ));
+
+    assert_invalid_params(&prompt)?;
+    if runtime.drain_events().is_empty() {
+        return Ok(());
+    }
+    Err("raw session_id prompt produced runtime events".into())
+}
+
+#[test]
+fn session_prompt_projects_ordered_session_updates_and_extension_events() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_updates
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            vec![
+                transcript_update(0, "agent_message_chunk", "left "),
+                TranscriptUpdateSnapshot {
+                    index: 1,
+                    variant: "usage_update".to_owned(),
+                    update: json!({
+                        "sessionUpdate": "usage_update",
+                        "used": 12,
+                        "size": 100
+                    }),
+                },
+                transcript_update(2, "agent_message_chunk", "right"),
+            ],
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let revision_before_prompt = number_field(&opened.result, "revision")?;
+
+    let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "user prompt");
+
+    assert_ok(&prompt)?;
+    let events = runtime.drain_events();
+    assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("user prompt")),
+            ("message", "agent", Some("left ")),
+            ("event", "usage_update", None),
+            ("message", "agent", Some("right")),
+        ],
+    )?;
+    if event_data_field(&latest.result, "usage_update", "used")? != Some(12) {
+        return Err(format!(
+            "usage_update did not preserve structured data: {}",
+            latest.result
+        )
+        .into());
+    }
+    assert_prompt_turn_status(&latest.result, "complete")
+}
+
+#[test]
+fn session_prompt_uses_open_session_id_as_product_identity() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+
+    let prompt = runtime.dispatch(command(
+        "2",
+        "session/prompt",
+        "claude",
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "wrong provider" }]
+        }),
+    ));
+
+    assert_ok(&prompt)?;
+    let latest = read_history(&mut runtime, "3", "all", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("wrong provider")),
+            ("message", "agent", Some("wrong provider")),
+        ],
+    )
+}
+
+#[test]
+fn session_prompt_open_session_marks_cancelled_turn_status() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_stop_reason
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            "cancelled".to_owned(),
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+
+    let prompt = runtime.dispatch(command(
+        "2",
+        "session/prompt",
+        "codex",
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "cancel me" }]
+        }),
+    ));
+    assert_ok(&prompt)?;
+    runtime.drain_events();
+    let latest = runtime.dispatch(command(
+        "3",
+        "session/history",
+        "codex",
+        json!({
+            "openSessionId": open_session_id,
+            "limit": 10
+        }),
+    ));
+
+    assert_ok(&latest)?;
+    assert_prompt_turn_status(&latest.result, "cancelled")
+}
+
+#[test]
+fn session_prompt_history_preserves_non_cancel_stop_reason() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_stop_reason
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            "max_tokens".to_owned(),
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+
+    let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "limit me");
+    assert_ok(&prompt)?;
+    runtime.drain_events();
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+
+    assert_ok(&latest)?;
+    assert_turn_stop_reason(&latest.result, "max_tokens")
+}
+
+#[test]
+fn session_prompt_open_session_provider_error_appends_failed_turn() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_errors
+        .insert(
+            (ProviderId::Codex, "session-1".to_owned()),
+            "provider failed".to_owned(),
+        );
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let revision_before_prompt = number_field(&opened.result, "revision")?;
+
+    let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "boom");
+
+    assert_provider_error(&prompt)?;
+    let events = runtime.drain_events();
+    assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("boom")),
+            ("message", "agent", Some("")),
+        ],
+    )?;
+    assert_prompt_turn_status(&latest.result, "failed")
+}
+
+#[test]
+fn session_prompt_open_session_missing_lifecycle_appends_failed_turn() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .prompt_lifecycle_missing
+        .insert((ProviderId::Codex, "session-1".to_owned()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 10);
+    assert_ok(&opened)?;
+    runtime.drain_events();
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    let revision_before_prompt = number_field(&opened.result, "revision")?;
+
+    let prompt = prompt_open_session(&mut runtime, "2", &open_session_id, "missing lifecycle");
+
+    assert_ok(&prompt)?;
+    let events = runtime.drain_events();
+    assert_timeline_event_advanced(&events, &open_session_id, revision_before_prompt)?;
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "agent", Some("loaded")),
+            ("message", "user", Some("missing lifecycle")),
+            ("message", "agent", Some("")),
+        ],
+    )?;
+    assert_prompt_turn_status(&latest.result, "failed")
+}
+
+#[test]
+fn repeated_session_open_uses_cached_timeline_and_keeps_envelope_shape() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
         &state,
@@ -140,14 +582,45 @@ fn repeated_session_open_refreshes_provider_load_and_keeps_envelope_shape() -> T
         .map_err(|error| format!("{error}"))?
         .session_load_requests
         .clone();
+    let expected = vec![(ProviderId::Codex, "session-1".to_owned())];
+    if requests == expected {
+        return Ok(());
+    }
+    Err(format!("expected cached open loads {expected:?}, got {requests:?}").into())
+}
+
+#[test]
+fn session_prompt_after_cached_open_hydrates_provider_before_prompt() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 40);
+    assert_ok(&opened)?;
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    assert_ok(&runtime.dispatch(command("2", "provider/disconnect", "codex", json!({}))))?;
+    runtime.drain_events();
+
+    let cached = open_session(&mut runtime, "3", "codex", "session-1", 40);
+    let prompt = prompt_open_session(&mut runtime, "4", &open_session_id, "after restart");
+
+    assert_ok(&cached)?;
+    assert_ok(&prompt)?;
     let expected = vec![
         (ProviderId::Codex, "session-1".to_owned()),
         (ProviderId::Codex, "session-1".to_owned()),
     ];
-    if requests == expected {
-        return Ok(());
+    let requests = session_load_requests(&state)?;
+    if requests != expected {
+        return Err(
+            format!("expected provider hydration loads {expected:?}, got {requests:?}").into(),
+        );
     }
-    Err(format!("expected repeated provider loads {expected:?}, got {requests:?}").into())
+    assert_timeline_event_advanced(&runtime.drain_events(), &open_session_id, 1)
 }
 
 #[test]
@@ -217,142 +690,4 @@ fn session_open_requires_absolute_normalized_cwd_identity() -> TestResult<()> {
         return Err("normalized cwd variants produced different openSessionIds".into());
     }
     Ok(())
-}
-
-fn history_fixture_updates() -> Vec<TranscriptUpdateSnapshot> {
-    vec![
-        transcript_update(0, "user_message_chunk", "old user"),
-        transcript_update(1, "agent_message_chunk", "old agent"),
-        TranscriptUpdateSnapshot {
-            index: 2,
-            variant: "tool_call".to_owned(),
-            update: json!({
-                "sessionUpdate": "tool_call",
-                "toolCallId": "tool-1",
-                "title": "Read file"
-            }),
-        },
-        transcript_update(3, "user_message_chunk", "new user"),
-        transcript_update(4, "agent_message_chunk", "new agent"),
-    ]
-}
-
-fn seed_session_load_updates(
-    state: &Arc<Mutex<FakeState>>,
-    provider: ProviderId,
-    session_id: &str,
-    updates: Vec<TranscriptUpdateSnapshot>,
-) -> TestResult<()> {
-    state
-        .lock()
-        .map_err(|error| format!("{error}"))?
-        .session_load_updates
-        .insert((provider, session_id.to_owned()), updates);
-    Ok(())
-}
-
-fn open_session(
-    runtime: &mut ServiceRuntime<FakeFactory>,
-    id: &str,
-    provider: &str,
-    session_id: &str,
-    limit: u64,
-) -> ConsumerResponse {
-    runtime.dispatch(command(
-        id,
-        "session/open",
-        provider,
-        json!({
-            "sessionId": session_id,
-            "cwd": "/repo",
-            "limit": limit
-        }),
-    ))
-}
-
-fn open_session_with_cwd(
-    runtime: &mut ServiceRuntime<FakeFactory>,
-    id: &str,
-    cwd: &str,
-    limit: u64,
-) -> ConsumerResponse {
-    runtime.dispatch(command(
-        id,
-        "session/open",
-        "codex",
-        json!({
-            "sessionId": "session-1",
-            "cwd": cwd,
-            "limit": limit
-        }),
-    ))
-}
-
-fn session_load_requests(state: &Arc<Mutex<FakeState>>) -> TestResult<Vec<(ProviderId, String)>> {
-    Ok(state
-        .lock()
-        .map_err(|error| format!("{error}"))?
-        .session_load_requests
-        .clone())
-}
-
-fn assert_invalid_params(response: &ConsumerResponse) -> TestResult<()> {
-    if response.ok {
-        return Err(format!("expected invalid_params, got ok response {response:?}").into());
-    }
-    let error_code = response.error.as_ref().map(|error| error.code.as_str());
-    if error_code == Some("invalid_params") {
-        return Ok(());
-    }
-    Err(format!("expected invalid_params, got {error_code:?}").into())
-}
-
-fn transcript_update(index: usize, variant: &str, text: &str) -> TranscriptUpdateSnapshot {
-    TranscriptUpdateSnapshot {
-        index,
-        variant: variant.to_owned(),
-        update: json!({
-            "sessionUpdate": variant,
-            "content": {
-                "type": "text",
-                "text": text
-            }
-        }),
-    }
-}
-
-fn string_field<'a>(value: &'a Value, field: &str) -> TestResult<&'a str> {
-    value
-        .get(field)
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("missing string field {field}: {value}").into())
-}
-
-fn assert_items(value: &Value, expected: &[(&str, &str, Option<&str>)]) -> TestResult<()> {
-    let items = value
-        .get("items")
-        .and_then(Value::as_array)
-        .ok_or_else(|| format!("missing items: {value}"))?;
-    let actual = items
-        .iter()
-        .map(|item| {
-            let kind = item
-                .get("kind")
-                .and_then(Value::as_str)
-                .ok_or_else(|| format!("missing item kind: {item}"))?;
-            let variant = item
-                .get("sourceVariants")
-                .and_then(Value::as_array)
-                .and_then(|variants| variants.first())
-                .and_then(Value::as_str)
-                .or_else(|| item.get("variant").and_then(Value::as_str))
-                .ok_or_else(|| format!("missing item variant: {item}"))?;
-            let text = item.get("text").and_then(Value::as_str);
-            Ok((kind, variant, text))
-        })
-        .collect::<TestResult<Vec<_>>>()?;
-    if actual == expected {
-        return Ok(());
-    }
-    Err(format!("expected items {expected:?}, got {actual:?}").into())
 }
