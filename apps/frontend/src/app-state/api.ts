@@ -7,6 +7,7 @@ import type {
   SessionGroupsQuery,
   SessionGroupsView,
 } from "@conduit/session-client";
+import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
 import { activeSessionOpened } from "./session-selection";
 
 const sessionClient = createSessionClient();
@@ -37,7 +38,7 @@ interface OpenSessionLifecycleApi {
   queryFulfilled: Promise<{ data: SessionHistoryWindow }>;
 }
 
-interface SessionHistoryCacheLifecycleApi {
+interface CacheLifecycleApi {
   cacheDataLoaded: Promise<unknown>;
   cacheEntryRemoved: Promise<unknown>;
   dispatch: (action: unknown) => unknown;
@@ -53,18 +54,20 @@ type InvalidateSessionHistory = (
   dispatch: DispatchLike,
   openSessionId: string,
 ) => void;
+type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
+type QueryResult<ResponseData> = Promise<
+  { data: ResponseData } | { error: string }
+>;
 
-function noopUpsertSessionHistory(): void {
+let upsertSessionHistory: UpsertSessionHistory = (): void => {
   throw new Error("session history cache upsert is not initialized");
-}
-
-function noopInvalidateSessionHistory(): void {
+};
+let invalidateSessionHistory: InvalidateSessionHistory = (): void => {
   throw new Error("session history invalidation is not initialized");
-}
-
-let upsertSessionHistory: UpsertSessionHistory = noopUpsertSessionHistory;
-let invalidateSessionHistory: InvalidateSessionHistory =
-  noopInvalidateSessionHistory;
+};
+let invalidateSessionGroups: InvalidateSessionGroups = (): void => {
+  throw new Error("session groups invalidation is not initialized");
+};
 
 function toQueryError(error: unknown): string {
   if (error instanceof Error) {
@@ -75,7 +78,7 @@ function toQueryError(error: unknown): string {
 
 async function getSessionGroupsQuery(
   query: SessionGroupsQuery | undefined,
-): Promise<{ data: SessionGroupsView } | { error: string }> {
+): QueryResult<SessionGroupsView> {
   try {
     const data = await sessionClient.getSessionGroups(query);
     return { data };
@@ -89,9 +92,7 @@ async function openSessionQuery({
   limit,
   provider,
   sessionId,
-}: OpenSessionMutationArg): Promise<
-  { data: SessionHistoryWindow } | { error: string }
-> {
+}: OpenSessionMutationArg): QueryResult<SessionHistoryWindow> {
   try {
     const response = await sessionClient.openSession(provider, {
       cwd,
@@ -115,9 +116,7 @@ async function readSessionHistoryQuery({
   limit,
   openSessionId,
   provider,
-}: ReadSessionHistoryQueryArg): Promise<
-  { data: SessionHistoryWindow } | { error: string }
-> {
+}: ReadSessionHistoryQueryArg): QueryResult<SessionHistoryWindow> {
   try {
     const response = await sessionClient.readSessionHistory(provider, {
       cursor,
@@ -140,7 +139,7 @@ async function promptSessionQuery({
   openSessionId,
   prompt,
   provider,
-}: PromptSessionMutationArg): Promise<{ data: null } | { error: string }> {
+}: PromptSessionMutationArg): QueryResult<null> {
   try {
     await sessionClient.promptSession(provider, { openSessionId, prompt });
     return { data: null };
@@ -172,11 +171,7 @@ async function handleOpenSessionStarted(
 
 async function handleSessionHistoryCacheEntryAdded(
   { openSessionId, provider }: ReadSessionHistoryQueryArg,
-  {
-    cacheDataLoaded,
-    cacheEntryRemoved,
-    dispatch,
-  }: SessionHistoryCacheLifecycleApi,
+  { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
 ): Promise<void> {
   let unsubscribe: (() => void) | null = null;
   try {
@@ -196,15 +191,37 @@ async function handleSessionHistoryCacheEntryAdded(
   }
 }
 
+async function handleSessionGroupsCacheEntryAdded(
+  _query: SessionGroupsQuery | undefined,
+  { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
+): Promise<void> {
+  let unsubscribes: (() => void)[] = [];
+  try {
+    await cacheDataLoaded;
+    unsubscribes = await subscribeSessionIndexInvalidation(
+      sessionClient,
+      dispatch,
+      invalidateSessionGroups,
+    );
+    await cacheEntryRemoved;
+  } finally {
+    for (const unsubscribe of unsubscribes) {
+      unsubscribe();
+    }
+  }
+}
+
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["SessionHistory"],
+  tagTypes: ["SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
     >({
+      onCacheEntryAdded: handleSessionGroupsCacheEntryAdded,
+      providesTags: [{ id: "LIST", type: "SessionGroups" }],
       queryFn: getSessionGroupsQuery,
     }),
     openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
@@ -247,6 +264,12 @@ invalidateSessionHistory = (dispatch, openSessionId): void => {
     conduitApi.util.invalidateTags([
       { id: openSessionId, type: "SessionHistory" },
     ]),
+  );
+};
+
+invalidateSessionGroups = (dispatch): void => {
+  void dispatch(
+    conduitApi.util.invalidateTags([{ id: "LIST", type: "SessionGroups" }]),
   );
 };
 

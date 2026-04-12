@@ -8,6 +8,12 @@ interface SessionTimelineChanged {
   revision: number;
 }
 
+interface SessionsIndexChanged {
+  sequence: number;
+  provider: ProviderId;
+  revision: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -31,5 +37,22 @@ function readSessionTimelineChanged(
   };
 }
 
-export { readSessionTimelineChanged };
-export type { SessionTimelineChanged };
+function readSessionsIndexChanged(
+  event: RuntimeEvent,
+): SessionsIndexChanged | null {
+  if (event.kind !== "sessions_index_changed" || !isRecord(event.payload)) {
+    return null;
+  }
+  const revision = event.payload.revision;
+  if (typeof revision !== "number") {
+    return null;
+  }
+  return {
+    sequence: event.sequence,
+    provider: event.provider,
+    revision,
+  };
+}
+
+export { readSessionTimelineChanged, readSessionsIndexChanged };
+export type { SessionTimelineChanged, SessionsIndexChanged };

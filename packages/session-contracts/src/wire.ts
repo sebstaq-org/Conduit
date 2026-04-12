@@ -15,8 +15,6 @@ const transportVersionField = "v";
 const SESSION_COMMANDS = [
   "initialize",
   "session/new",
-  "session/list",
-  "session/load",
   "session/prompt",
   "session/cancel",
 ] as const;
@@ -120,6 +118,7 @@ type RuntimeEventKind =
   | "prompt_update_observed"
   | "prompt_completed"
   | "session_timeline_changed"
+  | "sessions_index_changed"
   | "cancel_sent"
   | "raw_wire_event_captured";
 

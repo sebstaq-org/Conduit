@@ -3,6 +3,9 @@ import { SessionGroupsViewSchema } from "./src/index.js";
 
 it("accepts the grouped sessions read model", () => {
   const payload = {
+    revision: 1,
+    refreshedAt: "2026-04-11T12:00:00.000Z",
+    isRefreshing: false,
     groups: [
       {
         groupId: "cwd:/workspace/conduit",
@@ -24,6 +27,9 @@ it("accepts the grouped sessions read model", () => {
 
 it("rejects missing group identity", () => {
   const payload = {
+    revision: 1,
+    refreshedAt: null,
+    isRefreshing: false,
     groups: [
       {
         cwd: "/workspace/conduit",
@@ -37,6 +43,9 @@ it("rejects missing group identity", () => {
 
 it("rejects unknown providers", () => {
   const payload = {
+    revision: 1,
+    refreshedAt: null,
+    isRefreshing: false,
     groups: [
       {
         groupId: "cwd:/workspace/conduit",

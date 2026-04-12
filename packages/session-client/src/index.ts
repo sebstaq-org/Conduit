@@ -3,10 +3,14 @@ import {
   createConsumerCommand,
 } from "@conduit/session-contracts";
 import { readSessionHistoryResponse } from "./historyWindow.js";
-import { readSessionTimelineChanged } from "./timelineEvent.js";
+import {
+  readSessionTimelineChanged,
+  readSessionsIndexChanged,
+} from "./timelineEvent.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
+  RuntimeEvent,
   ServerFrame,
   SessionHistoryRequest,
   SessionHistoryWindow,
@@ -14,6 +18,7 @@ import type {
   SessionPromptRequest,
 } from "@conduit/session-contracts";
 import type { SessionTimelineChanged } from "./timelineEvent.js";
+import type { SessionsIndexChanged } from "./timelineEvent.js";
 import { SessionGroupsViewSchema } from "@conduit/session-model";
 import type {
   ProviderId,
@@ -41,6 +46,11 @@ interface SessionClientPort {
     handler: (event: SessionTimelineChanged) => void,
     afterSequence?: number | null,
   ): Promise<() => void>;
+  subscribeSessionIndexChanges(
+    provider: ProviderId,
+    handler: (event: SessionsIndexChanged) => void,
+    afterSequence?: number | null,
+  ): Promise<() => void>;
 }
 
 interface SessionClientOptions {
@@ -56,6 +66,10 @@ interface PendingResponse {
 interface TimelineSubscription {
   provider: ProviderId;
   handler: (event: SessionTimelineChanged) => void;
+}
+
+interface SessionIndexSubscription {
+  handler: (event: SessionsIndexChanged) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,6 +97,8 @@ function parseServerFrame(text: string): ServerFrame | null {
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
   private readonly timelineSubscriptions = new Set<TimelineSubscription>();
+  private readonly sessionIndexSubscriptions =
+    new Set<SessionIndexSubscription>();
   private readonly options: SessionClientOptions;
   private readonly pending = new Map<string, PendingResponse>();
   private connecting: Promise<WebSocket> | null = null;
@@ -156,6 +172,27 @@ class WebSocketSessionClient implements SessionClientPort {
     }
     return () => {
       this.timelineSubscriptions.delete(subscription);
+    };
+  }
+
+  public async subscribeSessionIndexChanges(
+    provider: ProviderId,
+    handler: (event: SessionsIndexChanged) => void,
+    afterSequence: number | null = null,
+  ): Promise<() => void> {
+    const subscription = { handler };
+    this.sessionIndexSubscriptions.add(subscription);
+    const response = await this.dispatch(
+      createConsumerCommand("events/subscribe", provider, {
+        after_sequence: afterSequence,
+      }),
+    );
+    if (!response.ok) {
+      this.sessionIndexSubscriptions.delete(subscription);
+      throw new Error(response.error?.message ?? "event subscription failed");
+    }
+    return () => {
+      this.sessionIndexSubscriptions.delete(subscription);
     };
   }
 
@@ -238,12 +275,25 @@ class WebSocketSessionClient implements SessionClientPort {
       this.pending.delete(frame.id);
       return;
     }
-    const event = readSessionTimelineChanged(frame.event);
-    if (!event) {
-      return;
+    this.handleTimelineEvent(frame.event);
+    this.handleSessionsIndexEvent(frame.event);
+  }
+
+  private handleTimelineEvent(eventFrame: RuntimeEvent): void {
+    const event = readSessionTimelineChanged(eventFrame);
+    if (event) {
+      for (const subscription of this.timelineSubscriptions) {
+        if (subscription.provider === event.provider) {
+          subscription.handler(event);
+        }
+      }
     }
-    for (const subscription of this.timelineSubscriptions) {
-      if (subscription.provider === event.provider) {
+  }
+
+  private handleSessionsIndexEvent(eventFrame: RuntimeEvent): void {
+    const event = readSessionsIndexChanged(eventFrame);
+    if (event) {
+      for (const subscription of this.sessionIndexSubscriptions) {
         subscription.handler(event);
       }
     }
@@ -270,6 +320,7 @@ function createSessionClient(
 }
 
 export { createSessionClient };
+export { PROVIDERS } from "@conduit/session-model";
 
 export type {
   SessionHistoryRequest,
@@ -285,5 +336,8 @@ export type {
   TranscriptEventItem,
   TranscriptItem,
 } from "@conduit/session-model";
-export type { SessionTimelineChanged } from "./timelineEvent.js";
+export type {
+  SessionTimelineChanged,
+  SessionsIndexChanged,
+} from "./timelineEvent.js";
 export type { SessionClientOptions, SessionClientPort };

@@ -89,6 +89,9 @@ const SessionGroupSchema = z.object({
 type SessionGroup = z.infer<typeof SessionGroupSchema>;
 
 const SessionGroupsViewSchema = z.object({
+  revision: z.number(),
+  refreshedAt: z.string().nullable(),
+  isRefreshing: z.boolean(),
   groups: z.array(SessionGroupSchema),
 });
 
