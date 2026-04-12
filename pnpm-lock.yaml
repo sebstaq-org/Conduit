@@ -131,6 +131,9 @@ importers:
       react-native-drawer-layout:
         specifier: 4.2.2
         version: 4.2.2(react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0))(react-native-reanimated@4.2.1(react-native-worklets@0.7.2(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
+      react-native-enriched-markdown:
+        specifier: 0.5.0-nightly-20260411-ba4bccd83
+        version: 0.5.0-nightly-20260411-ba4bccd83(@expo/config-plugins@55.0.8)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       react-native-gesture-handler:
         specifier: ~2.30.0
         version: 2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
@@ -152,6 +155,9 @@ importers:
       react-redux:
         specifier: 9.2.0
         version: 9.2.0(@types/react@19.2.14)(react@19.2.0)(redux@5.0.1)
+      remend:
+        specifier: 1.2.2
+        version: 1.2.2
     devDependencies:
       "@types/react":
         specifier: ~19.2.2
@@ -6041,6 +6047,22 @@ packages:
       react-native-gesture-handler: ">= 2.0.0"
       react-native-reanimated: ">= 2.0.0"
 
+  react-native-enriched-markdown@0.5.0-nightly-20260411-ba4bccd83:
+    resolution:
+      {
+        integrity: sha512-sKo0N2BtkDFXZmZ0Smt0YU0TGof1BqXQZul7PmQ1me6zb6OeUhdsKcEjQ6jD1QINu7KsdfFAJAyO72aY5eDLAA==,
+      }
+    peerDependencies:
+      "@expo/config-plugins": ">=50.0.0"
+      katex: ">=0.16.0"
+      react: "*"
+      react-native: "*"
+    peerDependenciesMeta:
+      "@expo/config-plugins":
+        optional: true
+      katex:
+        optional: true
+
   react-native-gesture-handler@2.30.1:
     resolution:
       {
@@ -6256,6 +6278,12 @@ packages:
         integrity: sha512-dLsljMd9sqwRkby8zhO1gSg3PnJIBFid8f4CQj/sXx+7cKx+E7u0PKhZ+U4wmhx7EfmtvnA318oVaIkAB1lRJw==,
       }
     hasBin: true
+
+  remend@1.2.2:
+    resolution:
+      {
+        integrity: sha512-4ZJgIB9EG9fQE41mOJCRHMmnxDTKHWawQoJWZyUbZuj680wVyogu2ihnj8Edqm7vh2mo/TWHyEZpn2kqeDvS7w==,
+      }
 
   require-directory@2.1.1:
     resolution:
@@ -11210,6 +11238,13 @@ snapshots:
       react-native-reanimated: 4.2.1(react-native-worklets@0.7.2(@babel/core@7.29.0)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0))(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       use-latest-callback: 0.2.6(react@19.2.0)
 
+  react-native-enriched-markdown@0.5.0-nightly-20260411-ba4bccd83(@expo/config-plugins@55.0.8)(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+      react-native: 0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0)
+    optionalDependencies:
+      "@expo/config-plugins": 55.0.8
+
   react-native-gesture-handler@2.30.1(react-native@0.83.4(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0):
     dependencies:
       "@egjs/hammerjs": 2.0.17
@@ -11400,6 +11435,8 @@ snapshots:
   regjsparser@0.13.1:
     dependencies:
       jsesc: 3.1.0
+
+  remend@1.2.2: {}
 
   require-directory@2.1.1: {}
 
