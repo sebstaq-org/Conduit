@@ -1,18 +1,21 @@
 import type {
   ProviderId,
-  ProviderSnapshot,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionOpenRequest,
 } from "@conduit/session-model";
-import {
-  isSessionGroupsQuery,
-  isSessionHistoryRequest,
-  isSessionOpenRequest,
-} from "./commandParams.js";
-
+import type {
+  ClientCommandFrame as TransportClientCommandFrame,
+  ConsumerError,
+  ConsumerResponse,
+  RuntimeEvent,
+  RuntimeEventKind,
+  ServerEventFrame,
+  ServerFrame,
+  ServerResponseFrame,
+} from "./frames.js";
 let nextCommandSequence = 0;
 
 const CONDUIT_TRANSPORT_VERSION = 1 as const;
@@ -88,61 +91,35 @@ type ConsumerCommand =
   | SessionOpenConsumerCommand
   | SessionHistoryConsumerCommand;
 
+type ClientCommandFrame = TransportClientCommandFrame<ConsumerCommand>;
+
 type ConsumerCommandTarget = ProviderId | "all";
 
-interface ConsumerError {
-  code: string;
-  message: string;
+function isSessionGroupsQuery(value: unknown): value is SessionGroupsQuery {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !("sessionId" in value) &&
+    !("openSessionId" in value)
+  );
 }
 
-interface ConsumerResponse<Result = unknown> {
-  id: string;
-  ok: boolean;
-  result: Result;
-  error: ConsumerError | null;
-  snapshot: ProviderSnapshot | null;
+function isSessionOpenRequest(value: unknown): value is SessionOpenRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "sessionId" in value &&
+    "cwd" in value
+  );
 }
 
-type RuntimeEventKind =
-  | "provider_connected"
-  | "provider_disconnected"
-  | "session_observed"
-  | "session_replay_update"
-  | "prompt_started"
-  | "prompt_update_observed"
-  | "prompt_completed"
-  | "cancel_sent"
-  | "raw_wire_event_captured";
-
-interface RuntimeEvent {
-  sequence: number;
-  kind: RuntimeEventKind;
-  provider: ProviderId;
-  session_id: string | null;
-  payload: unknown;
+function isSessionHistoryRequest(
+  value: unknown,
+): value is SessionHistoryRequest {
+  return (
+    typeof value === "object" && value !== null && "openSessionId" in value
+  );
 }
-
-interface ClientCommandFrame {
-  v: typeof CONDUIT_TRANSPORT_VERSION;
-  type: "command";
-  id: string;
-  command: ConsumerCommand;
-}
-
-interface ServerResponseFrame {
-  v: typeof CONDUIT_TRANSPORT_VERSION;
-  type: "response";
-  id: string;
-  response: ConsumerResponse;
-}
-
-interface ServerEventFrame {
-  v: typeof CONDUIT_TRANSPORT_VERSION;
-  type: "event";
-  event: RuntimeEvent;
-}
-
-type ServerFrame = ServerResponseFrame | ServerEventFrame;
 
 function nextConsumerCommandId(): string {
   nextCommandSequence += 1;

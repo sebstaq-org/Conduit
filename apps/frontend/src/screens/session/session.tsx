@@ -1,22 +1,44 @@
+import { SessionComposer } from "@/features/session-composer";
 import { SessionTranscript } from "@/features/session-transcript";
 import { Box } from "@/theme";
+import { IconButton, KeyboardLift } from "@/ui";
 import {
   sessionScreenBackgroundColor,
   sessionScreenFlex,
+  sessionScreenGap,
+  sessionScreenNavigationPanelAccessibilityLabel,
+  sessionScreenNavigationPanelIcon,
   sessionScreenPaddingX,
   sessionScreenPaddingY,
 } from "./session.styles";
 
-function SessionScreen(): React.JSX.Element {
+interface SessionScreenProps {
+  onOpenNavigationPanel?: (() => void) | undefined;
+}
+
+function SessionScreen({
+  onOpenNavigationPanel,
+}: SessionScreenProps): React.JSX.Element {
   return (
-    <Box
-      backgroundColor={sessionScreenBackgroundColor}
-      flex={sessionScreenFlex}
-      px={sessionScreenPaddingX}
-      py={sessionScreenPaddingY}
-    >
-      <SessionTranscript />
-    </Box>
+    <KeyboardLift>
+      <Box
+        backgroundColor={sessionScreenBackgroundColor}
+        flex={sessionScreenFlex}
+        gap={sessionScreenGap}
+        px={sessionScreenPaddingX}
+        py={sessionScreenPaddingY}
+      >
+        {onOpenNavigationPanel !== undefined && (
+          <IconButton
+            accessibilityLabel={sessionScreenNavigationPanelAccessibilityLabel}
+            icon={sessionScreenNavigationPanelIcon}
+            onPress={onOpenNavigationPanel}
+          />
+        )}
+        <SessionTranscript />
+        <SessionComposer />
+      </Box>
+    </KeyboardLift>
   );
 }
 
