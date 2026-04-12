@@ -23,6 +23,9 @@ import type {
   ProjectSuggestionsCommandName,
   ProjectSuggestionsConsumerCommand,
   ProjectSuggestionsQuery,
+  ProjectUpdateCommandName,
+  ProjectUpdateConsumerCommand,
+  ProjectUpdateRequest,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
   SessionGroupsCommandName,
@@ -209,10 +212,10 @@ function createConsumerCommand(
 ): ProjectListConsumerCommand;
 
 function createConsumerCommand(
-  command: ProjectRemoveCommandName,
+  command: ProjectRemoveCommandName | ProjectUpdateCommandName,
   provider: ConsumerCommandTarget,
-  params: ProjectRemoveRequest,
-): ProjectRemoveConsumerCommand;
+  params: ProjectRemoveRequest | ProjectUpdateRequest,
+): ProjectRemoveConsumerCommand | ProjectUpdateConsumerCommand;
 
 function createConsumerCommand(
   command: ProjectSuggestionsCommandName,
@@ -269,6 +272,7 @@ function createConsumerCommand(
     | ProjectAddRequest
     | ProjectRemoveRequest
     | ProjectSuggestionsQuery
+    | ProjectUpdateRequest
     | SessionGroupsQuery
     | SessionOpenRequest
     | SessionHistoryRequest

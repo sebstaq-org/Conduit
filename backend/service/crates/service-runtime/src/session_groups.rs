@@ -41,6 +41,7 @@ struct SessionRow {
 pub(crate) struct SessionGroup {
     group_id: String,
     cwd: String,
+    display_name: String,
     sessions: Vec<SessionRow>,
 }
 
@@ -149,26 +150,31 @@ pub(crate) fn grouped_view(
         .iter()
         .map(|project| project.cwd.as_str())
         .collect::<HashSet<_>>();
-    let mut groups = HashMap::<String, Vec<SessionRow>>::new();
+    let mut sessions_by_cwd = HashMap::<String, Vec<SessionRow>>::new();
     for entry in snapshot
         .entries
         .into_iter()
         .filter(|entry| query.accepts_entry(entry, &project_cwds))
     {
-        groups.entry(entry.cwd).or_default().push(SessionRow {
-            provider: entry.provider,
-            session_id: entry.session_id,
-            title: entry.title,
-            updated_at: entry.updated_at,
-        });
+        sessions_by_cwd
+            .entry(entry.cwd)
+            .or_default()
+            .push(SessionRow {
+                provider: entry.provider,
+                session_id: entry.session_id,
+                title: entry.title,
+                updated_at: entry.updated_at,
+            });
     }
-    let mut groups = groups
-        .into_iter()
-        .map(|(cwd, mut sessions)| {
+    let mut groups = projects
+        .iter()
+        .map(|project| {
+            let mut sessions = sessions_by_cwd.remove(&project.cwd).unwrap_or_default();
             sessions.sort_by(compare_rows);
             SessionGroup {
-                group_id: group_id(&cwd),
-                cwd,
+                group_id: project.project_id.clone(),
+                cwd: project.cwd.clone(),
+                display_name: project.display_name.clone(),
                 sessions,
             }
         })
@@ -222,6 +228,7 @@ fn compare_groups(left: &SessionGroup, right: &SessionGroup) -> std::cmp::Orderi
         &group_latest_updated_at(left),
         &group_latest_updated_at(right),
     )
+    .then_with(|| left.display_name.cmp(&right.display_name))
     .then_with(|| left.cwd.cmp(&right.cwd))
 }
 
@@ -240,10 +247,6 @@ fn group_latest_updated_at(group: &SessionGroup) -> Option<String> {
         .iter()
         .filter_map(|session| session.updated_at.clone())
         .max()
-}
-
-fn group_id(cwd: &str) -> String {
-    format!("cwd:{cwd}")
 }
 
 pub(crate) fn normalize_cwd(cwd: &str) -> String {

@@ -9,6 +9,7 @@ export {
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
   useRemoveProjectMutation,
+  useUpdateProjectMutation,
 } from "./api";
 export {
   canSubmitPrompt,

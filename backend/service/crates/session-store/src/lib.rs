@@ -42,7 +42,7 @@ pub use projects::{ProjectRow, project_id_for_cwd};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 const BOOTSTRAP_SCHEMA: &str = "
     CREATE TABLE open_sessions (
         open_session_id TEXT PRIMARY KEY,
@@ -81,6 +81,7 @@ const BOOTSTRAP_SCHEMA: &str = "
     CREATE TABLE projects (
         project_id TEXT PRIMARY KEY,
         cwd TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
     CREATE TABLE project_suggestion_sources (
@@ -93,7 +94,7 @@ const BOOTSTRAP_SCHEMA: &str = "
         suggestion_id TEXT NOT NULL,
         PRIMARY KEY(provider, cwd)
     );
-    PRAGMA user_version = 4;
+    PRAGMA user_version = 5;
 ";
 
 /// Result type for local store operations.

@@ -123,6 +123,25 @@ where
         ))
     }
 
+    pub(crate) fn projects_update(
+        &mut self,
+        id: String,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let project_id = string_param("projects/update", params, "projectId")?;
+        let display_name = string_param("projects/update", params, "displayName")?;
+        let projects = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .update_project_display_name(&project_id, &display_name)?;
+            self.local_store.projects()?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(ProjectListView { projects })?,
+        ))
+    }
+
     pub(crate) fn session_index_refresh_due(&self, provider: ProviderId) -> bool {
         self.session_index_refreshes
             .get(&provider)

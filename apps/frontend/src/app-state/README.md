@@ -7,10 +7,10 @@ raw command dispatch directly.
 
 The product session APIs in this checkout are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
-`useGetProjectSuggestionsQuery`, `useGetSessionGroupsQuery`,
-`useOpenSessionMutation`, `useReadSessionHistoryQuery`, and
-`usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
-not raw official ACP provider responses.
+`useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
+`useGetSessionGroupsQuery`, `useOpenSessionMutation`,
+`useReadSessionHistoryQuery`, and `usePromptSessionMutation`. They return
+Conduit read-model shapes for UI state, not raw official ACP provider responses.
 
 `useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI
 should add or remove projects through the project hooks instead of passing cwd

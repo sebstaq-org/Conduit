@@ -182,6 +182,9 @@ where
         if command.command == "projects/remove" {
             return self.projects_remove(command.id, &command.params);
         }
+        if command.command == "projects/update" {
+            return self.projects_update(command.id, &command.params);
+        }
         if command.command == "session/history" {
             return self.session_history(command.id, &command.params);
         }

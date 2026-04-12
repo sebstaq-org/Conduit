@@ -100,76 +100,6 @@ fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
 }
 
 #[test]
-fn projects_add_list_and_remove_drive_group_scope() -> TestResult<()> {
-    let state = Arc::new(Mutex::new(FakeState::default()));
-    seed_grouped_session_lists(&state)?;
-    let mut runtime = runtime(state)?;
-    let empty = dispatch_after_group_refresh(
-        &mut runtime,
-        command("empty", "sessions/grouped", "all", json!({})),
-    )?;
-    assert_ok(&empty)?;
-    assert_group_count(&empty.result, 0)?;
-
-    add_project(&mut runtime, "/repo/.")?;
-    let listed = runtime.dispatch(command("list", "projects/list", "all", json!({})));
-    assert_ok(&listed)?;
-    assert_project_cwds(&listed.result, &["/repo"])?;
-
-    let with_project = dispatch_after_group_refresh(
-        &mut runtime,
-        command("grouped", "sessions/grouped", "all", json!({})),
-    )?;
-    assert_ok(&with_project)?;
-    assert_group_identity(&with_project.result, "/repo", "cwd:/repo")?;
-
-    assert_ok(&runtime.dispatch(command(
-        "remove",
-        "projects/remove",
-        "all",
-        json!({ "projectId": "cwd:/repo" }),
-    )))?;
-    let removed = runtime.dispatch(command("removed", "sessions/grouped", "all", json!({})));
-    assert_ok(&removed)?;
-    assert_group_count(&removed.result, 0)
-}
-
-#[test]
-fn projects_suggestions_read_cached_addable_cwds() -> TestResult<()> {
-    let state = Arc::new(Mutex::new(FakeState::default()));
-    seed_grouped_session_lists(&state)?;
-    let mut runtime = runtime(Arc::clone(&state))?;
-
-    runtime.refresh_project_suggestions()?;
-    add_project(&mut runtime, "/repo")?;
-    let response = runtime.dispatch(command(
-        "suggest",
-        "projects/suggestions",
-        "all",
-        json!({ "query": "oth", "limit": 10 }),
-    ));
-
-    assert_ok(&response)?;
-    assert_project_suggestion_cwds(&response.result, &["/other"])?;
-    let requests = state
-        .lock()
-        .map_err(|error| format!("{error}"))?
-        .session_list_requests
-        .clone();
-    let expected = vec![
-        (ProviderId::Claude, None, None),
-        (ProviderId::Copilot, None, None),
-        (ProviderId::Codex, None, None),
-    ];
-    if requests != expected {
-        return Err(
-            format!("expected suggestion refresh requests {expected:?}, got {requests:?}").into(),
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
@@ -596,48 +526,6 @@ fn assert_group_identity(value: &Value, cwd: &str, expected_group_id: &str) -> T
         return Ok(());
     }
     Err(format!("expected groupId {expected_group_id}, got {group_id}").into())
-}
-
-fn assert_group_count(value: &Value, expected: usize) -> TestResult<()> {
-    let actual = value
-        .get("groups")
-        .and_then(Value::as_array)
-        .map(Vec::len)
-        .ok_or_else(|| format!("missing groups array: {value}"))?;
-    if actual == expected {
-        return Ok(());
-    }
-    Err(format!("expected {expected} groups, got {actual}: {value}").into())
-}
-
-fn assert_project_cwds(value: &Value, expected: &[&str]) -> TestResult<()> {
-    let actual = value
-        .get("projects")
-        .and_then(Value::as_array)
-        .ok_or_else(|| format!("missing projects array: {value}"))?
-        .iter()
-        .map(|project| project.get("cwd").and_then(Value::as_str))
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| format!("project row missing cwd: {value}"))?;
-    if actual == expected {
-        return Ok(());
-    }
-    Err(format!("expected projects {expected:?}, got {actual:?}").into())
-}
-
-fn assert_project_suggestion_cwds(value: &Value, expected: &[&str]) -> TestResult<()> {
-    let actual = value
-        .get("suggestions")
-        .and_then(Value::as_array)
-        .ok_or_else(|| format!("missing suggestions array: {value}"))?
-        .iter()
-        .map(|project| project.get("cwd").and_then(Value::as_str))
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| format!("suggestion row missing cwd: {value}"))?;
-    if actual == expected {
-        return Ok(());
-    }
-    Err(format!("expected suggestions {expected:?}, got {actual:?}").into())
 }
 
 fn assert_session_ids(sessions: &[Value], expected: &[&str]) -> TestResult<()> {

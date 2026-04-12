@@ -2,12 +2,12 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
-import { SessionGroupsViewSchema } from "@conduit/session-model";
 import { readSessionHistoryResponse } from "./historyWindow.js";
 import {
   readProjectListResponse,
   readProjectSuggestionsResponse,
 } from "./projectViews.js";
+import { readSessionGroupsResponse } from "./sessionGroupsView.js";
 import type {
   SessionClientOptions,
   SessionClientPort,
@@ -25,6 +25,7 @@ import type {
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   RuntimeEvent,
   ServerFrame,
   SessionHistoryRequest,
@@ -42,20 +43,15 @@ import type {
   SessionsIndexChanged,
 } from "./timelineEvent.js";
 
-interface TimelineSubscription {
-  openSessionId: string;
-  handler: (event: SessionTimelineChanged) => void;
-}
-
-interface SessionIndexSubscription {
-  handler: (event: SessionsIndexChanged) => void;
-}
-
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly timelineSubscriptions = new Set<TimelineSubscription>();
-  private readonly sessionIndexSubscriptions =
-    new Set<SessionIndexSubscription>();
+  private readonly timelineSubscriptions = new Set<{
+    openSessionId: string;
+    handler: (event: SessionTimelineChanged) => void;
+  }>();
+  private readonly sessionIndexSubscriptions = new Set<{
+    handler: (event: SessionsIndexChanged) => void;
+  }>();
   private readonly options: SessionClientOptions;
   private readonly pending = new Map<
     string,
@@ -102,18 +98,22 @@ class WebSocketSessionClient implements SessionClientPort {
     return readProjectSuggestionsResponse(response);
   }
 
+  public async updateProject(
+    request: ProjectUpdateRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/update", "all", request),
+    );
+    return readProjectListResponse(response, "project update failed");
+  }
+
   public async getSessionGroups(
     query: SessionGroupsQuery = {},
   ): Promise<SessionGroupsView> {
     const response = await this.dispatch(
       createConsumerCommand("sessions/grouped", "all", query),
     );
-    if (!response.ok) {
-      throw new Error(
-        response.error?.message ?? "session groups request failed",
-      );
-    }
-    return SessionGroupsViewSchema.parse(response.result);
+    return readSessionGroupsResponse(response);
   }
 
   public async openSession(

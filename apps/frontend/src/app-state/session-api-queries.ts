@@ -7,6 +7,7 @@ import type {
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
@@ -80,6 +81,17 @@ async function removeProjectQuery(
 ): QueryResult<ProjectListView> {
   try {
     const data = await sessionClient.removeProject(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function updateProjectQuery(
+  request: ProjectUpdateRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.updateProject(request);
     return { data };
   } catch (error) {
     return { error: toQueryError(error) };
@@ -166,6 +178,7 @@ export {
   readSessionHistoryQuery,
   removeProjectQuery,
   sessionClient,
+  updateProjectQuery,
 };
 export type {
   OpenSessionMutationArg,

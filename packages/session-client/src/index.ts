@@ -10,6 +10,7 @@ export type {
   ProjectSuggestion,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,

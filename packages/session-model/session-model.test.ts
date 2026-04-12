@@ -15,6 +15,7 @@ it("accepts the grouped sessions read model", () => {
       {
         groupId: "cwd:/workspace/conduit",
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [
           {
             provider: "codex",
@@ -38,6 +39,7 @@ it("rejects missing group identity", () => {
     groups: [
       {
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [],
       },
     ],
@@ -55,6 +57,7 @@ it("rejects unknown providers", () => {
       {
         groupId: "cwd:/workspace/conduit",
         cwd: "/workspace/conduit",
+        displayName: "conduit",
         sessions: [
           {
             provider: "unknown",
@@ -76,6 +79,7 @@ it("accepts the projects read model", () => {
       {
         projectId: "cwd:/workspace/conduit",
         cwd: "/workspace/conduit",
+        displayName: "conduit",
       },
     ],
   };

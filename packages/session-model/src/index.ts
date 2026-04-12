@@ -83,6 +83,7 @@ type SessionRow = z.infer<typeof SessionRowSchema>;
 const SessionGroupSchema = z.object({
   groupId: z.string(),
   cwd: z.string(),
+  displayName: z.string(),
   sessions: z.array(SessionRowSchema),
 });
 
@@ -108,6 +109,7 @@ type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
 const ProjectRowSchema = z.object({
   projectId: z.string(),
   cwd: z.string(),
+  displayName: z.string(),
 });
 
 type ProjectRow = z.infer<typeof ProjectRowSchema>;
@@ -137,6 +139,11 @@ interface ProjectAddRequest {
 
 interface ProjectRemoveRequest {
   projectId: string;
+}
+
+interface ProjectUpdateRequest {
+  projectId: string;
+  displayName: string;
 }
 
 interface ProjectSuggestionsQuery {
@@ -269,6 +276,7 @@ export type {
   ProjectSuggestion,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   RawWireEvent,
   SessionGroup,
   SessionGroupsQuery,

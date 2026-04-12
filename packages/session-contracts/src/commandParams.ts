@@ -2,6 +2,7 @@ import type {
   ProjectAddRequest,
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
+  ProjectUpdateRequest,
   SessionGroupsQuery,
   SessionHistoryRequest,
   SessionOpenRequest,
@@ -33,6 +34,17 @@ function isProjectRemoveRequest(value: unknown): value is ProjectRemoveRequest {
     value !== null &&
     "projectId" in value &&
     typeof value.projectId === "string"
+  );
+}
+
+function isProjectUpdateRequest(value: unknown): value is ProjectUpdateRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "projectId" in value &&
+    typeof value.projectId === "string" &&
+    "displayName" in value &&
+    typeof value.displayName === "string"
   );
 }
 
@@ -78,6 +90,7 @@ export {
   isProjectAddRequest,
   isProjectRemoveRequest,
   isProjectSuggestionsQuery,
+  isProjectUpdateRequest,
   isSessionGroupsQuery,
   isSessionHistoryRequest,
   isSessionOpenRequest,

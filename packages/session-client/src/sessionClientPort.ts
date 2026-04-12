@@ -5,6 +5,7 @@ import type {
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
@@ -37,6 +38,7 @@ interface SessionClientPort {
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
   promptSession(request: SessionPromptRequest): Promise<void>;
   removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
+  updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;
   subscribeTimelineChanges(
     openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,

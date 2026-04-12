@@ -131,10 +131,49 @@ fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
         &project_id_for_cwd("/repo"),
         "project id",
     )?;
+    ensure_eq(&project.display_name, &"repo".to_owned(), "display name")?;
     ensure_eq(&projects, &vec![project.clone()], "project list")?;
 
     store.remove_project(&project.project_id)?;
     ensure_eq(&store.projects()?.len(), &0, "removed project count")?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn project_display_name_is_mutable_without_changing_cwd() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let project = store.add_project("/workspace/conduit")?;
+
+    let renamed = store.update_project_display_name(&project.project_id, " Conduit ")?;
+
+    ensure_eq(
+        &renamed.project_id,
+        &project.project_id,
+        "project id remains stable",
+    )?;
+    ensure_eq(&renamed.cwd, &project.cwd, "cwd remains stable")?;
+    ensure_eq(
+        &renamed.display_name,
+        &"Conduit".to_owned(),
+        "display name is trimmed",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn project_display_name_rejects_empty_update() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let project = store.add_project("/repo")?;
+
+    let response = store.update_project_display_name(&project.project_id, " ");
+
+    if response.is_ok() {
+        return Err("empty displayName unexpectedly succeeded".into());
+    }
     fs::remove_file(path)?;
     Ok(())
 }

@@ -18,6 +18,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "projects/list",
   "projects/remove",
   "projects/suggestions",
+  "projects/update",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -132,6 +133,24 @@ describe("shared project suggestions boundary", () => {
       params: {
         query: "repo",
         limit: 5,
+      },
+    });
+  });
+});
+
+describe("shared projects boundary", () => {
+  test("project display names are mutable by project id", () => {
+    const command = createConsumerCommand("projects/update", "all", {
+      projectId: "cwd:/repo",
+      displayName: "Repo",
+    });
+
+    expect(command).toMatchObject({
+      command: "projects/update",
+      provider: "all",
+      params: {
+        projectId: "cwd:/repo",
+        displayName: "Repo",
       },
     });
   });

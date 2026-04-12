@@ -5,6 +5,7 @@ import type {
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
+  ProjectUpdateRequest,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
@@ -20,6 +21,7 @@ import {
   readSessionHistoryQuery,
   removeProjectQuery,
   sessionClient,
+  updateProjectQuery,
 } from "./session-api-queries";
 import { applyTimelineItems } from "./session-history-cache";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
@@ -62,15 +64,24 @@ type UpdateSessionHistoryItems = (
 ) => void;
 type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
 type ProjectSuggestionsQueryArg = ProjectSuggestionsQuery | undefined;
+type ProjectUpdateArg = ProjectUpdateRequest;
 
 const projectMutationInvalidations = [
   { id: "LIST", type: "Projects" },
   { id: "SUGGESTIONS", type: "Projects" },
   { id: "LIST", type: "SessionGroups" },
 ] as const;
+const projectListEndpoint = {
+  providesTags: [{ id: "LIST", type: "Projects" }],
+  queryFn: listProjectsQuery,
+} as const;
 const projectSuggestionsEndpoint = {
   providesTags: [{ id: "SUGGESTIONS", type: "Projects" }],
   queryFn: getProjectSuggestionsQuery,
+} as const;
+const projectUpdateEndpoint = {
+  invalidatesTags: projectMutationInvalidations,
+  queryFn: updateProjectQuery,
 } as const;
 
 let upsertSessionHistory: UpsertSessionHistory = (): void => {
@@ -162,10 +173,9 @@ const conduitApi = createApi({
   baseQuery: fakeBaseQuery<string>(),
   tagTypes: ["Projects", "SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
-    listProjects: builder.query<ProjectListView, undefined>({
-      providesTags: [{ id: "LIST", type: "Projects" }],
-      queryFn: listProjectsQuery,
-    }),
+    listProjects: builder.query<ProjectListView, undefined>(
+      projectListEndpoint,
+    ),
     addProject: builder.mutation<ProjectListView, ProjectAddRequest>({
       invalidatesTags: projectMutationInvalidations,
       queryFn: addProjectQuery,
@@ -174,6 +184,9 @@ const conduitApi = createApi({
       invalidatesTags: projectMutationInvalidations,
       queryFn: removeProjectQuery,
     }),
+    updateProject: builder.mutation<ProjectListView, ProjectUpdateArg>(
+      projectUpdateEndpoint,
+    ),
     getProjectSuggestions: builder.query<
       ProjectSuggestionsView,
       ProjectSuggestionsQueryArg
@@ -255,6 +268,7 @@ const {
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
   useRemoveProjectMutation,
+  useUpdateProjectMutation,
 } = conduitApi;
 
 export {
@@ -268,6 +282,7 @@ export {
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
   useRemoveProjectMutation,
+  useUpdateProjectMutation,
 };
 export type {
   OpenSessionMutationArg,
