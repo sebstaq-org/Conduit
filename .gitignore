@@ -12,3 +12,7 @@ apps/mobile/ios/
 .DS_Store
 artifacts/manual/*
 !artifacts/manual/.gitkeep
+
+# Expo CNG generated native projects
+apps/frontend/android/
+apps/frontend/ios/

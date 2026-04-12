@@ -1,0 +1,13 @@
+{
+  "presets": ["babel-preset-expo"],
+  "plugins": [
+    [
+      "react-native-worklets/plugin",
+      {
+        "bundleMode": true,
+        "strictGlobal": true,
+        "workletizableModules": ["remend"]
+      }
+    ]
+  ]
+}

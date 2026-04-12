@@ -1,0 +1,129 @@
+diff --git a/lib/module/StreamdownText.js b/lib/module/StreamdownText.js
+index 103850a4c0eb60c453a5899d8d62f53898d2901f..7f60d32aa5b07368498955da14c15670b20f9788 100644
+--- a/lib/module/StreamdownText.js
++++ b/lib/module/StreamdownText.js
+@@ -1,6 +1,9 @@
+ "use strict";
+ 
++import { useMemo } from 'react';
+ import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
++import { Platform } from 'react-native';
++import remend from 'remend';
+ import { useStreamdownMarkdown } from "./hooks/useStreamdownMarkdown.js";
+ import { jsx as _jsx } from "react/jsx-runtime";
+ /**
+@@ -9,10 +12,21 @@ import { jsx as _jsx } from "react/jsx-runtime";
+  * Processes markdown through remend on a worklet thread,
+  * then renders via EnrichedMarkdownText.
+  */
+-export function StreamdownText({
++export function StreamdownText(props) {
++  if (Platform.OS === 'web') {
++    return /*#__PURE__*/_jsx(StreamdownTextWeb, {
++      ...props
++    });
++  }
++  return /*#__PURE__*/_jsx(StreamdownTextNative, {
++    ...props
++  });
++}
++function StreamdownTextNative({
+   markdown,
+   remendConfig,
+   selectable = true,
++  streamingAnimation = true,
+   ...enrichedMarkdownProps
+ }) {
+   const {
+@@ -24,9 +38,24 @@ export function StreamdownText({
+   return /*#__PURE__*/_jsx(EnrichedMarkdownText, {
+     flavor: "commonmark",
+     markdown: processedMarkdown,
+-    streamingAnimation: true,
++    streamingAnimation: streamingAnimation,
+     selectable: !isStreaming && selectable,
+     ...enrichedMarkdownProps
+   });
+ }
++function StreamdownTextWeb({
++  markdown,
++  remendConfig,
++  selectable = true,
++  streamingAnimation: _streamingAnimation,
++  ...enrichedMarkdownProps
++}) {
++  const processedMarkdown = useMemo(() => remend(markdown, remendConfig), [markdown, remendConfig]);
++  return /*#__PURE__*/_jsx(EnrichedMarkdownText, {
++    flavor: "commonmark",
++    markdown: processedMarkdown,
++    selectable: selectable,
++    ...enrichedMarkdownProps
++  });
++}
+ //# sourceMappingURL=StreamdownText.js.map
+diff --git a/src/StreamdownText.tsx b/src/StreamdownText.tsx
+index ee1677a1757661e6a847a8fc39ad2d1e57fc7dea..44cee3ab4113fe468affa8d146c8f3b6f3860cd1 100644
+--- a/src/StreamdownText.tsx
++++ b/src/StreamdownText.tsx
+@@ -1,4 +1,7 @@
++import { useMemo } from 'react';
+ import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
++import { Platform } from 'react-native';
++import remend from 'remend';
+ import { useStreamdownMarkdown } from './hooks/useStreamdownMarkdown';
+ import type { StreamdownTextProps } from './types';
+ 
+@@ -8,10 +11,19 @@ import type { StreamdownTextProps } from './types';
+  * Processes markdown through remend on a worklet thread,
+  * then renders via EnrichedMarkdownText.
+  */
+-export function StreamdownText({
++export function StreamdownText(props: StreamdownTextProps) {
++  if (Platform.OS === 'web') {
++    return <StreamdownTextWeb {...props} />;
++  }
++
++  return <StreamdownTextNative {...props} />;
++}
++
++function StreamdownTextNative({
+   markdown,
+   remendConfig,
+   selectable = true,
++  streamingAnimation = true,
+   ...enrichedMarkdownProps
+ }: StreamdownTextProps) {
+   const { processedMarkdown, isStreaming } = useStreamdownMarkdown(markdown, {
+@@ -22,9 +34,31 @@ export function StreamdownText({
+     <EnrichedMarkdownText
+       flavor="commonmark"
+       markdown={processedMarkdown}
+-      streamingAnimation
++      streamingAnimation={streamingAnimation}
+       selectable={!isStreaming && selectable}
+       {...enrichedMarkdownProps}
+     />
+   );
+ }
++
++function StreamdownTextWeb({
++  markdown,
++  remendConfig,
++  selectable = true,
++  streamingAnimation: _streamingAnimation,
++  ...enrichedMarkdownProps
++}: StreamdownTextProps) {
++  const processedMarkdown = useMemo(
++    () => remend(markdown, remendConfig),
++    [markdown, remendConfig]
++  );
++
++  return (
++    <EnrichedMarkdownText
++      flavor="commonmark"
++      markdown={processedMarkdown}
++      selectable={selectable}
++      {...enrichedMarkdownProps}
++    />
++  );
++}

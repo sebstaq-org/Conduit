@@ -1,0 +1,19 @@
+diff --git a/src/node-haste/DependencyGraph.js b/src/node-haste/DependencyGraph.js
+index 342bbce6374a9cfdf338ba72ca3d2afad4b50dd4..07c032b7d3fe163ab76bbac8057d5a0c7f037d3d 100644
+--- a/src/node-haste/DependencyGraph.js
++++ b/src/node-haste/DependencyGraph.js
+@@ -187,6 +187,14 @@ class DependencyGraph extends _events.default {
+   }
+   async getOrComputeSha1(mixedPath) {
+     const result = await this._fileSystem.getOrComputeSha1(mixedPath);
++    if (mixedPath.includes("react-native-worklets/.worklets/")) {
++      const createHash = require("crypto").createHash;
++      return {
++        sha1: createHash("sha1")
++          .update(performance.now().toString())
++          .digest("hex"),
++      };
++    }
+     if (!result || !result.sha1) {
+       throw new Error(`Failed to get the SHA-1 for: ${mixedPath}.
+       Potential causes:
