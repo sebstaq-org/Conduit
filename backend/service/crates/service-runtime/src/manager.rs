@@ -48,18 +48,6 @@ struct ProjectListView {
     projects: Vec<ProjectRow>,
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProjectMutationView {
-    project: ProjectRow,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProjectRemoveView {
-    project_id: String,
-}
-
 #[derive(Clone, Copy)]
 struct PromptTurnContext<'a> {
     provider: ProviderId,
@@ -261,27 +249,29 @@ where
     fn projects_add(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
         let cwd =
             absolute_normalized_cwd("projects/add", path_param("projects/add", params, "cwd")?)?;
-        let project = {
+        let projects = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.add_project(&cwd.display().to_string())?
+            self.local_store.add_project(&cwd.display().to_string())?;
+            self.local_store.projects()?
         };
         self.session_index_refreshes.clear();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectMutationView { project })?,
+            to_value(ProjectListView { projects })?,
         ))
     }
 
     fn projects_remove(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
         let project_id = string_param("projects/remove", params, "projectId")?;
-        {
+        let projects = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.remove_project(&project_id)?;
-        }
+            self.local_store.projects()?
+        };
         self.session_index_refreshes.clear();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectRemoveView { project_id })?,
+            to_value(ProjectListView { projects })?,
         ))
     }
 

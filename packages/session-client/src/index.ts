@@ -5,6 +5,10 @@ export {
 export { PROVIDERS } from "@conduit/session-model";
 
 export type {
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectRow,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,

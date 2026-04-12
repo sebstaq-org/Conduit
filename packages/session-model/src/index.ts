@@ -97,12 +97,34 @@ const SessionGroupsViewSchema = z.object({
 
 type SessionGroupsView = z.infer<typeof SessionGroupsViewSchema>;
 
-const SessionGroupsQuerySchema = z.object({
-  cwdFilters: z.array(z.string()).optional(),
-  updatedWithinDays: z.number().nullable().optional(),
-});
+const SessionGroupsQuerySchema = z
+  .object({
+    updatedWithinDays: z.number().nullable().optional(),
+  })
+  .strict();
 
 type SessionGroupsQuery = z.infer<typeof SessionGroupsQuerySchema>;
+
+const ProjectRowSchema = z.object({
+  projectId: z.string(),
+  cwd: z.string(),
+});
+
+type ProjectRow = z.infer<typeof ProjectRowSchema>;
+
+const ProjectListViewSchema = z.object({
+  projects: z.array(ProjectRowSchema),
+});
+
+type ProjectListView = z.infer<typeof ProjectListViewSchema>;
+
+interface ProjectAddRequest {
+  cwd: string;
+}
+
+interface ProjectRemoveRequest {
+  projectId: string;
+}
 
 type TranscriptMessageRole = "user" | "agent";
 
@@ -200,6 +222,8 @@ export {
   PROVIDER_CATALOG,
   PROVIDERS,
   ProviderIdSchema,
+  ProjectListViewSchema,
+  ProjectRowSchema,
   SessionGroupSchema,
   SessionGroupsQuerySchema,
   SessionGroupsViewSchema,
@@ -218,6 +242,10 @@ export type {
   ProviderDescriptor,
   ProviderId,
   ProviderSnapshot,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectRow,
   RawWireEvent,
   SessionGroup,
   SessionGroupsQuery,

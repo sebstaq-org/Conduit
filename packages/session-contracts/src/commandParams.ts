@@ -1,4 +1,6 @@
 import type {
+  ProjectAddRequest,
+  ProjectRemoveRequest,
   SessionGroupsQuery,
   SessionHistoryRequest,
   SessionOpenRequest,
@@ -9,8 +11,27 @@ function isSessionGroupsQuery(value: unknown): value is SessionGroupsQuery {
   return (
     typeof value === "object" &&
     value !== null &&
+    !("cwdFilters" in value) &&
     !("sessionId" in value) &&
     !("openSessionId" in value)
+  );
+}
+
+function isProjectAddRequest(value: unknown): value is ProjectAddRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "cwd" in value &&
+    typeof value.cwd === "string"
+  );
+}
+
+function isProjectRemoveRequest(value: unknown): value is ProjectRemoveRequest {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "projectId" in value &&
+    typeof value.projectId === "string"
   );
 }
 
@@ -42,6 +63,8 @@ function isSessionPromptRequest(value: unknown): value is SessionPromptRequest {
 }
 
 export {
+  isProjectAddRequest,
+  isProjectRemoveRequest,
   isSessionGroupsQuery,
   isSessionHistoryRequest,
   isSessionOpenRequest,

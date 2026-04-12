@@ -102,14 +102,14 @@ describe("shared session grouping boundary", () => {
 
   test("grouped sessions can target one provider", () => {
     const command = createConsumerCommand("sessions/grouped", "codex", {
-      cwdFilters: ["/repo"],
+      updatedWithinDays: null,
     });
 
     expect(command).toMatchObject({
       command: "sessions/grouped",
       provider: "codex",
       params: {
-        cwdFilters: ["/repo"],
+        updatedWithinDays: null,
       },
     });
   });

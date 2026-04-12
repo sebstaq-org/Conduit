@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { SessionGroupsViewSchema } from "./src/index.js";
+import {
+  ProjectListViewSchema,
+  SessionGroupsQuerySchema,
+  SessionGroupsViewSchema,
+} from "./src/index.js";
 
 it("accepts the grouped sessions read model", () => {
   const payload = {
@@ -63,4 +67,25 @@ it("rejects unknown providers", () => {
   };
 
   expect(() => SessionGroupsViewSchema.parse(payload)).toThrow();
+});
+
+it("accepts the projects read model", () => {
+  const payload = {
+    projects: [
+      {
+        projectId: "cwd:/workspace/conduit",
+        cwd: "/workspace/conduit",
+      },
+    ],
+  };
+
+  expect(ProjectListViewSchema.parse(payload)).toEqual(payload);
+});
+
+it("rejects cwd filters in the session groups query", () => {
+  const payload = {
+    cwdFilters: ["/workspace/conduit"],
+  };
+
+  expect(() => SessionGroupsQuerySchema.parse(payload)).toThrow();
 });

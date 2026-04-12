@@ -2,7 +2,10 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
-import { SessionGroupsViewSchema } from "@conduit/session-model";
+import {
+  ProjectListViewSchema,
+  SessionGroupsViewSchema,
+} from "@conduit/session-model";
 import { readSessionHistoryResponse } from "./historyWindow.js";
 import type {
   SessionClientOptions,
@@ -16,6 +19,9 @@ import { parseServerFrame } from "./wireFrame.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
   RuntimeEvent,
   ServerFrame,
   SessionHistoryRequest,
@@ -57,6 +63,40 @@ class WebSocketSessionClient implements SessionClientPort {
 
   public constructor(options: SessionClientOptions = {}) {
     this.options = options;
+  }
+
+  public async listProjects(): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/list", "all"),
+    );
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? "projects list failed");
+    }
+    return ProjectListViewSchema.parse(response.result);
+  }
+
+  public async addProject(
+    request: ProjectAddRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/add", "all", request),
+    );
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? "project add failed");
+    }
+    return ProjectListViewSchema.parse(response.result);
+  }
+
+  public async removeProject(
+    request: ProjectRemoveRequest,
+  ): Promise<ProjectListView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/remove", "all", request),
+    );
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? "project remove failed");
+    }
+    return ProjectListViewSchema.parse(response.result);
   }
 
   public async getSessionGroups(
@@ -253,10 +293,8 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 }
 
-function createSessionClient(
+const createSessionClient = (
   options?: SessionClientOptions,
-): SessionClientPort {
-  return new WebSocketSessionClient(options);
-}
+): SessionClientPort => new WebSocketSessionClient(options);
 
 export { WebSocketSessionClient, createSessionClient };

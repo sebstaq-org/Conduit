@@ -4,10 +4,22 @@ import {
   isSessionOpenRequest,
   isSessionPromptRequest,
 } from "./commandParams.js";
+import {
+  isProjectCommandName,
+  projectCommandFactories,
+} from "./projectCommandFactories.js";
 import type {
   ConsumerCommand,
   ConsumerCommandName,
   ConsumerCommandTarget,
+  ProjectAddCommandName,
+  ProjectAddConsumerCommand,
+  ProjectAddRequest,
+  ProjectListCommandName,
+  ProjectListConsumerCommand,
+  ProjectRemoveCommandName,
+  ProjectRemoveConsumerCommand,
+  ProjectRemoveRequest,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
   SessionGroupsCommandName,
@@ -27,6 +39,7 @@ import type {
   SessionWatchCommandName,
   SessionWatchConsumerCommand,
 } from "./wire.js";
+import type { ProjectCommandName } from "./projectCommandFactories.js";
 import type { ProviderId } from "@conduit/session-model";
 
 let nextCommandSequence = 0;
@@ -153,6 +166,7 @@ type ConduitFactory = (
 ) => ConsumerCommand;
 
 type KnownConduitCommandName =
+  | ProjectCommandName
   | SessionGroupsCommandName
   | SessionsWatchCommandName
   | SessionOpenCommandName
@@ -160,14 +174,12 @@ type KnownConduitCommandName =
   | SessionWatchCommandName
   | SessionPromptCommandName;
 
-interface KnownConduitCommandInput {
-  command: KnownConduitCommandName;
-  id: string;
-  params: unknown;
-  provider: ConsumerCommandTarget;
-}
+type NonProjectConduitCommandName = Exclude<
+  KnownConduitCommandName,
+  ProjectCommandName
+>;
 
-const conduitFactories: Record<KnownConduitCommandName, ConduitFactory> = {
+const conduitFactories: Record<NonProjectConduitCommandName, ConduitFactory> = {
   "session/history": createSessionHistoryCommand,
   "session/open": createSessionOpenCommand,
   "session/prompt": createSessionPromptCommand,
@@ -179,17 +191,25 @@ const conduitFactories: Record<KnownConduitCommandName, ConduitFactory> = {
 function isKnownConduitCommandName(
   command: ConsumerCommandName,
 ): command is KnownConduitCommandName {
-  return command in conduitFactories;
+  return isProjectCommandName(command) || command in conduitFactories;
 }
 
-function createKnownConduitCommand({
-  command,
-  id,
-  params,
-  provider,
-}: KnownConduitCommandInput): ConsumerCommand {
-  return conduitFactories[command](id, provider, params);
-}
+function createConsumerCommand(
+  command: ProjectAddCommandName,
+  provider: ConsumerCommandTarget,
+  params: ProjectAddRequest,
+): ProjectAddConsumerCommand;
+
+function createConsumerCommand(
+  command: ProjectListCommandName,
+  provider: ConsumerCommandTarget,
+): ProjectListConsumerCommand;
+
+function createConsumerCommand(
+  command: ProjectRemoveCommandName,
+  provider: ConsumerCommandTarget,
+  params: ProjectRemoveRequest,
+): ProjectRemoveConsumerCommand;
 
 function createConsumerCommand(
   command: SessionGroupsCommandName,
@@ -237,6 +257,8 @@ function createConsumerCommand(
   provider: ConsumerCommandTarget,
   params:
     | Record<string, unknown>
+    | ProjectAddRequest
+    | ProjectRemoveRequest
     | SessionGroupsQuery
     | SessionOpenRequest
     | SessionHistoryRequest
@@ -244,12 +266,10 @@ function createConsumerCommand(
 ): ConsumerCommand {
   const id = nextConsumerCommandId();
   if (isKnownConduitCommandName(command)) {
-    return createKnownConduitCommand({
-      id,
-      command,
-      provider,
-      params,
-    });
+    if (isProjectCommandName(command)) {
+      return projectCommandFactories[command](id, provider, params);
+    }
+    return conduitFactories[command](id, provider, params);
   }
   return {
     id,

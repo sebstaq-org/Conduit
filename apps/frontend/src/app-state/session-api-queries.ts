@@ -2,6 +2,9 @@ import { createSessionClient } from "@conduit/session-client";
 import type {
   ContentBlock,
   ProviderId,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
@@ -44,6 +47,37 @@ async function getSessionGroupsQuery(
 ): QueryResult<SessionGroupsView> {
   try {
     const data = await sessionClient.getSessionGroups(query);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function listProjectsQuery(): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.listProjects();
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function addProjectQuery(
+  request: ProjectAddRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.addProject(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function removeProjectQuery(
+  request: ProjectRemoveRequest,
+): QueryResult<ProjectListView> {
+  try {
+    const data = await sessionClient.removeProject(request);
     return { data };
   } catch (error) {
     return { error: toQueryError(error) };
@@ -110,10 +144,13 @@ async function promptSessionQuery({
 }
 
 export {
+  addProjectQuery,
   getSessionGroupsQuery,
+  listProjectsQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
+  removeProjectQuery,
   sessionClient,
 };
 export type {

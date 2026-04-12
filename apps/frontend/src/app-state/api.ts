@@ -1,15 +1,21 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
   TranscriptItem,
 } from "@conduit/session-client";
 import {
+  addProjectQuery,
   getSessionGroupsQuery,
+  listProjectsQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
+  removeProjectQuery,
   sessionClient,
 } from "./session-api-queries";
 import { applyTimelineItems } from "./session-history-cache";
@@ -140,8 +146,26 @@ async function handleSessionGroupsCacheEntryAdded(
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["SessionGroups", "SessionHistory"],
+  tagTypes: ["Projects", "SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
+    listProjects: builder.query<ProjectListView, void>({
+      providesTags: [{ id: "LIST", type: "Projects" }],
+      queryFn: listProjectsQuery,
+    }),
+    addProject: builder.mutation<ProjectListView, ProjectAddRequest>({
+      invalidatesTags: [
+        { id: "LIST", type: "Projects" },
+        { id: "LIST", type: "SessionGroups" },
+      ],
+      queryFn: addProjectQuery,
+    }),
+    removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>({
+      invalidatesTags: [
+        { id: "LIST", type: "Projects" },
+        { id: "LIST", type: "SessionGroups" },
+      ],
+      queryFn: removeProjectQuery,
+    }),
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
@@ -210,20 +234,26 @@ invalidateSessionGroups = (dispatch): void => {
 };
 
 const {
+  useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
+  useRemoveProjectMutation,
 } = conduitApi;
 
 export {
   conduitApi,
+  useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionHistoryQuery,
+  useRemoveProjectMutation,
 };
 export type {
   OpenSessionMutationArg,

@@ -1,5 +1,9 @@
 import type {
   ProviderId,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectRow,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
@@ -21,6 +25,9 @@ const SESSION_COMMANDS = [
 
 const CONDUIT_COMMANDS = [
   "provider/disconnect",
+  "projects/add",
+  "projects/list",
+  "projects/remove",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -38,6 +45,12 @@ type ConsumerCommandName = (typeof CONSUMER_COMMANDS)[number];
 
 type SessionGroupsCommandName = "sessions/grouped";
 
+type ProjectAddCommandName = "projects/add";
+
+type ProjectListCommandName = "projects/list";
+
+type ProjectRemoveCommandName = "projects/remove";
+
 type SessionsWatchCommandName = "sessions/watch";
 
 type SessionOpenCommandName = "session/open";
@@ -51,6 +64,9 @@ type SessionPromptCommandName = "session/prompt";
 type ProviderScopedCommandName = Exclude<
   ConsumerCommandName,
   | SessionGroupsCommandName
+  | ProjectAddCommandName
+  | ProjectListCommandName
+  | ProjectRemoveCommandName
   | SessionsWatchCommandName
   | SessionOpenCommandName
   | SessionHistoryCommandName
@@ -70,6 +86,27 @@ interface SessionGroupsConsumerCommand {
   command: SessionGroupsCommandName;
   provider: ConsumerCommandTarget;
   params: SessionGroupsQuery;
+}
+
+interface ProjectAddConsumerCommand {
+  id: string;
+  command: ProjectAddCommandName;
+  provider: ConsumerCommandTarget;
+  params: ProjectAddRequest;
+}
+
+interface ProjectListConsumerCommand {
+  id: string;
+  command: ProjectListCommandName;
+  provider: ConsumerCommandTarget;
+  params: Record<string, never>;
+}
+
+interface ProjectRemoveConsumerCommand {
+  id: string;
+  command: ProjectRemoveCommandName;
+  provider: ConsumerCommandTarget;
+  params: ProjectRemoveRequest;
 }
 
 interface SessionOpenConsumerCommand {
@@ -109,6 +146,9 @@ interface SessionPromptConsumerCommand {
 
 type ConsumerCommand =
   | ProviderConsumerCommand
+  | ProjectAddConsumerCommand
+  | ProjectListConsumerCommand
+  | ProjectRemoveConsumerCommand
   | SessionGroupsConsumerCommand
   | SessionsWatchConsumerCommand
   | SessionOpenConsumerCommand
@@ -176,6 +216,16 @@ export type {
   ConsumerCommandTarget,
   ConsumerError,
   ConsumerResponse,
+  ProjectAddCommandName,
+  ProjectAddConsumerCommand,
+  ProjectAddRequest,
+  ProjectListCommandName,
+  ProjectListConsumerCommand,
+  ProjectListView,
+  ProjectRemoveCommandName,
+  ProjectRemoveConsumerCommand,
+  ProjectRemoveRequest,
+  ProjectRow,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
   RuntimeEvent,
