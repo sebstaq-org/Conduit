@@ -1,8 +1,4 @@
-import {
-  PopoverContent,
-  PopoverOverlay,
-  PopoverPortal,
-} from "@/ui/popover";
+import { PopoverContent, PopoverOverlay, PopoverPortal } from "@/ui/popover";
 import { ProjectPickerContent } from "./project-picker-content";
 
 function renderProjectPickerContent(): React.ReactNode {

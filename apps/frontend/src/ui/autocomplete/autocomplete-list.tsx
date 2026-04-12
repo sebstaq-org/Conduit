@@ -17,7 +17,9 @@ interface AutocompleteListProps<Item> {
   getItemLabel: (item: Item) => string;
   items: readonly Item[];
   onItemSelect: (item: Item) => void;
-  renderItem?: ((state: AutocompleteRenderItemState<Item>) => ReactNode) | undefined;
+  renderItem?:
+    | ((state: AutocompleteRenderItemState<Item>) => ReactNode)
+    | undefined;
   statusText?: string | undefined;
 }
 

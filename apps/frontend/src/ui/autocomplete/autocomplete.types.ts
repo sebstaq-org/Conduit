@@ -21,7 +21,9 @@ interface AutocompleteProps<Item> {
   onSubmitQuery?: ((query: string) => void) | undefined;
   placeholder: string;
   query: string;
-  renderItem?: ((state: AutocompleteRenderItemState<Item>) => ReactNode) | undefined;
+  renderItem?:
+    | ((state: AutocompleteRenderItemState<Item>) => ReactNode)
+    | undefined;
   statusText?: string | undefined;
 }
 

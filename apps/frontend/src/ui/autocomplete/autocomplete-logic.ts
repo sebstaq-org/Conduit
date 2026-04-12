@@ -1,6 +1,4 @@
-import type {
-  TextInputKeyPressEvent,
-} from "react-native";
+import type { TextInputKeyPressEvent } from "react-native";
 
 interface AutocompleteHighlightedItemInput<Item> {
   getItemKey: (item: Item) => string;
@@ -8,13 +6,15 @@ interface AutocompleteHighlightedItemInput<Item> {
   items: readonly Item[];
 }
 
-interface AutocompleteNextKeyInput<Item>
-  extends AutocompleteHighlightedItemInput<Item> {
+interface AutocompleteNextKeyInput<
+  Item,
+> extends AutocompleteHighlightedItemInput<Item> {
   direction: 1 | -1;
 }
 
-interface AutocompleteCommandInput<Item>
-  extends AutocompleteHighlightedItemInput<Item> {
+interface AutocompleteCommandInput<
+  Item,
+> extends AutocompleteHighlightedItemInput<Item> {
   onItemSelect: (item: Item) => void;
   onSubmitQuery?: ((query: string) => void) | undefined;
   query: string;

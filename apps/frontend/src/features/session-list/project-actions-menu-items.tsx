@@ -1,8 +1,5 @@
 import { removeProjectById } from "@/app-state";
-import type {
-  ProjectMutationState,
-  RemoveProjectTrigger,
-} from "@/app-state";
+import type { ProjectMutationState, RemoveProjectTrigger } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { MenuItem } from "@/ui";
 import { projectActionErrorMessage } from "./project-action-error";
