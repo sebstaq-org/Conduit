@@ -14,7 +14,7 @@
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use ids::{history_cursor, open_session_id_for};
-use prompt_turn::{prompt_turn_items, transcript_item_turn_id};
+use prompt_turn::prompt_turn_items;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
@@ -23,7 +23,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use thiserror::Error;
 use timeline_storage::{
-    cursor_end, i64_from_usize, insert_items, insert_items_at, next_revision, usize_from_i64,
+    cursor_end, i64_from_usize, insert_items, insert_items_at, next_revision, replace_turn_items,
+    usize_from_i64,
 };
 use transcript::project_items;
 
@@ -339,27 +340,24 @@ impl LocalStore {
     ) -> Result<TimelineMutation> {
         let existing = self.session_revision("session/prompt", replace.open_session_id)?;
         let revision = existing + 1;
-        let item_count = self.item_count("session/prompt", replace.open_session_id)?;
-        let mut items = self.items_between(replace.open_session_id, 0, item_count)?;
-        items.retain(|item| transcript_item_turn_id(item) != Some(replace.turn_id));
-        items.extend(prompt_turn_items(
+        let items = prompt_turn_items(
             replace.turn_id,
             replace.prompt,
             replace.updates,
             replace.status,
             replace.stop_reason,
-        ));
-        self.replace_open_session_items(replace.open_session_id, revision, &items)?;
+        );
+        let tx = self.connection.transaction()?;
+        replace_turn_items(&tx, replace.open_session_id, replace.turn_id, &items)?;
+        tx.execute(
+            "UPDATE open_sessions SET revision = ?2 WHERE open_session_id = ?1",
+            params![replace.open_session_id, revision],
+        )?;
+        tx.commit()?;
         Ok(TimelineMutation {
             open_session_id: replace.open_session_id.to_owned(),
             revision,
-            items: prompt_turn_items(
-                replace.turn_id,
-                replace.prompt,
-                replace.updates,
-                replace.status,
-                replace.stop_reason,
-            ),
+            items,
         })
     }
 
@@ -531,26 +529,6 @@ impl LocalStore {
             |row| row.get::<_, i64>(0),
         )?;
         insert_items_at(&tx, open_session_id, usize_from_i64(start)?, items)?;
-        tx.commit()?;
-        Ok(())
-    }
-
-    fn replace_open_session_items(
-        &mut self,
-        open_session_id: &str,
-        revision: i64,
-        items: &[TranscriptItem],
-    ) -> Result<()> {
-        let tx = self.connection.transaction()?;
-        tx.execute(
-            "UPDATE open_sessions SET revision = ?2 WHERE open_session_id = ?1",
-            params![open_session_id, revision],
-        )?;
-        tx.execute(
-            "DELETE FROM transcript_items WHERE open_session_id = ?1",
-            params![open_session_id],
-        )?;
-        insert_items(&tx, open_session_id, items)?;
         tx.commit()?;
         Ok(())
     }

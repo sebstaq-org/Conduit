@@ -7,8 +7,15 @@ import { Box, Text } from "@/theme";
 import { ScrollArea } from "@/ui";
 import { historyStatusVariant } from "./session-history.styles";
 import { SessionHistoryList } from "./session-history-list";
+import {
+  activeOlderHistoryFor,
+  currentOlderPageFor,
+  historyViewState,
+  nextOlderHistoryState,
+} from "./session-history-window";
 import type { ActiveSession } from "@/app-state";
 import type { SessionHistoryWindow } from "@conduit/session-client";
+import type { OlderHistoryState } from "./session-history-window";
 
 interface SessionHistoryQueryArg {
   cursor?: string | null;
@@ -16,18 +23,11 @@ interface SessionHistoryQueryArg {
   openSessionId: string;
 }
 
-interface OlderHistoryState {
-  cursor: string | null;
-  openSessionId: string;
-  pages: SessionHistoryWindow[];
-  revision: number;
-}
-
 interface LoadOlderContext {
   activeSession: ActiveSession | null;
   data: SessionHistoryWindow | undefined;
   olderHistory: OlderHistoryState | null;
-  olderPage: SessionHistoryWindow | undefined;
+  olderPage: ReturnType<typeof currentOlderPageFor>;
   setOlderHistory: Dispatch<SetStateAction<OlderHistoryState | null>>;
 }
 
@@ -41,10 +41,10 @@ interface HistoryContentProps {
   onLoadOlder: () => void;
 }
 
-interface HistoryViewState {
-  activeOlderHistory: OlderHistoryState | null;
-  activeOlderPage: SessionHistoryWindow | undefined;
-  history: SessionHistoryWindow | undefined;
+interface OlderHistoryView {
+  historyState: ReturnType<typeof historyViewState>;
+  isFetchingOlder: boolean;
+  isOlderError: boolean;
 }
 
 type OptionalSessionHistoryQueryArg = SessionHistoryQueryArg | typeof skipToken;
@@ -78,84 +78,6 @@ function olderHistoryQueryArg(
   };
 }
 
-function activeOlderHistoryFor(
-  olderHistory: OlderHistoryState | null,
-  data: SessionHistoryWindow | undefined,
-): OlderHistoryState | null {
-  if (
-    olderHistory !== null &&
-    data !== undefined &&
-    olderHistory.openSessionId === data.openSessionId &&
-    olderHistory.revision === data.revision
-  ) {
-    return olderHistory;
-  }
-  return null;
-}
-
-function activeOlderPageFor(
-  olderPage: SessionHistoryWindow | undefined,
-  data: SessionHistoryWindow | undefined,
-): SessionHistoryWindow | undefined {
-  if (
-    olderPage !== undefined &&
-    data !== undefined &&
-    olderPage.openSessionId === data.openSessionId &&
-    olderPage.revision === data.revision
-  ) {
-    return olderPage;
-  }
-  return undefined;
-}
-
-function nextCursorFor(
-  data: SessionHistoryWindow,
-  olderHistory: OlderHistoryState | null,
-  olderPage: SessionHistoryWindow | undefined,
-): string | null {
-  if (olderHistory === null) {
-    return data.nextCursor;
-  }
-  if (olderPage !== undefined) {
-    return olderPage.nextCursor;
-  }
-  return olderHistory.cursor;
-}
-
-function mergeHistory(
-  data: SessionHistoryWindow | undefined,
-  olderHistory: OlderHistoryState | null,
-  olderPage: SessionHistoryWindow | undefined,
-): SessionHistoryWindow | undefined {
-  if (data === undefined) {
-    return undefined;
-  }
-  const pages = [...(olderHistory?.pages ?? [])];
-  if (olderPage !== undefined) {
-    pages.push(olderPage);
-  }
-  return {
-    items: [...pages.flatMap((page) => page.items), ...data.items],
-    nextCursor: nextCursorFor(data, olderHistory, olderPage),
-    openSessionId: data.openSessionId,
-    revision: data.revision,
-  };
-}
-
-function historyViewState(
-  data: SessionHistoryWindow | undefined,
-  olderHistory: OlderHistoryState | null,
-  olderPage: SessionHistoryWindow | undefined,
-): HistoryViewState {
-  const activeOlderHistory = activeOlderHistoryFor(olderHistory, data);
-  const activeOlderPage = activeOlderPageFor(olderPage, data);
-  return {
-    activeOlderHistory,
-    activeOlderPage,
-    history: mergeHistory(data, activeOlderHistory, activeOlderPage),
-  };
-}
-
 function loadOlderWindow({
   activeSession,
   data,
@@ -163,30 +85,14 @@ function loadOlderWindow({
   olderPage,
   setOlderHistory,
 }: LoadOlderContext): void {
-  if (activeSession === null || data === undefined) {
-    return;
-  }
-  if (olderHistory === null) {
-    if (data.nextCursor === null) {
-      return;
-    }
-    setOlderHistory({
-      cursor: data.nextCursor,
-      openSessionId: data.openSessionId,
-      pages: [],
-      revision: data.revision,
-    });
-    return;
-  }
-  if (olderPage === undefined) {
-    return;
-  }
-  setOlderHistory({
-    cursor: olderPage.nextCursor,
-    openSessionId: olderPage.openSessionId,
-    pages: [...olderHistory.pages, olderPage],
-    revision: olderPage.revision,
-  });
+  setOlderHistory(
+    nextOlderHistoryState({
+      data,
+      olderHistory,
+      olderPage,
+      openSessionId: activeSession?.openSessionId ?? null,
+    }),
+  );
 }
 
 function renderNoActiveSession(): React.JSX.Element {
@@ -223,6 +129,27 @@ function renderHistoryContent({
   );
 }
 
+function useOlderHistoryView(
+  activeSession: ActiveSession | null,
+  data: SessionHistoryWindow | undefined,
+  olderHistory: OlderHistoryState | null,
+): OlderHistoryView {
+  const activeOlderHistory = activeOlderHistoryFor(olderHistory, data);
+  const olderPageQuery = useReadSessionHistoryQuery(
+    olderHistoryQueryArg(activeSession, activeOlderHistory),
+  );
+  const olderPage = currentOlderPageFor(
+    activeOlderHistory,
+    activeOlderHistory?.cursor ?? null,
+    olderPageQuery.currentData,
+  );
+  return {
+    historyState: historyViewState(data, activeOlderHistory, olderPage),
+    isFetchingOlder: olderPageQuery.isFetching,
+    isOlderError: olderPageQuery.isError,
+  };
+}
+
 function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const [olderHistory, setOlderHistory] = useState<OlderHistoryState | null>(
@@ -231,14 +158,10 @@ function SessionHistory(): React.JSX.Element {
   const { data, isError, isFetching, isLoading } = useReadSessionHistoryQuery(
     sessionHistoryQueryArg(activeSession),
   );
-  const activeOlderHistory = activeOlderHistoryFor(olderHistory, data);
-  const olderPageQuery = useReadSessionHistoryQuery(
-    olderHistoryQueryArg(activeSession, activeOlderHistory),
-  );
-  const historyState = historyViewState(
+  const { historyState, isFetchingOlder, isOlderError } = useOlderHistoryView(
+    activeSession,
     data,
-    activeOlderHistory,
-    olderPageQuery.data,
+    olderHistory,
   );
   const loadOlder = useCallback(() => {
     loadOlderWindow({
@@ -257,9 +180,9 @@ function SessionHistory(): React.JSX.Element {
   return renderHistoryContent({
     activeSession,
     history: historyState.history,
-    isError: isError || olderPageQuery.isError,
+    isError: isError || isOlderError,
     isFetching,
-    isFetchingOlder: olderPageQuery.isFetching,
+    isFetchingOlder,
     isLoading,
     onLoadOlder: loadOlder,
   });

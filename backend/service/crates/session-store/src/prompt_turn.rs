@@ -49,11 +49,3 @@ pub(crate) fn prompt_turn_items(
     }
     items
 }
-
-pub(crate) fn transcript_item_turn_id(item: &TranscriptItem) -> Option<&str> {
-    match item {
-        TranscriptItem::Message { turn_id, .. } | TranscriptItem::Event { turn_id, .. } => {
-            turn_id.as_deref()
-        }
-    }
-}

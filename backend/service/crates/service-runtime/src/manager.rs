@@ -191,10 +191,8 @@ where
     ) -> Result<ConsumerResponse> {
         let query = SessionGroupsQuery::from_params(params)?;
         let providers = providers_from_target(provider_target)?;
-        let is_refreshing = providers
-            .iter()
-            .any(|provider| self.session_index_refresh_due(*provider));
         let snapshot = self.local_store.session_index(&providers)?;
+        let is_refreshing = snapshot.refreshed_at.is_none();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
             grouped_view(snapshot, &query, is_refreshing)?,

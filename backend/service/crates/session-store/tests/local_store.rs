@@ -4,7 +4,10 @@ use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use serde as _;
 use serde_json::{Value, json};
-use session_store::{HistoryLimit, LocalStore, OpenSessionKey, SessionIndexEntry};
+use session_store::{
+    HistoryLimit, LocalStore, OpenSessionKey, PromptTurnReplace, SessionIndexEntry,
+    TranscriptItemStatus,
+};
 use sha2 as _;
 use std::error::Error;
 use std::fs;
@@ -128,6 +131,87 @@ fn cached_session_returns_materialized_history_without_replacing_it() -> TestRes
     Ok(())
 }
 
+#[test]
+fn prompt_turn_replace_preserves_surrounding_timeline_items() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let key = key("session-1");
+    let opened = store.open_session(key, &updates("loaded agent"), limit(10)?)?;
+    let first_turn = store.begin_prompt_turn(
+        &opened.open_session_id,
+        &[json!({ "type": "text", "text": "first prompt" })],
+    )?;
+    let second_turn = store.begin_prompt_turn(
+        &opened.open_session_id,
+        &[json!({ "type": "text", "text": "second prompt" })],
+    )?;
+
+    let mutation = store.replace_prompt_turn_updates(PromptTurnReplace {
+        open_session_id: &opened.open_session_id,
+        turn_id: &first_turn.turn_id,
+        prompt: &[json!({ "type": "text", "text": "first prompt" })],
+        updates: &[
+            transcript_update(10, "agent_message_chunk", "first streamed"),
+            transcript_update(11, "agent_message_chunk", " answer"),
+        ],
+        status: TranscriptItemStatus::Streaming,
+        stop_reason: None,
+    })?;
+    let latest = store.history_window(&opened.open_session_id, None, limit(10)?)?;
+    let texts = history_texts(&latest.items)?;
+
+    ensure_eq(&mutation.items.len(), &2, "changed turn item count")?;
+    ensure_eq(
+        &texts,
+        &vec![
+            "old user".to_owned(),
+            "old agent".to_owned(),
+            "new user".to_owned(),
+            "loaded agent".to_owned(),
+            "first prompt".to_owned(),
+            "first streamed answer".to_owned(),
+            "second prompt".to_owned(),
+        ],
+        "timeline text order",
+    )?;
+    ensure_eq(
+        &latest.items.last(),
+        &second_turn.items.last(),
+        "following turn preserved",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn prompt_turn_replace_rejects_missing_turn_without_append_fallback() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let key = key("session-1");
+    let opened = store.open_session(key, &updates("loaded agent"), limit(10)?)?;
+
+    let response = store.replace_prompt_turn_updates(PromptTurnReplace {
+        open_session_id: &opened.open_session_id,
+        turn_id: "missing-turn",
+        prompt: &[json!({ "type": "text", "text": "prompt" })],
+        updates: &[transcript_update(10, "agent_message_chunk", "agent")],
+        status: TranscriptItemStatus::Streaming,
+        stop_reason: None,
+    });
+    let latest = store.history_window(&opened.open_session_id, None, limit(10)?)?;
+
+    if response.is_ok() {
+        return Err("missing prompt turn unexpectedly appended".into());
+    }
+    ensure_eq(
+        &latest.items.len(),
+        &4,
+        "timeline item count after rejection",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
 fn ensure_eq<T>(actual: &T, expected: &T, label: &str) -> TestResult<()>
 where
     T: std::fmt::Debug + PartialEq,
@@ -136,6 +220,22 @@ where
         return Ok(());
     }
     Err(format!("expected {label} {expected:?}, got {actual:?}").into())
+}
+
+fn history_texts(items: &[session_store::TranscriptItem]) -> TestResult<Vec<String>> {
+    let mut texts = Vec::new();
+    for item in items {
+        if let session_store::TranscriptItem::Message { content, .. } = item {
+            texts.push(
+                content
+                    .iter()
+                    .filter_map(|block| block.get("text").and_then(Value::as_str))
+                    .collect::<Vec<_>>()
+                    .join(""),
+            );
+        }
+    }
+    Ok(texts)
 }
 
 fn limit(value: u64) -> TestResult<HistoryLimit> {
