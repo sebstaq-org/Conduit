@@ -5,6 +5,7 @@ import {
   sessionTranscriptRowGap,
   sessionTranscriptTextVariant,
 } from "./session-transcript.styles";
+import { TranscriptMarkdown } from "./transcript-markdown";
 import type { SessionTranscriptItem } from "./session-transcript.types";
 
 interface SessionTranscriptRowProps {
@@ -18,12 +19,18 @@ function SessionTranscriptRow({
     return null;
   }
 
+  let message = <TranscriptMarkdown markdown={row.text} />;
+
+  if (row.role === "user") {
+    message = <Text variant={sessionTranscriptTextVariant}>{row.text}</Text>;
+  }
+
   return (
     <Box gap={sessionTranscriptRowGap}>
       <Text variant={sessionTranscriptMetaVariant}>
         {sessionTranscriptRoleLabel(row.role)}
       </Text>
-      <Text variant={sessionTranscriptTextVariant}>{row.text}</Text>
+      {message}
     </Box>
   );
 }

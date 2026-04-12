@@ -6,6 +6,9 @@
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
     "scheme": "conduit",
+    "android": {
+      "package": "org.sebstaq.conduit"
+    },
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true

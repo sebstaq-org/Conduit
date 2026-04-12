@@ -1,0 +1,91 @@
+diff --git a/lib/module/ReanimatedModule/reanimatedModuleInstance.js b/lib/module/ReanimatedModule/reanimatedModuleInstance.js
+index 5360396f736b5256dc36f811cf02c45946ea9b9e..0a0a724afa3be9232a0c64909971b2953b2f96aa 100644
+--- a/lib/module/ReanimatedModule/reanimatedModuleInstance.js
++++ b/lib/module/ReanimatedModule/reanimatedModuleInstance.js
+@@ -3,5 +3,6 @@
+ import { SHOULD_BE_USE_WEB } from '../common';
+ import { createJSReanimatedModule } from './js-reanimated';
+ import { createNativeReanimatedModule } from './NativeReanimated';
+-export const ReanimatedModule = SHOULD_BE_USE_WEB ? createJSReanimatedModule() : createNativeReanimatedModule();
++const isNonReactNativeRuntime = globalThis.__RUNTIME_KIND !== undefined && globalThis.__RUNTIME_KIND !== 1;
++export const ReanimatedModule = SHOULD_BE_USE_WEB || isNonReactNativeRuntime ? createJSReanimatedModule() : createNativeReanimatedModule();
+ //# sourceMappingURL=reanimatedModuleInstance.js.map
+\ No newline at end of file
+diff --git a/lib/module/common/constants/platform.js b/lib/module/common/constants/platform.js
+index 982b2951e70af122e747330928e6ca21de218833..15ae426d39183d5e797b206a48de025aef6e5156 100644
+--- a/lib/module/common/constants/platform.js
++++ b/lib/module/common/constants/platform.js
+@@ -1,6 +1,10 @@
+ 'use strict';
+ 
+-import { Platform } from 'react-native';
++import { Platform as ReactNativePlatform } from 'react-native';
++const Platform = ReactNativePlatform ?? {
++  OS: 'android',
++  select: spec => spec.android ?? spec.native ?? spec.default
++};
+ function isWindowAvailable() {
+   // the window object is unavailable when building the server portion of a site that uses SSG
+   // this function shouldn't be used to conditionally render components
+diff --git a/lib/module/specs/NativeReanimatedModule.js b/lib/module/specs/NativeReanimatedModule.js
+index 42ba9a3bb122ad09e2477fb8b25b35d64f705c9e..5d6514799e8d75bcb6d3bcf531584c8536169928 100644
+--- a/lib/module/specs/NativeReanimatedModule.js
++++ b/lib/module/specs/NativeReanimatedModule.js
+@@ -1,5 +1,8 @@
+ 'use strict';
+ 
+-import { TurboModuleRegistry } from 'react-native';
++import { TurboModuleRegistry as ReactNativeTurboModuleRegistry } from 'react-native';
++const TurboModuleRegistry = ReactNativeTurboModuleRegistry ?? {
++  get: () => undefined
++};
+ export default TurboModuleRegistry.get('ReanimatedModule');
+ //# sourceMappingURL=NativeReanimatedModule.js.map
+\ No newline at end of file
+diff --git a/src/ReanimatedModule/reanimatedModuleInstance.ts b/src/ReanimatedModule/reanimatedModuleInstance.ts
+index 686a5fea1bb3dcd065b8dec8fd9082ca49cc1be1..32d81acf7431d2c7405bcc00a3060bfa1e802113 100644
+--- a/src/ReanimatedModule/reanimatedModuleInstance.ts
++++ b/src/ReanimatedModule/reanimatedModuleInstance.ts
+@@ -4,6 +4,9 @@ import { SHOULD_BE_USE_WEB } from '../common';
+ import { createJSReanimatedModule } from './js-reanimated';
+ import { createNativeReanimatedModule } from './NativeReanimated';
+ 
+-export const ReanimatedModule = SHOULD_BE_USE_WEB
++const isNonReactNativeRuntime =
++  globalThis.__RUNTIME_KIND !== undefined && globalThis.__RUNTIME_KIND !== 1;
++
++export const ReanimatedModule = SHOULD_BE_USE_WEB || isNonReactNativeRuntime
+   ? createJSReanimatedModule()
+   : createNativeReanimatedModule();
+diff --git a/src/common/constants/platform.ts b/src/common/constants/platform.ts
+index 12721cb6f8965b71390eb79d207e029c5c61076f..54250d530e27b5e137700e3f00d4b2bb3e8635ea 100644
+--- a/src/common/constants/platform.ts
++++ b/src/common/constants/platform.ts
+@@ -1,5 +1,10 @@
+ 'use strict';
+-import { Platform } from 'react-native';
++import { Platform as ReactNativePlatform } from 'react-native';
++
++const Platform = ReactNativePlatform ?? {
++  OS: 'android',
++  select: (spec) => spec.android ?? spec.native ?? spec.default,
++};
+ 
+ function isWindowAvailable() {
+   // the window object is unavailable when building the server portion of a site that uses SSG
+diff --git a/src/specs/NativeReanimatedModule.ts b/src/specs/NativeReanimatedModule.ts
+index 3d4a836e9ddccf202218bfe0d0814f97bb1cb594..1b7a4075e1c03cd9da41d4ca158fee54f2dfe932 100644
+--- a/src/specs/NativeReanimatedModule.ts
++++ b/src/specs/NativeReanimatedModule.ts
+@@ -1,6 +1,10 @@
+ 'use strict';
+ import type { TurboModule } from 'react-native';
+-import { TurboModuleRegistry } from 'react-native';
++import { TurboModuleRegistry as ReactNativeTurboModuleRegistry } from 'react-native';
++
++const TurboModuleRegistry = ReactNativeTurboModuleRegistry ?? {
++  get: () => undefined,
++};
+ 
+ interface Spec extends TurboModule {
+   installTurboModule: () => boolean;
