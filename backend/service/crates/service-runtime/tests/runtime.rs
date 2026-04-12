@@ -100,6 +100,41 @@ fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
 }
 
 #[test]
+fn projects_add_list_and_remove_drive_group_scope() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_grouped_session_lists(&state)?;
+    let mut runtime = runtime(state)?;
+    let empty = dispatch_after_group_refresh(
+        &mut runtime,
+        command("empty", "sessions/grouped", "all", json!({})),
+    )?;
+    assert_ok(&empty)?;
+    assert_group_count(&empty.result, 0)?;
+
+    add_project(&mut runtime, "/repo/.")?;
+    let listed = runtime.dispatch(command("list", "projects/list", "all", json!({})));
+    assert_ok(&listed)?;
+    assert_project_cwds(&listed.result, &["/repo"])?;
+
+    let with_project = dispatch_after_group_refresh(
+        &mut runtime,
+        command("grouped", "sessions/grouped", "all", json!({})),
+    )?;
+    assert_ok(&with_project)?;
+    assert_group_identity(&with_project.result, "/repo", "cwd:/repo")?;
+
+    assert_ok(&runtime.dispatch(command(
+        "remove",
+        "projects/remove",
+        "all",
+        json!({ "projectId": "cwd:/repo" }),
+    )))?;
+    let removed = runtime.dispatch(command("removed", "sessions/grouped", "all", json!({})));
+    assert_ok(&removed)?;
+    assert_group_count(&removed.result, 0)
+}
+
+#[test]
 fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
@@ -125,6 +160,7 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(state)?;
+    add_project(&mut runtime, "/repo")?;
     let response = dispatch_after_group_refresh(
         &mut runtime,
         command(
@@ -132,7 +168,6 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
             "sessions/grouped",
             "all",
             json!({
-                "cwdFilters": ["/repo"],
                 "updatedWithinDays": 5
             }),
         ),
@@ -143,6 +178,29 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
     let sessions = grouped_sessions(&response.result, "/repo")?;
     assert_session_ids(sessions, &["claude-recent", "codex-recent"])?;
     assert_session_updated_at(sessions, "claude-recent", "9999-01-02T00:00:00Z")
+}
+
+#[test]
+fn grouped_sessions_rejects_cwd_filters_product_path() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let response = runtime.dispatch(command(
+        "1",
+        "sessions/grouped",
+        "all",
+        json!({
+            "cwdFilters": ["/repo"]
+        }),
+    ));
+
+    if response.ok {
+        return Err("sessions/grouped unexpectedly accepted cwdFilters".into());
+    }
+    let error_code = response.error.map(|error| error.code);
+    if error_code != Some("invalid_params".to_owned()) {
+        return Err(format!("expected invalid_params, got {error_code:?}").into());
+    }
+    Ok(())
 }
 
 #[test]
@@ -173,6 +231,7 @@ fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(state)?;
+    add_project(&mut runtime, "/repo")?;
     let response = dispatch_after_group_refresh(
         &mut runtime,
         command(
@@ -180,7 +239,6 @@ fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
             "sessions/grouped",
             "codex",
             json!({
-                "cwdFilters": ["/repo"],
                 "updatedWithinDays": null
             }),
         ),
@@ -197,6 +255,7 @@ fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResul
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(Arc::clone(&state))?;
+    add_project(&mut runtime, "/repo")?;
     let request = command(
         "1",
         "sessions/grouped",
@@ -224,10 +283,12 @@ fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResul
 }
 
 #[test]
-fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()> {
+fn grouped_sessions_uses_projects_and_exhausts_cursors() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_paginated_session_lists(&state)?;
     let mut runtime = runtime(Arc::clone(&state))?;
+    add_project(&mut runtime, "/repo/.")?;
+    add_project(&mut runtime, "/other//")?;
     let response = dispatch_after_group_refresh(
         &mut runtime,
         command(
@@ -235,7 +296,6 @@ fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()
             "sessions/grouped",
             "codex",
             json!({
-                "cwdFilters": ["/repo/.", "/other//"],
                 "updatedWithinDays": null
             }),
         ),
@@ -258,8 +318,13 @@ fn grouped_sessions_forwards_cwd_filters_and_exhausts_cursors() -> TestResult<()
         .session_list_requests
         .clone();
     let expected = vec![
-        (ProviderId::Codex, None, None),
-        (ProviderId::Codex, None, Some("repo-page-2".to_owned())),
+        (ProviderId::Codex, Some("/other".to_owned()), None),
+        (ProviderId::Codex, Some("/repo".to_owned()), None),
+        (
+            ProviderId::Codex,
+            Some("/repo".to_owned()),
+            Some("repo-page-2".to_owned()),
+        ),
     ];
     if requests != expected {
         return Err(format!("expected list requests {expected:?}, got {requests:?}").into());
@@ -288,6 +353,7 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
             }),
         );
     let mut runtime = runtime(state)?;
+    add_project(&mut runtime, "/repo")?;
     let response = dispatch_after_group_refresh(
         &mut runtime,
         command(
@@ -295,7 +361,6 @@ fn grouped_sessions_null_updated_window_includes_all_time() -> TestResult<()> {
             "sessions/grouped",
             "copilot",
             json!({
-                "cwdFilters": ["/repo"],
                 "updatedWithinDays": null
             }),
         ),
@@ -363,6 +428,19 @@ fn dispatch_after_group_refresh(
     Ok(runtime.dispatch(request))
 }
 
+fn add_project(
+    runtime: &mut service_runtime::ServiceRuntime<support::FakeFactory>,
+    cwd: &str,
+) -> TestResult<()> {
+    assert_ok(&runtime.dispatch(command(
+        "add-project",
+        "projects/add",
+        "all",
+        json!({ "cwd": cwd }),
+    )))?;
+    Ok(())
+}
+
 fn seed_grouped_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
     let mut state = state.lock().map_err(|error| format!("{error}"))?;
     state.session_lists.insert(
@@ -416,19 +494,29 @@ fn seed_grouped_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
 fn seed_paginated_session_lists(state: &Arc<Mutex<FakeState>>) -> TestResult<()> {
     let mut state = state.lock().map_err(|error| format!("{error}"))?;
     state.session_list_pages.insert(
-        (ProviderId::Codex, None, None),
+        (ProviderId::Codex, Some("/repo".to_owned()), None),
         json!({
             "sessions": [session_list_row("repo-page-1", "/repo", "9999-01-01T00:00:00Z")],
             "nextCursor": "repo-page-2"
         }),
     );
     state.session_list_pages.insert(
-        (ProviderId::Codex, None, Some("repo-page-2".to_owned())),
+        (
+            ProviderId::Codex,
+            Some("/repo".to_owned()),
+            Some("repo-page-2".to_owned()),
+        ),
         json!({
             "sessions": [
-                session_list_row("repo-page-2", "/repo", "9999-01-02T00:00:00Z"),
-                session_list_row("other-page-1", "/other", "9999-01-03T00:00:00Z")
+                session_list_row("repo-page-2", "/repo", "9999-01-02T00:00:00Z")
             ],
+            "nextCursor": null
+        }),
+    );
+    state.session_list_pages.insert(
+        (ProviderId::Codex, Some("/other".to_owned()), None),
+        json!({
+            "sessions": [session_list_row("other-page-1", "/other", "9999-01-03T00:00:00Z")],
             "nextCursor": null
         }),
     );
@@ -473,6 +561,33 @@ fn assert_group_identity(value: &Value, cwd: &str, expected_group_id: &str) -> T
         return Ok(());
     }
     Err(format!("expected groupId {expected_group_id}, got {group_id}").into())
+}
+
+fn assert_group_count(value: &Value, expected: usize) -> TestResult<()> {
+    let actual = value
+        .get("groups")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .ok_or_else(|| format!("missing groups array: {value}"))?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected} groups, got {actual}: {value}").into())
+}
+
+fn assert_project_cwds(value: &Value, expected: &[&str]) -> TestResult<()> {
+    let actual = value
+        .get("projects")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing projects array: {value}"))?
+        .iter()
+        .map(|project| project.get("cwd").and_then(Value::as_str))
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| format!("project row missing cwd: {value}"))?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected projects {expected:?}, got {actual:?}").into())
 }
 
 fn assert_session_ids(sessions: &[Value], expected: &[&str]) -> TestResult<()> {

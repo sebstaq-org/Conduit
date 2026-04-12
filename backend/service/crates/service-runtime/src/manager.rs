@@ -17,7 +17,7 @@ use acp_core::{ConnectionState, ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{
-    HistoryLimit, LocalStore, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
+    HistoryLimit, LocalStore, OpenSessionKey, ProjectRow, PromptTurnAppend, PromptTurnMutation,
     PromptTurnReplace, TranscriptItemStatus,
 };
 use std::collections::{HashMap, HashSet};
@@ -40,6 +40,24 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
 struct SessionPromptTarget {
     open_session_id: String,
     key: OpenSessionKey,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectListView {
+    projects: Vec<ProjectRow>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectMutationView {
+    project: ProjectRow,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectRemoveView {
+    project_id: String,
 }
 
 #[derive(Clone, Copy)]
@@ -173,6 +191,15 @@ where
         if command.command == "sessions/watch" {
             return self.sessions_watch(command.id);
         }
+        if command.command == "projects/list" {
+            return self.projects_list(command.id);
+        }
+        if command.command == "projects/add" {
+            return self.projects_add(command.id, &command.params);
+        }
+        if command.command == "projects/remove" {
+            return self.projects_remove(command.id, &command.params);
+        }
         if command.command == "session/history" {
             return self.session_history(command.id, &command.params);
         }
@@ -204,11 +231,12 @@ where
         let query = SessionGroupsQuery::from_params(params)?;
         let providers = providers_from_target(provider_target)?;
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+        let projects = self.local_store.projects()?;
         let snapshot = self.local_store.session_index(&providers)?;
-        let is_refreshing = snapshot.refreshed_at.is_none();
+        let is_refreshing = !projects.is_empty() && snapshot.refreshed_at.is_none();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            grouped_view(snapshot, &query, is_refreshing)?,
+            grouped_view(snapshot, &query, &projects, is_refreshing)?,
         ))
     }
 
@@ -216,6 +244,44 @@ where
         Ok(ConsumerResponse::success_without_snapshot(
             id,
             json!({ "subscribed": true }),
+        ))
+    }
+
+    fn projects_list(&self, id: String) -> Result<ConsumerResponse> {
+        let projects = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.projects()?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(ProjectListView { projects })?,
+        ))
+    }
+
+    fn projects_add(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
+        let cwd =
+            absolute_normalized_cwd("projects/add", path_param("projects/add", params, "cwd")?)?;
+        let project = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.add_project(&cwd.display().to_string())?
+        };
+        self.session_index_refreshes.clear();
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(ProjectMutationView { project })?,
+        ))
+    }
+
+    fn projects_remove(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
+        let project_id = string_param("projects/remove", params, "projectId")?;
+        {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.remove_project(&project_id)?;
+        }
+        self.session_index_refreshes.clear();
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(ProjectRemoveView { project_id })?,
         ))
     }
 
@@ -648,8 +714,31 @@ where
 
     fn refresh_session_index_provider(&mut self, provider: ProviderId) -> Result<()> {
         let entries = {
-            let provider_port = self.provider(provider)?;
-            paginated_index_entries(provider_port.as_mut(), provider)?
+            let projects = {
+                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                self.local_store.projects()?
+            };
+            if projects.is_empty() {
+                Vec::new()
+            } else {
+                let project_cwds = projects
+                    .iter()
+                    .map(|project| project.cwd.as_str())
+                    .collect::<HashSet<_>>();
+                let provider_port = self.provider(provider)?;
+                let mut entries = Vec::new();
+                for project in &projects {
+                    entries.extend(paginated_index_entries(
+                        provider_port.as_mut(),
+                        provider,
+                        Some(&project.cwd),
+                    )?);
+                }
+                entries
+                    .into_iter()
+                    .filter(|entry| project_cwds.contains(entry.cwd.as_str()))
+                    .collect::<Vec<_>>()
+            }
         };
         self.session_index_refreshes
             .insert(provider, current_epoch());

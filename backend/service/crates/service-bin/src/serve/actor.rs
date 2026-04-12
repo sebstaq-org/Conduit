@@ -99,7 +99,13 @@ type StoreLock = Arc<Mutex<()>>;
 
 #[derive(Clone)]
 struct RefreshWorker {
-    requests: mpsc::UnboundedSender<String>,
+    requests: mpsc::UnboundedSender<RefreshRequest>,
+}
+
+#[derive(Clone)]
+struct RefreshRequest {
+    force: bool,
+    provider_target: String,
 }
 
 impl RefreshWorker {
@@ -124,7 +130,18 @@ impl RefreshWorker {
     }
 
     fn request(&self, provider_target: &str) {
-        let _send_status = self.requests.send(provider_target.to_owned());
+        self.send(provider_target, false);
+    }
+
+    fn force(&self, provider_target: &str) {
+        self.send(provider_target, true);
+    }
+
+    fn send(&self, provider_target: &str, force: bool) {
+        let _send_status = self.requests.send(RefreshRequest {
+            force,
+            provider_target: provider_target.to_owned(),
+        });
     }
 }
 
@@ -267,7 +284,7 @@ where
 }
 
 async fn run_refresh_worker<F>(
-    mut receiver: mpsc::UnboundedReceiver<String>,
+    mut receiver: mpsc::UnboundedReceiver<RefreshRequest>,
     events: broadcast::Sender<RuntimeEvent>,
     factory: F,
     refresh_store: StoreOpener,
@@ -342,22 +359,28 @@ async fn fail_prompt_lane_requests(
 
 fn refresh_index_targets<F>(
     runtime: &mut ServiceRuntime<F>,
-    receiver: &mut mpsc::UnboundedReceiver<String>,
-    provider_target: String,
+    receiver: &mut mpsc::UnboundedReceiver<RefreshRequest>,
+    request: RefreshRequest,
 ) where
     F: ProviderFactory,
 {
-    let mut provider_targets = HashSet::from([provider_target]);
-    while let Ok(provider_target) = receiver.try_recv() {
-        provider_targets.insert(provider_target);
+    let mut provider_targets = HashSet::from([request.provider_target]);
+    let mut force = request.force;
+    while let Ok(request) = receiver.try_recv() {
+        force |= request.force;
+        provider_targets.insert(request.provider_target);
     }
     for provider_target in provider_targets {
-        let _refresh_status = runtime.refresh_after_response(&ConsumerCommand {
-            id: "background-session-index-refresh".to_owned(),
-            command: "sessions/grouped".to_owned(),
-            provider: provider_target,
-            params: serde_json::Value::Null,
-        });
+        let _refresh_status = if force {
+            runtime.force_refresh_session_index(&provider_target)
+        } else {
+            runtime.refresh_after_response(&ConsumerCommand {
+                id: "background-session-index-refresh".to_owned(),
+                command: "sessions/grouped".to_owned(),
+                provider: provider_target,
+                params: serde_json::Value::Null,
+            })
+        };
     }
 }
 
@@ -373,11 +396,29 @@ fn handle_request<F>(
         handle_grouped_sessions_request(runtime, request, refreshes);
         return;
     }
+    if request.command.command == "projects/add" {
+        handle_project_add_request(runtime, request, refreshes);
+        return;
+    }
     if let Some(open_session_id) = prompt_open_session_id(&request.command) {
         prompt_lanes.dispatch(&open_session_id, request);
         return;
     }
     let response = runtime.dispatch(request.command);
+    let _response_status = request.respond_to.send(response);
+}
+
+fn handle_project_add_request<F>(
+    runtime: &mut ServiceRuntime<F>,
+    request: ActorRequest,
+    refreshes: &RefreshWorker,
+) where
+    F: ProviderFactory,
+{
+    let response = runtime.dispatch(request.command);
+    if response.ok {
+        refreshes.force("all");
+    }
     let _response_status = request.respond_to.send(response);
 }
 
@@ -462,9 +503,11 @@ mod tests {
             release: Arc::clone(&release),
             started: Arc::new(Mutex::new(Some(started))),
         };
+        let mut local_store = LocalStore::open_path(&path)?;
+        local_store.add_project("/repo")?;
         let actor = RuntimeActor::start_with_store_opener(
             factory,
-            LocalStore::open_path(&path)?,
+            local_store,
             Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
         );
         let grouped = actor
