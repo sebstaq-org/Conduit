@@ -1,4 +1,4 @@
-import { IconButton } from "@/ui";
+import { AutocompletePopoverMock, IconButton } from "@/ui";
 
 function handleMockAction(): boolean {
   return false;
@@ -17,11 +17,7 @@ function SessionListActions(): React.JSX.Element {
         icon="filter"
         onPress={handleMockAction}
       />
-      <IconButton
-        accessibilityLabel="Create session"
-        icon="plus"
-        onPress={handleMockAction}
-      />
+      <AutocompletePopoverMock />
     </>
   );
 }
