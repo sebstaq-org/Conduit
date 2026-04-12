@@ -2,6 +2,7 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
+import { createDeferred } from "./deferred.js";
 import { readSessionHistoryResponse } from "./historyWindow.js";
 import {
   readProjectListResponse,
@@ -221,7 +222,7 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 
   private async waitForOpen(socket: WebSocket): Promise<WebSocket> {
-    const deferred = Promise.withResolvers<WebSocket>();
+    const deferred = createDeferred<WebSocket>();
     socket.addEventListener("open", () => {
       this.connecting = null;
       deferred.resolve(socket);
@@ -235,7 +236,7 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 
   private async trackResponse(id: string): Promise<ConsumerResponse> {
-    const deferred = Promise.withResolvers<ConsumerResponse>();
+    const deferred = createDeferred<ConsumerResponse>();
     this.pending.set(id, deferred);
     const response = await deferred.promise;
     return response;

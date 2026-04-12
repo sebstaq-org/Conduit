@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ConduitThemeProvider } from "@/theme";
+import { PopoverPortalHost } from "@/ui";
 import {
   rootLayoutSafeAreaEdges,
   rootLayoutSafeAreaStyle,
@@ -15,6 +16,7 @@ function RootLayoutTheme(): React.JSX.Element {
       >
         <Stack screenOptions={{ headerShown: false }} />
       </SafeAreaView>
+      <PopoverPortalHost />
     </ConduitThemeProvider>
   );
 }

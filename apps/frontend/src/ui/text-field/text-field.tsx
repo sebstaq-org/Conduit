@@ -1,0 +1,40 @@
+import { useTheme } from "@shopify/restyle";
+import { TextInput } from "react-native";
+import type { Theme } from "@/theme";
+import { createTextFieldStyle } from "./text-field.styles";
+
+interface TextFieldProps {
+  accessibilityLabel: string;
+  disabled?: boolean | undefined;
+  onChangeText: (value: string) => void;
+  onSubmit?: (() => void) | undefined;
+  placeholder: string;
+  value: string;
+}
+
+function TextField({
+  accessibilityLabel,
+  disabled = false,
+  onChangeText,
+  onSubmit,
+  placeholder,
+  value,
+}: TextFieldProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+
+  return (
+    <TextInput
+      accessibilityLabel={accessibilityLabel}
+      editable={!disabled}
+      onChangeText={onChangeText}
+      onSubmitEditing={onSubmit}
+      placeholder={placeholder}
+      placeholderTextColor={theme.colors.textMuted}
+      selectionColor={theme.colors.textPrimary}
+      style={createTextFieldStyle(theme)}
+      value={value}
+    />
+  );
+}
+
+export { TextField };

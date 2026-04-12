@@ -20,6 +20,8 @@
     "@conduit/session-model": "workspace:*",
     "@expo/vector-icons": "15.1.1",
     "@reduxjs/toolkit": "2.11.2",
+    "@rn-primitives/popover": "1.4.0",
+    "@rn-primitives/portal": "1.4.0",
     "@shopify/restyle": "^2.4.5",
     "expo": "~55.0.14",
     "expo-constants": "~55.0.13",

@@ -1,5 +1,7 @@
+import { ProjectsToolbar } from "@/features/projects-toolbar";
 import { SessionList } from "@/features/session-list";
 import { Text } from "@/theme";
+import { Section } from "@/ui";
 import {
   navigationPanelHeadingMarginBottom,
   navigationPanelHeadingVariant,
@@ -22,7 +24,9 @@ function NavigationPanelRows({
         Conduit
       </Text>
       <NavigationPanelProjectRows />
-      <SessionList onSessionSelected={onSessionSelected} />
+      <Section actions={<ProjectsToolbar />} title="Threads">
+        <SessionList onSessionSelected={onSessionSelected} />
+      </Section>
     </>
   );
 }

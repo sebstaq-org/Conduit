@@ -1,0 +1,24 @@
+import { PortalHost } from "@rn-primitives/portal";
+import { StyleSheet, View } from "react-native";
+
+const styles = StyleSheet.create({
+  host: {
+    bottom: 0,
+    elevation: 1000,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    zIndex: 1000,
+  },
+});
+
+function PopoverPortalHost(): React.JSX.Element {
+  return (
+    <View pointerEvents="box-none" style={styles.host}>
+      <PortalHost />
+    </View>
+  );
+}
+
+export { PopoverPortalHost };

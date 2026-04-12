@@ -29,6 +29,11 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Future backend contract usage belongs behind `packages/app-client`, not in app or feature code.
 - Product UI should be defined once in `apps/frontend` and hosted by platform shells.
 - `apps/frontend/src/screens/navigation-panel` is composition-only: it may arrange panel sections and temporary local fixtures, but feature behavior and state must move to narrow feature modules when introduced.
+- When a UI or app task is finished, start the relevant app and open it for the
+  user so they can test it immediately. "Started" means the whole relevant local
+  stack is usable: if the UI flow depends on service WebSocket/API data, start
+  that service too and manually verify the target flow is not stuck in an
+  unavailable/offline state before handing it over.
 
 ## Session View Rules
 
