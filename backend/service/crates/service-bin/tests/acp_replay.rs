@@ -303,51 +303,25 @@ async fn exercise_curated_sequence(
 ) -> TestResult<()> {
     let mut event_frames = Vec::new();
     let mut run = ReplayRun::new(provider);
-    let mut expected_snapshot = None;
-    let mut opened_session_id = None;
+    let mut state = CuratedSequenceState::default();
     let operations = scenario
         .get("consumer_sequence")
         .and_then(Value::as_array)
         .ok_or("scenario was missing consumer_sequence")?;
 
     for operation in operations {
-        let command = operation
-            .get("command")
-            .and_then(Value::as_str)
-            .ok_or("consumer_sequence operation was missing command")?;
-        let params = operation
-            .get("params")
-            .cloned()
-            .unwrap_or_else(|| json!({}));
-        let params = materialize_curated_params(params, opened_session_id.as_deref())?;
-        let response = dispatch(socket, &mut run, command, params, &mut event_frames).await?;
-        let expect_ok = operation
-            .get("expect_ok")
-            .and_then(Value::as_bool)
-            .unwrap_or(true);
-        if expect_ok {
-            assert_response_ok(&response)?;
-            if response_snapshot_value(&response).is_some_and(|snapshot| !snapshot.is_null()) {
-                assert_snapshot_provider(&response, provider)?;
-            }
-        } else {
-            assert_response_error(&response, operation)?;
-        }
-        assert_operation_expectations(&response, provider, scenario, operation)?;
-        if command == "session/open" && expect_ok {
-            opened_session_id = Some(
-                response_result(&response)?
-                    .get("openSessionId")
-                    .and_then(Value::as_str)
-                    .ok_or("session/open result did not include openSessionId")?
-                    .to_owned(),
-            );
-        }
-        if let Some(snapshot) =
-            response_snapshot_value(&response).filter(|snapshot| !snapshot.is_null())
-        {
-            expected_snapshot = Some(snapshot.clone());
-        }
+        exercise_curated_operation(
+            socket,
+            &mut run,
+            &mut event_frames,
+            &mut state,
+            CuratedOperation {
+                provider,
+                scenario,
+                operation,
+            },
+        )
+        .await?;
     }
 
     let expected_event_kinds = expected_event_kind_strings(scenario)?;
@@ -358,10 +332,85 @@ async fn exercise_curated_sequence(
         &expected_event_kinds,
     )
     .await?;
-    let expected_snapshot = expected_snapshot
+    let expected_snapshot = state
+        .expected_snapshot
         .ok_or("scenario did not produce a response snapshot before events/subscribe")?;
     assert_expected_oracles(fixture, scenario, &backlog_frames, &expected_snapshot)?;
     assert_replay_disconnect(socket, &mut run, &mut event_frames, &backlog_frames).await
+}
+
+#[derive(Default)]
+struct CuratedSequenceState {
+    expected_snapshot: Option<Value>,
+    opened_session_id: Option<String>,
+}
+
+struct CuratedOperation<'a> {
+    provider: &'a str,
+    scenario: &'a Value,
+    operation: &'a Value,
+}
+
+async fn exercise_curated_operation(
+    socket: &mut TestSocket,
+    run: &mut ReplayRun<'_>,
+    event_frames: &mut Vec<Value>,
+    state: &mut CuratedSequenceState,
+    input: CuratedOperation<'_>,
+) -> TestResult<()> {
+    let command = input
+        .operation
+        .get("command")
+        .and_then(Value::as_str)
+        .ok_or("consumer_sequence operation was missing command")?;
+    let params = input
+        .operation
+        .get("params")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let params = materialize_curated_params(params, state.opened_session_id.as_deref())?;
+    let response = dispatch(socket, run, command, params, event_frames).await?;
+    let expect_ok = input
+        .operation
+        .get("expect_ok")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    assert_curated_response(input.provider, input.operation, &response, expect_ok)?;
+    assert_operation_expectations(&response, input.provider, input.scenario, input.operation)?;
+    if command == "session/open" && expect_ok {
+        state.opened_session_id = Some(open_session_id(&response)?);
+    }
+    if let Some(snapshot) =
+        response_snapshot_value(&response).filter(|snapshot| !snapshot.is_null())
+    {
+        state.expected_snapshot = Some(snapshot.clone());
+    }
+    Ok(())
+}
+
+fn assert_curated_response(
+    provider: &str,
+    operation: &Value,
+    response: &Value,
+    expect_ok: bool,
+) -> TestResult<()> {
+    if expect_ok {
+        assert_response_ok(response)?;
+        if response_snapshot_value(response).is_some_and(|snapshot| !snapshot.is_null()) {
+            assert_snapshot_provider(response, provider)?;
+        }
+    } else {
+        assert_response_error(response, operation)?;
+    }
+    Ok(())
+}
+
+fn open_session_id(response: &Value) -> TestResult<String> {
+    Ok(response_result(response)?
+        .get("openSessionId")
+        .and_then(Value::as_str)
+        .ok_or("session/open result did not include openSessionId")
+        .map(ToOwned::to_owned)?)
 }
 
 fn materialize_curated_params(value: Value, opened_session_id: Option<&str>) -> TestResult<Value> {

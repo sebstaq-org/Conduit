@@ -199,37 +199,8 @@ impl ProviderPort for FakeProvider {
             .get(&(self.provider, session_id.clone()))
             .cloned()
             .unwrap_or_else(|| "end_turn".to_owned());
-        let agent_text_chunks = state
-            .prompt_agent_text
-            .get(&(self.provider, session_id.clone()))
-            .cloned()
-            .unwrap_or_else(|| vec![prompt.clone()]);
-        let updates = state
-            .prompt_updates
-            .get(&(self.provider, session_id.clone()))
-            .cloned()
-            .unwrap_or_else(|| {
-                agent_text_chunks
-                    .iter()
-                    .enumerate()
-                    .map(|(index, text)| TranscriptUpdateSnapshot {
-                        index,
-                        variant: "agent_message_chunk".to_owned(),
-                        update: json!({
-                            "sessionUpdate": "agent_message_chunk",
-                            "content": {
-                                "type": "text",
-                                "text": text
-                            }
-                        }),
-                    })
-                    .collect()
-            });
-        let prompt_state = if stop_reason == "cancelled" {
-            PromptLifecycleState::Cancelled
-        } else {
-            PromptLifecycleState::Completed
-        };
+        let (agent_text_chunks, updates) =
+            fake_prompt_updates(&state, self.provider, &session_id, &prompt);
         if !state
             .prompt_lifecycle_missing
             .contains(&(self.provider, session_id.clone()))
@@ -239,7 +210,7 @@ impl ProviderPort for FakeProvider {
                     provider: self.provider,
                     acp_session_id: session_id.clone(),
                 },
-                state: prompt_state,
+                state: fake_prompt_lifecycle_state(&stop_reason),
                 stop_reason: Some(stop_reason.clone()),
                 raw_update_count: updates.len(),
                 agent_text_chunks,
@@ -255,6 +226,52 @@ impl ProviderPort for FakeProvider {
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
         Ok(json!({ "sessionId": session_id }))
+    }
+}
+
+fn fake_prompt_updates(
+    state: &FakeState,
+    provider: ProviderId,
+    session_id: &str,
+    prompt: &str,
+) -> (Vec<String>, Vec<TranscriptUpdateSnapshot>) {
+    let key = (provider, session_id.to_owned());
+    let agent_text_chunks = state
+        .prompt_agent_text
+        .get(&key)
+        .cloned()
+        .unwrap_or_else(|| vec![prompt.to_owned()]);
+    let updates = state
+        .prompt_updates
+        .get(&key)
+        .cloned()
+        .unwrap_or_else(|| prompt_updates_from_chunks(&agent_text_chunks));
+    (agent_text_chunks, updates)
+}
+
+fn prompt_updates_from_chunks(chunks: &[String]) -> Vec<TranscriptUpdateSnapshot> {
+    chunks
+        .iter()
+        .enumerate()
+        .map(|(index, text)| TranscriptUpdateSnapshot {
+            index,
+            variant: "agent_message_chunk".to_owned(),
+            update: json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": {
+                    "type": "text",
+                    "text": text
+                }
+            }),
+        })
+        .collect()
+}
+
+fn fake_prompt_lifecycle_state(stop_reason: &str) -> PromptLifecycleState {
+    if stop_reason == "cancelled" {
+        PromptLifecycleState::Cancelled
+    } else {
+        PromptLifecycleState::Completed
     }
 }
 
