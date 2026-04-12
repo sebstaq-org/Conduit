@@ -20,7 +20,8 @@ use serde_json::{Value, json, to_value};
 use session_store::{
     HistoryLimit, LocalStore, OpenSessionKey, PromptTurnAppend, TranscriptItemStatus,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 
@@ -28,6 +29,7 @@ const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 pub struct ServiceRuntime<F = AppServiceFactory> {
     event_buffer: EventBuffer,
     factory: F,
+    loaded_provider_sessions: HashSet<OpenSessionKey>,
     session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     local_store: LocalStore,
@@ -55,6 +57,7 @@ where
         Self {
             event_buffer: EventBuffer::new(),
             factory,
+            loaded_provider_sessions: HashSet::new(),
             session_index_refreshes: HashMap::new(),
             providers: HashMap::new(),
             local_store,
@@ -228,12 +231,18 @@ where
         params: &Value,
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/load", params, "session_id")?;
-        let cwd = path_param("session/load", params, "cwd")?;
+        let cwd =
+            absolute_normalized_cwd("session/load", path_param("session/load", params, "cwd")?)?;
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
-            let result = provider_port.session_load(session_id.clone(), cwd)?;
+            let result = provider_port.session_load(session_id.clone(), cwd.clone())?;
             (result, provider_port.snapshot(), provider_port.raw_events())
         };
+        self.loaded_provider_sessions.insert(OpenSessionKey {
+            provider,
+            session_id: session_id.clone(),
+            cwd: cwd.display().to_string(),
+        });
         for update in loaded_transcript_updates(&snapshot, &session_id) {
             self.event_buffer.emit(
                 provider,
@@ -282,6 +291,7 @@ where
             let _result = provider_port.session_load(session_id.clone(), cwd)?;
             (provider_port.snapshot(), provider_port.raw_events())
         };
+        self.loaded_provider_sessions.insert(key.clone());
         for update in loaded_transcript_updates(&snapshot, &session_id) {
             self.event_buffer.emit(
                 provider,
@@ -345,6 +355,10 @@ where
             Some(target.key.session_id.clone()),
             json!({ "prompt": prompt.clone() }),
         );
+        if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
+            self.append_failed_prompt_turn(provider, &target, &prompt)?;
+            return Err(error);
+        }
         let mut observed_updates = Vec::new();
         let (result, snapshot, raw_events) = {
             let provider_port = self.provider(provider)?;
@@ -392,7 +406,7 @@ where
         self.append_prompt_turn_from_updates(&target, &prompt, &snapshot, &observed_updates)?;
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
-        Ok(ConsumerResponse::success(id, result, snapshot))
+        Ok(ConsumerResponse::success_without_snapshot(id, result))
     }
 
     fn session_prompt_target(
@@ -542,6 +556,8 @@ where
         self.event_buffer
             .capture_raw_events(provider, &raw_events)?;
         self.providers.remove(&provider);
+        self.loaded_provider_sessions
+            .retain(|key| key.provider != provider);
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
@@ -574,6 +590,8 @@ where
             .is_some_and(|entry| entry.snapshot().connection_state == ConnectionState::Disconnected)
         {
             self.providers.remove(&provider);
+            self.loaded_provider_sessions
+                .retain(|key| key.provider != provider);
         }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;
@@ -592,6 +610,23 @@ where
                     .saturating_sub(*last)
                     .ge(&SESSION_INDEX_REFRESH_INTERVAL_SECONDS)
             })
+    }
+
+    fn ensure_provider_session_loaded(&mut self, key: &OpenSessionKey) -> Result<()> {
+        if self.loaded_provider_sessions.contains(key) {
+            return Ok(());
+        }
+        let cwd = PathBuf::from(&key.cwd);
+        let (result, raw_events) = {
+            let provider_port = self.provider(key.provider)?;
+            let result = provider_port.session_load(key.session_id.clone(), cwd);
+            (result, provider_port.raw_events())
+        };
+        self.event_buffer
+            .capture_raw_events(key.provider, &raw_events)?;
+        result?;
+        self.loaded_provider_sessions.insert(key.clone());
+        Ok(())
     }
 
     fn refresh_session_index_provider(&mut self, provider: ProviderId) -> Result<()> {

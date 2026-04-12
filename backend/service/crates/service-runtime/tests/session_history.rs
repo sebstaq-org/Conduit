@@ -583,6 +583,40 @@ fn repeated_session_open_uses_cached_timeline_and_keeps_envelope_shape() -> Test
 }
 
 #[test]
+fn session_prompt_after_cached_open_hydrates_provider_before_prompt() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_session_load_updates(
+        &state,
+        ProviderId::Codex,
+        "session-1",
+        vec![transcript_update(0, "agent_message_chunk", "loaded")],
+    )?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+    let opened = open_session(&mut runtime, "1", "codex", "session-1", 40);
+    assert_ok(&opened)?;
+    let open_session_id = string_field(&opened.result, "openSessionId")?.to_owned();
+    assert_ok(&runtime.dispatch(command("2", "provider/disconnect", "codex", json!({}))))?;
+    runtime.drain_events();
+
+    let cached = open_session(&mut runtime, "3", "codex", "session-1", 40);
+    let prompt = prompt_open_session(&mut runtime, "4", &open_session_id, "after restart");
+
+    assert_ok(&cached)?;
+    assert_ok(&prompt)?;
+    let expected = vec![
+        (ProviderId::Codex, "session-1".to_owned()),
+        (ProviderId::Codex, "session-1".to_owned()),
+    ];
+    let requests = session_load_requests(&state)?;
+    if requests != expected {
+        return Err(
+            format!("expected provider hydration loads {expected:?}, got {requests:?}").into(),
+        );
+    }
+    assert_timeline_event_advanced(&runtime.drain_events(), &open_session_id, 1)
+}
+
+#[test]
 fn session_open_invalid_limit_has_no_provider_or_event_side_effects() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(

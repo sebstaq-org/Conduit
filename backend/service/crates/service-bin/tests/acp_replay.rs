@@ -324,6 +324,13 @@ async fn exercise_curated_sequence(
         .await?;
     }
 
+    let expected_snapshot = if sequence_contains_command(operations, "session/prompt") {
+        assert_latest_snapshot(socket, &mut run, provider, scenario, &mut event_frames).await?
+    } else {
+        state
+            .expected_snapshot
+            .ok_or("scenario did not produce a response snapshot before events/subscribe")?
+    };
     let expected_event_kinds = expected_event_kind_strings(scenario)?;
     let backlog_frames = assert_subscribe_backlog_matches(
         socket,
@@ -332,11 +339,34 @@ async fn exercise_curated_sequence(
         &expected_event_kinds,
     )
     .await?;
-    let expected_snapshot = state
-        .expected_snapshot
-        .ok_or("scenario did not produce a response snapshot before events/subscribe")?;
     assert_expected_oracles(fixture, scenario, &backlog_frames, &expected_snapshot)?;
     assert_replay_disconnect(socket, &mut run, &mut event_frames, &backlog_frames).await
+}
+
+async fn assert_latest_snapshot(
+    socket: &mut TestSocket,
+    run: &mut ReplayRun<'_>,
+    provider: &str,
+    scenario: &Value,
+    event_frames: &mut Vec<Value>,
+) -> TestResult<Value> {
+    if scenario
+        .get("prompt")
+        .and_then(|prompt| prompt.get("agent_text_chunks"))
+        .is_some()
+    {
+        return assert_snapshot_agent_chunks(socket, run, scenario, event_frames).await;
+    }
+    let snapshot = dispatch(socket, run, "snapshot/get", json!({}), event_frames).await?;
+    assert_response_ok(&snapshot)?;
+    assert_snapshot_provider(&snapshot, provider)?;
+    Ok(response_snapshot(&snapshot)?.clone())
+}
+
+fn sequence_contains_command(operations: &[Value], expected: &str) -> bool {
+    operations
+        .iter()
+        .any(|operation| operation.get("command").and_then(Value::as_str) == Some(expected))
 }
 
 #[derive(Default)]
