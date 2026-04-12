@@ -140,6 +140,48 @@ fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
 }
 
 #[test]
+fn project_suggestions_replace_query_limit_and_exclude_projects() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+
+    store.replace_project_suggestions_provider(
+        ProviderId::Codex,
+        &["/repo".to_owned(), "/other".to_owned()],
+    )?;
+    store.replace_project_suggestions_provider(
+        ProviderId::Claude,
+        &["/repo".to_owned(), "/zeta".to_owned()],
+    )?;
+    store.add_project("/repo")?;
+
+    let all = store.project_suggestions(None, 10)?;
+    let filtered = store.project_suggestions(Some("ot"), 10)?;
+    let limited = store.project_suggestions(None, 1)?;
+
+    ensure_eq(
+        &all.iter().map(|row| row.cwd.as_str()).collect::<Vec<_>>(),
+        &vec!["/other", "/zeta"],
+        "deduped addable suggestions",
+    )?;
+    ensure_eq(
+        &all[0].suggestion_id,
+        &project_id_for_cwd("/other"),
+        "suggestion id",
+    )?;
+    ensure_eq(
+        &filtered
+            .iter()
+            .map(|row| row.cwd.as_str())
+            .collect::<Vec<_>>(),
+        &vec!["/other"],
+        "query suggestions",
+    )?;
+    ensure_eq(&limited.len(), &1, "limited suggestions")?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
 fn cached_session_returns_materialized_history_without_replacing_it() -> TestResult<()> {
     let path = test_db_path()?;
     let mut store = LocalStore::open_path(&path)?;

@@ -1,7 +1,5 @@
-export {
-  WebSocketSessionClient,
-  createSessionClient,
-} from "./webSocketSessionClient.js";
+export { createSessionClient } from "./createSessionClient.js";
+export { WebSocketSessionClient } from "./webSocketSessionClient.js";
 export { PROVIDERS } from "@conduit/session-model";
 
 export type {
@@ -9,6 +7,9 @@ export type {
   ProjectListView,
   ProjectRemoveRequest,
   ProjectRow,
+  ProjectSuggestion,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,

@@ -173,6 +173,9 @@ where
         if command.command == "projects/list" {
             return self.projects_list(command.id);
         }
+        if command.command == "projects/suggestions" {
+            return self.projects_suggestions(command.id, &command.params);
+        }
         if command.command == "projects/add" {
             return self.projects_add(command.id, &command.params);
         }

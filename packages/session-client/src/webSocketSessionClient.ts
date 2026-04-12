@@ -2,11 +2,12 @@ import {
   CONDUIT_TRANSPORT_VERSION,
   createConsumerCommand,
 } from "@conduit/session-contracts";
-import {
-  ProjectListViewSchema,
-  SessionGroupsViewSchema,
-} from "@conduit/session-model";
+import { SessionGroupsViewSchema } from "@conduit/session-model";
 import { readSessionHistoryResponse } from "./historyWindow.js";
+import {
+  readProjectListResponse,
+  readProjectSuggestionsResponse,
+} from "./projectViews.js";
 import type {
   SessionClientOptions,
   SessionClientPort,
@@ -22,6 +23,8 @@ import type {
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   RuntimeEvent,
   ServerFrame,
   SessionHistoryRequest,
@@ -69,10 +72,7 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.dispatch(
       createConsumerCommand("projects/list", "all"),
     );
-    if (!response.ok) {
-      throw new Error(response.error?.message ?? "projects list failed");
-    }
-    return ProjectListViewSchema.parse(response.result);
+    return readProjectListResponse(response, "projects list failed");
   }
 
   public async addProject(
@@ -81,10 +81,7 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.dispatch(
       createConsumerCommand("projects/add", "all", request),
     );
-    if (!response.ok) {
-      throw new Error(response.error?.message ?? "project add failed");
-    }
-    return ProjectListViewSchema.parse(response.result);
+    return readProjectListResponse(response, "project add failed");
   }
 
   public async removeProject(
@@ -93,10 +90,16 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.dispatch(
       createConsumerCommand("projects/remove", "all", request),
     );
-    if (!response.ok) {
-      throw new Error(response.error?.message ?? "project remove failed");
-    }
-    return ProjectListViewSchema.parse(response.result);
+    return readProjectListResponse(response, "project remove failed");
+  }
+
+  public async getProjectSuggestions(
+    query: ProjectSuggestionsQuery = {},
+  ): Promise<ProjectSuggestionsView> {
+    const response = await this.dispatch(
+      createConsumerCommand("projects/suggestions", "all", query),
+    );
+    return readProjectSuggestionsResponse(response);
   }
 
   public async getSessionGroups(
@@ -293,8 +296,4 @@ class WebSocketSessionClient implements SessionClientPort {
   }
 }
 
-const createSessionClient = (
-  options?: SessionClientOptions,
-): SessionClientPort => new WebSocketSessionClient(options);
-
-export { WebSocketSessionClient, createSessionClient };
+export { WebSocketSessionClient };

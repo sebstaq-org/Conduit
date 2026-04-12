@@ -17,6 +17,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "projects/add",
   "projects/list",
   "projects/remove",
+  "projects/suggestions",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -113,6 +114,24 @@ describe("shared session grouping boundary", () => {
       provider: "codex",
       params: {
         updatedWithinDays: null,
+      },
+    });
+  });
+});
+
+describe("shared project suggestions boundary", () => {
+  test("project suggestions are an explicit all-providers command", () => {
+    const command = createConsumerCommand("projects/suggestions", "all", {
+      query: "repo",
+      limit: 5,
+    });
+
+    expect(command).toMatchObject({
+      command: "projects/suggestions",
+      provider: "all",
+      params: {
+        query: "repo",
+        limit: 5,
       },
     });
   });

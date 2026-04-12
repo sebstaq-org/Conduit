@@ -30,17 +30,72 @@ use transcript::project_items;
 
 mod history_limit;
 mod ids;
+mod project_suggestions;
 mod projects;
 mod prompt_turn;
 mod session_index;
 mod timeline_storage;
 mod transcript;
 
+pub use project_suggestions::ProjectSuggestion;
 pub use projects::{ProjectRow, project_id_for_cwd};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
+const BOOTSTRAP_SCHEMA: &str = "
+    CREATE TABLE open_sessions (
+        open_session_id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        cwd TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        UNIQUE(provider, session_id, cwd)
+    );
+    CREATE TABLE transcript_items (
+        open_session_id TEXT NOT NULL,
+        item_ordinal INTEGER NOT NULL,
+        item_json TEXT NOT NULL,
+        PRIMARY KEY(open_session_id, item_ordinal),
+        FOREIGN KEY(open_session_id)
+            REFERENCES open_sessions(open_session_id)
+            ON DELETE CASCADE
+    );
+    CREATE TABLE session_index_meta (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        revision INTEGER NOT NULL
+    );
+    INSERT INTO session_index_meta (id, revision) VALUES (1, 0);
+    CREATE TABLE session_index_sources (
+        provider TEXT PRIMARY KEY,
+        refreshed_at TEXT NOT NULL
+    );
+    CREATE TABLE session_index_entries (
+        provider TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        cwd TEXT NOT NULL,
+        title TEXT,
+        updated_at TEXT,
+        PRIMARY KEY(provider, session_id, cwd)
+    );
+    CREATE TABLE projects (
+        project_id TEXT PRIMARY KEY,
+        cwd TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+    CREATE TABLE project_suggestion_sources (
+        provider TEXT PRIMARY KEY,
+        refreshed_at TEXT NOT NULL
+    );
+    CREATE TABLE project_suggestions (
+        provider TEXT NOT NULL,
+        cwd TEXT NOT NULL,
+        suggestion_id TEXT NOT NULL,
+        PRIMARY KEY(provider, cwd)
+    );
+    PRAGMA user_version = 4;
+";
+
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -428,50 +483,7 @@ impl LocalStore {
             .query_row("PRAGMA user_version", [], |row| row.get(0))?;
         match version {
             0 => {
-                self.connection.execute_batch(
-                    "
-                    CREATE TABLE open_sessions (
-                        open_session_id TEXT PRIMARY KEY,
-                        provider TEXT NOT NULL,
-                        session_id TEXT NOT NULL,
-                        cwd TEXT NOT NULL,
-                        revision INTEGER NOT NULL,
-                        UNIQUE(provider, session_id, cwd)
-                    );
-                    CREATE TABLE transcript_items (
-                        open_session_id TEXT NOT NULL,
-                        item_ordinal INTEGER NOT NULL,
-                        item_json TEXT NOT NULL,
-                        PRIMARY KEY(open_session_id, item_ordinal),
-                        FOREIGN KEY(open_session_id)
-                            REFERENCES open_sessions(open_session_id)
-                            ON DELETE CASCADE
-                    );
-                    CREATE TABLE session_index_meta (
-                        id INTEGER PRIMARY KEY CHECK(id = 1),
-                        revision INTEGER NOT NULL
-                    );
-                    INSERT INTO session_index_meta (id, revision) VALUES (1, 0);
-                    CREATE TABLE session_index_sources (
-                        provider TEXT PRIMARY KEY,
-                        refreshed_at TEXT NOT NULL
-                    );
-                    CREATE TABLE session_index_entries (
-                        provider TEXT NOT NULL,
-                        session_id TEXT NOT NULL,
-                        cwd TEXT NOT NULL,
-                        title TEXT,
-                        updated_at TEXT,
-                        PRIMARY KEY(provider, session_id, cwd)
-                    );
-                    CREATE TABLE projects (
-                        project_id TEXT PRIMARY KEY,
-                        cwd TEXT NOT NULL UNIQUE,
-                        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-                    );
-                    PRAGMA user_version = 3;
-                    ",
-                )?;
+                self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
                 Ok(())
             }
             SCHEMA_VERSION => Ok(()),

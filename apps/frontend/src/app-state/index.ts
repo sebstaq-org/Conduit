@@ -2,6 +2,7 @@ export {
   conduitApi,
   useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
   useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,

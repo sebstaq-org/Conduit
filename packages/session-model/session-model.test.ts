@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   ProjectListViewSchema,
+  ProjectSuggestionsViewSchema,
   SessionGroupsQuerySchema,
   SessionGroupsViewSchema,
 } from "./src/index.js";
@@ -80,6 +81,19 @@ it("accepts the projects read model", () => {
   };
 
   expect(ProjectListViewSchema.parse(payload)).toEqual(payload);
+});
+
+it("accepts the project suggestions read model", () => {
+  const payload = {
+    suggestions: [
+      {
+        suggestionId: "cwd:/workspace/conduit",
+        cwd: "/workspace/conduit",
+      },
+    ],
+  };
+
+  expect(ProjectSuggestionsViewSchema.parse(payload)).toEqual(payload);
 });
 
 it("rejects cwd filters in the session groups query", () => {

@@ -4,6 +4,9 @@ import type {
   ProjectListView,
   ProjectRemoveRequest,
   ProjectRow,
+  ProjectSuggestion,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
@@ -28,6 +31,7 @@ const CONDUIT_COMMANDS = [
   "projects/add",
   "projects/list",
   "projects/remove",
+  "projects/suggestions",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -51,6 +55,8 @@ type ProjectListCommandName = "projects/list";
 
 type ProjectRemoveCommandName = "projects/remove";
 
+type ProjectSuggestionsCommandName = "projects/suggestions";
+
 type SessionsWatchCommandName = "sessions/watch";
 
 type SessionOpenCommandName = "session/open";
@@ -67,6 +73,7 @@ type ProviderScopedCommandName = Exclude<
   | ProjectAddCommandName
   | ProjectListCommandName
   | ProjectRemoveCommandName
+  | ProjectSuggestionsCommandName
   | SessionsWatchCommandName
   | SessionOpenCommandName
   | SessionHistoryCommandName
@@ -109,6 +116,13 @@ interface ProjectRemoveConsumerCommand {
   params: ProjectRemoveRequest;
 }
 
+interface ProjectSuggestionsConsumerCommand {
+  id: string;
+  command: ProjectSuggestionsCommandName;
+  provider: ConsumerCommandTarget;
+  params: ProjectSuggestionsQuery;
+}
+
 interface SessionOpenConsumerCommand {
   id: string;
   command: SessionOpenCommandName;
@@ -149,6 +163,7 @@ type ConsumerCommand =
   | ProjectAddConsumerCommand
   | ProjectListConsumerCommand
   | ProjectRemoveConsumerCommand
+  | ProjectSuggestionsConsumerCommand
   | SessionGroupsConsumerCommand
   | SessionsWatchConsumerCommand
   | SessionOpenConsumerCommand
@@ -226,6 +241,11 @@ export type {
   ProjectRemoveConsumerCommand,
   ProjectRemoveRequest,
   ProjectRow,
+  ProjectSuggestion,
+  ProjectSuggestionsCommandName,
+  ProjectSuggestionsConsumerCommand,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
   RuntimeEvent,

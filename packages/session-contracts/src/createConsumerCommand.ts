@@ -20,6 +20,9 @@ import type {
   ProjectRemoveCommandName,
   ProjectRemoveConsumerCommand,
   ProjectRemoveRequest,
+  ProjectSuggestionsCommandName,
+  ProjectSuggestionsConsumerCommand,
+  ProjectSuggestionsQuery,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
   SessionGroupsCommandName,
@@ -212,6 +215,12 @@ function createConsumerCommand(
 ): ProjectRemoveConsumerCommand;
 
 function createConsumerCommand(
+  command: ProjectSuggestionsCommandName,
+  provider: ConsumerCommandTarget,
+  params?: ProjectSuggestionsQuery,
+): ProjectSuggestionsConsumerCommand;
+
+function createConsumerCommand(
   command: SessionGroupsCommandName,
   provider: ConsumerCommandTarget,
   params?: SessionGroupsQuery,
@@ -259,6 +268,7 @@ function createConsumerCommand(
     | Record<string, unknown>
     | ProjectAddRequest
     | ProjectRemoveRequest
+    | ProjectSuggestionsQuery
     | SessionGroupsQuery
     | SessionOpenRequest
     | SessionHistoryRequest

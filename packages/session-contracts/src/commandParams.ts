@@ -1,6 +1,7 @@
 import type {
   ProjectAddRequest,
   ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
   SessionGroupsQuery,
   SessionHistoryRequest,
   SessionOpenRequest,
@@ -35,6 +36,17 @@ function isProjectRemoveRequest(value: unknown): value is ProjectRemoveRequest {
   );
 }
 
+function isProjectSuggestionsQuery(
+  value: unknown,
+): value is ProjectSuggestionsQuery {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (!("query" in value) || typeof value.query === "string") &&
+    (!("limit" in value) || typeof value.limit === "number")
+  );
+}
+
 function isSessionOpenRequest(value: unknown): value is SessionOpenRequest {
   return (
     typeof value === "object" &&
@@ -65,6 +77,7 @@ function isSessionPromptRequest(value: unknown): value is SessionPromptRequest {
 export {
   isProjectAddRequest,
   isProjectRemoveRequest,
+  isProjectSuggestionsQuery,
   isSessionGroupsQuery,
   isSessionHistoryRequest,
   isSessionOpenRequest,

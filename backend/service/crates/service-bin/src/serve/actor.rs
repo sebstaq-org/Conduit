@@ -1,5 +1,8 @@
 //! Single-owner runtime actor for WebSocket consumers.
 
+mod suggestion_refresh;
+
+use self::suggestion_refresh::spawn_suggestion_refresh_worker;
 use service_runtime::{
     AppServiceFactory, ConsumerCommand, ConsumerResponse, ProviderFactory, RuntimeEvent,
     ServiceRuntime,
@@ -55,6 +58,12 @@ impl RuntimeActor {
         let (events, _) = broadcast::channel(256);
         let store_lock = Arc::new(Mutex::new(()));
         let refreshes = RefreshWorker::start(
+            factory.clone(),
+            events.clone(),
+            Arc::clone(&refresh_store),
+            Arc::clone(&store_lock),
+        );
+        spawn_suggestion_refresh_worker(
             factory.clone(),
             events.clone(),
             Arc::clone(&refresh_store),

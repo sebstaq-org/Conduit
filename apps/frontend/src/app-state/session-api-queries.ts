@@ -5,6 +5,8 @@ import type {
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
@@ -84,6 +86,17 @@ async function removeProjectQuery(
   }
 }
 
+async function getProjectSuggestionsQuery(
+  query: ProjectSuggestionsQuery | undefined,
+): QueryResult<ProjectSuggestionsView> {
+  try {
+    const data = await sessionClient.getProjectSuggestions(query);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
 async function openSessionQuery({
   cwd,
   limit,
@@ -145,6 +158,7 @@ async function promptSessionQuery({
 
 export {
   addProjectQuery,
+  getProjectSuggestionsQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
   openSessionQuery,

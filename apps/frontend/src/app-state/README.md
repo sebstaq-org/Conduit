@@ -6,7 +6,8 @@ caching. Feature modules should consume RTK Query hooks from here, not
 raw command dispatch directly.
 
 The product session APIs in this checkout are `useListProjectsQuery`,
-`useAddProjectMutation`, `useRemoveProjectMutation`, `useGetSessionGroupsQuery`,
+`useAddProjectMutation`, `useRemoveProjectMutation`,
+`useGetProjectSuggestionsQuery`, `useGetSessionGroupsQuery`,
 `useOpenSessionMutation`, `useReadSessionHistoryQuery`, and
 `usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
 not raw official ACP provider responses.

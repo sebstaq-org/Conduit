@@ -3,6 +3,8 @@ import type {
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionOpenRequest,
@@ -21,6 +23,9 @@ import type {
 interface SessionClientPort {
   readonly policy: "official-acp-only";
   addProject(request: ProjectAddRequest): Promise<ProjectListView>;
+  getProjectSuggestions(
+    query?: ProjectSuggestionsQuery,
+  ): Promise<ProjectSuggestionsView>;
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
   listProjects(): Promise<ProjectListView>;
   openSession(

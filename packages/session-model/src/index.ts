@@ -118,12 +118,30 @@ const ProjectListViewSchema = z.object({
 
 type ProjectListView = z.infer<typeof ProjectListViewSchema>;
 
+const ProjectSuggestionSchema = z.object({
+  suggestionId: z.string(),
+  cwd: z.string(),
+});
+
+type ProjectSuggestion = z.infer<typeof ProjectSuggestionSchema>;
+
+const ProjectSuggestionsViewSchema = z.object({
+  suggestions: z.array(ProjectSuggestionSchema),
+});
+
+type ProjectSuggestionsView = z.infer<typeof ProjectSuggestionsViewSchema>;
+
 interface ProjectAddRequest {
   cwd: string;
 }
 
 interface ProjectRemoveRequest {
   projectId: string;
+}
+
+interface ProjectSuggestionsQuery {
+  query?: string;
+  limit?: number;
 }
 
 type TranscriptMessageRole = "user" | "agent";
@@ -224,6 +242,8 @@ export {
   ProviderIdSchema,
   ProjectListViewSchema,
   ProjectRowSchema,
+  ProjectSuggestionSchema,
+  ProjectSuggestionsViewSchema,
   SessionGroupSchema,
   SessionGroupsQuerySchema,
   SessionGroupsViewSchema,
@@ -246,6 +266,9 @@ export type {
   ProjectListView,
   ProjectRemoveRequest,
   ProjectRow,
+  ProjectSuggestion,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   RawWireEvent,
   SessionGroup,
   SessionGroupsQuery,

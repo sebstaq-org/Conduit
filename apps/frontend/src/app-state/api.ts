@@ -3,6 +3,8 @@ import type {
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
   SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
@@ -10,6 +12,7 @@ import type {
 } from "@conduit/session-client";
 import {
   addProjectQuery,
+  getProjectSuggestionsQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
   openSessionQuery,
@@ -58,6 +61,17 @@ type UpdateSessionHistoryItems = (
   update: TimelineItemsUpdate,
 ) => void;
 type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
+type ProjectSuggestionsQueryArg = ProjectSuggestionsQuery | undefined;
+
+const projectMutationInvalidations = [
+  { id: "LIST", type: "Projects" },
+  { id: "SUGGESTIONS", type: "Projects" },
+  { id: "LIST", type: "SessionGroups" },
+] as const;
+const projectSuggestionsEndpoint = {
+  providesTags: [{ id: "SUGGESTIONS", type: "Projects" }],
+  queryFn: getProjectSuggestionsQuery,
+} as const;
 
 let upsertSessionHistory: UpsertSessionHistory = (): void => {
   throw new Error("session history cache upsert is not initialized");
@@ -153,19 +167,17 @@ const conduitApi = createApi({
       queryFn: listProjectsQuery,
     }),
     addProject: builder.mutation<ProjectListView, ProjectAddRequest>({
-      invalidatesTags: [
-        { id: "LIST", type: "Projects" },
-        { id: "LIST", type: "SessionGroups" },
-      ],
+      invalidatesTags: projectMutationInvalidations,
       queryFn: addProjectQuery,
     }),
     removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>({
-      invalidatesTags: [
-        { id: "LIST", type: "Projects" },
-        { id: "LIST", type: "SessionGroups" },
-      ],
+      invalidatesTags: projectMutationInvalidations,
       queryFn: removeProjectQuery,
     }),
+    getProjectSuggestions: builder.query<
+      ProjectSuggestionsView,
+      ProjectSuggestionsQueryArg
+    >(projectSuggestionsEndpoint),
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
@@ -236,6 +248,7 @@ invalidateSessionGroups = (dispatch): void => {
 const {
   useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
   useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
@@ -248,6 +261,7 @@ export {
   conduitApi,
   useAddProjectMutation,
   useGetSessionGroupsQuery,
+  useGetProjectSuggestionsQuery,
   useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,

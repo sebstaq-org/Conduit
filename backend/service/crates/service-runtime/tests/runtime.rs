@@ -135,6 +135,41 @@ fn projects_add_list_and_remove_drive_group_scope() -> TestResult<()> {
 }
 
 #[test]
+fn projects_suggestions_read_cached_addable_cwds() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_grouped_session_lists(&state)?;
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    runtime.refresh_project_suggestions()?;
+    add_project(&mut runtime, "/repo")?;
+    let response = runtime.dispatch(command(
+        "suggest",
+        "projects/suggestions",
+        "all",
+        json!({ "query": "oth", "limit": 10 }),
+    ));
+
+    assert_ok(&response)?;
+    assert_project_suggestion_cwds(&response.result, &["/other"])?;
+    let requests = state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .session_list_requests
+        .clone();
+    let expected = vec![
+        (ProviderId::Claude, None, None),
+        (ProviderId::Copilot, None, None),
+        (ProviderId::Codex, None, None),
+    ];
+    if requests != expected {
+        return Err(
+            format!("expected suggestion refresh requests {expected:?}, got {requests:?}").into(),
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
@@ -588,6 +623,21 @@ fn assert_project_cwds(value: &Value, expected: &[&str]) -> TestResult<()> {
         return Ok(());
     }
     Err(format!("expected projects {expected:?}, got {actual:?}").into())
+}
+
+fn assert_project_suggestion_cwds(value: &Value, expected: &[&str]) -> TestResult<()> {
+    let actual = value
+        .get("suggestions")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing suggestions array: {value}"))?
+        .iter()
+        .map(|project| project.get("cwd").and_then(Value::as_str))
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| format!("suggestion row missing cwd: {value}"))?;
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected suggestions {expected:?}, got {actual:?}").into())
 }
 
 fn assert_session_ids(sessions: &[Value], expected: &[&str]) -> TestResult<()> {

@@ -1,6 +1,7 @@
 import {
   isProjectAddRequest,
   isProjectRemoveRequest,
+  isProjectSuggestionsQuery,
 } from "./commandParams.js";
 import type {
   ConsumerCommand,
@@ -11,12 +12,15 @@ import type {
   ProjectListConsumerCommand,
   ProjectRemoveCommandName,
   ProjectRemoveConsumerCommand,
+  ProjectSuggestionsCommandName,
+  ProjectSuggestionsConsumerCommand,
 } from "./wire.js";
 
 type ProjectCommandName =
   | ProjectAddCommandName
   | ProjectListCommandName
-  | ProjectRemoveCommandName;
+  | ProjectRemoveCommandName
+  | ProjectSuggestionsCommandName;
 
 type ProjectCommandFactory = (
   id: string,
@@ -68,6 +72,22 @@ function createProjectRemoveCommand(
   };
 }
 
+function createProjectSuggestionsCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ProjectSuggestionsConsumerCommand {
+  if (!isProjectSuggestionsQuery(params)) {
+    throw new Error("projects/suggestions params are invalid");
+  }
+  return {
+    id,
+    command: "projects/suggestions",
+    provider,
+    params,
+  };
+}
+
 const projectCommandFactories: Record<
   ProjectCommandName,
   ProjectCommandFactory
@@ -75,6 +95,7 @@ const projectCommandFactories: Record<
   "projects/add": createProjectAddCommand,
   "projects/list": createProjectListCommand,
   "projects/remove": createProjectRemoveCommand,
+  "projects/suggestions": createProjectSuggestionsCommand,
 };
 
 function isProjectCommandName(command: string): command is ProjectCommandName {
