@@ -4,7 +4,7 @@ import {
 } from "@/ui/popover";
 import { ProjectPickerPortal } from "./project-picker-portal";
 
-function ProjectPickerTrigger(): React.JSX.Element {
+function ProjectsToolbar(): React.JSX.Element {
   return (
     <PopoverRoot>
       <PopoverIconTrigger accessibilityLabel="Add project" icon="plus" />
@@ -13,4 +13,4 @@ function ProjectPickerTrigger(): React.JSX.Element {
   );
 }
 
-export { ProjectPickerTrigger };
+export { ProjectsToolbar };

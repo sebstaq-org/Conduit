@@ -1,12 +1,7 @@
-import { Fragment } from "react";
-import {
-  openSessionRow,
-  useGetSessionGroupsQuery,
-  useOpenSessionMutation,
-} from "@/app-state";
+import { useGetSessionGroupsQuery, useOpenSessionMutation } from "@/app-state";
 import { List, Row } from "@/ui";
+import { SessionGroupRow } from "./session-group-row";
 
-const sessionRowDepth = 1;
 const defaultUpdatedWithinDays = 5;
 
 interface SessionListRowsProps {
@@ -19,22 +14,6 @@ function sessionGroupsErrorMessage(error: unknown): string {
   }
 
   return "session request failed";
-}
-
-function formatSessionMeta(provider: string, updatedAt: string | null): string {
-  if (updatedAt === null) {
-    return provider;
-  }
-
-  return `${provider} · ${updatedAt.slice(0, 10)}`;
-}
-
-function sessionTitle(title: string | null): string {
-  if (title === null) {
-    return "Untitled session";
-  }
-
-  return title;
 }
 
 function renderSessionsUnavailable(error: unknown): React.JSX.Element {
@@ -68,29 +47,12 @@ function SessionListRows({
       {!isLoading &&
         !isError &&
         data?.groups.map((group) => (
-          <Fragment key={group.groupId}>
-            <Row icon="folder" label={group.cwd} />
-            {group.sessions.map((session) => (
-              <Row
-                key={`${session.provider}:${session.sessionId}`}
-                depth={sessionRowDepth}
-                label={sessionTitle(session.title)}
-                meta={formatSessionMeta(session.provider, session.updatedAt)}
-                onPress={() => {
-                  void openSessionRow({
-                    onSessionSelected,
-                    openSession,
-                    request: {
-                      cwd: group.cwd,
-                      provider: session.provider,
-                      sessionId: session.sessionId,
-                      title: session.title,
-                    },
-                  });
-                }}
-              />
-            ))}
-          </Fragment>
+          <SessionGroupRow
+            key={group.groupId}
+            group={group}
+            onSessionSelected={onSessionSelected}
+            openSession={openSession}
+          />
         ))}
     </List>
   );

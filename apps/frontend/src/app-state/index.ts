@@ -16,7 +16,16 @@ export {
   openSessionRow,
   submitPrompt,
 } from "./session-commands";
-export { addProjectPath } from "./project-commands";
+export {
+  addProjectPath,
+  removeProjectById,
+  updateProjectDisplayName,
+} from "./project-commands";
+export type {
+  ProjectMutationState,
+  RemoveProjectTrigger,
+  UpdateProjectTrigger,
+} from "./project-commands";
 export { selectActiveSession } from "./session-selection";
 export type {
   OpenSessionMutationArg,
