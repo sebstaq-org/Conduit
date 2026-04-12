@@ -32,7 +32,6 @@ interface LoadOlderContext {
 }
 
 interface HistoryContentProps {
-  activeSession: ActiveSession;
   history: SessionHistoryWindow | undefined;
   isError: boolean;
   isFetching: boolean;
@@ -104,7 +103,6 @@ function renderNoActiveSession(): React.JSX.Element {
 }
 
 function renderHistoryContent({
-  activeSession,
   history,
   isError,
   isFetching,
@@ -122,7 +120,6 @@ function renderHistoryContent({
           isFetchingOlder={isFetchingOlder}
           isLoading={isLoading}
           onLoadOlder={onLoadOlder}
-          title={activeSession.title ?? activeSession.cwd}
         />
       </ScrollArea>
     </Box>
@@ -178,7 +175,6 @@ function SessionHistory(): React.JSX.Element {
   }
 
   return renderHistoryContent({
-    activeSession,
     history: historyState.history,
     isError: isError || isOlderError,
     isFetching,
