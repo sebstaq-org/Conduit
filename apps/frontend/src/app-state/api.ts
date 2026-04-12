@@ -148,7 +148,7 @@ const conduitApi = createApi({
   baseQuery: fakeBaseQuery<string>(),
   tagTypes: ["Projects", "SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
-    listProjects: builder.query<ProjectListView, void>({
+    listProjects: builder.query<ProjectListView, undefined>({
       providesTags: [{ id: "LIST", type: "Projects" }],
       queryFn: listProjectsQuery,
     }),
