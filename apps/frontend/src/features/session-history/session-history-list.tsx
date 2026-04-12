@@ -1,20 +1,23 @@
+import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
-import { List, Row } from "@/ui";
+import type { Theme } from "@/theme";
+import { Row } from "@/ui";
+import { transcriptItemLabel } from "./session-history-content";
+import { SessionHistoryMarkdown } from "./session-history-markdown";
 import {
-  transcriptItemLabel,
-  transcriptItemMeta,
-} from "./session-history-content";
-import { historyStatusVariant } from "./session-history.styles";
+  createHistoryListStyle,
+  createHistoryUserBubbleStyle,
+  createHistoryUserTextStyle,
+  historyAgentRowAlignItems,
+  historyListGap,
+  historyStatusVariant,
+  historyUserBubbleBackgroundColor,
+  historyUserRowAlignItems,
+} from "./session-history.styles";
 import type {
   SessionHistoryWindow,
   TranscriptItem,
 } from "@conduit/session-client";
-
-const historyItemBorderColor = "borderSubtle" as const;
-const historyItemBorderRadius = "row" as const;
-const historyItemGap = "xs" as const;
-const historyItemPadding = "sm" as const;
-const historyTextVariant = "rowLabel" as const;
 
 interface SessionHistoryListProps {
   history: SessionHistoryWindow | undefined;
@@ -23,27 +26,59 @@ interface SessionHistoryListProps {
   isFetching: boolean;
   isLoading: boolean;
   onLoadOlder: () => void;
-  title: string;
 }
 
-function renderTranscriptItem(item: TranscriptItem): React.JSX.Element {
+function renderAgentMessage(item: TranscriptItem): React.JSX.Element | null {
+  if (item.kind !== "message") {
+    return null;
+  }
   return (
-    <Box
-      borderColor={historyItemBorderColor}
-      borderRadius={historyItemBorderRadius}
-      borderWidth={1}
-      gap={historyItemGap}
-      key={item.id}
-      p={historyItemPadding}
-    >
-      <Text variant={historyStatusVariant}>{transcriptItemMeta(item)}</Text>
-      <Text variant={historyTextVariant}>{transcriptItemLabel(item)}</Text>
+    <Box alignItems={historyAgentRowAlignItems} key={item.id}>
+      <SessionHistoryMarkdown markdown={transcriptItemLabel(item)} />
     </Box>
   );
 }
 
-function renderStatusText(text: string): React.JSX.Element {
-  return <Text variant={historyStatusVariant}>{text}</Text>;
+function renderUserMessage(
+  item: TranscriptItem,
+  theme: Theme,
+): React.JSX.Element | null {
+  if (item.kind !== "message") {
+    return null;
+  }
+  return (
+    <Box alignItems={historyUserRowAlignItems} key={item.id}>
+      <Box
+        backgroundColor={historyUserBubbleBackgroundColor}
+        style={createHistoryUserBubbleStyle(theme)}
+      >
+        <Text style={createHistoryUserTextStyle(theme)}>
+          {transcriptItemLabel(item)}
+        </Text>
+      </Box>
+    </Box>
+  );
+}
+
+function renderTranscriptItem(
+  item: TranscriptItem,
+  theme: Theme,
+): React.JSX.Element | null {
+  if (item.kind !== "message") {
+    return null;
+  }
+  if (item.role === "user") {
+    return renderUserMessage(item, theme);
+  }
+  return renderAgentMessage(item);
+}
+
+function renderStatusText(text: string, key?: string): React.JSX.Element {
+  return (
+    <Text key={key} variant={historyStatusVariant}>
+      {text}
+    </Text>
+  );
 }
 
 function loadOlderLabel(isFetchingOlder: boolean): string {
@@ -70,14 +105,17 @@ function SessionHistoryList({
   isFetching,
   isLoading,
   onLoadOlder,
-  title,
 }: SessionHistoryListProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+
   return (
-    <List>
-      {renderStatusText(title)}
+    <Box gap={historyListGap} style={createHistoryListStyle(theme)}>
       {isLoading && renderStatusText("Loading session")}
       {isError && renderStatusText("Session unavailable")}
-      {isFetching && !isLoading && renderStatusText("Refreshing session")}
+      {isFetching &&
+        !isLoading &&
+        history === undefined &&
+        renderStatusText("Refreshing session")}
       {history?.nextCursor !== null && history?.nextCursor !== undefined && (
         <Row
           label={loadOlderLabel(isFetchingOlder)}
@@ -88,8 +126,8 @@ function SessionHistoryList({
       {history !== undefined &&
         history.items.length === 0 &&
         renderStatusText("No messages yet")}
-      {history?.items.map((item) => renderTranscriptItem(item))}
-    </List>
+      {history?.items.map((item) => renderTranscriptItem(item, theme))}
+    </Box>
   );
 }
 
