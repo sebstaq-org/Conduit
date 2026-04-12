@@ -73,26 +73,17 @@
         }
       },
       "stderr_lines": [],
-      "stdout_lines": [
-        "/__dynamic_initialize_stdout__"
-      ]
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
     },
     "initialize_viable": true,
     "launcher": {
-      "args": [
-        "--acp",
-        "--allow-all",
-        "--no-color",
-        "--no-auto-update"
-      ],
+      "args": ["--acp", "--allow-all", "--no-color", "--no-auto-update"],
       "display": "copilot --acp --allow-all --no-color --no-auto-update",
       "executable": "/__dynamic_path__"
     },
     "provider": "copilot",
     "resolved_path": "/__dynamic_path__",
-    "transport_diagnostics": [
-      "/__dynamic_transport_diagnostics__"
-    ],
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
     "version": "/__dynamic_provider_version__"
   },
   "last_prompt": {

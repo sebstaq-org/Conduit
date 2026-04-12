@@ -88,9 +88,7 @@
         }
       },
       "stderr_lines": [],
-      "stdout_lines": [
-        "/__dynamic_initialize_stdout__"
-      ]
+      "stdout_lines": ["/__dynamic_initialize_stdout__"]
     },
     "initialize_viable": true,
     "launcher": {
@@ -100,15 +98,11 @@
     },
     "provider": "claude",
     "resolved_path": "/__dynamic_path__",
-    "transport_diagnostics": [
-      "/__dynamic_transport_diagnostics__"
-    ],
+    "transport_diagnostics": ["/__dynamic_transport_diagnostics__"],
     "version": "/__dynamic_provider_version__"
   },
   "last_prompt": {
-    "agent_text_chunks": [
-      "Conduit direct ACP continuation turn observed."
-    ],
+    "agent_text_chunks": ["Conduit direct ACP continuation turn observed."],
     "identity": {
       "acp_session_id": "replay-claude-session-load-known-session-session-1",
       "provider": "claude"
