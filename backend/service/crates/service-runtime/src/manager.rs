@@ -7,45 +7,36 @@ use crate::error::{
 };
 use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::manager_helpers::{
-    absolute_normalized_cwd, content_blocks_param, current_epoch,
-    loaded_transcript_snapshot_updates, paginated_index_entries, parse_provider, prompt_lifecycle,
-    prompt_status,
+    absolute_normalized_cwd, content_blocks_param, loaded_transcript_snapshot_updates,
+    parse_provider, prompt_lifecycle, prompt_status,
 };
-use crate::session_groups::{SessionGroupsQuery, grouped_view, providers_from_target};
+use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::{ConnectionState, ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{
-    HistoryLimit, LocalStore, OpenSessionKey, ProjectRow, PromptTurnAppend, PromptTurnMutation,
+    HistoryLimit, LocalStore, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
     PromptTurnReplace, TranscriptItemStatus,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
-
 /// Consumer API runtime manager keyed by provider.
 pub struct ServiceRuntime<F = AppServiceFactory> {
-    event_buffer: EventBuffer,
+    pub(crate) event_buffer: EventBuffer,
     factory: F,
     loaded_provider_sessions: HashSet<OpenSessionKey>,
-    session_index_refreshes: HashMap<ProviderId, u64>,
+    pub(crate) session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
-    local_store: LocalStore,
-    store_lock: Arc<Mutex<()>>,
+    pub(crate) local_store: LocalStore,
+    pub(crate) store_lock: Arc<Mutex<()>>,
 }
 
 struct SessionPromptTarget {
     open_session_id: String,
     key: OpenSessionKey,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProjectListView {
-    projects: Vec<ProjectRow>,
 }
 
 #[derive(Clone, Copy)]
@@ -208,71 +199,6 @@ where
             "provider/disconnect" => self.provider_disconnect(command.id, provider),
             _ => Err(RuntimeError::UnsupportedCommand(command.command)),
         }
-    }
-
-    fn sessions_grouped(
-        &mut self,
-        id: String,
-        provider_target: &str,
-        params: &Value,
-    ) -> Result<ConsumerResponse> {
-        let query = SessionGroupsQuery::from_params(params)?;
-        let providers = providers_from_target(provider_target)?;
-        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        let projects = self.local_store.projects()?;
-        let snapshot = self.local_store.session_index(&providers)?;
-        let is_refreshing = !projects.is_empty() && snapshot.refreshed_at.is_none();
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            grouped_view(snapshot, &query, &projects, is_refreshing)?,
-        ))
-    }
-
-    fn sessions_watch(&self, id: String) -> Result<ConsumerResponse> {
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            json!({ "subscribed": true }),
-        ))
-    }
-
-    fn projects_list(&self, id: String) -> Result<ConsumerResponse> {
-        let projects = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.projects()?
-        };
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            to_value(ProjectListView { projects })?,
-        ))
-    }
-
-    fn projects_add(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let cwd =
-            absolute_normalized_cwd("projects/add", path_param("projects/add", params, "cwd")?)?;
-        let projects = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.add_project(&cwd.display().to_string())?;
-            self.local_store.projects()?
-        };
-        self.session_index_refreshes.clear();
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            to_value(ProjectListView { projects })?,
-        ))
-    }
-
-    fn projects_remove(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let project_id = string_param("projects/remove", params, "projectId")?;
-        let projects = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.remove_project(&project_id)?;
-            self.local_store.projects()?
-        };
-        self.session_index_refreshes.clear();
-        Ok(ConsumerResponse::success_without_snapshot(
-            id,
-            to_value(ProjectListView { projects })?,
-        ))
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -640,7 +566,7 @@ where
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
-    fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
+    pub(crate) fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
         if self
             .providers
             .get(&provider)
@@ -678,16 +604,6 @@ where
             .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
     }
 
-    fn session_index_refresh_due(&self, provider: ProviderId) -> bool {
-        self.session_index_refreshes
-            .get(&provider)
-            .is_none_or(|last| {
-                current_epoch()
-                    .saturating_sub(*last)
-                    .ge(&SESSION_INDEX_REFRESH_INTERVAL_SECONDS)
-            })
-    }
-
     fn ensure_provider_session_loaded(&mut self, key: &OpenSessionKey) -> Result<()> {
         if self.loaded_provider_sessions.contains(key) {
             return Ok(());
@@ -699,52 +615,6 @@ where
         };
         result?;
         self.loaded_provider_sessions.insert(key.clone());
-        Ok(())
-    }
-
-    fn refresh_session_index_provider(&mut self, provider: ProviderId) -> Result<()> {
-        let entries = {
-            let projects = {
-                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-                self.local_store.projects()?
-            };
-            if projects.is_empty() {
-                Vec::new()
-            } else {
-                let project_cwds = projects
-                    .iter()
-                    .map(|project| project.cwd.as_str())
-                    .collect::<HashSet<_>>();
-                let provider_port = self.provider(provider)?;
-                let mut entries = Vec::new();
-                for project in &projects {
-                    entries.extend(paginated_index_entries(
-                        provider_port.as_mut(),
-                        provider,
-                        Some(&project.cwd),
-                    )?);
-                }
-                entries
-                    .into_iter()
-                    .filter(|entry| project_cwds.contains(entry.cwd.as_str()))
-                    .collect::<Vec<_>>()
-            }
-        };
-        self.session_index_refreshes
-            .insert(provider, current_epoch());
-        let revision = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store
-                .replace_session_index_provider(provider, &entries)?
-        };
-        if let Some(revision) = revision {
-            self.event_buffer.emit(
-                provider,
-                RuntimeEventKind::SessionsIndexChanged,
-                None,
-                json!({ "revision": revision }),
-            );
-        }
         Ok(())
     }
 }
@@ -761,6 +631,6 @@ fn append_snapshot_updates_if_missing(
     }
 }
 
-fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
+pub(crate) fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
     RuntimeError::Provider(format!("local store lock poisoned: {error}"))
 }
