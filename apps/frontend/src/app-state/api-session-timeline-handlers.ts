@@ -263,4 +263,8 @@ export {
   createSessionTimelineHandlers,
   createUninitializedSessionTimelineMutations,
 };
-export type { LoadOlderSessionTimelineArg, SessionTimelineMutations };
+export type {
+  LoadOlderSessionTimelineArg,
+  SessionTimelineHandlers,
+  SessionTimelineMutations,
+};
