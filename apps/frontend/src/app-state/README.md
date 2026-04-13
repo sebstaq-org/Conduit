@@ -8,10 +8,10 @@ raw command dispatch directly.
 The product session APIs in this checkout are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
-`useGetSessionGroupsQuery`, `useOpenSessionMutation`,
-`useReadSessionHistoryQuery`, `usePromptSessionMutation`, and
-`useGetRuntimeHealthQuery`. They return
-Conduit read-model shapes for UI state, not raw official ACP provider responses.
+`useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
+`useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`, and
+`usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
+not raw official ACP provider responses.
 
 `useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI
 should add or remove projects through the project hooks instead of passing cwd
@@ -22,9 +22,11 @@ Do not wire feature UI to `ProviderSnapshot`, `LoadedTranscriptSnapshot`,
 The product event path is `sessions/watch` and `session/watch`, surfaced through
 the client subscription methods in `src/app-state`.
 
-Session history is cursor-windowed. The latest window is fetched without a
-cursor, older windows use `nextCursor`, and live `session/prompt` output is
-projected into the same timeline model before feature UI renders it.
+Session timeline data is cursor-windowed behind one canonical cache entry per
+`openSessionId`. The latest window is fetched without a cursor, older windows
+prepend into the same timeline entry through `nextCursor`, and live
+`session/prompt` output is projected into that same timeline before feature UI
+renders it.
 
 The session transport URL is required through
 `EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. Frontend fails fast when the variable is

@@ -3,6 +3,7 @@ import { useTheme } from "@shopify/restyle";
 import { useWindowDimensions } from "react-native";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
+import type { ViewStyle } from "react-native";
 import { NavigationPanelContent } from "@/screens/navigation-panel/navigation-panel-content";
 import { SessionScreen } from "@/screens/session";
 import { PanelFrame } from "@/ui";
@@ -17,6 +18,8 @@ import {
 interface RenderNavigationPanelOptions {
   onSessionSelected?: (() => void) | undefined;
 }
+
+const appShellScreenStyle: ViewStyle = { minHeight: 0 };
 
 function renderNavigationPanel({
   onSessionSelected,
@@ -47,6 +50,7 @@ function AppShellScreen(): React.JSX.Element {
         backgroundColor={appShellBackgroundColor}
         flex={appShellFlex}
         flexDirection={appShellFlexDirection}
+        style={appShellScreenStyle}
       >
         {renderNavigationPanel()}
         <SessionScreen />

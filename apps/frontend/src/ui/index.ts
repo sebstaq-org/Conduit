@@ -42,3 +42,5 @@ export type {
 } from "./scroll-area";
 export { Section } from "./section";
 export { TextField } from "./text-field";
+export { VirtualList } from "./flash-list";
+export type { VirtualListProps } from "./flash-list";

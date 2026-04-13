@@ -29,13 +29,13 @@ interface ScrollAreaHandle {
 
 interface ScrollAreaProps {
   children: ReactNode;
-  onContentSizeChange?:
-    | ((size: ScrollAreaContentSize) => void)
-    | undefined;
+  onContentSizeChange?: ((size: ScrollAreaContentSize) => void) | undefined;
   onMetricsChange?: ((metrics: ScrollAreaMetrics) => void) | undefined;
+  showsVerticalScrollIndicator?: boolean | undefined;
 }
 
 const defaultScrollEventThrottle = 16;
+const verticalOffsetAxis = "y" as const;
 
 interface ScrollAreaMetricState {
   contentHeightRef: RefObject<number>;
@@ -90,7 +90,10 @@ function applyLayout(
   state.viewportHeightRef.current = event.nativeEvent.layout.height;
 }
 
-function applyScroll(state: ScrollAreaMetricState, event: NativeScrollEvent): void {
+function applyScroll(
+  state: ScrollAreaMetricState,
+  event: NativeScrollEvent,
+): void {
   state.contentHeightRef.current = event.contentSize.height;
   state.contentWidthRef.current = event.contentSize.width;
   state.offsetYRef.current = event.contentOffset.y;
@@ -144,44 +147,54 @@ function useScrollAreaHandle(
         scrollViewRef.current?.scrollToEnd({ animated });
       },
       scrollToOffset: ({ animated = true, offsetY }): void => {
-        scrollViewRef.current?.scrollTo({ animated, "y": offsetY });
+        scrollViewRef.current?.scrollTo({
+          animated,
+          [verticalOffsetAxis]: offsetY,
+        });
       },
     }),
     [scrollViewRef],
   );
 }
 
-const ScrollArea = forwardRef<ScrollAreaHandle, ScrollAreaProps>(function ScrollArea(
-  { children, onContentSizeChange, onMetricsChange }: ScrollAreaProps,
-  ref,
-): React.JSX.Element {
-  const theme = useTheme<Theme>();
-  const scrollViewRef = useRef<ScrollView | null>(null);
-  const state = useScrollAreaMetricState();
-  const handlers = useScrollAreaHandlers(
-    state,
-    onContentSizeChange,
-    onMetricsChange,
-  );
-  useScrollAreaHandle(ref, scrollViewRef);
+const ScrollArea = forwardRef<ScrollAreaHandle, ScrollAreaProps>(
+  function ScrollArea(
+    {
+      children,
+      onContentSizeChange,
+      onMetricsChange,
+      showsVerticalScrollIndicator = true,
+    }: ScrollAreaProps,
+    ref,
+  ): React.JSX.Element {
+    const theme = useTheme<Theme>();
+    const scrollViewRef = useRef<ScrollView | null>(null);
+    const state = useScrollAreaMetricState();
+    const handlers = useScrollAreaHandlers(
+      state,
+      onContentSizeChange,
+      onMetricsChange,
+    );
+    useScrollAreaHandle(ref, scrollViewRef);
 
-  return (
-    <ScrollView
-      contentContainerStyle={createScrollAreaContentStyle(theme)}
-      onContentSizeChange={handlers.handleContentSizeChange}
-      onLayout={handlers.handleLayout}
-      onScroll={(event): void => {
-        handlers.handleScroll(event.nativeEvent);
-      }}
-      ref={scrollViewRef}
-      scrollEventThrottle={defaultScrollEventThrottle}
-      showsVerticalScrollIndicator={false}
-      style={scrollAreaStyle}
-    >
-      {children}
-    </ScrollView>
-  );
-});
+    return (
+      <ScrollView
+        contentContainerStyle={createScrollAreaContentStyle(theme)}
+        onContentSizeChange={handlers.handleContentSizeChange}
+        onLayout={handlers.handleLayout}
+        onScroll={(event): void => {
+          handlers.handleScroll(event.nativeEvent);
+        }}
+        ref={scrollViewRef}
+        scrollEventThrottle={defaultScrollEventThrottle}
+        showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+        style={scrollAreaStyle}
+      >
+        {children}
+      </ScrollView>
+    );
+  },
+);
 
 export { ScrollArea };
 export type { ScrollAreaContentSize, ScrollAreaHandle, ScrollAreaMetrics };

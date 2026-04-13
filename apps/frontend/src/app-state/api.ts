@@ -6,10 +6,9 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
-  SessionHistoryWindow,
   SessionGroupsQuery,
   SessionGroupsView,
-  TranscriptItem,
+  SessionHistoryWindow,
 } from "@conduit/session-client";
 import {
   addProjectQuery,
@@ -19,52 +18,33 @@ import {
   listProjectsQuery,
   openSessionQuery,
   promptSessionQuery,
-  readSessionHistoryQuery,
   removeProjectQuery,
-  sessionClient,
   updateProjectQuery,
 } from "./session-api-queries";
-import { applyTimelineItems } from "./session-history-cache";
-import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
-import { activeSessionOpened } from "./session-selection";
+import {
+  createSessionTimelineHandlers,
+  createUninitializedSessionTimelineMutations,
+} from "./api-session-timeline-handlers";
+import {
+  applyTimelineItems,
+  beginOlderPageLoad,
+  createSessionTimelineData,
+  failOlderPageLoad,
+  mergeOlderPage,
+} from "./session-timeline-cache";
 import type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
   RuntimeHealthView,
 } from "./session-api-queries";
-
-interface OpenSessionLifecycleApi {
-  dispatch: (action: unknown) => unknown;
-  queryFulfilled: Promise<{ data: SessionHistoryWindow }>;
-}
-
-interface CacheLifecycleApi {
-  cacheDataLoaded: Promise<unknown>;
-  cacheEntryRemoved: Promise<unknown>;
-  dispatch: (action: unknown) => unknown;
-}
+import type {
+  LoadOlderSessionTimelineArg,
+  SessionTimelineMutations,
+} from "./api-session-timeline-handlers";
+import type { SessionTimelineData } from "./session-timeline-cache";
 
 type DispatchLike = (action: unknown) => unknown;
-type UpsertSessionHistory = (
-  dispatch: DispatchLike,
-  history: SessionHistoryWindow,
-) => void;
-type InvalidateSessionHistory = (
-  dispatch: DispatchLike,
-  openSessionId: string,
-) => void;
-interface TimelineItemsUpdate {
-  openSessionId: string;
-  revision: number;
-  items: TranscriptItem[];
-}
-
-type UpdateSessionHistoryItems = (
-  dispatch: DispatchLike,
-  update: TimelineItemsUpdate,
-) => void;
-type InvalidateSessionGroups = (dispatch: DispatchLike) => void;
 type ProjectSuggestionsQueryArg = ProjectSuggestionsQuery | undefined;
 type ProjectUpdateArg = ProjectUpdateRequest;
 
@@ -77,146 +57,79 @@ const projectListEndpoint = {
   providesTags: [{ id: "LIST", type: "Projects" }],
   queryFn: listProjectsQuery,
 } as const;
-const projectSuggestionsEndpoint = {
-  providesTags: [{ id: "SUGGESTIONS", type: "Projects" }],
-  queryFn: getProjectSuggestionsQuery,
+const projectAddEndpoint = {
+  invalidatesTags: projectMutationInvalidations,
+  queryFn: addProjectQuery,
+} as const;
+const projectRemoveEndpoint = {
+  invalidatesTags: projectMutationInvalidations,
+  queryFn: removeProjectQuery,
 } as const;
 const projectUpdateEndpoint = {
   invalidatesTags: projectMutationInvalidations,
   queryFn: updateProjectQuery,
 } as const;
+const projectSuggestionsEndpoint = {
+  providesTags: [{ id: "SUGGESTIONS", type: "Projects" }],
+  queryFn: getProjectSuggestionsQuery,
+} as const;
 
-let upsertSessionHistory: UpsertSessionHistory = (): void => {
-  throw new Error("session history cache upsert is not initialized");
-};
-let invalidateSessionHistory: InvalidateSessionHistory = (): void => {
-  throw new Error("session history invalidation is not initialized");
-};
-let updateSessionHistoryItems: UpdateSessionHistoryItems = (): void => {
-  throw new Error("session history cache item update is not initialized");
-};
-let invalidateSessionGroups: InvalidateSessionGroups = (): void => {
-  throw new Error("session groups invalidation is not initialized");
-};
-
-async function handleOpenSessionStarted(
-  { cwd, provider, sessionId, title }: OpenSessionMutationArg,
-  { dispatch, queryFulfilled }: OpenSessionLifecycleApi,
-): Promise<void> {
-  try {
-    const { data } = await queryFulfilled;
-    dispatch(
-      activeSessionOpened({
-        cwd,
-        openSessionId: data.openSessionId,
-        provider,
-        sessionId,
-        title,
-      }),
-    );
-    upsertSessionHistory(dispatch, data);
-  } catch {
-    // The query result already carries the user-visible failure.
-  }
-}
-
-async function handleSessionHistoryCacheEntryAdded(
-  { openSessionId }: ReadSessionHistoryQueryArg,
-  { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
-): Promise<void> {
-  let unsubscribe: (() => void) | null = null;
-  try {
-    await cacheDataLoaded;
-    unsubscribe = await sessionClient.subscribeTimelineChanges(
-      openSessionId,
-      (event) => {
-        if (event.openSessionId !== openSessionId) {
-          return;
-        }
-        if (event.items !== undefined) {
-          updateSessionHistoryItems(dispatch, {
-            items: event.items,
-            openSessionId,
-            revision: event.revision,
-          });
-          return;
-        }
-        invalidateSessionHistory(dispatch, openSessionId);
-      },
-    );
-    await cacheEntryRemoved;
-  } finally {
-    unsubscribe?.();
-  }
-}
-
-async function handleSessionGroupsCacheEntryAdded(
-  _query: SessionGroupsQuery | undefined,
-  { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
-): Promise<void> {
-  let unsubscribes: (() => void)[] = [];
-  try {
-    await cacheDataLoaded;
-    unsubscribes = await subscribeSessionIndexInvalidation(
-      sessionClient,
-      dispatch,
-      invalidateSessionGroups,
-    );
-    await cacheEntryRemoved;
-  } finally {
-    for (const unsubscribe of unsubscribes) {
-      unsubscribe();
-    }
-  }
-}
+const sessionTimelineMutations: SessionTimelineMutations =
+  createUninitializedSessionTimelineMutations();
+const sessionTimelineHandlers = createSessionTimelineHandlers(
+  sessionTimelineMutations,
+);
 
 const runtimeHealthEndpoint = {
   providesTags: [{ id: "CURRENT", type: "RuntimeHealth" }],
   queryFn: getRuntimeHealthQuery,
 } as const;
 const sessionGroupsEndpoint = {
-  onCacheEntryAdded: handleSessionGroupsCacheEntryAdded,
+  onCacheEntryAdded: sessionTimelineHandlers.handleSessionGroupsCacheEntryAdded,
   providesTags: [{ id: "LIST", type: "SessionGroups" }],
   queryFn: getSessionGroupsQuery,
 } as const;
 const openSessionEndpoint = {
-  onQueryStarted: handleOpenSessionStarted,
+  onQueryStarted: sessionTimelineHandlers.handleOpenSessionStarted,
   queryFn: openSessionQuery,
 } as const;
 const promptSessionEndpoint = {
   invalidatesTags: (
-    _result: unknown,
+    _result: null | undefined,
     _error: unknown,
-    args: PromptSessionMutationArg,
-  ) => [{ id: args.openSessionId, type: "SessionHistory" as const }],
+    { openSessionId }: PromptSessionMutationArg,
+  ) => [{ id: openSessionId, type: "SessionTimeline" as const }],
   queryFn: promptSessionQuery,
 } as const;
-const readSessionHistoryEndpoint = {
-  onCacheEntryAdded: handleSessionHistoryCacheEntryAdded,
+const readSessionTimelineEndpoint = {
+  onCacheEntryAdded:
+    sessionTimelineHandlers.handleSessionTimelineCacheEntryAdded,
   providesTags: (
-    _result: unknown,
+    _result: SessionTimelineData | undefined,
     _error: unknown,
-    args: ReadSessionHistoryQueryArg,
-  ) => [{ id: args.openSessionId, type: "SessionHistory" as const }],
-  queryFn: readSessionHistoryQuery,
+    { openSessionId }: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
+  ) => [{ id: openSessionId, type: "SessionTimeline" as const }],
+  queryFn: sessionTimelineHandlers.readSessionTimelineQueryFn,
+} as const;
+const loadOlderSessionTimelineEndpoint = {
+  onQueryStarted: sessionTimelineHandlers.handleLoadOlderSessionTimelineStarted,
+  queryFn: sessionTimelineHandlers.loadOlderTimelineQueryFn,
 } as const;
 
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["Projects", "RuntimeHealth", "SessionGroups", "SessionHistory"],
+  tagTypes: ["Projects", "RuntimeHealth", "SessionGroups", "SessionTimeline"],
   endpoints: (builder) => ({
     listProjects: builder.query<ProjectListView, undefined>(
       projectListEndpoint,
     ),
-    addProject: builder.mutation<ProjectListView, ProjectAddRequest>({
-      invalidatesTags: projectMutationInvalidations,
-      queryFn: addProjectQuery,
-    }),
-    removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>({
-      invalidatesTags: projectMutationInvalidations,
-      queryFn: removeProjectQuery,
-    }),
+    addProject: builder.mutation<ProjectListView, ProjectAddRequest>(
+      projectAddEndpoint,
+    ),
+    removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>(
+      projectRemoveEndpoint,
+    ),
     updateProject: builder.mutation<ProjectListView, ProjectUpdateArg>(
       projectUpdateEndpoint,
     ),
@@ -237,42 +150,116 @@ const conduitApi = createApi({
     promptSession: builder.mutation<null, PromptSessionMutationArg>(
       promptSessionEndpoint,
     ),
-    readSessionHistory: builder.query<
+    readSessionTimeline: builder.query<
+      SessionTimelineData,
+      Pick<ReadSessionHistoryQueryArg, "openSessionId">
+    >(readSessionTimelineEndpoint),
+    loadOlderSessionTimeline: builder.mutation<
       SessionHistoryWindow,
-      ReadSessionHistoryQueryArg
-    >(readSessionHistoryEndpoint),
+      LoadOlderSessionTimelineArg
+    >(loadOlderSessionTimelineEndpoint),
   }),
 });
 
-upsertSessionHistory = (dispatch, history): void => {
+sessionTimelineMutations.upsertSessionTimeline = (dispatch, history): void => {
   void dispatch(
     conduitApi.util.upsertQueryData(
-      "readSessionHistory",
+      "readSessionTimeline",
       { openSessionId: history.openSessionId },
-      history,
+      createSessionTimelineData(history),
     ),
   );
 };
 
-invalidateSessionHistory = (dispatch, openSessionId): void => {
+sessionTimelineMutations.invalidateSessionTimeline = (
+  dispatch,
+  openSessionId,
+): void => {
   void dispatch(
     conduitApi.util.invalidateTags([
-      { id: openSessionId, type: "SessionHistory" },
+      { id: openSessionId, type: "SessionTimeline" },
     ]),
   );
 };
 
-updateSessionHistoryItems = (dispatch, update): void => {
+sessionTimelineMutations.updateSessionTimelineItems = (
+  dispatch,
+  update,
+): void => {
   void dispatch(
     conduitApi.util.updateQueryData(
-      "readSessionHistory",
+      "readSessionTimeline",
       { openSessionId: update.openSessionId },
-      (history) => applyTimelineItems(history, update.revision, update.items),
+      (timeline) => {
+        const nextTimeline = applyTimelineItems(
+          timeline,
+          update.revision,
+          update.items,
+        );
+        timeline.history = nextTimeline.history;
+        timeline.pagination = nextTimeline.pagination;
+      },
     ),
   );
 };
 
-invalidateSessionGroups = (dispatch): void => {
+sessionTimelineMutations.markSessionTimelineOlderRequested = (
+  dispatch,
+  update,
+): void => {
+  void dispatch(
+    conduitApi.util.updateQueryData(
+      "readSessionTimeline",
+      { openSessionId: update.openSessionId },
+      (timeline) => {
+        const nextTimeline = beginOlderPageLoad(timeline, update.cursor);
+        timeline.history = nextTimeline.history;
+        timeline.pagination = nextTimeline.pagination;
+      },
+    ),
+  );
+};
+
+sessionTimelineMutations.mergeOlderSessionTimelinePage = (
+  dispatch,
+  update,
+): void => {
+  void dispatch(
+    conduitApi.util.updateQueryData(
+      "readSessionTimeline",
+      { openSessionId: update.openSessionId },
+      (timeline) => {
+        const mergedTimeline = mergeOlderPage(timeline, {
+          cursor: update.cursor,
+          history: update.history,
+        })[0];
+        timeline.history = mergedTimeline.history;
+        timeline.pagination = mergedTimeline.pagination;
+      },
+    ),
+  );
+};
+
+sessionTimelineMutations.markSessionTimelineOlderFailed = (
+  dispatch,
+  update,
+): void => {
+  void dispatch(
+    conduitApi.util.updateQueryData(
+      "readSessionTimeline",
+      { openSessionId: update.openSessionId },
+      (timeline) => {
+        const nextTimeline = failOlderPageLoad(timeline, update.cursor);
+        timeline.history = nextTimeline.history;
+        timeline.pagination = nextTimeline.pagination;
+      },
+    ),
+  );
+};
+
+sessionTimelineMutations.invalidateSessionGroups = (
+  dispatch: DispatchLike,
+): void => {
   void dispatch(
     conduitApi.util.invalidateTags([{ id: "LIST", type: "SessionGroups" }]),
   );
@@ -280,6 +267,7 @@ invalidateSessionGroups = (dispatch): void => {
 
 export { conduitApi };
 export type {
+  LoadOlderSessionTimelineArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,

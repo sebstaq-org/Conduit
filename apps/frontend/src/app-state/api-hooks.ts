@@ -2,28 +2,28 @@ import { conduitApi } from "./api";
 
 const {
   useAddProjectMutation,
-  useGetSessionGroupsQuery,
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
+  useGetSessionGroupsQuery,
   useListProjectsQuery,
-  useLazyReadSessionHistoryQuery,
+  useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
-  useReadSessionHistoryQuery,
+  useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
 } = conduitApi;
 
 export {
   useAddProjectMutation,
-  useGetSessionGroupsQuery,
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
+  useGetSessionGroupsQuery,
   useListProjectsQuery,
-  useLazyReadSessionHistoryQuery,
+  useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
-  useReadSessionHistoryQuery,
+  useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
 };
