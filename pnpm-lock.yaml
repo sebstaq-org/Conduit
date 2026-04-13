@@ -124,6 +124,9 @@ importers:
       '@rn-primitives/portal':
         specifier: 1.4.0
         version: 1.4.0(@types/react@19.2.14)(immer@11.1.4)(react-native-web@0.21.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-native@0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0))
+      '@shopify/flash-list':
+        specifier: 2.3.1
+        version: 2.3.1(@babel/runtime@7.29.2)(react-native@0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
       '@shopify/restyle':
         specifier: ^2.4.5
         version: 2.4.5(react-native@0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
@@ -2206,6 +2209,13 @@ packages:
     resolution: {integrity: sha512-lWMnixq/QzxyhTV6NjQJ4SFo1J6PvOX8vUx5Wb4bBPsEb+8xZ89Bz6kOXpfXj9ak9AHTQVQzlgzBEc1SyM27xQ==}
     cpu: [x64]
     os: [win32]
+
+  '@shopify/flash-list@2.3.1':
+    resolution: {integrity: sha512-7oktg2NQR7KAODjFoDaWe8/OBzyYbdTE3zQTrUBMxjIbxHTHN7UXRX1hX3DHk8KvtkgQdRfZOV8Gjj2l4fGrXw==}
+    peerDependencies:
+      '@babel/runtime': '*'
+      react: '*'
+      react-native: '*'
 
   '@shopify/restyle@2.4.5':
     resolution: {integrity: sha512-xV970ytoX0oLac9+fMOMxcXcV9nv5BtwdNk50ZoyhqSLyiGamLJMpL/lMZIQHsmfDT8sksbUx94zQnZBztMgww==}
@@ -6955,6 +6965,12 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.60.1':
     optional: true
+
+  '@shopify/flash-list@2.3.1(@babel/runtime@7.29.2)(react-native@0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      '@babel/runtime': 7.29.2
+      react: 19.2.0
+      react-native: 0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0)
 
   '@shopify/restyle@2.4.5(react-native@0.83.4(@babel/core@7.29.0)(@react-native/metro-config@0.85.0(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)':
     dependencies:

@@ -62,6 +62,7 @@ function SessionRowItem({
           openSession,
           request: {
             cwd: group.cwd,
+            limit: 100,
             provider: session.provider,
             sessionId: session.sessionId,
             title: session.title,

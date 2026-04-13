@@ -1,7 +1,7 @@
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
-import { Row } from "@/ui";
+import { VirtualList } from "@/ui";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
 import {
@@ -20,12 +20,47 @@ import type {
 } from "@conduit/session-client";
 
 interface SessionHistoryListProps {
-  history: SessionHistoryWindow | undefined;
-  isError: boolean;
-  isFetchingOlder: boolean;
-  isFetching: boolean;
-  isLoading: boolean;
-  onLoadOlder: () => void;
+  history: SessionHistoryWindow;
+  onStartReached: () => void;
+  openSessionId: string;
+}
+
+type SessionHistoryListRow =
+  | {
+      kind: "status";
+      key: string;
+      label: string;
+    }
+  | {
+      item: TranscriptItem;
+      kind: "transcript";
+      key: string;
+    };
+
+const historyViewportStyle = { flex: 1, minHeight: 0 } as const;
+const historyStartReachedThreshold = 2;
+const historyVisibleContentPosition = {
+  animateAutoScrollToBottom: false,
+  autoscrollToBottomThreshold: 0.2,
+  autoscrollToTopThreshold: 0.2,
+  startRenderingFromBottom: true,
+} as const;
+
+function eventLabel(item: TranscriptItem): string {
+  if (item.kind !== "event") {
+    return "";
+  }
+  if (item.variant === "tool_call" || item.variant === "tool_call_update") {
+    return "Tool call";
+  }
+  return item.variant;
+}
+
+function renderEventItem(item: TranscriptItem): React.JSX.Element | null {
+  if (item.kind !== "event") {
+    return null;
+  }
+  return <Text variant={historyStatusVariant}>{eventLabel(item)}</Text>;
 }
 
 function renderAgentMessage(item: TranscriptItem): React.JSX.Element | null {
@@ -33,7 +68,7 @@ function renderAgentMessage(item: TranscriptItem): React.JSX.Element | null {
     return null;
   }
   return (
-    <Box alignItems={historyAgentRowAlignItems} key={item.id}>
+    <Box alignItems={historyAgentRowAlignItems}>
       <SessionHistoryMarkdown markdown={transcriptItemLabel(item)} />
     </Box>
   );
@@ -47,7 +82,7 @@ function renderUserMessage(
     return null;
   }
   return (
-    <Box alignItems={historyUserRowAlignItems} key={item.id}>
+    <Box alignItems={historyUserRowAlignItems}>
       <Box
         backgroundColor={historyUserBubbleBackgroundColor}
         style={createHistoryUserBubbleStyle(theme)}
@@ -64,6 +99,9 @@ function renderTranscriptItem(
   item: TranscriptItem,
   theme: Theme,
 ): React.JSX.Element | null {
+  if (item.kind === "event") {
+    return renderEventItem(item);
+  }
   if (item.kind !== "message") {
     return null;
   }
@@ -73,61 +111,84 @@ function renderTranscriptItem(
   return renderAgentMessage(item);
 }
 
-function renderStatusText(text: string, key?: string): React.JSX.Element {
-  return (
-    <Text key={key} variant={historyStatusVariant}>
-      {text}
-    </Text>
-  );
+function sessionHistoryRows(
+  history: SessionHistoryWindow,
+): SessionHistoryListRow[] {
+  if (history.items.length === 0) {
+    return [{ kind: "status", key: "status:empty", label: "No messages yet" }];
+  }
+  return history.items.map((item) => ({
+    item,
+    kind: "transcript",
+    key: `item:${item.id}`,
+  }));
 }
 
-function loadOlderLabel(isFetchingOlder: boolean): string {
-  if (isFetchingOlder) {
-    return "Loading older messages";
+function rowType(row: SessionHistoryListRow): string {
+  if (row.kind === "status") {
+    return "status";
   }
-  return "Load older messages";
+  if (row.item.kind === "event") {
+    return "event";
+  }
+  if (row.item.role === "user") {
+    return "user";
+  }
+  return "agent";
 }
 
-function loadOlderPress(
-  isFetchingOlder: boolean,
-  onLoadOlder: () => void,
-): (() => void) | undefined {
-  if (isFetchingOlder) {
-    return undefined;
+function renderHistoryRow(
+  row: SessionHistoryListRow,
+  theme: Theme,
+): React.JSX.Element | null {
+  if (row.kind === "status") {
+    return <Text variant={historyStatusVariant}>{row.label}</Text>;
   }
-  return onLoadOlder;
+  return renderTranscriptItem(row.item, theme);
+}
+
+function createHistoryContentContainerStyle(theme: Theme): {
+  alignSelf: "center";
+  maxWidth: number;
+  paddingBottom: number;
+  width: "100%";
+} {
+  const historyListStyle = createHistoryListStyle(theme);
+  return {
+    alignSelf: historyListStyle.alignSelf,
+    maxWidth: historyListStyle.maxWidth,
+    paddingBottom: theme.spacing.scrollBottom,
+    width: historyListStyle.width,
+  };
+}
+
+function historyItemSeparator(theme: Theme): React.JSX.Element {
+  return <Box style={{ height: theme.spacing[historyListGap] }} />;
 }
 
 function SessionHistoryList({
   history,
-  isError,
-  isFetchingOlder,
-  isFetching,
-  isLoading,
-  onLoadOlder,
+  onStartReached,
+  openSessionId,
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
+  const rows = sessionHistoryRows(history);
 
   return (
-    <Box gap={historyListGap} style={createHistoryListStyle(theme)}>
-      {isLoading && renderStatusText("Loading session")}
-      {isError && renderStatusText("Session unavailable")}
-      {isFetching &&
-        !isLoading &&
-        history === undefined &&
-        renderStatusText("Refreshing session")}
-      {history?.nextCursor !== null && history?.nextCursor !== undefined && (
-        <Row
-          label={loadOlderLabel(isFetchingOlder)}
-          muted={isFetchingOlder}
-          onPress={loadOlderPress(isFetchingOlder, onLoadOlder)}
-        />
-      )}
-      {history !== undefined &&
-        history.items.length === 0 &&
-        renderStatusText("No messages yet")}
-      {history?.items.map((item) => renderTranscriptItem(item, theme))}
-    </Box>
+    <VirtualList
+      contentContainerStyle={createHistoryContentContainerStyle(theme)}
+      data={rows}
+      getItemType={rowType}
+      ItemSeparatorComponent={() => historyItemSeparator(theme)}
+      keyExtractor={(row) => row.key}
+      listKey={openSessionId}
+      maintainVisibleContentPosition={historyVisibleContentPosition}
+      onStartReached={onStartReached}
+      onStartReachedThreshold={historyStartReachedThreshold}
+      renderItem={({ item }) => renderHistoryRow(item, theme)}
+      showsVerticalScrollIndicator
+      style={historyViewportStyle}
+    />
   );
 }
 

@@ -1,14 +1,14 @@
 export { conduitApi } from "./api";
 export {
   useAddProjectMutation,
-  useGetSessionGroupsQuery,
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
+  useGetSessionGroupsQuery,
   useListProjectsQuery,
-  useLazyReadSessionHistoryQuery,
+  useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
-  useReadSessionHistoryQuery,
+  useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
 } from "./api-hooks";
@@ -23,17 +23,19 @@ export {
   updateProjectDisplayName,
 } from "./project-commands";
 export type {
+  LoadOlderSessionTimelineArg,
+  OpenSessionMutationArg,
+  PromptSessionMutationArg,
+  ReadSessionHistoryQueryArg,
+} from "./api";
+export type {
   ProjectMutationState,
   RemoveProjectTrigger,
   UpdateProjectTrigger,
 } from "./project-commands";
 export { selectActiveSession } from "./session-selection";
-export type {
-  OpenSessionMutationArg,
-  PromptSessionMutationArg,
-  ReadSessionHistoryQueryArg,
-} from "./api";
 export type { ActiveSession } from "./session-selection";
+export { useSessionTimeline } from "./session-timeline";
 export { ConduitStoreProvider } from "./provider";
 export { store } from "./store";
 export type { AppDispatch, RootState } from "./store";

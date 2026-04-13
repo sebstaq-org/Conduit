@@ -1,98 +1,21 @@
-import { skipToken } from "@reduxjs/toolkit/query";
-import { useCallback, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
 import { useSelector } from "react-redux";
-import { selectActiveSession, useReadSessionHistoryQuery } from "@/app-state";
+import { selectActiveSession, useSessionTimeline } from "@/app-state";
 import { Box, Text } from "@/theme";
-import { ScrollArea } from "@/ui";
-import { historyStatusVariant } from "./session-history.styles";
 import { SessionHistoryList } from "./session-history-list";
-import {
-  activeOlderHistoryFor,
-  currentOlderPageFor,
-  historyViewState,
-  nextOlderHistoryState,
-} from "./session-history-window";
-import type { ActiveSession } from "@/app-state";
-import type { SessionHistoryWindow } from "@conduit/session-client";
-import type { OlderHistoryState } from "./session-history-window";
+import type { ViewStyle } from "react-native";
 
-interface SessionHistoryQueryArg {
-  cursor?: string | null;
-  limit?: number;
-  openSessionId: string;
-}
+type HistoryRenderState = "loading" | "ready" | "unavailable";
 
-interface LoadOlderContext {
-  activeSession: ActiveSession | null;
-  data: SessionHistoryWindow | undefined;
-  olderHistory: OlderHistoryState | null;
-  olderPage: ReturnType<typeof currentOlderPageFor>;
-  setOlderHistory: Dispatch<SetStateAction<OlderHistoryState | null>>;
-}
-
-interface HistoryContentProps {
-  history: SessionHistoryWindow | undefined;
-  isError: boolean;
-  isFetching: boolean;
-  isFetchingOlder: boolean;
-  isLoading: boolean;
-  onLoadOlder: () => void;
-}
-
-interface OlderHistoryView {
-  historyState: ReturnType<typeof historyViewState>;
-  isFetchingOlder: boolean;
-  isOlderError: boolean;
-}
-
-type OptionalSessionHistoryQueryArg = SessionHistoryQueryArg | typeof skipToken;
-
-function sessionHistoryQueryArg(
-  activeSession: ActiveSession | null,
-): OptionalSessionHistoryQueryArg {
-  if (activeSession === null) {
-    return skipToken;
-  }
-  return {
-    openSessionId: activeSession.openSessionId,
-  };
-}
-
-function olderHistoryQueryArg(
-  activeSession: ActiveSession | null,
-  olderHistory: OlderHistoryState | null,
-): OptionalSessionHistoryQueryArg {
-  if (
-    activeSession === null ||
-    olderHistory === null ||
-    olderHistory.cursor === null
-  ) {
-    return skipToken;
-  }
-  return {
-    cursor: olderHistory.cursor,
-    limit: 40,
-    openSessionId: activeSession.openSessionId,
-  };
-}
-
-function loadOlderWindow({
-  activeSession,
-  data,
-  olderHistory,
-  olderPage,
-  setOlderHistory,
-}: LoadOlderContext): void {
-  setOlderHistory(
-    nextOlderHistoryState({
-      data,
-      olderHistory,
-      olderPage,
-      openSessionId: activeSession?.openSessionId ?? null,
-    }),
-  );
-}
+const historyStatusVariant = "rowLabelMuted" as const;
+const historyRootStyle: ViewStyle = { minHeight: 0, position: "relative" };
+const historyOverlayStyle: ViewStyle = {
+  alignItems: "center",
+  left: 0,
+  position: "absolute",
+  right: 0,
+  top: 8,
+  zIndex: 1,
+};
 
 function renderNoActiveSession(): React.JSX.Element {
   return (
@@ -102,86 +25,105 @@ function renderNoActiveSession(): React.JSX.Element {
   );
 }
 
-function renderHistoryContent({
-  history,
-  isError,
-  isFetching,
-  isFetchingOlder,
-  isLoading,
-  onLoadOlder,
-}: HistoryContentProps): React.JSX.Element {
+function renderHistoryUnavailable(): React.JSX.Element {
   return (
     <Box flex={1}>
-      <ScrollArea>
-        <SessionHistoryList
-          history={history}
-          isError={isError}
-          isFetching={isFetching}
-          isFetchingOlder={isFetchingOlder}
-          isLoading={isLoading}
-          onLoadOlder={onLoadOlder}
-        />
-      </ScrollArea>
+      <Text variant={historyStatusVariant}>Session unavailable</Text>
     </Box>
   );
 }
 
-function useOlderHistoryView(
-  activeSession: ActiveSession | null,
-  data: SessionHistoryWindow | undefined,
-  olderHistory: OlderHistoryState | null,
-): OlderHistoryView {
-  const activeOlderHistory = activeOlderHistoryFor(olderHistory, data);
-  const olderPageQuery = useReadSessionHistoryQuery(
-    olderHistoryQueryArg(activeSession, activeOlderHistory),
+function renderHistoryLoading(): React.JSX.Element {
+  return (
+    <Box flex={1}>
+      <Text variant={historyStatusVariant}>Loading session</Text>
+    </Box>
   );
-  const olderPage = currentOlderPageFor(
-    activeOlderHistory,
-    activeOlderHistory?.cursor ?? null,
-    olderPageQuery.currentData,
+}
+
+function historyRenderState(
+  timeline: Pick<
+    ReturnType<typeof useSessionTimeline>,
+    "history" | "isError" | "isFetching" | "isLoading"
+  >,
+): HistoryRenderState {
+  if (timeline.history !== undefined) {
+    return "ready";
+  }
+  if (timeline.isError) {
+    return "unavailable";
+  }
+  if (timeline.isLoading || timeline.isFetching || !timeline.isError) {
+    return "loading";
+  }
+  return "unavailable";
+}
+
+function renderHistoryByState(state: HistoryRenderState): React.JSX.Element {
+  if (state === "loading") {
+    return renderHistoryLoading();
+  }
+  return renderHistoryUnavailable();
+}
+
+function olderStatusLabel(
+  timeline: Pick<
+    ReturnType<typeof useSessionTimeline>,
+    "isFetchingOlder" | "isOlderError"
+  >,
+): string | null {
+  if (timeline.isFetchingOlder) {
+    return "Loading older messages";
+  }
+  if (timeline.isOlderError) {
+    return "Failed to load older messages";
+  }
+  return null;
+}
+
+function renderReadyHistory(
+  timeline: Pick<
+    ReturnType<typeof useSessionTimeline>,
+    "history" | "isFetchingOlder" | "isOlderError" | "loadOlderIfNeeded"
+  >,
+  openSessionId: string,
+): React.JSX.Element {
+  if (timeline.history === undefined) {
+    return renderHistoryUnavailable();
+  }
+  const handleStartReached = timeline.loadOlderIfNeeded;
+  const statusLabel = olderStatusLabel(timeline);
+
+  return (
+    <Box flex={1} style={historyRootStyle}>
+      <SessionHistoryList
+        history={timeline.history}
+        onStartReached={handleStartReached}
+        openSessionId={openSessionId}
+      />
+      {statusLabel !== null && (
+        <Box pointerEvents="none" style={historyOverlayStyle}>
+          <Text variant={historyStatusVariant}>{statusLabel}</Text>
+        </Box>
+      )}
+    </Box>
   );
-  return {
-    historyState: historyViewState(data, activeOlderHistory, olderPage),
-    isFetchingOlder: olderPageQuery.isFetching,
-    isOlderError: olderPageQuery.isError,
-  };
 }
 
 function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
-  const [olderHistory, setOlderHistory] = useState<OlderHistoryState | null>(
-    null,
-  );
-  const { data, isError, isFetching, isLoading } = useReadSessionHistoryQuery(
-    sessionHistoryQueryArg(activeSession),
-  );
-  const { historyState, isFetchingOlder, isOlderError } = useOlderHistoryView(
-    activeSession,
-    data,
-    olderHistory,
-  );
-  const loadOlder = useCallback(() => {
-    loadOlderWindow({
-      activeSession,
-      data,
-      olderHistory: historyState.activeOlderHistory,
-      olderPage: historyState.activeOlderPage,
-      setOlderHistory,
-    });
-  }, [activeSession, data, historyState]);
+  const openSessionId = activeSession?.openSessionId ?? null;
+  const timeline = useSessionTimeline(openSessionId);
 
-  if (activeSession === null) {
+  if (activeSession === null || openSessionId === null) {
     return renderNoActiveSession();
   }
 
-  return renderHistoryContent({
-    history: historyState.history,
-    isError: isError || isOlderError,
-    isFetching,
-    isFetchingOlder,
-    isLoading,
-    onLoadOlder: loadOlder,
-  });
+  const state = historyRenderState(timeline);
+  if (state !== "ready" || timeline.history === undefined) {
+    return renderHistoryByState(state);
+  }
+  return renderReadyHistory(timeline, openSessionId);
 }
 
 export { SessionHistory };

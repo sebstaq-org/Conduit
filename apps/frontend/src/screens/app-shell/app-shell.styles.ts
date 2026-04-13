@@ -27,6 +27,7 @@ function createAppShellRootStyle(theme: Theme): ViewStyle {
   return {
     backgroundColor: theme.colors.background,
     flex: appShellFlex,
+    minHeight: 0,
   };
 }
 
