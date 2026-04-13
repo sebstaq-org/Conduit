@@ -13,7 +13,7 @@ interface NavigationPanelScrollContentProps {
   onSessionSelected?: (() => void) | undefined;
 }
 
-const defaultUpdatedWithinDays = 5;
+const defaultSessionGroupsQuery = {};
 
 function createNavigationPanelContentContainerStyle(theme: Theme): {
   paddingBottom: number;
@@ -25,9 +25,9 @@ function NavigationPanelScrollContent({
   onSessionSelected,
 }: NavigationPanelScrollContentProps): React.JSX.Element {
   const theme = useTheme<Theme>();
-  const { data, error, isError, isLoading } = useGetSessionGroupsQuery({
-    updatedWithinDays: defaultUpdatedWithinDays,
-  });
+  const { data, error, isError, isLoading } = useGetSessionGroupsQuery(
+    defaultSessionGroupsQuery,
+  );
   const [openSession, openSessionState] = useOpenSessionMutation();
   const showOpenSessionError =
     openSessionState.isError && !openSessionState.isSuccess;
