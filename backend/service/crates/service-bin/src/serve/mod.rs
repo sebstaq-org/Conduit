@@ -26,6 +26,26 @@ struct ServeState {
     actor: RuntimeActor,
 }
 
+const CATALOG_COMMANDS: [&str; 17] = [
+    "initialize",
+    "session/new",
+    "session/prompt",
+    "session/cancel",
+    "provider/disconnect",
+    "projects/add",
+    "projects/list",
+    "projects/remove",
+    "projects/suggestions",
+    "projects/update",
+    "settings/get",
+    "settings/update",
+    "sessions/grouped",
+    "sessions/watch",
+    "session/open",
+    "session/history",
+    "session/watch",
+];
+
 /// Runs the versioned consumer WebSocket service.
 ///
 /// # Errors
@@ -62,18 +82,7 @@ async fn health() -> Json<serde_json::Value> {
 async fn catalog() -> Json<serde_json::Value> {
     Json(json!({
         "providers": ["claude", "copilot", "codex"],
-        "commands": [
-            "initialize",
-            "session/new",
-            "session/open",
-            "session/history",
-            "session/watch",
-            "session/prompt",
-            "session/cancel",
-            "provider/disconnect",
-            "sessions/watch",
-            "sessions/grouped"
-        ],
+        "commands": CATALOG_COMMANDS,
     }))
 }
 

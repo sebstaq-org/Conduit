@@ -1,13 +1,10 @@
-import { PanelFooter, Row } from "@/ui";
-
-function handleMockSettingsPress(): boolean {
-  return false;
-}
+import { SessionHistorySettingsControl } from "@/features/settings";
+import { PanelFooter } from "@/ui";
 
 function NavigationPanelSettings(): React.JSX.Element {
   return (
     <PanelFooter>
-      <Row icon="settings" label="Settings" onPress={handleMockSettingsPress} />
+      <SessionHistorySettingsControl />
     </PanelFooter>
   );
 }

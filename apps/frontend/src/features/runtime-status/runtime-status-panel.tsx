@@ -25,7 +25,7 @@ function lastHealthyMeta(checkedAt: string | undefined): string | null {
 }
 
 function RuntimeStatusPanel(): React.JSX.Element | null {
-  const runtimeHealth = useGetRuntimeHealthQuery(undefined, {
+  const runtimeHealth = useGetRuntimeHealthQuery(null, {
     pollingInterval: runtimePollingIntervalMs,
     refetchOnFocus: true,
     refetchOnReconnect: true,

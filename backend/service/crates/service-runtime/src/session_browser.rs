@@ -1,5 +1,6 @@
 //! Session browser product read-model commands.
 
+use crate::RuntimeError;
 use crate::command::ConsumerResponse;
 use crate::error::{optional_string_param, optional_u64_param, path_param, string_param};
 use crate::event::RuntimeEventKind;
@@ -15,6 +16,8 @@ use std::collections::HashSet;
 const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 const DEFAULT_PROJECT_SUGGESTIONS_LIMIT: usize = 20;
 const MAX_PROJECT_SUGGESTIONS_LIMIT: usize = 100;
+const MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 1;
+const MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 365;
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +36,10 @@ struct ProjectSuggestionsQuery {
     limit: usize,
 }
 
+struct GlobalSettingsUpdateRequest {
+    session_groups_updated_within_days: Option<u64>,
+}
+
 impl<F> ServiceRuntime<F>
 where
     F: ProviderFactory,
@@ -43,9 +50,11 @@ where
         provider_target: &str,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let query = SessionGroupsQuery::from_params(params)?;
         let providers = providers_from_target(provider_target)?;
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+        let settings = self.local_store.global_settings()?;
+        let query =
+            SessionGroupsQuery::from_params(params, settings.session_groups_updated_within_days)?;
         let projects = self.local_store.projects()?;
         let snapshot = self.local_store.session_index(&providers)?;
         let is_refreshing = !projects.is_empty() && snapshot.refreshed_at.is_none();
@@ -59,6 +68,34 @@ where
         Ok(ConsumerResponse::success_without_snapshot(
             id,
             json!({ "subscribed": true }),
+        ))
+    }
+
+    pub(crate) fn settings_get(&self, id: String) -> Result<ConsumerResponse> {
+        let settings = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.global_settings()?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(settings)?,
+        ))
+    }
+
+    pub(crate) fn settings_update(
+        &mut self,
+        id: String,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let request = GlobalSettingsUpdateRequest::from_params(params)?;
+        let settings = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .update_global_settings(request.session_groups_updated_within_days)?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_value(settings)?,
         ))
     }
 
@@ -247,5 +284,47 @@ impl ProjectSuggestionsQuery {
             None => DEFAULT_PROJECT_SUGGESTIONS_LIMIT,
         };
         Ok(Self { query, limit })
+    }
+}
+
+impl GlobalSettingsUpdateRequest {
+    fn from_params(params: &Value) -> Result<Self> {
+        let value =
+            params
+                .get("sessionGroupsUpdatedWithinDays")
+                .ok_or(RuntimeError::MissingParameter {
+                    command: "settings/update",
+                    parameter: "sessionGroupsUpdatedWithinDays",
+                })?;
+        let session_groups_updated_within_days = parse_settings_lookback(value)?;
+        Ok(Self {
+            session_groups_updated_within_days,
+        })
+    }
+}
+
+fn parse_settings_lookback(value: &Value) -> Result<Option<u64>> {
+    match value {
+        Value::Null => Ok(None),
+        Value::Number(days) => {
+            let days = days.as_u64().ok_or(RuntimeError::InvalidStringParameter {
+                command: "settings/update",
+                parameter: "sessionGroupsUpdatedWithinDays",
+            })?;
+            if (MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS..=MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS)
+                .contains(&days)
+            {
+                return Ok(Some(days));
+            }
+            Err(RuntimeError::InvalidParameter {
+                command: "settings/update",
+                parameter: "sessionGroupsUpdatedWithinDays",
+                message: "value must be between 1 and 365 or null",
+            })
+        }
+        _ => Err(RuntimeError::InvalidStringParameter {
+            command: "settings/update",
+            parameter: "sessionGroupsUpdatedWithinDays",
+        }),
     }
 }

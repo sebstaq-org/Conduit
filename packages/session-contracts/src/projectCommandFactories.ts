@@ -6,7 +6,7 @@ import {
 } from "./commandParams.js";
 import type {
   ConsumerCommand,
-  ConsumerCommandTarget,
+  GlobalCommandTarget,
   ProjectAddCommandName,
   ProjectAddConsumerCommand,
   ProjectListCommandName,
@@ -28,13 +28,13 @@ type ProjectCommandName =
 
 type ProjectCommandFactory = (
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
   params: unknown,
 ) => ConsumerCommand;
 
 function createProjectAddCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
   params: unknown,
 ): ProjectAddConsumerCommand {
   if (!isProjectAddRequest(params)) {
@@ -50,7 +50,7 @@ function createProjectAddCommand(
 
 function createProjectListCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
 ): ProjectListConsumerCommand {
   return {
     id,
@@ -62,7 +62,7 @@ function createProjectListCommand(
 
 function createProjectRemoveCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
   params: unknown,
 ): ProjectRemoveConsumerCommand {
   if (!isProjectRemoveRequest(params)) {
@@ -78,7 +78,7 @@ function createProjectRemoveCommand(
 
 function createProjectSuggestionsCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
   params: unknown,
 ): ProjectSuggestionsConsumerCommand {
   if (!isProjectSuggestionsQuery(params)) {
@@ -94,7 +94,7 @@ function createProjectSuggestionsCommand(
 
 function createProjectUpdateCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: GlobalCommandTarget,
   params: unknown,
 ): ProjectUpdateConsumerCommand {
   if (!isProjectUpdateRequest(params)) {

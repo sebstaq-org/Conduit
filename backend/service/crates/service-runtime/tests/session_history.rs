@@ -58,7 +58,7 @@ fn assert_older_history_page(
     let older = runtime.dispatch(command(
         command_id,
         "session/history",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "cursor": next_cursor,
@@ -100,7 +100,7 @@ fn session_history_uses_open_session_id_as_product_identity() -> TestResult<()> 
     let response = runtime.dispatch(command(
         "2",
         "session/history",
-        "codex",
+        "all",
         json!({
             "openSessionId": string_field(&opened.result, "openSessionId")?
         }),
@@ -128,7 +128,7 @@ fn session_history_without_cursor_returns_latest_window_without_provider_load() 
     let latest = runtime.dispatch(command(
         "2",
         "session/history",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "limit": 2
@@ -180,7 +180,7 @@ fn session_prompt_open_session_appends_to_timeline_and_emits_revision() -> TestR
     let prompt = runtime.dispatch(command(
         "2",
         "session/prompt",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "prompt": [{ "type": "text", "text": "user prompt" }]
@@ -255,7 +255,7 @@ fn session_prompt_history_preserves_non_text_content_blocks() -> TestResult<()> 
     let prompt = runtime.dispatch(command(
         "2",
         "session/prompt",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "prompt": prompt_content
@@ -277,7 +277,7 @@ fn session_prompt_rejects_raw_session_id_target() -> TestResult<()> {
     let prompt = runtime.dispatch(command(
         "1",
         "session/prompt",
-        "codex",
+        "all",
         json!({
             "session_id": "session-1",
             "prompt": [{ "type": "text", "text": "raw target" }]
@@ -372,7 +372,7 @@ fn session_prompt_uses_open_session_id_as_product_identity() -> TestResult<()> {
     let prompt = runtime.dispatch(command(
         "2",
         "session/prompt",
-        "claude",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "prompt": [{ "type": "text", "text": "wrong provider" }]
@@ -418,7 +418,7 @@ fn session_prompt_open_session_marks_cancelled_turn_status() -> TestResult<()> {
     let prompt = runtime.dispatch(command(
         "2",
         "session/prompt",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "prompt": [{ "type": "text", "text": "cancel me" }]
@@ -429,7 +429,7 @@ fn session_prompt_open_session_marks_cancelled_turn_status() -> TestResult<()> {
     let latest = runtime.dispatch(command(
         "3",
         "session/history",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "limit": 10

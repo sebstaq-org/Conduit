@@ -1,5 +1,7 @@
 import type {
   ContentBlock,
+  GlobalSettingsUpdateRequest,
+  GlobalSettingsView,
   ProviderId,
   ProjectAddRequest,
   ProjectListView,
@@ -133,6 +135,26 @@ async function getSessionGroupsQuery(
   }
 }
 
+async function getSettingsQuery(): QueryResult<GlobalSettingsView> {
+  try {
+    const data = await sessionClient.getSettings();
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function updateSettingsQuery(
+  request: GlobalSettingsUpdateRequest,
+): QueryResult<GlobalSettingsView> {
+  try {
+    const data = await sessionClient.updateSettings(request);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
 async function listProjectsQuery(): QueryResult<ProjectListView> {
   try {
     const data = await sessionClient.listProjects();
@@ -249,6 +271,7 @@ export {
   addProjectQuery,
   getRuntimeHealthQuery,
   getProjectSuggestionsQuery,
+  getSettingsQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
   openSessionQuery,
@@ -257,6 +280,7 @@ export {
   removeProjectQuery,
   sessionClient,
   updateProjectQuery,
+  updateSettingsQuery,
 };
 export type {
   OpenSessionMutationArg,

@@ -9,8 +9,9 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const DEFAULT_UPDATED_WITHIN_DAYS: u64 = 5;
 const SECONDS_PER_DAY: u64 = 86_400;
+const MIN_UPDATED_WITHIN_DAYS: u64 = 1;
+const MAX_UPDATED_WITHIN_DAYS: u64 = 365;
 const ALL_PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
 
 #[derive(Debug, Clone)]
@@ -55,7 +56,10 @@ struct SessionGroupsView {
 }
 
 impl SessionGroupsQuery {
-    pub(crate) fn from_params(params: &Value) -> Result<Self> {
+    pub(crate) fn from_params(
+        params: &Value,
+        default_updated_within_days: Option<u64>,
+    ) -> Result<Self> {
         if params.get("providers").is_some() {
             return Err(RuntimeError::InvalidParameter {
                 command: "sessions/grouped",
@@ -72,7 +76,10 @@ impl SessionGroupsQuery {
         }
         let updated_within_days = params.get("updatedWithinDays").cloned();
         Ok(Self {
-            updated_since_epoch: updated_since_epoch(updated_within_days)?,
+            updated_since_epoch: updated_since_epoch(
+                updated_within_days,
+                default_updated_within_days,
+            )?,
         })
     }
 
@@ -189,9 +196,12 @@ pub(crate) fn grouped_view(
     .map_err(RuntimeError::from)
 }
 
-fn updated_since_epoch(updated_within_days: Option<Value>) -> Result<Option<u64>> {
+fn updated_since_epoch(
+    updated_within_days: Option<Value>,
+    default_updated_within_days: Option<u64>,
+) -> Result<Option<u64>> {
     let updated_within_days = match updated_within_days {
-        None => Some(DEFAULT_UPDATED_WITHIN_DAYS),
+        None => default_updated_within_days,
         Some(Value::Null) => None,
         Some(Value::Number(number)) => Some(number.as_u64().ok_or(
             RuntimeError::InvalidStringParameter {
@@ -209,6 +219,13 @@ fn updated_since_epoch(updated_within_days: Option<Value>) -> Result<Option<u64>
     let Some(updated_within_days) = updated_within_days else {
         return Ok(None);
     };
+    if !(MIN_UPDATED_WITHIN_DAYS..=MAX_UPDATED_WITHIN_DAYS).contains(&updated_within_days) {
+        return Err(RuntimeError::InvalidParameter {
+            command: "sessions/grouped",
+            parameter: "updatedWithinDays",
+            message: "value must be between 1 and 365 or null",
+        });
+    }
     let now_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());

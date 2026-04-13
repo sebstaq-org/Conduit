@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import {
+  GlobalSettingsUpdateRequestSchema,
+  GlobalSettingsViewSchema,
   ProjectListViewSchema,
   ProjectSuggestionsViewSchema,
   SessionGroupsQuerySchema,
@@ -106,4 +108,52 @@ it("rejects cwd filters in the session groups query", () => {
   };
 
   expect(() => SessionGroupsQuerySchema.parse(payload)).toThrow();
+});
+
+it("accepts numeric updatedWithinDays session groups query", () => {
+  const payload = {
+    updatedWithinDays: 17,
+  };
+
+  expect(SessionGroupsQuerySchema.parse(payload)).toEqual(payload);
+});
+
+it("accepts global settings view with all-history lookback", () => {
+  const payload = {
+    sessionGroupsUpdatedWithinDays: null,
+  };
+
+  expect(GlobalSettingsViewSchema.parse(payload)).toEqual(payload);
+});
+
+it("accepts global settings update request with custom lookback", () => {
+  const payload = {
+    sessionGroupsUpdatedWithinDays: 17,
+  };
+
+  expect(GlobalSettingsUpdateRequestSchema.parse(payload)).toEqual(payload);
+});
+
+it("rejects zero session groups query lookback", () => {
+  const payload = {
+    updatedWithinDays: 0,
+  };
+
+  expect(() => SessionGroupsQuerySchema.parse(payload)).toThrow();
+});
+
+it("rejects zero global settings lookback", () => {
+  const payload = {
+    sessionGroupsUpdatedWithinDays: 0,
+  };
+
+  expect(() => GlobalSettingsUpdateRequestSchema.parse(payload)).toThrow();
+});
+
+it("rejects out-of-range global settings lookback", () => {
+  const payload = {
+    sessionGroupsUpdatedWithinDays: 366,
+  };
+
+  expect(() => GlobalSettingsUpdateRequestSchema.parse(payload)).toThrow();
 });

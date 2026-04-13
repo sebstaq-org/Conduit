@@ -34,15 +34,17 @@ mod project_suggestions;
 mod projects;
 mod prompt_turn;
 mod session_index;
+mod settings;
 mod timeline_storage;
 mod transcript;
 
 pub use project_suggestions::ProjectSuggestion;
 pub use projects::{ProjectRow, project_id_for_cwd};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
+pub use settings::GlobalSettings;
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 const BOOTSTRAP_SCHEMA: &str = "
     CREATE TABLE open_sessions (
         open_session_id TEXT PRIMARY KEY,
@@ -94,7 +96,23 @@ const BOOTSTRAP_SCHEMA: &str = "
         suggestion_id TEXT NOT NULL,
         PRIMARY KEY(provider, cwd)
     );
-    PRAGMA user_version = 5;
+    CREATE TABLE global_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        session_groups_updated_within_days INTEGER
+    );
+    INSERT INTO global_settings (id, session_groups_updated_within_days)
+    VALUES (1, 5);
+    PRAGMA user_version = 6;
+";
+const MIGRATE_SCHEMA_5_TO_6: &str = "
+    CREATE TABLE IF NOT EXISTS global_settings (
+        id INTEGER PRIMARY KEY CHECK(id = 1),
+        session_groups_updated_within_days INTEGER
+    );
+    INSERT INTO global_settings (id, session_groups_updated_within_days)
+    VALUES (1, 5)
+    ON CONFLICT(id) DO NOTHING;
+    PRAGMA user_version = 6;
 ";
 
 /// Result type for local store operations.
@@ -485,6 +503,10 @@ impl LocalStore {
         match version {
             0 => {
                 self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
+                Ok(())
+            }
+            5 => {
+                self.connection.execute_batch(MIGRATE_SCHEMA_5_TO_6)?;
                 Ok(())
             }
             SCHEMA_VERSION => Ok(()),

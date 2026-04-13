@@ -1,5 +1,7 @@
 import type {
   ConsumerResponse,
+  GlobalSettingsUpdateRequest,
+  GlobalSettingsView,
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
@@ -27,6 +29,7 @@ interface SessionClientPort {
   getProjectSuggestions(
     query?: ProjectSuggestionsQuery,
   ): Promise<ProjectSuggestionsView>;
+  getSettings(): Promise<GlobalSettingsView>;
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
   listProjects(): Promise<ProjectListView>;
   openSession(
@@ -39,6 +42,9 @@ interface SessionClientPort {
   promptSession(request: SessionPromptRequest): Promise<void>;
   removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
   updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;
+  updateSettings(
+    request: GlobalSettingsUpdateRequest,
+  ): Promise<GlobalSettingsView>;
   subscribeTimelineChanges(
     openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,

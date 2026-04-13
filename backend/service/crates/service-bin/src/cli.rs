@@ -54,7 +54,11 @@ fn runtime_command(args: &[String]) -> Result<ConsumerCommand> {
 
 fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
     match command {
-        "initialize" | "session/list" | "provider/disconnect" | "sessions/watch" => Ok(json!({})),
+        "initialize"
+        | "session/list"
+        | "provider/disconnect"
+        | "sessions/watch"
+        | "settings/get" => Ok(json!({})),
         "session/new" => Ok(json!({
             "cwd": required_value(args, "--cwd")?,
         })),
@@ -77,8 +81,26 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
             "prompt": [{ "type": "text", "text": required_value(args, "--prompt")? }],
         })),
         "session/cancel" => Ok(json!({ "session_id": required_value(args, "--session-id")? })),
+        "settings/update" => Ok(json!({
+            "sessionGroupsUpdatedWithinDays": settings_lookback_value(args)?
+        })),
         _ => Err(unsupported(command)),
     }
+}
+
+fn settings_lookback_value(args: &[String]) -> Result<Value> {
+    if args.iter().any(|arg| arg == "--all-history") {
+        return Ok(Value::Null);
+    }
+    let raw = required_value(args, "--updated-within-days")?;
+    let parsed = raw
+        .parse::<u64>()
+        .map_err(|source| ServiceError::InvalidFlagValue {
+            flag: "--updated-within-days".to_owned(),
+            value: raw.clone(),
+            message: source.to_string(),
+        })?;
+    Ok(Value::from(parsed))
 }
 
 fn optional_u16(args: &[String], flag: &str) -> Result<Option<u16>> {
