@@ -18,7 +18,7 @@ backend/       Rust service workspace and future backend-owned assets
 vendor/        pinned external sources only
 artifacts/     generated evidence only
 docs/                         canonical policy and architecture notes
-scripts/       frontend registries only; repo guard rails live in backend/service/crates/repo-guard
+scripts/       frontend registries and stage operations; repo guard rails live in backend/service/crates/repo-guard
 ```
 
 ## Rules That Matter
@@ -37,5 +37,15 @@ scripts/       frontend registries only; repo guard rails live in backend/servic
 - App UI tokens and primitives live under `apps/frontend/src/ui` until a second real consumer justifies extraction.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - No raw DOM or React Native primitives belong in feature code. That boundary is reserved for app UI primitives and shell code.
+
+## Isolated Stage Build
+
+`scripts/stage/conduit-stage.sh` builds an isolated, tagged stage bundle from `origin/main` under `/srv/devops/repos/conduit-stage` and keeps runtime processes separate from repo-local Expo or Electron runs.
+
+1. `rtk pnpm run stage:refresh`
+2. `rtk pnpm run stage:open`
+3. `rtk pnpm run stage:install-desktop-entry` (optional launcher icon)
+
+The stage runtime defaults to backend `ws://127.0.0.1:4274/api/session` and web `http://127.0.0.1:4310`, with isolated app data in `/srv/devops/repos/conduit-stage/data`.
 
 Canonical detail lives in `ARCHITECTURE.md`, `AGENTS.md`, `docs/contributing.md`, and `docs/frontend-architecture.md`.

@@ -1,4 +1,3 @@
-import { createSessionClient } from "@conduit/session-client";
 import type {
   ContentBlock,
   ProviderId,
@@ -12,8 +11,7 @@ import type {
   SessionGroupsView,
   SessionHistoryWindow,
 } from "@conduit/session-client";
-
-const sessionClient = createSessionClient();
+import { sessionClient } from "./session-client";
 
 interface OpenSessionMutationArg {
   provider: ProviderId;
