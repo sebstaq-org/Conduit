@@ -17,6 +17,8 @@ DATA_ROOT="$STAGE_ROOT/data"
 PID_DIR="$STAGE_ROOT/pids"
 LOG_DIR="$STAGE_ROOT/logs"
 RUNNER_PATH="$STAGE_ROOT/conduit-stage"
+SUPERVISOR_PID_FILE="$PID_DIR/supervisor.pid"
+RUNTIME_STATUS_FILE="$PID_DIR/runtime-status.json"
 
 run() {
   if command -v rtk >/dev/null 2>&1; then
@@ -53,6 +55,22 @@ pid_running() {
     return 1
   fi
   kill -0 "$pid" >/dev/null 2>&1
+}
+
+wait_for_runtime_ready() {
+  local backend_url="http://${BACKEND_HOST}:${BACKEND_PORT}/health"
+  local web_url="http://${WEB_HOST}:${WEB_PORT}/"
+  local attempts=30
+  local index=0
+  while [[ "$index" -lt "$attempts" ]]; do
+    if curl --silent --show-error --fail --max-time 2 "$backend_url" >/dev/null 2>&1 &&
+      curl --silent --show-error --fail --max-time 2 "$web_url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    index=$((index + 1))
+  done
+  return 1
 }
 
 write_stage_runner() {
@@ -169,6 +187,10 @@ EOF
 
   ln -sfn "$release_dir" "$CURRENT_LINK"
   write_stage_runner
+  if pid_running "$SUPERVISOR_PID_FILE" || pid_running "$PID_DIR/backend.pid" || pid_running "$PID_DIR/web.pid"; then
+    stop_stage
+    start_stage
+  fi
   printf "Stage refreshed to %s\n" "$release_name"
 }
 
@@ -180,27 +202,30 @@ start_stage() {
     exit 1
   }
 
-  local backend_pid_file="$PID_DIR/backend.pid"
-  local web_pid_file="$PID_DIR/web.pid"
-
-  if ! pid_running "$backend_pid_file"; then
-    setsid env XDG_DATA_HOME="$DATA_ROOT" "$current_release/bin/service-bin" serve --host "$BACKEND_HOST" --port "$BACKEND_PORT" >"$LOG_DIR/backend.log" 2>&1 < /dev/null &
-    printf "%s" "$!" >"$backend_pid_file"
+  if ! pid_running "$SUPERVISOR_PID_FILE"; then
+    setsid python3 "$SCRIPT_DIR/watchdog.py" \
+      --backend-host "$BACKEND_HOST" \
+      --backend-port "$BACKEND_PORT" \
+      --current-link "$CURRENT_LINK" \
+      --data-root "$DATA_ROOT" \
+      --log-dir "$LOG_DIR" \
+      --pid-dir "$PID_DIR" \
+      --poll-interval 5 \
+      --status-file "$RUNTIME_STATUS_FILE" \
+      --static-server "$SCRIPT_DIR/static_server.py" \
+      --web-host "$WEB_HOST" \
+      --web-port "$WEB_PORT" >"$LOG_DIR/supervisor.log" 2>&1 < /dev/null &
+    printf "%s" "$!" >"$SUPERVISOR_PID_FILE"
     sleep 0.2
-    if ! pid_running "$backend_pid_file"; then
-      printf "Backend failed to start. See %s/backend.log\n" "$LOG_DIR" >&2
+    if ! pid_running "$SUPERVISOR_PID_FILE"; then
+      printf "Supervisor failed to start. See %s/supervisor.log\n" "$LOG_DIR" >&2
       exit 1
     fi
   fi
 
-  if ! pid_running "$web_pid_file"; then
-    setsid python3 -m http.server "$WEB_PORT" --bind "$WEB_HOST" --directory "$current_release/web" >"$LOG_DIR/web.log" 2>&1 < /dev/null &
-    printf "%s" "$!" >"$web_pid_file"
-    sleep 0.2
-    if ! pid_running "$web_pid_file"; then
-      printf "Web server failed to start. See %s/web.log\n" "$LOG_DIR" >&2
-      exit 1
-    fi
+  if ! wait_for_runtime_ready; then
+    printf "Stage runtime failed readiness checks. See %s\n" "$RUNTIME_STATUS_FILE" >&2
+    exit 1
   fi
 
   printf "Backend: ws://%s:%s/api/session\n" "$BACKEND_HOST" "$BACKEND_PORT"
@@ -209,7 +234,7 @@ start_stage() {
 
 stop_stage() {
   local pid_file
-  for pid_file in "$PID_DIR/backend.pid" "$PID_DIR/web.pid"; do
+  for pid_file in "$SUPERVISOR_PID_FILE" "$PID_DIR/backend.pid" "$PID_DIR/web.pid"; do
     if pid_running "$pid_file"; then
       local pid
       pid="$(cat "$pid_file")"
@@ -227,6 +252,12 @@ status_stage() {
     printf "Release: none\n"
   fi
 
+  if pid_running "$SUPERVISOR_PID_FILE"; then
+    printf "Supervisor: running (pid %s)\n" "$(cat "$SUPERVISOR_PID_FILE")"
+  else
+    printf "Supervisor: stopped\n"
+  fi
+
   if pid_running "$PID_DIR/backend.pid"; then
     printf "Backend: running (pid %s)\n" "$(cat "$PID_DIR/backend.pid")"
   else
@@ -238,11 +269,18 @@ status_stage() {
   else
     printf "Web: stopped\n"
   fi
+
+  if [[ -f "$RUNTIME_STATUS_FILE" ]]; then
+    printf "Runtime status: %s\n" "$RUNTIME_STATUS_FILE"
+    cat "$RUNTIME_STATUS_FILE"
+  else
+    printf "Runtime status: unavailable\n"
+  fi
 }
 
 open_stage() {
   start_stage
-  local url="http://${WEB_HOST}:${WEB_PORT}"
+  local url="http://${WEB_HOST}:${WEB_PORT}/?v=$(date +%s)"
   if command -v xdg-open >/dev/null 2>&1; then
     xdg-open "$url" >/dev/null 2>&1 &
     return
@@ -263,9 +301,13 @@ show_logs() {
     web)
       tail -n 200 "$LOG_DIR/web.log"
       ;;
+    supervisor)
+      tail -n 200 "$LOG_DIR/supervisor.log"
+      ;;
     all)
       printf "Backend log: %s/backend.log\n" "$LOG_DIR"
       printf "Web log: %s/web.log\n" "$LOG_DIR"
+      printf "Supervisor log: %s/supervisor.log\n" "$LOG_DIR"
       ;;
     *)
       printf "Unknown log stream: %s\n" "$stream" >&2
@@ -280,11 +322,11 @@ Usage: $0 <command>
 
 Commands:
   refresh               Build latest origin/main into a tagged stage release
-  start                 Start backend + static web server for current release
-  stop                  Stop stage backend + web server
+  start                 Start stage supervisor and wait for runtime readiness
+  stop                  Stop stage supervisor, backend, and web server
   status                Show current release and process status
   open                  Start stage if needed and open browser
-  logs [backend|web]    Show recent log output
+  logs [backend|web|supervisor] Show recent log output
   install-desktop-entry Install a desktop launcher for stage open
 EOF
 }

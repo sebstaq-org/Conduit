@@ -21,6 +21,7 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Shared backend-facing frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in app feature code.
 - Apps may depend on packages, but they must not import each other or reach into backend internals directly.
 - Do not create placeholder UI, starter components, starter themes, fake tokens, or speculative feature stubs.
+- Do not implement fallbacks, backward-compatibility shims, or silent degradation paths in product code; this greenfield project must fail fast with explicit errors when required state or configuration is missing.
 
 ## Frontend Hard Rules
 
