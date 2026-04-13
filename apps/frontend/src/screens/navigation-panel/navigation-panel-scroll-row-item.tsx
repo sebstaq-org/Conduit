@@ -1,8 +1,9 @@
+import { useSelector } from "react-redux";
+import { selectActiveSession } from "@/app-state";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
 import { SessionGroupHeader } from "@/features/session-list/session-group-header";
-import { sessionRowDepth } from "@/features/session-list/session-list.constants";
 import { SessionRowItem } from "@/features/session-list/session-row-item";
-import type { useOpenSessionMutation } from "@/app-state";
+import type { ActiveSession, useOpenSessionMutation } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { Row, Section } from "@/ui";
 import {
@@ -18,12 +19,15 @@ interface NavigationPanelScrollRowItemProps {
   row: NavigationPanelScrollRow;
 }
 
+const sessionRowDepth = 1;
+
 type SessionNavigationPanelRow = Extract<
   NavigationPanelScrollRow,
   { kind: "groupEmpty" } | { kind: "groupHeader" } | { kind: "session" }
 >;
 
 interface SessionRowRenderProps {
+  activeSession: ActiveSession | null;
   onSessionSelected?: (() => void) | undefined;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   row: SessionNavigationPanelRow;
@@ -69,6 +73,7 @@ function renderStaticNavigationPanelRow(
 }
 
 function renderSessionNavigationPanelRow({
+  activeSession,
   onSessionSelected,
   openSession,
   row,
@@ -81,6 +86,7 @@ function renderSessionNavigationPanelRow({
   }
   return (
     <SessionRowItem
+      activeSession={activeSession}
       group={row.group}
       onSessionSelected={onSessionSelected}
       openSession={openSession}
@@ -92,6 +98,7 @@ function renderSessionNavigationPanelRow({
 function NavigationPanelScrollRowItem(
   props: NavigationPanelScrollRowItemProps,
 ): React.JSX.Element {
+  const activeSession = useSelector(selectActiveSession);
   const staticRow = renderStaticNavigationPanelRow(props.row);
   if (staticRow !== null) {
     return staticRow;
@@ -100,6 +107,7 @@ function NavigationPanelScrollRowItem(
     return <Row label="Row unavailable" muted />;
   }
   return renderSessionNavigationPanelRow({
+    activeSession,
     onSessionSelected: props.onSessionSelected,
     openSession: props.openSession,
     row: props.row,

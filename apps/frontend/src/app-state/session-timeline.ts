@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import {
   useLoadOlderSessionTimelineMutation,
   useReadSessionTimelineQuery,
-} from "./api";
+} from "./api-hooks";
 import type { SessionHistoryWindow } from "@conduit/session-client";
 
 interface SessionTimelineView {
