@@ -1,3 +1,4 @@
 artifacts/**
 vendor/**
 backend/service/target/**
+pnpm-lock.yaml
