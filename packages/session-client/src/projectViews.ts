@@ -1,9 +1,11 @@
 import {
+  GlobalSettingsViewSchema,
   ProjectListViewSchema,
   ProjectSuggestionsViewSchema,
 } from "@conduit/session-model";
 import type {
   ConsumerResponse,
+  GlobalSettingsView,
   ProjectListView,
   ProjectSuggestionsView,
 } from "@conduit/session-contracts";
@@ -27,4 +29,18 @@ function readProjectSuggestionsResponse(
   return ProjectSuggestionsViewSchema.parse(response.result);
 }
 
-export { readProjectListResponse, readProjectSuggestionsResponse };
+function readGlobalSettingsResponse(
+  response: ConsumerResponse,
+  fallbackMessage: string,
+): GlobalSettingsView {
+  if (!response.ok) {
+    throw new Error(response.error?.message ?? fallbackMessage);
+  }
+  return GlobalSettingsViewSchema.parse(response.result);
+}
+
+export {
+  readGlobalSettingsResponse,
+  readProjectListResponse,
+  readProjectSuggestionsResponse,
+};

@@ -100,6 +100,73 @@ fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
 }
 
 #[test]
+fn settings_get_returns_persisted_defaults() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let response = runtime.dispatch(command("1", "settings/get", "all", json!({})));
+
+    assert_ok(&response)?;
+    assert_settings_lookback(&response.result, Some(5))
+}
+
+#[test]
+fn settings_update_persists_custom_and_all_history() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let custom = runtime.dispatch(command(
+        "1",
+        "settings/update",
+        "all",
+        json!({ "sessionGroupsUpdatedWithinDays": 17 }),
+    ));
+    assert_ok(&custom)?;
+    assert_settings_lookback(&custom.result, Some(17))?;
+
+    let all_history = runtime.dispatch(command(
+        "2",
+        "settings/update",
+        "all",
+        json!({ "sessionGroupsUpdatedWithinDays": null }),
+    ));
+    assert_ok(&all_history)?;
+    assert_settings_lookback(&all_history.result, None)
+}
+
+#[test]
+fn settings_update_rejects_out_of_range_value() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let response = runtime.dispatch(command(
+        "1",
+        "settings/update",
+        "all",
+        json!({ "sessionGroupsUpdatedWithinDays": 0 }),
+    ));
+
+    assert_invalid_params(&response)
+}
+
+#[test]
+fn global_commands_reject_non_all_provider_target() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let settings_get = runtime.dispatch(command("1", "settings/get", "codex", json!({})));
+    let settings_update = runtime.dispatch(command(
+        "2",
+        "settings/update",
+        "claude",
+        json!({ "sessionGroupsUpdatedWithinDays": 17 }),
+    ));
+    let projects_list = runtime.dispatch(command("3", "projects/list", "copilot", json!({})));
+    let sessions_watch = runtime.dispatch(command("4", "sessions/watch", "codex", json!({})));
+
+    assert_invalid_params(&settings_get)?;
+    assert_invalid_params(&settings_update)?;
+    assert_invalid_params(&projects_list)?;
+    assert_invalid_params(&sessions_watch)
+}
+
+#[test]
 fn raw_event_subscription_is_not_a_product_command() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
@@ -143,6 +210,30 @@ fn grouped_sessions_groups_by_cwd_and_filters_recent_rows() -> TestResult<()> {
     let sessions = grouped_sessions(&response.result, "/repo")?;
     assert_session_ids(sessions, &["claude-recent", "codex-recent"])?;
     assert_session_updated_at(sessions, "claude-recent", "9999-01-02T00:00:00Z")
+}
+
+#[test]
+fn grouped_sessions_uses_persisted_settings_default() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    seed_grouped_session_lists(&state)?;
+    let mut runtime = runtime(state)?;
+    add_project(&mut runtime, "/repo")?;
+    assert_ok(&runtime.dispatch(command(
+        "settings",
+        "settings/update",
+        "all",
+        json!({ "sessionGroupsUpdatedWithinDays": null }),
+    )))?;
+    let response = dispatch_after_group_refresh(
+        &mut runtime,
+        command("1", "sessions/grouped", "all", json!({})),
+    )?;
+
+    assert_ok(&response)?;
+    assert_session_ids(
+        grouped_sessions(&response.result, "/repo")?,
+        &["claude-recent", "codex-recent", "copilot-old"],
+    )
 }
 
 #[test]
@@ -560,6 +651,22 @@ fn assert_session_updated_at(
         return Ok(());
     }
     Err(format!("expected updatedAt {expected_updated_at}, got {updated_at}").into())
+}
+
+fn assert_settings_lookback(value: &Value, expected: Option<u64>) -> TestResult<()> {
+    let lookback = value
+        .get("sessionGroupsUpdatedWithinDays")
+        .and_then(|entry| {
+            if entry.is_null() {
+                return Some(None);
+            }
+            entry.as_u64().map(Some)
+        })
+        .ok_or_else(|| format!("missing settings lookback in payload: {value}"))?;
+    if lookback == expected {
+        return Ok(());
+    }
+    Err(format!("expected lookback {expected:?}, got {lookback:?}").into())
 }
 
 fn assert_invalid_params(response: &service_runtime::ConsumerResponse) -> TestResult<()> {

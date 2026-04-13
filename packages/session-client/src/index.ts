@@ -3,6 +3,8 @@ export { WebSocketSessionClient } from "./webSocketSessionClient.js";
 export { PROVIDERS } from "@conduit/session-model";
 
 export type {
+  GlobalSettingsUpdateRequest,
+  GlobalSettingsView,
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,

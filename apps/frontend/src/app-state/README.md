@@ -9,8 +9,9 @@ The product session APIs in this checkout are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
 `useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
-`useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`, and
-`usePromptSessionMutation`. They return Conduit read-model shapes for UI state,
+`useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`,
+`usePromptSessionMutation`, `useGetSettingsQuery`, and
+`useUpdateSettingsMutation`. They return Conduit read-model shapes for UI state,
 not raw official ACP provider responses.
 
 `useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI

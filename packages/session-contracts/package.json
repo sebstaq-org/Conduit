@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@conduit/session-model": "workspace:*"
+    "@conduit/session-model": "workspace:*",
+    "zod": "4.3.6"
   }
 }

@@ -1,4 +1,5 @@
 import {
+  isGlobalSettingsUpdateRequest,
   isSessionGroupsQuery,
   isSessionHistoryRequest,
   isSessionOpenRequest,
@@ -8,48 +9,18 @@ import {
   isProjectCommandName,
   projectCommandFactories,
 } from "./projectCommandFactories.js";
+import { ConsumerCommandSchema } from "./wire.js";
+import type { ProjectCommandName } from "./projectCommandFactories.js";
+import type { ProviderId } from "@conduit/session-model";
 import type {
   ConsumerCommand,
   ConsumerCommandName,
   ConsumerCommandTarget,
-  ProjectAddCommandName,
-  ProjectAddConsumerCommand,
-  ProjectAddRequest,
-  ProjectListCommandName,
-  ProjectListConsumerCommand,
-  ProjectRemoveCommandName,
-  ProjectRemoveConsumerCommand,
-  ProjectRemoveRequest,
-  ProjectSuggestionsCommandName,
-  ProjectSuggestionsConsumerCommand,
-  ProjectSuggestionsQuery,
-  ProjectUpdateCommandName,
-  ProjectUpdateConsumerCommand,
-  ProjectUpdateRequest,
-  ProviderConsumerCommand,
-  ProviderScopedCommandName,
-  SessionGroupsCommandName,
-  SessionGroupsConsumerCommand,
-  SessionGroupsQuery,
-  SessionHistoryCommandName,
-  SessionHistoryConsumerCommand,
-  SessionHistoryRequest,
-  SessionOpenCommandName,
-  SessionOpenConsumerCommand,
-  SessionOpenRequest,
-  SessionPromptCommandName,
-  SessionPromptConsumerCommand,
-  SessionPromptRequest,
-  SessionsWatchCommandName,
-  SessionsWatchConsumerCommand,
-  SessionWatchCommandName,
-  SessionWatchConsumerCommand,
+  GlobalCommandTarget,
+  SessionGroupsCommandTarget,
 } from "./wire.js";
-import type { ProjectCommandName } from "./projectCommandFactories.js";
-import type { ProviderId } from "@conduit/session-model";
 
 let nextCommandSequence = 0;
-
 function nextConsumerCommandId(): string {
   nextCommandSequence += 1;
   return `conduit-command-${String(nextCommandSequence)}`;
@@ -73,96 +44,139 @@ function requireProvider(
   return provider;
 }
 
+function requireGlobalProvider(
+  command: ConsumerCommandName,
+  provider: ConsumerCommandTarget,
+): GlobalCommandTarget {
+  if (provider !== "all") {
+    throw new Error(`${command} must target provider "all"`);
+  }
+  return provider;
+}
+
+function parseConsumerCommand(command: unknown): ConsumerCommand {
+  return ConsumerCommandSchema.parse(command);
+}
+
 function createSessionGroupsCommand(
   id: string,
-  provider: ConsumerCommandTarget,
+  provider: SessionGroupsCommandTarget,
   params: unknown,
-): SessionGroupsConsumerCommand {
+): ConsumerCommand {
   if (!isSessionGroupsQuery(params)) {
     throw new Error("sessions/grouped params are invalid");
   }
-  return {
+  return parseConsumerCommand({
     id,
     command: "sessions/grouped",
     provider,
     params,
-  };
+  });
 }
 
 function createSessionOpenCommand(
   id: string,
   provider: ConsumerCommandTarget,
   params: unknown,
-): SessionOpenConsumerCommand {
+): ConsumerCommand {
   if (!isSessionOpenRequest(params)) {
     throw new Error("session/open params are invalid");
   }
-  return {
+  return parseConsumerCommand({
     id,
     command: "session/open",
     provider: requireProvider("session/open", provider),
     params,
-  };
+  });
+}
+
+function createSettingsGetCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  _params: unknown,
+): ConsumerCommand {
+  return parseConsumerCommand({
+    id,
+    command: "settings/get",
+    provider: requireGlobalProvider("settings/get", provider),
+    params: {},
+  });
+}
+
+function createSettingsUpdateCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ConsumerCommand {
+  if (!isGlobalSettingsUpdateRequest(params)) {
+    throw new Error("settings/update params are invalid");
+  }
+  return parseConsumerCommand({
+    id,
+    command: "settings/update",
+    provider: requireGlobalProvider("settings/update", provider),
+    params,
+  });
 }
 
 function createSessionsWatchCommand(
   id: string,
   provider: ConsumerCommandTarget,
-): SessionsWatchConsumerCommand {
-  return {
+): ConsumerCommand {
+  return parseConsumerCommand({
     id,
     command: "sessions/watch",
-    provider,
+    provider: requireGlobalProvider("sessions/watch", provider),
     params: {},
-  };
+  });
 }
 
 function createSessionHistoryCommand(
   id: string,
   provider: ConsumerCommandTarget,
   params: unknown,
-): SessionHistoryConsumerCommand {
+): ConsumerCommand {
   if (!isSessionHistoryRequest(params)) {
     throw new Error("session/history params are invalid");
   }
-  return {
+  return parseConsumerCommand({
     id,
     command: "session/history",
-    provider,
+    provider: requireGlobalProvider("session/history", provider),
     params,
-  };
+  });
 }
 
 function createSessionWatchCommand(
   id: string,
   provider: ConsumerCommandTarget,
   params: unknown,
-): SessionWatchConsumerCommand {
+): ConsumerCommand {
   if (!isSessionHistoryRequest(params)) {
     throw new Error("session/watch params are invalid");
   }
-  return {
+  return parseConsumerCommand({
     id,
     command: "session/watch",
-    provider,
+    provider: requireGlobalProvider("session/watch", provider),
     params,
-  };
+  });
 }
 
 function createSessionPromptCommand(
   id: string,
   provider: ConsumerCommandTarget,
   params: unknown,
-): SessionPromptConsumerCommand {
+): ConsumerCommand {
   if (!isSessionPromptRequest(params)) {
     throw new Error("session/prompt params are invalid");
   }
-  return {
+  return parseConsumerCommand({
     id,
     command: "session/prompt",
-    provider,
+    provider: requireGlobalProvider("session/prompt", provider),
     params,
-  };
+  });
 }
 
 type ConduitFactory = (
@@ -170,22 +184,24 @@ type ConduitFactory = (
   provider: ConsumerCommandTarget,
   params: unknown,
 ) => ConsumerCommand;
-
 type KnownConduitCommandName =
   | ProjectCommandName
-  | SessionGroupsCommandName
-  | SessionsWatchCommandName
-  | SessionOpenCommandName
-  | SessionHistoryCommandName
-  | SessionWatchCommandName
-  | SessionPromptCommandName;
-
+  | "settings/get"
+  | "settings/update"
+  | "sessions/grouped"
+  | "sessions/watch"
+  | "session/open"
+  | "session/history"
+  | "session/watch"
+  | "session/prompt";
 type NonProjectConduitCommandName = Exclude<
   KnownConduitCommandName,
   ProjectCommandName
 >;
 
 const conduitFactories: Record<NonProjectConduitCommandName, ConduitFactory> = {
+  "settings/get": createSettingsGetCommand,
+  "settings/update": createSettingsUpdateCommand,
   "session/history": createSessionHistoryCommand,
   "session/open": createSessionOpenCommand,
   "session/prompt": createSessionPromptCommand,
@@ -201,96 +217,28 @@ function isKnownConduitCommandName(
 }
 
 function createConsumerCommand(
-  command: ProjectAddCommandName,
-  provider: ConsumerCommandTarget,
-  params: ProjectAddRequest,
-): ProjectAddConsumerCommand;
-
-function createConsumerCommand(
-  command: ProjectListCommandName,
-  provider: ConsumerCommandTarget,
-): ProjectListConsumerCommand;
-
-function createConsumerCommand(
-  command: ProjectRemoveCommandName | ProjectUpdateCommandName,
-  provider: ConsumerCommandTarget,
-  params: ProjectRemoveRequest | ProjectUpdateRequest,
-): ProjectRemoveConsumerCommand | ProjectUpdateConsumerCommand;
-
-function createConsumerCommand(
-  command: ProjectSuggestionsCommandName,
-  provider: ConsumerCommandTarget,
-  params?: ProjectSuggestionsQuery,
-): ProjectSuggestionsConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionGroupsCommandName,
-  provider: ConsumerCommandTarget,
-  params?: SessionGroupsQuery,
-): SessionGroupsConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionOpenCommandName,
-  provider: ProviderId,
-  params: SessionOpenRequest,
-): SessionOpenConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionsWatchCommandName,
-  provider: ConsumerCommandTarget,
-): SessionsWatchConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionHistoryCommandName,
-  provider: ConsumerCommandTarget,
-  params: SessionHistoryRequest,
-): SessionHistoryConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionWatchCommandName,
-  provider: ConsumerCommandTarget,
-  params: SessionHistoryRequest,
-): SessionWatchConsumerCommand;
-
-function createConsumerCommand(
-  command: SessionPromptCommandName,
-  provider: ConsumerCommandTarget,
-  params: SessionPromptRequest,
-): SessionPromptConsumerCommand;
-
-function createConsumerCommand(
-  command: ProviderScopedCommandName,
-  provider: ProviderId,
-  params?: Record<string, unknown>,
-): ProviderConsumerCommand;
-
-function createConsumerCommand(
   command: ConsumerCommandName,
   provider: ConsumerCommandTarget,
-  params:
-    | Record<string, unknown>
-    | ProjectAddRequest
-    | ProjectRemoveRequest
-    | ProjectSuggestionsQuery
-    | ProjectUpdateRequest
-    | SessionGroupsQuery
-    | SessionOpenRequest
-    | SessionHistoryRequest
-    | SessionPromptRequest = {},
+  params: Record<string, unknown> = {},
 ): ConsumerCommand {
   const id = nextConsumerCommandId();
   if (isKnownConduitCommandName(command)) {
     if (isProjectCommandName(command)) {
-      return projectCommandFactories[command](id, provider, params);
+      const globalProvider = requireGlobalProvider(command, provider);
+      return parseConsumerCommand(
+        projectCommandFactories[command](id, globalProvider, params),
+      );
     }
-    return conduitFactories[command](id, provider, params);
+    return parseConsumerCommand(
+      conduitFactories[command](id, provider, params),
+    );
   }
-  return {
+  return parseConsumerCommand({
     id,
     command,
     provider: requireProvider(command, provider),
     params: toRecordParams(params),
-  };
+  });
 }
 
 export { createConsumerCommand };

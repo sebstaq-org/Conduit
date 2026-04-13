@@ -88,6 +88,66 @@ fn unsupported_schema_version_fails_hard() -> TestResult<()> {
 }
 
 #[test]
+fn schema_version_5_migrates_global_settings() -> TestResult<()> {
+    let path = test_db_path()?;
+    let connection = rusqlite::Connection::open(&path)?;
+    connection.pragma_update(None, "user_version", 5)?;
+    drop(connection);
+
+    let store = LocalStore::open_path(&path)?;
+    let settings = store.global_settings()?;
+
+    ensure_eq(
+        &settings.session_groups_updated_within_days,
+        &Some(5),
+        "migrated default lookback",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn global_settings_default_and_update() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let default_settings = store.global_settings()?;
+
+    ensure_eq(
+        &default_settings.session_groups_updated_within_days,
+        &Some(5),
+        "default lookback",
+    )?;
+
+    let all_history = store.update_global_settings(None)?;
+    ensure_eq(
+        &all_history.session_groups_updated_within_days,
+        &None,
+        "all-history lookback",
+    )?;
+
+    let custom = store.update_global_settings(Some(17))?;
+    ensure_eq(
+        &custom.session_groups_updated_within_days,
+        &Some(17),
+        "custom lookback",
+    )?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn global_settings_rejects_out_of_range_values() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let response = store.update_global_settings(Some(0));
+    if response.is_ok() {
+        return Err("out-of-range lookback unexpectedly succeeded".into());
+    }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
 fn session_index_replaces_provider_rows_and_tracks_revision() -> TestResult<()> {
     let path = test_db_path()?;
     let mut store = LocalStore::open_path(&path)?;

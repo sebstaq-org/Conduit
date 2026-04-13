@@ -174,14 +174,14 @@ pub(crate) fn assert_timeline_event_advanced(
 pub(crate) fn read_history(
     runtime: &mut ServiceRuntime<FakeFactory>,
     id: &str,
-    provider: &str,
+    _provider: &str,
     open_session_id: &str,
     limit: u64,
 ) -> ConsumerResponse {
     runtime.dispatch(command(
         id,
         "session/history",
-        provider,
+        "all",
         json!({
             "openSessionId": open_session_id,
             "limit": limit
@@ -198,7 +198,7 @@ pub(crate) fn prompt_open_session(
     runtime.dispatch(command(
         id,
         "session/prompt",
-        "codex",
+        "all",
         json!({
             "openSessionId": open_session_id,
             "prompt": [{ "type": "text", "text": prompt }]

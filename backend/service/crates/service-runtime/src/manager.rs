@@ -79,6 +79,17 @@ impl<F> ServiceRuntime<F>
 where
     F: ProviderFactory,
 {
+    fn require_global_provider(command: &'static str, provider: &str) -> Result<()> {
+        if provider == "all" {
+            return Ok(());
+        }
+        Err(RuntimeError::InvalidParameter {
+            command,
+            parameter: "provider",
+            message: "must be all",
+        })
+    }
+
     /// Creates a consumer runtime with an explicit provider factory.
     pub fn with_factory(factory: F, local_store: LocalStore) -> Self {
         Self::with_factory_and_store_lock(factory, local_store, Arc::new(Mutex::new(())))
@@ -168,30 +179,47 @@ where
             return self.sessions_grouped(command.id, &command.provider, &command.params);
         }
         if command.command == "sessions/watch" {
+            Self::require_global_provider("sessions/watch", &command.provider)?;
             return self.sessions_watch(command.id);
         }
         if command.command == "projects/list" {
+            Self::require_global_provider("projects/list", &command.provider)?;
             return self.projects_list(command.id);
         }
         if command.command == "projects/suggestions" {
+            Self::require_global_provider("projects/suggestions", &command.provider)?;
             return self.projects_suggestions(command.id, &command.params);
         }
         if command.command == "projects/add" {
+            Self::require_global_provider("projects/add", &command.provider)?;
             return self.projects_add(command.id, &command.params);
         }
         if command.command == "projects/remove" {
+            Self::require_global_provider("projects/remove", &command.provider)?;
             return self.projects_remove(command.id, &command.params);
         }
         if command.command == "projects/update" {
+            Self::require_global_provider("projects/update", &command.provider)?;
             return self.projects_update(command.id, &command.params);
         }
+        if command.command == "settings/get" {
+            Self::require_global_provider("settings/get", &command.provider)?;
+            return self.settings_get(command.id);
+        }
+        if command.command == "settings/update" {
+            Self::require_global_provider("settings/update", &command.provider)?;
+            return self.settings_update(command.id, &command.params);
+        }
         if command.command == "session/history" {
+            Self::require_global_provider("session/history", &command.provider)?;
             return self.session_history(command.id, &command.params);
         }
         if command.command == "session/watch" {
+            Self::require_global_provider("session/watch", &command.provider)?;
             return self.session_watch(command.id, &command.params);
         }
         if command.command == "session/prompt" {
+            Self::require_global_provider("session/prompt", &command.provider)?;
             return self.session_prompt(command.id, &command.params);
         }
         let provider = parse_provider(&command.provider)?;

@@ -5,6 +5,7 @@ const {
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
+  useGetSettingsQuery,
   useListProjectsQuery,
   useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
@@ -12,6 +13,7 @@ const {
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
+  useUpdateSettingsMutation,
 } = conduitApi;
 
 export {
@@ -19,6 +21,7 @@ export {
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
+  useGetSettingsQuery,
   useListProjectsQuery,
   useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
@@ -26,4 +29,5 @@ export {
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
+  useUpdateSettingsMutation,
 };

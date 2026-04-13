@@ -235,6 +235,9 @@ importers:
       '@conduit/session-model':
         specifier: workspace:*
         version: link:../session-model
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
 
   packages/session-model:
     dependencies:

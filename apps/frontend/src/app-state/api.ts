@@ -1,5 +1,7 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
+  GlobalSettingsUpdateRequest,
+  GlobalSettingsView,
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
@@ -25,6 +27,10 @@ import {
 import { runtimeHealthEndpoint } from "./api-runtime-health-endpoint";
 import { createSessionTimelineEndpoints } from "./api-session-timeline-endpoints";
 import { createSessionTimelineData } from "./session-timeline-cache";
+import {
+  getSettingsQuery,
+  updateSettingsQuery,
+} from "./session-api-queries";
 import type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
@@ -45,10 +51,28 @@ const sessionTimelineEndpoints = createSessionTimelineEndpoints(
   sessionTimelineHandlers,
 );
 
+const globalSettingsEndpoint = {
+  providesTags: [{ id: "GLOBAL", type: "Settings" }],
+  queryFn: getSettingsQuery,
+} as const;
+const updateSettingsEndpoint = {
+  invalidatesTags: [
+    { id: "GLOBAL", type: "Settings" },
+    { id: "LIST", type: "SessionGroups" },
+  ],
+  queryFn: updateSettingsQuery,
+} as const;
+
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["Projects", "RuntimeHealth", "SessionGroups", "SessionTimeline"],
+  tagTypes: [
+    "Projects",
+    "RuntimeHealth",
+    "SessionGroups",
+    "SessionTimeline",
+    "Settings",
+  ],
   endpoints: (builder) => ({
     listProjects: builder.query<ProjectListView, undefined>(
       projectListEndpoint,
@@ -66,13 +90,20 @@ const conduitApi = createApi({
       ProjectSuggestionsView,
       ProjectSuggestionsQueryArg
     >(projectSuggestionsEndpoint),
-    getRuntimeHealth: builder.query<RuntimeHealthView, undefined>(
+    getRuntimeHealth: builder.query<RuntimeHealthView, null>(
       runtimeHealthEndpoint,
+    ),
+    getSettings: builder.query<GlobalSettingsView, null>(
+      globalSettingsEndpoint,
     ),
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
     >(sessionTimelineEndpoints.sessionGroupsEndpoint),
+    updateSettings: builder.mutation<
+      GlobalSettingsView,
+      GlobalSettingsUpdateRequest
+    >(updateSettingsEndpoint),
     openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
       sessionTimelineEndpoints.openSessionEndpoint,
     ),

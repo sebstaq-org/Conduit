@@ -15,6 +15,7 @@ export {
   MenuRoot,
 } from "./menu";
 export { Meta } from "./meta";
+export { ModalPortalHost } from "./modal";
 export { MultilineInput } from "./multiline-input";
 export {
   PanelBody,

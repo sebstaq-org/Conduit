@@ -7,7 +7,7 @@ import {
 import { List, Row } from "@/ui";
 import { SessionGroupRow } from "./session-group-row";
 
-const defaultUpdatedWithinDays = 5;
+const defaultSessionGroupsQuery = {};
 
 interface SessionListRowsProps {
   onSessionSelected?: (() => void) | undefined;
@@ -34,9 +34,9 @@ function renderSessionsUnavailable(error: unknown): React.JSX.Element {
 function SessionListRows({
   onSessionSelected,
 }: SessionListRowsProps): React.JSX.Element {
-  const { data, error, isError, isLoading } = useGetSessionGroupsQuery({
-    updatedWithinDays: defaultUpdatedWithinDays,
-  });
+  const { data, error, isError, isLoading } = useGetSessionGroupsQuery(
+    defaultSessionGroupsQuery,
+  );
   const [openSession, openSessionState] = useOpenSessionMutation();
   const showOpenSessionError =
     openSessionState.isError && !openSessionState.isSuccess;

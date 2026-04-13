@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   CONDUIT_COMMANDS,
@@ -19,6 +21,8 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "projects/remove",
   "projects/suggestions",
   "projects/update",
+  "settings/get",
+  "settings/update",
   "sessions/grouped",
   "sessions/watch",
   "session/open",
@@ -26,11 +30,40 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "session/watch",
 ] as const;
 
-describe("shared session boundary", () => {
+function readCatalogCommands(): string[] {
+  const sourcePath = fileURLToPath(
+    new URL(
+      "../backend/service/crates/service-bin/src/serve/mod.rs",
+      import.meta.url,
+    ),
+  );
+  const source = readFileSync(sourcePath, "utf8");
+  const arraySectionMatch = /const\s+CATALOG_COMMANDS[^=]*=\s*\[(.*?)\];/s.exec(
+    source,
+  );
+  const catalogCommandArray = arraySectionMatch?.[1];
+  if (catalogCommandArray === undefined || catalogCommandArray.length === 0) {
+    throw new Error(
+      "CATALOG_COMMANDS constant not found in service catalog source",
+    );
+  }
+  return Array.from(
+    catalogCommandArray.matchAll(/"([^"]+)"/g),
+    (match) => match[1] ?? "",
+  );
+}
+
+describe("shared session boundary catalog", () => {
   test("the shared consumer command set stays canonical", () => {
     expect(CONSUMER_COMMANDS).toEqual(EXPECTED_CONSUMER_COMMANDS);
   });
 
+  test("rust catalog commands stay aligned with contracts", () => {
+    expect(readCatalogCommands()).toEqual(CONSUMER_COMMANDS);
+  });
+});
+
+describe("shared session boundary commands", () => {
   test("consumer transport uses versioned correlated websocket frames", () => {
     const command = createConsumerCommand("provider/disconnect", "codex");
     const frame: ClientCommandFrame = {

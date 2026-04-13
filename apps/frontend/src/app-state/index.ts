@@ -4,6 +4,7 @@ export {
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
+  useGetSettingsQuery,
   useListProjectsQuery,
   useLoadOlderSessionTimelineMutation,
   useOpenSessionMutation,
@@ -11,6 +12,7 @@ export {
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
+  useUpdateSettingsMutation,
 } from "./api-hooks";
 export {
   canSubmitPrompt,
