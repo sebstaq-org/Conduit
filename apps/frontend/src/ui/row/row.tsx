@@ -20,6 +20,7 @@ interface RowProps {
   meta?: string | undefined;
   muted?: boolean | undefined;
   onPress?: (() => void) | undefined;
+  selected?: boolean | undefined;
   trailing?: ReactNode | undefined;
 }
 
@@ -60,6 +61,7 @@ function Row({
   meta,
   muted = false,
   onPress,
+  selected = false,
   trailing,
 }: RowProps): React.JSX.Element {
   const theme = useTheme<Theme>();
@@ -72,6 +74,7 @@ function Row({
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
+        accessibilityState={{ selected }}
         onHoverIn={() => {
           setHovered(true);
         }}
@@ -80,7 +83,7 @@ function Row({
         }}
         onPress={onPress}
         style={({ pressed }) =>
-          createRowStyle(theme, depth, { hovered, pressed })
+          createRowStyle(theme, depth, { hovered, pressed, selected })
         }
       >
         {rowChildren}
@@ -90,7 +93,11 @@ function Row({
 
   return (
     <Box
-      style={createRowStyle(theme, depth, { hovered: false, pressed: false })}
+      style={createRowStyle(theme, depth, {
+        hovered: false,
+        pressed: false,
+        selected,
+      })}
     >
       {rowChildren}
     </Box>

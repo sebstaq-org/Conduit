@@ -1,15 +1,8 @@
 import { openSessionRow } from "@/app-state";
-import type { useOpenSessionMutation } from "@/app-state";
+import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
 import { Row } from "@/ui";
 import { sessionRowDepth } from "./session-list.constants";
 import type { SessionGroup, SessionRow } from "./session-list.types";
-
-interface SessionRowItemProps {
-  group: SessionGroup;
-  onSessionSelected?: (() => void) | undefined;
-  openSession: ReturnType<typeof useOpenSessionMutation>[0];
-  session: SessionRow;
-}
 
 function formatSessionMeta(provider: string, updatedAt: string | null): string {
   if (updatedAt === null) {
@@ -27,11 +20,36 @@ function sessionTitle(title: string | null): string {
   return title;
 }
 
+function isActiveSession(
+  session: {
+    cwd: string;
+    provider: string;
+    sessionId: string;
+  },
+  activeSession: ActiveSession | null,
+): boolean {
+  return (
+    activeSession !== null &&
+    activeSession.cwd === session.cwd &&
+    activeSession.provider === session.provider &&
+    activeSession.sessionId === session.sessionId
+  );
+}
+
+interface SessionRowItemProps {
+  group: SessionGroup;
+  onSessionSelected?: (() => void) | undefined;
+  openSession: ReturnType<typeof useOpenSessionMutation>[0];
+  session: SessionRow;
+  activeSession: ActiveSession | null;
+}
+
 function SessionRowItem({
   group,
   onSessionSelected,
   openSession,
   session,
+  activeSession,
 }: SessionRowItemProps): React.JSX.Element {
   return (
     <Row
@@ -50,6 +68,14 @@ function SessionRowItem({
           },
         });
       }}
+      selected={isActiveSession(
+        {
+          cwd: group.cwd,
+          provider: session.provider,
+          sessionId: session.sessionId,
+        },
+        activeSession,
+      )}
     />
   );
 }
