@@ -24,6 +24,7 @@ interface ScrollAreaMetrics {
 
 interface ScrollAreaHandle {
   scrollToEnd: (options?: { animated?: boolean }) => void;
+  scrollToOffset: (options: { animated?: boolean; offsetY: number }) => void;
 }
 
 interface ScrollAreaProps {
@@ -141,6 +142,9 @@ function useScrollAreaHandle(
     () => ({
       scrollToEnd: ({ animated = true } = {}): void => {
         scrollViewRef.current?.scrollToEnd({ animated });
+      },
+      scrollToOffset: ({ animated = true, offsetY }): void => {
+        scrollViewRef.current?.scrollTo({ animated, "y": offsetY });
       },
     }),
     [scrollViewRef],

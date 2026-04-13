@@ -1,7 +1,6 @@
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
-import { Row } from "@/ui";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
 import {
@@ -22,10 +21,8 @@ import type {
 interface SessionHistoryListProps {
   history: SessionHistoryWindow | undefined;
   isError: boolean;
-  isFetchingOlder: boolean;
   isFetching: boolean;
   isLoading: boolean;
-  onLoadOlder: () => void;
 }
 
 function eventLabel(item: TranscriptItem): string {
@@ -105,30 +102,11 @@ function renderStatusText(text: string, key?: string): React.JSX.Element {
   );
 }
 
-function loadOlderLabel(isFetchingOlder: boolean): string {
-  if (isFetchingOlder) {
-    return "Loading older messages";
-  }
-  return "Load older messages";
-}
-
-function loadOlderPress(
-  isFetchingOlder: boolean,
-  onLoadOlder: () => void,
-): (() => void) | undefined {
-  if (isFetchingOlder) {
-    return undefined;
-  }
-  return onLoadOlder;
-}
-
 function SessionHistoryList({
   history,
   isError,
-  isFetchingOlder,
   isFetching,
   isLoading,
-  onLoadOlder,
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
 
@@ -140,13 +118,6 @@ function SessionHistoryList({
         !isLoading &&
         history === undefined &&
         renderStatusText("Refreshing session")}
-      {history?.nextCursor !== null && history?.nextCursor !== undefined && (
-        <Row
-          label={loadOlderLabel(isFetchingOlder)}
-          muted={isFetchingOlder}
-          onPress={loadOlderPress(isFetchingOlder, onLoadOlder)}
-        />
-      )}
       {history !== undefined &&
         history.items.length === 0 &&
         renderStatusText("No messages yet")}
