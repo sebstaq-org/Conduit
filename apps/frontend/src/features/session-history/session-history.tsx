@@ -1,6 +1,6 @@
 import { skipToken } from "@reduxjs/toolkit/query";
-import { useCallback, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import { useCallback, useRef, useState } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useSelector } from "react-redux";
 import { selectActiveSession, useReadSessionHistoryQuery } from "@/app-state";
 import { Box, Text } from "@/theme";
@@ -14,6 +14,11 @@ import {
   nextOlderHistoryState,
 } from "./session-history-window";
 import type { ActiveSession } from "@/app-state";
+import type {
+  ScrollAreaContentSize,
+  ScrollAreaHandle,
+  ScrollAreaMetrics,
+} from "@/ui";
 import type { SessionHistoryWindow } from "@conduit/session-client";
 import type { OlderHistoryState } from "./session-history-window";
 
@@ -37,7 +42,10 @@ interface HistoryContentProps {
   isFetching: boolean;
   isFetchingOlder: boolean;
   isLoading: boolean;
+  onContentSizeChange: (size: ScrollAreaContentSize) => void;
   onLoadOlder: () => void;
+  onMetricsChange: (metrics: ScrollAreaMetrics) => void;
+  scrollAreaRef: RefObject<ScrollAreaHandle | null>;
 }
 
 interface OlderHistoryView {
@@ -46,7 +54,36 @@ interface OlderHistoryView {
   isOlderError: boolean;
 }
 
+interface SessionHistoryAutoScroll {
+  onContentSizeChange: (size: ScrollAreaContentSize) => void;
+  onMetricsChange: (metrics: ScrollAreaMetrics) => void;
+  scrollAreaRef: RefObject<ScrollAreaHandle | null>;
+}
+
+interface SessionTrackingRefs {
+  isNearBottomRef: RefObject<boolean>;
+  shouldSnapToBottomRef: RefObject<boolean>;
+  trackedSessionIdRef: RefObject<string | null>;
+}
+
 type OptionalSessionHistoryQueryArg = SessionHistoryQueryArg | typeof skipToken;
+const historyAutoScrollThreshold = 48;
+
+function nearHistoryBottom(metrics: ScrollAreaMetrics): boolean {
+  return metrics.distanceFromBottom <= historyAutoScrollThreshold;
+}
+
+function syncTrackedSession(
+  activeOpenSessionId: string | null,
+  refs: SessionTrackingRefs,
+): void {
+  if (refs.trackedSessionIdRef.current === activeOpenSessionId) {
+    return;
+  }
+  refs.trackedSessionIdRef.current = activeOpenSessionId;
+  refs.shouldSnapToBottomRef.current = activeOpenSessionId !== null;
+  refs.isNearBottomRef.current = true;
+}
 
 function sessionHistoryQueryArg(
   activeSession: ActiveSession | null,
@@ -108,11 +145,18 @@ function renderHistoryContent({
   isFetching,
   isFetchingOlder,
   isLoading,
+  onContentSizeChange,
   onLoadOlder,
+  onMetricsChange,
+  scrollAreaRef,
 }: HistoryContentProps): React.JSX.Element {
   return (
     <Box flex={1}>
-      <ScrollArea>
+      <ScrollArea
+        onContentSizeChange={onContentSizeChange}
+        onMetricsChange={onMetricsChange}
+        ref={scrollAreaRef}
+      >
         <SessionHistoryList
           history={history}
           isError={isError}
@@ -147,11 +191,51 @@ function useOlderHistoryView(
   };
 }
 
+function useSessionHistoryAutoScroll(
+  activeOpenSessionId: string | null,
+): SessionHistoryAutoScroll {
+  const scrollAreaRef = useRef<ScrollAreaHandle | null>(null);
+  const isNearBottomRef = useRef(true);
+  const shouldSnapToBottomRef = useRef(activeOpenSessionId !== null);
+  const trackedSessionIdRef = useRef(activeOpenSessionId);
+  syncTrackedSession(activeOpenSessionId, {
+    isNearBottomRef,
+    shouldSnapToBottomRef,
+    trackedSessionIdRef,
+  });
+
+  const onMetricsChange = useCallback((metrics: ScrollAreaMetrics): void => {
+    isNearBottomRef.current = nearHistoryBottom(metrics);
+  }, []);
+  const onContentSizeChange = useCallback(
+    (_size: ScrollAreaContentSize): void => {
+      if (shouldSnapToBottomRef.current) {
+        scrollAreaRef.current?.scrollToEnd({ animated: false });
+        shouldSnapToBottomRef.current = false;
+        return;
+      }
+      if (isNearBottomRef.current) {
+        scrollAreaRef.current?.scrollToEnd({ animated: true });
+      }
+    },
+    [],
+  );
+
+  return {
+    onContentSizeChange,
+    onMetricsChange,
+    scrollAreaRef,
+  };
+}
+
 function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
+  const activeOpenSessionId = activeSession?.openSessionId ?? null;
   const [olderHistory, setOlderHistory] = useState<OlderHistoryState | null>(
     null,
   );
+  const { onContentSizeChange, onMetricsChange, scrollAreaRef } =
+    useSessionHistoryAutoScroll(activeOpenSessionId);
   const { data, isError, isFetching, isLoading } = useReadSessionHistoryQuery(
     sessionHistoryQueryArg(activeSession),
   );
@@ -180,7 +264,10 @@ function SessionHistory(): React.JSX.Element {
     isFetching,
     isFetchingOlder,
     isLoading,
+    onContentSizeChange,
     onLoadOlder: loadOlder,
+    onMetricsChange,
+    scrollAreaRef,
   });
 }
 

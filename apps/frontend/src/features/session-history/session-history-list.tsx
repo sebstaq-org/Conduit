@@ -28,6 +28,27 @@ interface SessionHistoryListProps {
   onLoadOlder: () => void;
 }
 
+function eventLabel(item: TranscriptItem): string {
+  if (item.kind !== "event") {
+    return "";
+  }
+  if (item.variant === "tool_call" || item.variant === "tool_call_update") {
+    return "Tool call";
+  }
+  return item.variant;
+}
+
+function renderEventItem(item: TranscriptItem): React.JSX.Element | null {
+  if (item.kind !== "event") {
+    return null;
+  }
+  return (
+    <Text key={item.id} variant={historyStatusVariant}>
+      {eventLabel(item)}
+    </Text>
+  );
+}
+
 function renderAgentMessage(item: TranscriptItem): React.JSX.Element | null {
   if (item.kind !== "message") {
     return null;
@@ -64,6 +85,9 @@ function renderTranscriptItem(
   item: TranscriptItem,
   theme: Theme,
 ): React.JSX.Element | null {
+  if (item.kind === "event") {
+    return renderEventItem(item);
+  }
   if (item.kind !== "message") {
     return null;
   }
