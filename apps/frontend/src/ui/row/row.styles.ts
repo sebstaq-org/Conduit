@@ -6,6 +6,7 @@ type RowLabelVariant = "rowLabel" | "rowLabelMuted";
 interface RowInteractionState {
   hovered: boolean;
   pressed: boolean;
+  selected: boolean;
 }
 
 const rowAlignItems = "center" as const;
@@ -27,13 +28,17 @@ function createRowStyle(
     paddingRight: theme.spacing.none,
   };
 
-  if (state.hovered) {
-    rowStyle.backgroundColor = theme.colors.hoverBackground;
-  }
-
   if (state.pressed) {
     rowStyle.backgroundColor = theme.colors.pressedBackground;
     rowStyle.opacity = 0.72;
+  }
+
+  if (!state.pressed && state.selected) {
+    rowStyle.backgroundColor = theme.colors.selectedBackground;
+  }
+
+  if (!state.pressed && !state.selected && state.hovered) {
+    rowStyle.backgroundColor = theme.colors.hoverBackground;
   }
 
   return rowStyle;

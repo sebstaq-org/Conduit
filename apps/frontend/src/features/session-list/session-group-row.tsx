@@ -1,4 +1,5 @@
 import type { useOpenSessionMutation } from "@/app-state";
+import type { ActiveSession } from "@/app-state";
 import { Row } from "@/ui";
 import { SessionGroupHeader } from "./session-group-header";
 import { sessionRowDepth } from "./session-list.constants";
@@ -9,12 +10,14 @@ interface SessionGroupRowProps {
   group: SessionGroup;
   onSessionSelected?: (() => void) | undefined;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
+  activeSession: ActiveSession | null;
 }
 
 function SessionGroupRow({
   group,
   onSessionSelected,
   openSession,
+  activeSession,
 }: SessionGroupRowProps): React.JSX.Element {
   return (
     <>
@@ -29,6 +32,7 @@ function SessionGroupRow({
           onSessionSelected={onSessionSelected}
           openSession={openSession}
           session={session}
+          activeSession={activeSession}
         />
       ))}
     </>

@@ -1,4 +1,9 @@
-import { useGetSessionGroupsQuery, useOpenSessionMutation } from "@/app-state";
+import { useSelector } from "react-redux";
+import {
+  selectActiveSession,
+  useGetSessionGroupsQuery,
+  useOpenSessionMutation,
+} from "@/app-state";
 import { List, Row } from "@/ui";
 import { SessionGroupRow } from "./session-group-row";
 
@@ -35,6 +40,8 @@ function SessionListRows({
   const [openSession, openSessionState] = useOpenSessionMutation();
   const showOpenSessionError =
     openSessionState.isError && !openSessionState.isSuccess;
+  const activeSession = useSelector(selectActiveSession);
+  const shouldShowGroups = !isLoading && !isError && data?.groups.length !== 0;
 
   return (
     <List>
@@ -44,14 +51,14 @@ function SessionListRows({
       {!isLoading && !isError && data?.groups.length === 0 && (
         <Row label="No sessions" muted />
       )}
-      {!isLoading &&
-        !isError &&
+      {shouldShowGroups &&
         data?.groups.map((group) => (
           <SessionGroupRow
             key={group.groupId}
             group={group}
             onSessionSelected={onSessionSelected}
             openSession={openSession}
+            activeSession={activeSession}
           />
         ))}
     </List>
