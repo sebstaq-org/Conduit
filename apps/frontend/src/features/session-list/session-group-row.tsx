@@ -1,5 +1,4 @@
-import type { useOpenSessionMutation } from "@/app-state";
-import type { ActiveSession } from "@/app-state";
+import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
 import { Row } from "@/ui";
 import { SessionGroupHeader } from "./session-group-header";
 import { sessionRowDepth } from "./session-list.constants";
