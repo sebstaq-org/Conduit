@@ -24,3 +24,7 @@ the client subscription methods in `src/app-state`.
 Session history is cursor-windowed. The latest window is fetched without a
 cursor, older windows use `nextCursor`, and live `session/prompt` output is
 projected into the same timeline model before feature UI renders it.
+
+The session transport URL is configurable through
+`EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. If unset, frontend uses
+`ws://127.0.0.1:4174/api/session`.
