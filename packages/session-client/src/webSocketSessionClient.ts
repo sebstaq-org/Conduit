@@ -18,6 +18,7 @@ import {
   readSessionsIndexChanged,
 } from "./timelineEvent.js";
 import { parseServerFrame } from "./wireFrame.js";
+import { requireWebSocketUrl } from "./webSocketUrl.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
@@ -209,7 +210,7 @@ class WebSocketSessionClient implements SessionClientPort {
 
   private async connectSocket(): Promise<WebSocket> {
     const Socket = this.options.WebSocketImpl ?? WebSocket;
-    const socket = new Socket(this.url());
+    const socket = new Socket(requireWebSocketUrl(this.options.url));
     this.socket = socket;
     socket.addEventListener("message", (event: MessageEvent) => {
       this.handleMessage(event);
@@ -290,10 +291,6 @@ class WebSocketSessionClient implements SessionClientPort {
       pending.reject(new Error("session websocket closed"));
     }
     this.pending.clear();
-  }
-
-  private url(): string {
-    return this.options.url ?? "ws://127.0.0.1:4174/api/session";
   }
 }
 

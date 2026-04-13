@@ -2,7 +2,7 @@ import type {
   useAddProjectMutation,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
-} from "./api";
+} from "./api-hooks";
 
 type AddProjectTrigger = ReturnType<typeof useAddProjectMutation>[0];
 type RemoveProjectTrigger = ReturnType<typeof useRemoveProjectMutation>[0];

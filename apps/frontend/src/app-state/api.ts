@@ -14,6 +14,7 @@ import type {
 import {
   addProjectQuery,
   getProjectSuggestionsQuery,
+  getRuntimeHealthQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
   openSessionQuery,
@@ -30,6 +31,7 @@ import type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  RuntimeHealthView,
 } from "./session-api-queries";
 
 interface OpenSessionLifecycleApi {
@@ -168,10 +170,41 @@ async function handleSessionGroupsCacheEntryAdded(
   }
 }
 
+const runtimeHealthEndpoint = {
+  providesTags: [{ id: "CURRENT", type: "RuntimeHealth" }],
+  queryFn: getRuntimeHealthQuery,
+} as const;
+const sessionGroupsEndpoint = {
+  onCacheEntryAdded: handleSessionGroupsCacheEntryAdded,
+  providesTags: [{ id: "LIST", type: "SessionGroups" }],
+  queryFn: getSessionGroupsQuery,
+} as const;
+const openSessionEndpoint = {
+  onQueryStarted: handleOpenSessionStarted,
+  queryFn: openSessionQuery,
+} as const;
+const promptSessionEndpoint = {
+  invalidatesTags: (
+    _result: unknown,
+    _error: unknown,
+    args: PromptSessionMutationArg,
+  ) => [{ id: args.openSessionId, type: "SessionHistory" as const }],
+  queryFn: promptSessionQuery,
+} as const;
+const readSessionHistoryEndpoint = {
+  onCacheEntryAdded: handleSessionHistoryCacheEntryAdded,
+  providesTags: (
+    _result: unknown,
+    _error: unknown,
+    args: ReadSessionHistoryQueryArg,
+  ) => [{ id: args.openSessionId, type: "SessionHistory" as const }],
+  queryFn: readSessionHistoryQuery,
+} as const;
+
 const conduitApi = createApi({
   reducerPath: "conduitApi",
   baseQuery: fakeBaseQuery<string>(),
-  tagTypes: ["Projects", "SessionGroups", "SessionHistory"],
+  tagTypes: ["Projects", "RuntimeHealth", "SessionGroups", "SessionHistory"],
   endpoints: (builder) => ({
     listProjects: builder.query<ProjectListView, undefined>(
       projectListEndpoint,
@@ -191,36 +224,23 @@ const conduitApi = createApi({
       ProjectSuggestionsView,
       ProjectSuggestionsQueryArg
     >(projectSuggestionsEndpoint),
+    getRuntimeHealth: builder.query<RuntimeHealthView, undefined>(
+      runtimeHealthEndpoint,
+    ),
     getSessionGroups: builder.query<
       SessionGroupsView,
       SessionGroupsQuery | undefined
-    >({
-      onCacheEntryAdded: handleSessionGroupsCacheEntryAdded,
-      providesTags: [{ id: "LIST", type: "SessionGroups" }],
-      queryFn: getSessionGroupsQuery,
-    }),
+    >(sessionGroupsEndpoint),
     openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
-      {
-        queryFn: openSessionQuery,
-        onQueryStarted: handleOpenSessionStarted,
-      },
+      openSessionEndpoint,
     ),
-    promptSession: builder.mutation<null, PromptSessionMutationArg>({
-      invalidatesTags: (_result, _error, { openSessionId }) => [
-        { id: openSessionId, type: "SessionHistory" },
-      ],
-      queryFn: promptSessionQuery,
-    }),
+    promptSession: builder.mutation<null, PromptSessionMutationArg>(
+      promptSessionEndpoint,
+    ),
     readSessionHistory: builder.query<
       SessionHistoryWindow,
       ReadSessionHistoryQueryArg
-    >({
-      onCacheEntryAdded: handleSessionHistoryCacheEntryAdded,
-      providesTags: (_result, _error, { openSessionId }) => [
-        { id: openSessionId, type: "SessionHistory" },
-      ],
-      queryFn: readSessionHistoryQuery,
-    }),
+    >(readSessionHistoryEndpoint),
   }),
 });
 
@@ -258,32 +278,7 @@ invalidateSessionGroups = (dispatch): void => {
   );
 };
 
-const {
-  useAddProjectMutation,
-  useGetSessionGroupsQuery,
-  useGetProjectSuggestionsQuery,
-  useListProjectsQuery,
-  useLazyReadSessionHistoryQuery,
-  useOpenSessionMutation,
-  usePromptSessionMutation,
-  useReadSessionHistoryQuery,
-  useRemoveProjectMutation,
-  useUpdateProjectMutation,
-} = conduitApi;
-
-export {
-  conduitApi,
-  useAddProjectMutation,
-  useGetSessionGroupsQuery,
-  useGetProjectSuggestionsQuery,
-  useListProjectsQuery,
-  useLazyReadSessionHistoryQuery,
-  useOpenSessionMutation,
-  usePromptSessionMutation,
-  useReadSessionHistoryQuery,
-  useRemoveProjectMutation,
-  useUpdateProjectMutation,
-};
+export { conduitApi };
 export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,

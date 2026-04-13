@@ -9,7 +9,8 @@ The product session APIs in this checkout are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
 `useGetSessionGroupsQuery`, `useOpenSessionMutation`,
-`useReadSessionHistoryQuery`, and `usePromptSessionMutation`. They return
+`useReadSessionHistoryQuery`, `usePromptSessionMutation`, and
+`useGetRuntimeHealthQuery`. They return
 Conduit read-model shapes for UI state, not raw official ACP provider responses.
 
 `useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI
@@ -25,6 +26,7 @@ Session history is cursor-windowed. The latest window is fetched without a
 cursor, older windows use `nextCursor`, and live `session/prompt` output is
 projected into the same timeline model before feature UI renders it.
 
-The session transport URL is configurable through
-`EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. If unset, frontend uses
-`ws://127.0.0.1:4174/api/session`.
+The session transport URL is required through
+`EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. Frontend fails fast when the variable is
+missing, empty, or not a `ws://` or `wss://` URL.
+Runtime health uses the same host and port and polls `http(s)://.../health`.

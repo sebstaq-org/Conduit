@@ -1,8 +1,8 @@
+import type { OpenSessionMutationArg } from "./api";
 import type {
-  OpenSessionMutationArg,
   useOpenSessionMutation,
   usePromptSessionMutation,
-} from "./api";
+} from "./api-hooks";
 import type { ActiveSession } from "./session-selection";
 
 type OpenSessionTrigger = ReturnType<typeof useOpenSessionMutation>[0];

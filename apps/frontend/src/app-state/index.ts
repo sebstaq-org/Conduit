@@ -1,8 +1,9 @@
+export { conduitApi } from "./api";
 export {
-  conduitApi,
   useAddProjectMutation,
   useGetSessionGroupsQuery,
   useGetProjectSuggestionsQuery,
+  useGetRuntimeHealthQuery,
   useListProjectsQuery,
   useLazyReadSessionHistoryQuery,
   useOpenSessionMutation,
@@ -10,7 +11,7 @@ export {
   useReadSessionHistoryQuery,
   useRemoveProjectMutation,
   useUpdateProjectMutation,
-} from "./api";
+} from "./api-hooks";
 export {
   canSubmitPrompt,
   openSessionRow,
