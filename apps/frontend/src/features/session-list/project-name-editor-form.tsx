@@ -49,11 +49,7 @@ function ProjectNameEditorForm({
         label={saveProjectLabel(saving)}
         onSelect={handleSave}
       />
-      <MenuItem
-        disabled={saving}
-        label="Cancel"
-        onSelect={handleCancel}
-      />
+      <MenuItem disabled={saving} label="Cancel" onSelect={handleCancel} />
     </Box>
   );
 }

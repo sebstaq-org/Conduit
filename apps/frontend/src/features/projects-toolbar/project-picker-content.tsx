@@ -28,9 +28,7 @@ interface ProjectPickerManualItem {
   type: "manual";
 }
 
-type ProjectPickerItem =
-  | ProjectPickerManualItem
-  | ProjectPickerSuggestionItem;
+type ProjectPickerItem = ProjectPickerManualItem | ProjectPickerSuggestionItem;
 interface ProjectPickerState {
   handleCwdAdd: (cwd: string) => void;
   handleItemSelect: (item: ProjectPickerItem) => void;
@@ -151,11 +149,10 @@ function renderProjectPickerItem({
 function useProjectPickerState(): ProjectPickerState {
   const { close } = usePopoverControls();
   const [query, setQuery] = useState("");
-  const suggestionsQuery =
-    useGetProjectSuggestionsQuery({
-      limit: projectPickerSuggestionLimit,
-      query,
-    });
+  const suggestionsQuery = useGetProjectSuggestionsQuery({
+    limit: projectPickerSuggestionLimit,
+    query,
+  });
   const [addProject, addProjectState] = useAddProjectMutation();
   const suggestions =
     suggestionsQuery.data?.suggestions.map(projectPickerSuggestionItem) ?? [];

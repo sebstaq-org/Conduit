@@ -11,7 +11,9 @@ interface AutocompleteItemProps<Item> {
   highlighted: boolean;
   item: Item;
   onItemSelect: (item: Item) => void;
-  renderItem?: ((state: AutocompleteRenderItemState<Item>) => ReactNode) | undefined;
+  renderItem?:
+    | ((state: AutocompleteRenderItemState<Item>) => ReactNode)
+    | undefined;
 }
 
 function AutocompleteItem<Item>({

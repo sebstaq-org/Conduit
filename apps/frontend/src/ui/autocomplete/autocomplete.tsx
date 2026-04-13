@@ -8,9 +8,7 @@ import { AutocompleteList } from "./autocomplete-list";
 import { useAutocompleteState } from "./autocomplete-state-hook";
 import type { AutocompleteProps } from "./autocomplete.types";
 
-function Autocomplete<Item>(
-  props: AutocompleteProps<Item>,
-): React.JSX.Element {
+function Autocomplete<Item>(props: AutocompleteProps<Item>): React.JSX.Element {
   const inputNativeId = useId();
   const theme = useTheme<Theme>();
   const state = useAutocompleteState(props);

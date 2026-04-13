@@ -91,7 +91,10 @@ async function updateProjectDisplayName({
   }
 
   try {
-    await updateProject({ displayName: trimmedDisplayName, projectId }).unwrap();
+    await updateProject({
+      displayName: trimmedDisplayName,
+      projectId,
+    }).unwrap();
     close();
   } catch {
     // The mutation state renders the failure while the edit form stays open.
@@ -99,4 +102,8 @@ async function updateProjectDisplayName({
 }
 
 export { addProjectPath, removeProjectById, updateProjectDisplayName };
-export type { ProjectMutationState, RemoveProjectTrigger, UpdateProjectTrigger };
+export type {
+  ProjectMutationState,
+  RemoveProjectTrigger,
+  UpdateProjectTrigger,
+};

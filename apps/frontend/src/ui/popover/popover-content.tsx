@@ -13,9 +13,7 @@ interface PopoverContentProps {
   children: ReactNode;
 }
 
-function PopoverContent({
-  children,
-}: PopoverContentProps): React.JSX.Element {
+function PopoverContent({ children }: PopoverContentProps): React.JSX.Element {
   const theme = useTheme<Theme>();
 
   return (
