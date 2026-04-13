@@ -27,10 +27,7 @@ import {
 import { runtimeHealthEndpoint } from "./api-runtime-health-endpoint";
 import { createSessionTimelineEndpoints } from "./api-session-timeline-endpoints";
 import { createSessionTimelineData } from "./session-timeline-cache";
-import {
-  getSettingsQuery,
-  updateSettingsQuery,
-} from "./session-api-queries";
+import { getSettingsQuery, updateSettingsQuery } from "./session-api-queries";
 import type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
