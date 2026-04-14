@@ -15,10 +15,12 @@ import type { SessionComposerPreviewControl } from "./session-composer.styles";
 
 interface SessionComposerPreviewControlChipProps {
   control: SessionComposerPreviewControl;
+  showChevron?: boolean | undefined;
 }
 
 function SessionComposerPreviewControlChip({
   control,
+  showChevron = true,
 }: SessionComposerPreviewControlChipProps): React.JSX.Element {
   const theme = useTheme<Theme>();
 
@@ -37,7 +39,7 @@ function SessionComposerPreviewControlChip({
       >
         {control.value}
       </Text>
-      <IconSlot name="chevron-down" />
+      {showChevron && <IconSlot name="chevron-down" />}
     </Box>
   );
 }

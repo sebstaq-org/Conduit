@@ -1,6 +1,6 @@
 import { PROVIDERS } from "@conduit/session-client";
 import type { ProviderId } from "@conduit/session-client";
-import { MenuContent, MenuItem, usePopoverControls } from "@/ui";
+import { DropdownMenuContent, DropdownMenuItem } from "@/ui";
 
 interface SessionComposerProviderMenuProps {
   onProviderSelect: (provider: ProviderId) => void;
@@ -9,21 +9,18 @@ interface SessionComposerProviderMenuProps {
 function SessionComposerProviderMenu({
   onProviderSelect,
 }: SessionComposerProviderMenuProps): React.JSX.Element {
-  const { close } = usePopoverControls();
-
   return (
-    <MenuContent>
+    <DropdownMenuContent>
       {PROVIDERS.map((provider) => (
-        <MenuItem
+        <DropdownMenuItem
           key={provider}
           label={provider}
           onSelect={() => {
             onProviderSelect(provider);
-            close();
           }}
         />
       ))}
-    </MenuContent>
+    </DropdownMenuContent>
   );
 }
 

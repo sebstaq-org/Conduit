@@ -1,6 +1,6 @@
 import type { ProviderId } from "@conduit/session-client";
 import { Box } from "@/theme";
-import { MenuIconTrigger, MenuPortal, MenuRoot } from "@/ui";
+import { DropdownMenuRoot, DropdownMenuTrigger } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
 import { SessionComposerProviderMenu } from "./session-composer-provider-menu";
 import {
@@ -15,11 +15,15 @@ interface SessionComposerControlsProps {
   provider: ProviderId | null;
 }
 
-function renderComposerControl(provider: string | null): React.JSX.Element {
+function renderComposerControl(
+  provider: string | null,
+  showChevron: boolean,
+): React.JSX.Element {
   return (
     <SessionComposerPreviewControlChip
       control={{ label: "Provider", value: provider ?? "Select provider" }}
       key={provider ?? "select-provider"}
+      showChevron={showChevron}
     />
   );
 }
@@ -32,16 +36,12 @@ function renderDraftControls({
   "onProviderSelect" | "provider"
 >): React.JSX.Element {
   return (
-    <MenuRoot>
-      <MenuIconTrigger
-        accessibilityLabel="Select provider for new session"
-        icon="chevron-down"
-      />
-      {renderComposerControl(provider)}
-      <MenuPortal>
-        <SessionComposerProviderMenu onProviderSelect={onProviderSelect} />
-      </MenuPortal>
-    </MenuRoot>
+    <DropdownMenuRoot>
+      <DropdownMenuTrigger accessibilityLabel="Select provider for new session">
+        {renderComposerControl(provider, true)}
+      </DropdownMenuTrigger>
+      <SessionComposerProviderMenu onProviderSelect={onProviderSelect} />
+    </DropdownMenuRoot>
   );
 }
 
@@ -51,7 +51,7 @@ function renderOpenControls(
   if (provider === null) {
     return null;
   }
-  return renderComposerControl(provider);
+  return renderComposerControl(provider, false);
 }
 
 function renderControls(

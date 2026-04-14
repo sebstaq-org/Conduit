@@ -20,6 +20,7 @@
     "@conduit/session-model": "workspace:*",
     "@expo/vector-icons": "15.1.1",
     "@reduxjs/toolkit": "2.11.2",
+    "@rn-primitives/dropdown-menu": "1.4.0",
     "@rn-primitives/popover": "1.4.0",
     "@rn-primitives/portal": "1.4.0",
     "@shopify/flash-list": "2.3.1",

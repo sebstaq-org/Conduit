@@ -8,6 +8,12 @@ export { IconSlot } from "./icon-slot";
 export { KeyboardLift } from "./keyboard-lift";
 export { List } from "./list";
 export {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+} from "./dropdown-menu";
+export {
   MenuContent,
   MenuIconTrigger,
   MenuItem,
