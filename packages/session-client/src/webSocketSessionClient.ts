@@ -17,7 +17,7 @@ import {
   readSessionTimelineChanged,
   readSessionsIndexChanged,
 } from "./timelineEvent.js";
-import { WebSocketTransport } from "./webSocketTransport.js";
+import { WebSocketTransport } from "./transport/webSocketTransport.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,

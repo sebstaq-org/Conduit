@@ -8,13 +8,17 @@ import type {
   RuntimeEvent,
   ServerFrame,
 } from "@conduit/session-contracts";
-import type { SessionClientOptions } from "./sessionClientPort.js";
 
 const transportVersionField = "v";
 
+interface WebSocketTransportOptions {
+  url?: string;
+  WebSocketImpl?: typeof WebSocket;
+}
+
 class WebSocketTransport {
   private readonly handleEvent: (event: RuntimeEvent) => void;
-  private readonly options: SessionClientOptions;
+  private readonly options: WebSocketTransportOptions;
   private readonly pending = new Map<
     string,
     PromiseWithResolvers<ConsumerResponse>
@@ -23,7 +27,7 @@ class WebSocketTransport {
   private socket: WebSocket | null = null;
 
   public constructor(
-    options: SessionClientOptions,
+    options: WebSocketTransportOptions,
     handleEvent: (event: RuntimeEvent) => void,
   ) {
     this.options = options;
