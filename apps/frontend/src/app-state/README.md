@@ -5,7 +5,7 @@ caching. Feature modules should consume RTK Query hooks from here, not
 `@conduit/session-client`, `@conduit/session-contracts`, WebSocket transport, or
 raw command dispatch directly.
 
-The product session APIs in this checkout are `useListProjectsQuery`,
+The product session APIs are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
 `useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
