@@ -6,6 +6,7 @@ import type {
   ProjectUpdateRequest,
   SessionGroupsQuery,
   SessionHistoryRequest,
+  SessionNewRequest,
   SessionOpenRequest,
   SessionPromptRequest,
 } from "@conduit/session-model";
@@ -16,6 +17,7 @@ import {
   ProjectSuggestionsQuerySchema,
   ProjectUpdateRequestSchema,
   SessionHistoryRequestSchema,
+  SessionNewRequestSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   SessionGroupsQuerySchema,
@@ -47,6 +49,10 @@ function isSessionOpenRequest(value: unknown): value is SessionOpenRequest {
   return SessionOpenRequestSchema.safeParse(value).success;
 }
 
+function isSessionNewRequest(value: unknown): value is SessionNewRequest {
+  return SessionNewRequestSchema.safeParse(value).success;
+}
+
 function isSessionHistoryRequest(
   value: unknown,
 ): value is SessionHistoryRequest {
@@ -70,6 +76,7 @@ export {
   isProjectUpdateRequest,
   isSessionGroupsQuery,
   isSessionHistoryRequest,
+  isSessionNewRequest,
   isSessionOpenRequest,
   isSessionPromptRequest,
   isGlobalSettingsUpdateRequest,

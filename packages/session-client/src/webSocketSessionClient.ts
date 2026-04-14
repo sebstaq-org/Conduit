@@ -1,9 +1,8 @@
+import { createConsumerCommand } from "@conduit/session-contracts";
 import {
-  CONDUIT_TRANSPORT_VERSION,
-  createConsumerCommand,
-} from "@conduit/session-contracts";
-import { createDeferred } from "./deferred.js";
-import { readSessionHistoryResponse } from "./historyWindow.js";
+  readSessionHistoryResponse,
+  readSessionNewResponse,
+} from "./historyWindow.js";
 import {
   readGlobalSettingsResponse,
   readProjectListResponse,
@@ -18,8 +17,7 @@ import {
   readSessionTimelineChanged,
   readSessionsIndexChanged,
 } from "./timelineEvent.js";
-import { parseServerFrame } from "./wireFrame.js";
-import { requireWebSocketUrl } from "./webSocketUrl.js";
+import { WebSocketTransport } from "./transport/webSocketTransport.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
@@ -32,11 +30,12 @@ import type {
   ProjectSuggestionsView,
   ProjectUpdateRequest,
   RuntimeEvent,
-  ServerFrame,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
 } from "@conduit/session-contracts";
@@ -55,15 +54,11 @@ class WebSocketSessionClient implements SessionClientPort {
   private readonly sessionIndexSubscriptions = new Set<{
     handler: (event: SessionsIndexChanged) => void;
   }>();
-  private readonly options: SessionClientOptions;
-  private readonly pending = new Map<
-    string,
-    PromiseWithResolvers<ConsumerResponse>
-  >();
-  private connecting: Promise<WebSocket> | null = null;
-  private socket: WebSocket | null = null;
+  private readonly transport: WebSocketTransport;
   public constructor(options: SessionClientOptions = {}) {
-    this.options = options;
+    this.transport = new WebSocketTransport(options, (event) => {
+      this.handleRuntimeEvent(event);
+    });
   }
   public async listProjects(): Promise<ProjectListView> {
     const response = await this.dispatch(
@@ -134,6 +129,15 @@ class WebSocketSessionClient implements SessionClientPort {
     );
     return readSessionHistoryResponse(response);
   }
+  public async newSession(
+    provider: ProviderId,
+    request: SessionNewRequest,
+  ): Promise<ConsumerResponse<SessionNewResult | null>> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/new", provider, request),
+    );
+    return readSessionNewResponse(response);
+  }
   public async readSessionHistory(
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
@@ -184,80 +188,12 @@ class WebSocketSessionClient implements SessionClientPort {
     };
   }
   private async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
-    const socket = await this.openSocket();
-    const response = this.trackResponse(command.id);
-    socket.send(
-      JSON.stringify({
-        v: CONDUIT_TRANSPORT_VERSION,
-        type: "command",
-        id: command.id,
-        command,
-      }),
-    );
+    const response = await this.transport.dispatch(command);
     return response;
   }
-  private async openSocket(): Promise<WebSocket> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
-      return this.socket;
-    }
-    if (this.connecting) {
-      const socket = await this.connecting;
-      return socket;
-    }
-    this.connecting = this.connectSocket();
-    const socket = await this.connecting;
-    return socket;
-  }
-  private async connectSocket(): Promise<WebSocket> {
-    const Socket = this.options.WebSocketImpl ?? WebSocket;
-    const socket = new Socket(requireWebSocketUrl(this.options.url));
-    this.socket = socket;
-    socket.addEventListener("message", (event: MessageEvent) => {
-      this.handleMessage(event);
-    });
-    socket.addEventListener("close", () => {
-      this.handleClose();
-    });
-    const openedSocket = await this.waitForOpen(socket);
-    return openedSocket;
-  }
-  private async waitForOpen(socket: WebSocket): Promise<WebSocket> {
-    const deferred = createDeferred<WebSocket>();
-    socket.addEventListener("open", () => {
-      this.connecting = null;
-      deferred.resolve(socket);
-    });
-    socket.addEventListener("error", () => {
-      this.connecting = null;
-      deferred.reject(new Error("session websocket failed to connect"));
-    });
-    const openedSocket = await deferred.promise;
-    return openedSocket;
-  }
-  private async trackResponse(id: string): Promise<ConsumerResponse> {
-    const deferred = createDeferred<ConsumerResponse>();
-    this.pending.set(id, deferred);
-    const response = await deferred.promise;
-    return response;
-  }
-  private handleMessage(event: MessageEvent): void {
-    if (typeof event.data !== "string") {
-      return;
-    }
-    const frame = parseServerFrame(event.data);
-    if (!frame) {
-      return;
-    }
-    this.handleServerFrame(frame);
-  }
-  private handleServerFrame(frame: ServerFrame): void {
-    if (frame.type === "response") {
-      this.pending.get(frame.id)?.resolve(frame.response);
-      this.pending.delete(frame.id);
-      return;
-    }
-    this.handleTimelineEvent(frame.event);
-    this.handleSessionsIndexEvent(frame.event);
+  private handleRuntimeEvent(event: RuntimeEvent): void {
+    this.handleTimelineEvent(event);
+    this.handleSessionsIndexEvent(event);
   }
   private handleTimelineEvent(eventFrame: RuntimeEvent): void {
     const event = readSessionTimelineChanged(eventFrame);
@@ -276,14 +212,6 @@ class WebSocketSessionClient implements SessionClientPort {
         subscription.handler(event);
       }
     }
-  }
-  private handleClose(): void {
-    this.socket = null;
-    this.connecting = null;
-    for (const pending of this.pending.values()) {
-      pending.reject(new Error("session websocket closed"));
-    }
-    this.pending.clear();
   }
 }
 export { WebSocketSessionClient };

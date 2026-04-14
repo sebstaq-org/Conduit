@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { useTheme } from "@shopify/restyle";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
   canSubmitPrompt,
+  draftSessionProviderSelected,
   selectActiveSession,
   submitPrompt,
+  useNewSessionMutation,
   usePromptSessionMutation,
 } from "@/app-state";
+import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
+import type { ProviderId } from "@conduit/session-client";
 import { SessionComposerActionRow } from "./session-composer-action-row";
 import { SessionComposerInput } from "./session-composer-input";
 import {
@@ -21,31 +25,41 @@ import {
   sessionComposerPaddingY,
 } from "./session-composer.styles";
 
-function SessionComposer(): React.JSX.Element {
-  const theme = useTheme<Theme>();
-  const activeSession = useSelector(selectActiveSession);
-  const [promptSession, promptSessionState] = usePromptSessionMutation();
-  const [draft, setDraft] = useState("");
-  const trimmedDraft = draft.trim();
-  const canSend = canSubmitPrompt(
-    activeSession,
-    promptSessionState.isLoading,
-    trimmedDraft,
-  );
+interface SessionComposerSurfaceArgs {
+  activeSession: ActiveSession | null;
+  canSend: boolean;
+  dispatch: ReturnType<typeof useDispatch>;
+  draft: string;
+  hasError: boolean;
+  handleSend: () => void;
+  setDraft: (draft: string) => void;
+  theme: Theme;
+}
 
-  function handleSend(): void {
-    if (!canSend || activeSession === null) {
-      return;
-    }
-
-    void submitPrompt({
-      activeSession,
-      promptSession,
-      setDraft,
-      text: trimmedDraft,
-    });
+function renderComposerError(hasError: boolean): React.JSX.Element | null {
+  if (!hasError) {
+    return null;
   }
+  return <Text variant="rowLabelMuted">Message failed to send</Text>;
+}
 
+function selectDraftProvider(
+  dispatch: ReturnType<typeof useDispatch>,
+  provider: ProviderId,
+): void {
+  dispatch(draftSessionProviderSelected(provider));
+}
+
+function renderSessionComposerSurface({
+  activeSession,
+  canSend,
+  dispatch,
+  draft,
+  handleSend,
+  hasError,
+  setDraft,
+  theme,
+}: SessionComposerSurfaceArgs): React.JSX.Element {
   return (
     <Box
       backgroundColor={sessionComposerBackgroundColor}
@@ -61,13 +75,53 @@ function SessionComposer(): React.JSX.Element {
       <SessionComposerActionRow
         canSend={canSend}
         onSend={handleSend}
-        provider={activeSession?.provider}
+        isDraft={activeSession?.kind === "draft"}
+        onProviderSelect={(provider) => {
+          selectDraftProvider(dispatch, provider);
+        }}
+        provider={activeSession?.provider ?? null}
       />
-      {promptSessionState.isError && (
-        <Text variant="rowLabelMuted">Message failed to send</Text>
-      )}
+      {renderComposerError(hasError)}
     </Box>
   );
+}
+
+function SessionComposer(): React.JSX.Element {
+  const theme = useTheme<Theme>();
+  const dispatch = useDispatch();
+  const activeSession = useSelector(selectActiveSession);
+  const [newSession, newSessionState] = useNewSessionMutation();
+  const [promptSession, promptSessionState] = usePromptSessionMutation();
+  const [draft, setDraft] = useState("");
+  const trimmedDraft = draft.trim();
+  const canSend = canSubmitPrompt(
+    activeSession,
+    promptSessionState.isLoading || newSessionState.isLoading,
+    trimmedDraft,
+  );
+
+  function handleSend(): void {
+    if (canSend && activeSession !== null) {
+      void submitPrompt({
+        activeSession,
+        newSession,
+        promptSession,
+        setDraft,
+        text: trimmedDraft,
+      });
+    }
+  }
+
+  return renderSessionComposerSurface({
+    activeSession,
+    canSend,
+    dispatch,
+    draft,
+    handleSend,
+    hasError: promptSessionState.isError || newSessionState.isError,
+    setDraft,
+    theme,
+  });
 }
 
 export { SessionComposer };

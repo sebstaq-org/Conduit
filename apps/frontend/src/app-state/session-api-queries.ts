@@ -12,14 +12,21 @@ import type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
+  SessionNewResult,
 } from "@conduit/session-client";
-import { configuredSessionHealthUrl, sessionClient } from "./session-client";
+import { sessionClient } from "./session-client";
 
 interface OpenSessionMutationArg {
   provider: ProviderId;
   sessionId: string;
   cwd: string;
   title: string | null;
+  limit?: number;
+}
+
+interface NewSessionMutationArg {
+  provider: ProviderId;
+  cwd: string;
   limit?: number;
 }
 
@@ -34,12 +41,6 @@ interface PromptSessionMutationArg {
   prompt: ContentBlock[];
 }
 
-interface RuntimeHealthView {
-  checkedAt: string;
-  service: string;
-  transport: string;
-}
-
 type QueryResult<ResponseData> = Promise<
   { data: ResponseData } | { error: string }
 >;
@@ -49,79 +50,6 @@ function toQueryError(error: unknown): string {
     return error.message;
   }
   return "session request failed";
-}
-
-function runtimeHealthErrorMessage(status: number): string {
-  return `runtime health failed (${status})`;
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object") {
-    return false;
-  }
-  return true;
-}
-
-function readRuntimeString(value: unknown, fallback: string): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  return fallback;
-}
-
-function readRuntimeHealthPayload(payload: unknown): RuntimeHealthView | null {
-  if (!isObjectRecord(payload)) {
-    return null;
-  }
-  if (payload.ok !== true) {
-    return null;
-  }
-  const service = readRuntimeString(payload.service, "conduit-service");
-  const transport = readRuntimeString(payload.transport, "websocket");
-  return {
-    checkedAt: new Date().toISOString(),
-    service,
-    transport,
-  };
-}
-
-function createHealthTimeoutSignal(): {
-  abortController: AbortController;
-  timeoutId: ReturnType<typeof setTimeout>;
-} {
-  const abortController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    abortController.abort();
-  }, 2000);
-  return { abortController, timeoutId };
-}
-
-async function readRuntimeHealthResponse(
-  signal: AbortSignal,
-): Promise<RuntimeHealthView> {
-  const response = await fetch(configuredSessionHealthUrl(), { signal });
-  if (!response.ok) {
-    throw new Error(runtimeHealthErrorMessage(response.status));
-  }
-  const payload = readRuntimeHealthPayload(await response.json());
-  if (payload === null) {
-    throw new Error("runtime health returned invalid payload");
-  }
-  return payload;
-}
-
-async function getRuntimeHealthQuery(): QueryResult<RuntimeHealthView> {
-  const timeoutSignal = createHealthTimeoutSignal();
-  try {
-    const data = await readRuntimeHealthResponse(
-      timeoutSignal.abortController.signal,
-    );
-    return { data };
-  } catch (error) {
-    return { error: toQueryError(error) };
-  } finally {
-    clearTimeout(timeoutSignal.timeoutId);
-  }
 }
 
 async function getSessionGroupsQuery(
@@ -208,6 +136,28 @@ async function getProjectSuggestionsQuery(
   }
 }
 
+async function newSessionQuery({
+  cwd,
+  limit,
+  provider,
+}: NewSessionMutationArg): QueryResult<SessionNewResult> {
+  try {
+    const response = await sessionClient.newSession(provider, {
+      cwd,
+      limit,
+    });
+    if (!response.ok) {
+      return { error: response.error?.message ?? "session new failed" };
+    }
+    if (response.result === null) {
+      return { error: "session new returned no session" };
+    }
+    return { data: response.result };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
 async function openSessionQuery({
   cwd,
   limit,
@@ -269,11 +219,11 @@ async function promptSessionQuery({
 
 export {
   addProjectQuery,
-  getRuntimeHealthQuery,
   getProjectSuggestionsQuery,
   getSettingsQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
+  newSessionQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
@@ -283,8 +233,9 @@ export {
   updateSettingsQuery,
 };
 export type {
+  NewSessionMutationArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
-  RuntimeHealthView,
 };
+export type { RuntimeHealthView } from "./api-runtime-health-query";

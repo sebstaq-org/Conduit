@@ -7,6 +7,7 @@ export {
   useGetSettingsQuery,
   useListProjectsQuery,
   useLoadOlderSessionTimelineMutation,
+  useNewSessionMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
@@ -26,6 +27,7 @@ export {
 } from "./project-commands";
 export type {
   LoadOlderSessionTimelineArg,
+  NewSessionMutationArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
@@ -35,7 +37,11 @@ export type {
   RemoveProjectTrigger,
   UpdateProjectTrigger,
 } from "./project-commands";
-export { selectActiveSession } from "./session-selection";
+export {
+  draftSessionProviderSelected,
+  draftSessionStarted,
+  selectActiveSession,
+} from "./session-selection";
 export type { ActiveSession } from "./session-selection";
 export { useSessionTimeline } from "./session-timeline";
 export { ConduitStoreProvider } from "./provider";

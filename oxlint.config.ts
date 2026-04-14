@@ -216,7 +216,16 @@ export default defineConfig({
       files: [
         "packages/app-client/src/index.ts",
         "packages/session-client/src/index.ts",
-        "packages/session-client/src/webSocketSessionClient.ts",
+      ],
+      rules: {
+        "eslint/id-length": "off",
+        "oxc/no-async-await": "off",
+      },
+    },
+    {
+      files: [
+        "packages/session-client/src/*SessionClient.ts",
+        "packages/session-client/src/transport/**/*.ts",
       ],
       rules: {
         "eslint/id-length": "off",

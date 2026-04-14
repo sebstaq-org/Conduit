@@ -16,6 +16,8 @@ import type {
   SessionGroupsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
   TranscriptItem,
@@ -29,6 +31,7 @@ import {
   ProjectUpdateRequestSchema,
   SessionGroupsQuerySchema,
   SessionHistoryRequestSchema,
+  SessionNewRequestSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   TranscriptItemSchema,
@@ -106,7 +109,7 @@ const ProviderConsumerCommandSchema = z.union([
       id: z.string(),
       command: z.literal("session/new"),
       provider: ProviderIdSchema,
-      params: ProviderCommandParamsSchema,
+      params: SessionNewRequestSchema,
     })
     .strict(),
   z
@@ -279,6 +282,10 @@ type SessionOpenConsumerCommand = Extract<
   ProviderConsumerCommand,
   { command: "session/open" }
 >;
+type SessionNewConsumerCommand = Extract<
+  ProviderConsumerCommand,
+  { command: "session/new" }
+>;
 type SessionHistoryConsumerCommand = z.infer<
   typeof SessionHistoryConsumerCommandSchema
 >;
@@ -381,6 +388,9 @@ export type {
   SessionHistoryConsumerCommand,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewConsumerCommand,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenCommandName,
   SessionOpenConsumerCommand,
   SessionOpenRequest,

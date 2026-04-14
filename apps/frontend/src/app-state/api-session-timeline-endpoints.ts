@@ -1,5 +1,6 @@
 import {
   getSessionGroupsQuery,
+  newSessionQuery,
   openSessionQuery,
   promptSessionQuery,
 } from "./session-api-queries";
@@ -10,6 +11,11 @@ import type {
 } from "./session-api-queries";
 import type { SessionTimelineData } from "./session-timeline-cache";
 
+interface SessionTimelineTag {
+  id: string;
+  type: "SessionTimeline";
+}
+
 interface SessionTimelineEndpoints {
   loadOlderSessionTimelineEndpoint: {
     onQueryStarted: SessionTimelineHandlers["handleLoadOlderSessionTimelineStarted"];
@@ -19,12 +25,16 @@ interface SessionTimelineEndpoints {
     onQueryStarted: SessionTimelineHandlers["handleOpenSessionStarted"];
     queryFn: typeof openSessionQuery;
   };
+  newSessionEndpoint: {
+    onQueryStarted: SessionTimelineHandlers["handleNewSessionStarted"];
+    queryFn: typeof newSessionQuery;
+  };
   promptSessionEndpoint: {
     invalidatesTags: (
       result: null | undefined,
       error: unknown,
       arg: PromptSessionMutationArg,
-    ) => { id: string; type: "SessionTimeline" }[];
+    ) => SessionTimelineTag[];
     queryFn: typeof promptSessionQuery;
   };
   readSessionTimelineEndpoint: {
@@ -33,7 +43,7 @@ interface SessionTimelineEndpoints {
       result: SessionTimelineData | undefined,
       error: unknown,
       arg: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
-    ) => { id: string; type: "SessionTimeline" }[];
+    ) => SessionTimelineTag[];
     queryFn: SessionTimelineHandlers["readSessionTimelineQueryFn"];
   };
   sessionGroupsEndpoint: {
@@ -41,6 +51,26 @@ interface SessionTimelineEndpoints {
     providesTags: readonly [{ id: "LIST"; type: "SessionGroups" }];
     queryFn: typeof getSessionGroupsQuery;
   };
+}
+
+function sessionTimelineTag(openSessionId: string): SessionTimelineTag[] {
+  return [{ id: openSessionId, type: "SessionTimeline" }];
+}
+
+function promptSessionInvalidatesTags(
+  _result: null | undefined,
+  _error: unknown,
+  { openSessionId }: PromptSessionMutationArg,
+): SessionTimelineTag[] {
+  return sessionTimelineTag(openSessionId);
+}
+
+function readSessionTimelineProvidesTags(
+  _result: SessionTimelineData | undefined,
+  _error: unknown,
+  { openSessionId }: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
+): SessionTimelineTag[] {
+  return sessionTimelineTag(openSessionId);
 }
 
 function createSessionTimelineEndpoints(
@@ -57,26 +87,19 @@ function createSessionTimelineEndpoints(
     queryFn: openSessionQuery,
   } as const;
 
+  const newSessionEndpoint = {
+    onQueryStarted: handlers.handleNewSessionStarted,
+    queryFn: newSessionQuery,
+  } as const;
+
   const promptSessionEndpoint = {
-    invalidatesTags: (
-      _result: null | undefined,
-      _error: unknown,
-      { openSessionId }: PromptSessionMutationArg,
-    ): { id: string; type: "SessionTimeline" }[] => [
-      { id: openSessionId, type: "SessionTimeline" },
-    ],
+    invalidatesTags: promptSessionInvalidatesTags,
     queryFn: promptSessionQuery,
   };
 
   const readSessionTimelineEndpoint = {
     onCacheEntryAdded: handlers.handleSessionTimelineCacheEntryAdded,
-    providesTags: (
-      _result: SessionTimelineData | undefined,
-      _error: unknown,
-      { openSessionId }: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
-    ): { id: string; type: "SessionTimeline" }[] => [
-      { id: openSessionId, type: "SessionTimeline" },
-    ],
+    providesTags: readSessionTimelineProvidesTags,
     queryFn: handlers.readSessionTimelineQueryFn,
   };
 
@@ -87,6 +110,7 @@ function createSessionTimelineEndpoints(
 
   return {
     loadOlderSessionTimelineEndpoint,
+    newSessionEndpoint,
     openSessionEndpoint,
     promptSessionEndpoint,
     readSessionTimelineEndpoint,
