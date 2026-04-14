@@ -10,6 +10,7 @@ The product session APIs are `useListProjectsQuery`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
 `useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
 `useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`,
+`useNewSessionMutation`,
 `usePromptSessionMutation`, `useGetSettingsQuery`, and
 `useUpdateSettingsMutation`. They return Conduit read-model shapes for UI state,
 not raw official ACP provider responses.
