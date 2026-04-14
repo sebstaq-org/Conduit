@@ -15,6 +15,8 @@ export type {
   ProjectUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
 } from "@conduit/session-contracts";

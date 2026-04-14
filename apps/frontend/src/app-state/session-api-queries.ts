@@ -12,6 +12,7 @@ import type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
+  SessionNewResult,
 } from "@conduit/session-client";
 import { configuredSessionHealthUrl, sessionClient } from "./session-client";
 
@@ -20,6 +21,12 @@ interface OpenSessionMutationArg {
   sessionId: string;
   cwd: string;
   title: string | null;
+  limit?: number;
+}
+
+interface NewSessionMutationArg {
+  provider: ProviderId;
+  cwd: string;
   limit?: number;
 }
 
@@ -208,6 +215,28 @@ async function getProjectSuggestionsQuery(
   }
 }
 
+async function newSessionQuery({
+  cwd,
+  limit,
+  provider,
+}: NewSessionMutationArg): QueryResult<SessionNewResult> {
+  try {
+    const response = await sessionClient.newSession(provider, {
+      cwd,
+      limit,
+    });
+    if (!response.ok) {
+      return { error: response.error?.message ?? "session new failed" };
+    }
+    if (response.result === null) {
+      return { error: "session new returned no session" };
+    }
+    return { data: response.result };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
 async function openSessionQuery({
   cwd,
   limit,
@@ -274,6 +303,7 @@ export {
   getSettingsQuery,
   getSessionGroupsQuery,
   listProjectsQuery,
+  newSessionQuery,
   openSessionQuery,
   promptSessionQuery,
   readSessionHistoryQuery,
@@ -283,6 +313,7 @@ export {
   updateSettingsQuery,
 };
 export type {
+  NewSessionMutationArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,

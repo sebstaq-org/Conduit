@@ -11,6 +11,7 @@ import type {
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
+  SessionNewResult,
 } from "@conduit/session-client";
 import {
   createSessionTimelineHandlers,
@@ -30,6 +31,7 @@ import { createSessionTimelineData } from "./session-timeline-cache";
 import { getSettingsQuery, updateSettingsQuery } from "./session-api-queries";
 import type {
   OpenSessionMutationArg,
+  NewSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
   RuntimeHealthView,
@@ -104,6 +106,9 @@ const conduitApi = createApi({
     openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
       sessionTimelineEndpoints.openSessionEndpoint,
     ),
+    newSession: builder.mutation<SessionNewResult, NewSessionMutationArg>(
+      sessionTimelineEndpoints.newSessionEndpoint,
+    ),
     promptSession: builder.mutation<null, PromptSessionMutationArg>(
       sessionTimelineEndpoints.promptSessionEndpoint,
     ),
@@ -154,6 +159,7 @@ bindSessionTimelineMutations(sessionTimelineMutations, {
 export { conduitApi };
 export type {
   LoadOlderSessionTimelineArg,
+  NewSessionMutationArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,

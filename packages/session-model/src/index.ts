@@ -187,6 +187,13 @@ const SessionOpenRequestSchema = z
   })
   .strict();
 type SessionOpenRequest = z.infer<typeof SessionOpenRequestSchema>;
+const SessionNewRequestSchema = z
+  .object({
+    cwd: z.string(),
+    limit: z.number().int().positive().optional(),
+  })
+  .strict();
+type SessionNewRequest = z.infer<typeof SessionNewRequestSchema>;
 const SessionHistoryRequestSchema = z
   .object({
     openSessionId: z.string(),
@@ -237,6 +244,13 @@ const SessionHistoryWindowSchema = z
   })
   .strict();
 type SessionHistoryWindow = z.infer<typeof SessionHistoryWindowSchema>;
+const SessionNewResultSchema = z
+  .object({
+    sessionId: z.string(),
+    history: SessionHistoryWindowSchema,
+  })
+  .strict();
+type SessionNewResult = z.infer<typeof SessionNewResultSchema>;
 interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
@@ -289,6 +303,8 @@ export {
   SessionGroupsUpdatedWithinDaysSchema,
   SessionHistoryRequestSchema,
   SessionHistoryWindowSchema,
+  SessionNewRequestSchema,
+  SessionNewResultSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   SessionRowSchema,
@@ -324,6 +340,8 @@ export type {
   GlobalSettingsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
   TranscriptEventItem,

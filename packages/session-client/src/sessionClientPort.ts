@@ -10,6 +10,8 @@ import type {
   ProjectUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
 } from "@conduit/session-contracts";
@@ -36,6 +38,10 @@ interface SessionClientPort {
     provider: ProviderId,
     request: SessionOpenRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
+  newSession(
+    provider: ProviderId,
+    request: SessionNewRequest,
+  ): Promise<ConsumerResponse<SessionNewResult | null>>;
   readSessionHistory(
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;

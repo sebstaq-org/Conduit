@@ -410,6 +410,11 @@ fn handle_request<F>(
         return;
     }
     if let Some(open_session_id) = prompt_open_session_id(&request.command) {
+        if runtime.open_session_is_live(&open_session_id) {
+            let response = runtime.dispatch(request.command);
+            let _response_status = request.respond_to.send(response);
+            return;
+        }
         prompt_lanes.dispatch(&open_session_id, request);
         return;
     }

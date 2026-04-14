@@ -1,10 +1,12 @@
 import {
   getSessionGroupsQuery,
+  newSessionQuery,
   openSessionQuery,
   promptSessionQuery,
 } from "./session-api-queries";
 import type { SessionTimelineHandlers } from "./api-session-timeline-handlers";
 import type {
+  NewSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
 } from "./session-api-queries";
@@ -18,6 +20,10 @@ interface SessionTimelineEndpoints {
   openSessionEndpoint: {
     onQueryStarted: SessionTimelineHandlers["handleOpenSessionStarted"];
     queryFn: typeof openSessionQuery;
+  };
+  newSessionEndpoint: {
+    onQueryStarted: SessionTimelineHandlers["handleNewSessionStarted"];
+    queryFn: typeof newSessionQuery;
   };
   promptSessionEndpoint: {
     invalidatesTags: (
@@ -57,6 +63,11 @@ function createSessionTimelineEndpoints(
     queryFn: openSessionQuery,
   } as const;
 
+  const newSessionEndpoint = {
+    onQueryStarted: handlers.handleNewSessionStarted,
+    queryFn: newSessionQuery,
+  } as const;
+
   const promptSessionEndpoint = {
     invalidatesTags: (
       _result: null | undefined,
@@ -87,6 +98,7 @@ function createSessionTimelineEndpoints(
 
   return {
     loadOlderSessionTimelineEndpoint,
+    newSessionEndpoint,
     openSessionEndpoint,
     promptSessionEndpoint,
     readSessionTimelineEndpoint,

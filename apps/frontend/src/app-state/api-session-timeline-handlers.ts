@@ -1,6 +1,7 @@
 import type {
   SessionGroupsQuery,
   SessionHistoryWindow,
+  SessionNewResult,
   TranscriptItem,
 } from "@conduit/session-client";
 import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
@@ -9,6 +10,7 @@ import { activeSessionOpened } from "./session-selection";
 import { createSessionTimelineData } from "./session-timeline-cache";
 import type {
   OpenSessionMutationArg,
+  NewSessionMutationArg,
   ReadSessionHistoryQueryArg,
 } from "./session-api-queries";
 import type { SessionTimelineData } from "./session-timeline-cache";
@@ -24,6 +26,11 @@ interface CacheLifecycleApi {
 interface QueryStartedApi {
   dispatch: DispatchLike;
   queryFulfilled: Promise<{ data: SessionHistoryWindow }>;
+}
+
+interface NewSessionQueryStartedApi {
+  dispatch: DispatchLike;
+  queryFulfilled: Promise<{ data: SessionNewResult }>;
 }
 
 interface LoadOlderSessionTimelineArg {
@@ -80,6 +87,10 @@ interface SessionTimelineHandlers {
   handleOpenSessionStarted: (
     arg: OpenSessionMutationArg,
     api: QueryStartedApi,
+  ) => Promise<void>;
+  handleNewSessionStarted: (
+    arg: NewSessionMutationArg,
+    api: NewSessionQueryStartedApi,
   ) => Promise<void>;
   handleSessionGroupsCacheEntryAdded: (
     query: SessionGroupsQuery | undefined,
@@ -193,6 +204,29 @@ async function handleOpenSessionStarted(
   }
 }
 
+async function handleNewSessionStarted(
+  { cwd, provider }: NewSessionMutationArg,
+  { dispatch, queryFulfilled }: NewSessionQueryStartedApi,
+  mutations: SessionTimelineMutations,
+): Promise<void> {
+  try {
+    const { data } = await queryFulfilled;
+    dispatch(
+      activeSessionOpened({
+        cwd,
+        openSessionId: data.history.openSessionId,
+        provider,
+        sessionId: data.sessionId,
+        title: null,
+      }),
+    );
+    mutations.upsertSessionTimeline(dispatch, data.history);
+    mutations.invalidateSessionGroups(dispatch);
+  } catch {
+    // The query result already carries the user-visible failure.
+  }
+}
+
 async function readSessionTimelineQueryFn({
   openSessionId,
 }: Pick<ReadSessionHistoryQueryArg, "openSessionId">): Promise<
@@ -248,6 +282,9 @@ function createSessionTimelineHandlers(
     handleOpenSessionStarted: async (arg, api) => {
       await handleOpenSessionStarted(arg, api, mutations);
     },
+    handleNewSessionStarted: async (arg, api) => {
+      await handleNewSessionStarted(arg, api, mutations);
+    },
     handleSessionGroupsCacheEntryAdded: async (query, api) => {
       await handleSessionGroupsCacheEntryAdded(query, api, mutations);
     },
@@ -265,6 +302,7 @@ export {
 };
 export type {
   LoadOlderSessionTimelineArg,
+  NewSessionMutationArg,
   SessionTimelineHandlers,
   SessionTimelineMutations,
 };

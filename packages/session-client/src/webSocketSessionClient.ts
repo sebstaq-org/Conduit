@@ -37,6 +37,8 @@ import type {
   SessionGroupsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
   SessionOpenRequest,
   SessionPromptRequest,
 } from "@conduit/session-contracts";
@@ -133,6 +135,15 @@ class WebSocketSessionClient implements SessionClientPort {
       createConsumerCommand("session/open", provider, request),
     );
     return readSessionHistoryResponse(response);
+  }
+  public async newSession(
+    provider: ProviderId,
+    request: SessionNewRequest,
+  ): Promise<ConsumerResponse<SessionNewResult | null>> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/new", provider, request),
+    );
+    return response as ConsumerResponse<SessionNewResult | null>;
   }
   public async readSessionHistory(
     request: SessionHistoryRequest,

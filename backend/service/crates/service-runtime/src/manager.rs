@@ -134,6 +134,31 @@ where
         self.event_buffer.set_sink(sink);
     }
 
+    /// Returns whether an open session is already live in this runtime.
+    pub fn open_session_is_live(&mut self, open_session_id: &str) -> bool {
+        let key = {
+            let Ok(_store_lock) = self.store_lock.lock() else {
+                return false;
+            };
+            let Ok(key) = self
+                .local_store
+                .open_session_key("session/prompt", open_session_id)
+            else {
+                return false;
+            };
+            key
+        };
+        if self.loaded_provider_sessions.contains(&key) {
+            return true;
+        }
+        self.provider(key.provider).is_ok_and(|provider_port| {
+            provider_port.snapshot().live_sessions.iter().any(|session| {
+                session.identity.provider == key.provider
+                    && session.identity.acp_session_id == key.session_id
+            })
+        })
+    }
+
     /// Dispatches one command and converts errors into stable envelopes.
     pub fn dispatch(&mut self, command: ConsumerCommand) -> ConsumerResponse {
         let id = command.id.clone();
@@ -253,13 +278,33 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let cwd = path_param("session/new", params, "cwd")?;
-        let (result, snapshot) = {
+        let cwd =
+            absolute_normalized_cwd("session/new", path_param("session/new", params, "cwd")?)?;
+        let limit = HistoryLimit::new(
+            "session/new",
+            optional_u64_param("session/new", params, "limit")?,
+        )?;
+        let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
-            let result = provider_port.session_new(cwd)?;
+            let result = provider_port.session_new(cwd.clone())?;
             (result, provider_port.snapshot())
         };
-        Ok(ConsumerResponse::success(id, result, snapshot))
+        let session_id = session_new_result_id(&provider_result)?;
+        let key = OpenSessionKey {
+            provider,
+            session_id: session_id.clone(),
+            cwd: cwd.display().to_string(),
+        };
+        self.loaded_provider_sessions.insert(key.clone());
+        let history = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.open_session(key, &[], limit)?
+        };
+        Ok(ConsumerResponse::success(
+            id,
+            json!({ "sessionId": session_id, "history": history }),
+            snapshot,
+        ))
     }
 
     fn session_list(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -642,6 +687,17 @@ where
         if self.loaded_provider_sessions.contains(key) {
             return Ok(());
         }
+        let provider_tracks_live_session = {
+            let provider_port = self.provider(key.provider)?;
+            provider_port.snapshot().live_sessions.iter().any(|session| {
+                session.identity.provider == key.provider
+                    && session.identity.acp_session_id == key.session_id
+            })
+        };
+        if provider_tracks_live_session {
+            self.loaded_provider_sessions.insert(key.clone());
+            return Ok(());
+        }
         let cwd = PathBuf::from(&key.cwd);
         let result = {
             let provider_port = self.provider(key.provider)?;
@@ -663,6 +719,16 @@ fn append_snapshot_updates_if_missing(
     {
         observed_updates.extend(lifecycle.updates.clone());
     }
+}
+
+fn session_new_result_id(result: &Value) -> Result<String> {
+    result
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or(RuntimeError::Provider(
+            "session/new result missing sessionId".to_owned(),
+        ))
 }
 
 pub(crate) fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {

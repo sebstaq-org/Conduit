@@ -7,6 +7,7 @@ export {
   useGetSettingsQuery,
   useListProjectsQuery,
   useLoadOlderSessionTimelineMutation,
+  useNewSessionMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
@@ -26,6 +27,7 @@ export {
 } from "./project-commands";
 export type {
   LoadOlderSessionTimelineArg,
+  NewSessionMutationArg,
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,

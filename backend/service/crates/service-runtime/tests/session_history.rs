@@ -21,6 +21,59 @@ use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
 #[test]
+fn session_new_materializes_open_session_for_prompt_history() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+
+    let created = runtime.dispatch(command(
+        "1",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo", "limit": 10 }),
+    ));
+    assert_ok(&created)?;
+    let session_id = string_field(&created.result, "sessionId")?;
+    if session_id != "session-1" {
+        return Err(format!("expected session-1, got {session_id}").into());
+    }
+
+    let history = created
+        .result
+        .get("history")
+        .ok_or("session/new result missing history")?;
+    let open_session_id = string_field(history, "openSessionId")?.to_owned();
+    let initial_items = history
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or("session/new history missing items")?;
+    if !initial_items.is_empty() {
+        return Err("session/new history should start without local transcript items".into());
+    }
+
+    let prompt = runtime.dispatch(command(
+        "2",
+        "session/prompt",
+        "all",
+        json!({
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "hello new session" }]
+        }),
+    ));
+    assert_ok(&prompt)?;
+
+    let latest = read_history(&mut runtime, "3", "codex", &open_session_id, 10);
+    assert_ok(&latest)?;
+    assert_items(
+        &latest.result,
+        &[
+            ("message", "user", Some("hello new session")),
+            ("message", "agent", Some("hello new session")),
+        ],
+    )?;
+    assert_prompt_turn_status(&latest.result, "complete")
+}
+
+#[test]
 fn session_open_returns_latest_history_window_and_older_cursor() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_session_load_updates(
