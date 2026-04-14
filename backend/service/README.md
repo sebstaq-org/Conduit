@@ -1,6 +1,6 @@
 # backend/service
 
-This Rust workspace now contains the Phase 1.5 official ACP-only baseline: vendored contract validation, launcher discovery, stdio JSON-RPC host runtime, `service-runtime` consumer dispatch, a versioned WebSocket product boundary in `service-bin serve`, and a separate silent proof runner for manual artifacts.
+This Rust workspace implements Conduit's official-ACP-only backend surface: vendored contract validation, launcher discovery, stdio JSON-RPC host runtime, `service-runtime` consumer dispatch, and a versioned WebSocket product boundary in `service-bin serve`.
 
 Provider runtime endpoints remain only the official adapter binaries. Conduit does not define a provider-specific protocol or fallback runtime path.
 

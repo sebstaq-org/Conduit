@@ -1,89 +1,52 @@
 # Architecture
 
-Conduit is structured around product boundaries instead of language buckets. The current pass moves the UI to one Expo/React Native frontend that targets native and web, while Electron becomes a host for the web target.
+Conduit is organized around product boundaries, not language buckets.
 
-## Current Pass
+## Product Boundaries
 
-Phase 1 includes the vendored ACP contract lock, official launcher discovery, raw stdio JSON-RPC host ownership, in-memory live session state, text-only prompt/cancel, and manual proof artifacts. It still excludes fallback runtime paths, provider-specific Conduit protocols, duplicated live DTO families above ACP, and persisted runtime truth.
+- `apps/frontend` owns product UI for React Native and React Native Web.
+- `apps/desktop` owns Electron host integration for the frontend web target.
+- `packages/session-client` owns platform-neutral consumer transport.
+- `packages/session-contracts` owns consumer command and envelope contracts.
+- `packages/session-model` owns platform-neutral read-side session/provider shapes.
+- `packages/app-client` owns proof-surface client contracts.
+- `packages/app-core` owns framework-neutral re-exported app-facing contracts.
+- `packages/design-system-tokens` owns non-rendering token/copy contracts.
 
-This pass also includes:
+Feature code must stay behind these boundaries: apps may depend on packages, apps must not depend on each other, and feature code must not import backend internals directly.
 
-- final frontend app name
-- React Native Web frontend foundation
-- Electron host integration
-- normal consumer API session package boundaries
-- frontend ownership canon
-- local and repo-wide agent rules
-- empty registry surfaces for future policy enforcement
-- current structure guard rails updated to the target frontend tree
-- Phase 0.5 repository shape, pinned toolchains, check chains, repo bootstrap automation, and the Phase 1 ACP runtime baseline
+## Runtime Surface
 
-This pass explicitly excludes:
+- `backend/service/crates/service-bin` is the runtime composition root.
+- `service-bin serve` exposes:
+  - `GET /health`
+  - `GET /api/catalog`
+  - `GET /api/session` (WebSocket)
+- Default serve bind is `127.0.0.1:4174`, so default session transport is `ws://127.0.0.1:4174/api/session`.
+- Transport frames are versioned (`v: 1`) and correlated by `id`.
 
-- fallback runtime paths
-- provider-specific Conduit protocols
-- duplicated live runtime DTO families above ACP
-- persisted runtime truth
-- product behavior beyond the temporary panel preview
-- speculative themes or feature stubs
+## Rust Workspace Ownership
 
-## Frontend Layer
+- `acp-contracts`: vendor-lock and ACP subset envelope validation.
+- `acp-core`: ACP process lifecycle, JSON-RPC stdio, session/prompt event truth.
+- `acp-discovery`: official launcher resolution and discovery diagnostics.
+- `app-api`: app-facing provider/session operations.
+- `provider-*`: provider launcher descriptors.
+- `session-store`: local store and persistence boundary.
+- `repo-guard`: repository structure and policy guardrails.
 
-- `apps/frontend` is the Expo/React Native app for native and web UI.
-- `apps/desktop` is the Electron host only.
-- `packages/session-client` owns the normal consumer transport boundary.
-- `packages/session-contracts` owns shared consumer command and transport envelopes.
-- `packages/session-model` owns provider/session model vocabulary.
-- `packages/app-client` owns the proof-surface contract boundary.
-- `packages/app-core` owns framework-neutral reducers, selectors, and view-model logic.
-- `packages/design-system-tokens` is retained for existing proof-copy contracts.
-- `apps/frontend/src/ui` owns app-local UI tokens and primitives until extraction is justified.
+Rust policy is deny-first and enforced through workspace lints, clippy, rustdoc warnings-as-errors, and crate-edge checks.
 
-The frontend rule is strict:
+## Frontend Guardrails
 
-- keep product UI in the frontend app
-- host the same web target in Electron
-- keep raw React Native primitives inside app UI primitives or shell code
-
-## Frontend Delivery Order
-
-Cross-platform frontend work should land in this order:
-
-1. app-facing backend boundary
-2. `packages/app-client`
-3. `packages/app-core`
-4. `apps/frontend` UI integration
-5. `apps/desktop` host integration
-
-If a capability is intended for both platforms, it should not be treated as complete until both shells exist.
-
-## Frontend Boundaries
-
-- Apps may depend on packages, but apps may not depend on each other.
-- Shared backend-facing behavior must not live directly under app feature code.
-- Feature code must not import backend-owned contracts directly; that boundary belongs in `packages/app-client`.
-- Raw DOM and React Native primitives are reserved for app UI primitives and shell boundaries.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
-- Placeholder feature behavior is forbidden. Temporary visual previews are allowed only when explicitly requested and must stay under `apps/frontend/src/previews`.
+- Feature modules must not perform direct transport/fetch/WebSocket command dispatch; async backend reads go through `apps/frontend/src/app-state`.
+- Raw DOM and React Native primitives are reserved for app UI primitives and shell code.
+- Placeholder feature behavior and speculative fallback paths are forbidden.
 
-## Rust Layer
-
-- `backend/service/crates/acp-contracts` owns the vendor-facing contract lock and locked-subset envelope validation.
-- `backend/service/crates/acp-core` owns ACP process lifecycle, raw JSON-RPC stdio, request tracking, live initialize truth, events, snapshots, sessions, prompt, and cancel.
-- `backend/service/crates/acp-discovery` owns official launcher resolution, initialize viability, raw discovery captures, and transport diagnostics.
-- `backend/service/crates/app-api` owns the app-facing Phase 1 provider/session operations.
-- `backend/service/crates/provider-*` own provider launcher descriptors only.
-- `backend/service/crates/repo-guard` owns repo guard rails as a normal workspace crate under the same Rust policy as every other crate.
-- `backend/service/crates/session-store` reserves read-side and persistence boundaries.
-- `backend/service/crates/service-bin` is the runtime workspace composition root.
-- Rust guard rails treat `service-bin` as the only runtime composition root, keep `acp-contracts` vendor-facing only, keep `repo-guard` isolated from runtime crates, and block provider crates from depending upward into `app-api`, `session-store`, or sibling providers.
-
-## Policy Surfaces
-
-This pass introduces two empty policy surfaces for future Rust enforcement:
+## Policy Registries
 
 - `scripts/shared-capability-registry.ts`
 - `scripts/design-system-parity-registry.ts`
 
-They define frontend policy data only. They do not implement product behavior or become a second source of truth next to future Rust policy code.
-Native bridge directories stay deferred until a concrete desktop or mobile bridge exists, so Phase 1 does not create empty platform trees that might force early boundary decisions.
+These files are policy data surfaces; they must not become runtime behavior sources.

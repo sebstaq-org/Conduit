@@ -1,7 +1,6 @@
 # Conduit
 
-Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime.
-The frontend workspace has one Expo/React Native app under `apps/frontend`; Electron hosts that app web target instead of owning a separate UI. `packages/session-client` and `packages/session-contracts` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-tokens` keep shared non-UI package boundaries.
+Conduit is an official-ACP-only workspace. The backend validates against a pinned ACP bundle, discovers only official adapter binaries, and exposes a versioned consumer WebSocket boundary from `service-bin serve`. The frontend product UI lives in `apps/frontend`; Electron in `apps/desktop` hosts that same web target.
 
 ## Happy Path
 
@@ -14,11 +13,11 @@ The frontend workspace has one Expo/React Native app under `apps/frontend`; Elec
 ```text
 apps/          frontend app and desktop host
 packages/      shared frontend packages
-backend/       Rust service workspace and future backend-owned assets
+backend/       Rust service workspace
 vendor/        pinned external sources only
 artifacts/     generated evidence only
-docs/                         canonical policy and architecture notes
-scripts/       frontend registries and stage operations; repo guard rails live in backend/service/crates/repo-guard
+docs/          canonical policy and architecture notes
+scripts/       stage operations and repository checks
 ```
 
 ## Rules That Matter
@@ -34,7 +33,7 @@ scripts/       frontend registries and stage operations; repo guard rails live i
 - `packages/session-client` and `packages/session-contracts` own normal runtime command transport and envelopes.
 - `packages/app-client` owns proof-surface contracts only.
 - `packages/app-core` owns provider/session vocabulary and framework-neutral view-model logic.
-- App UI tokens and primitives live under `apps/frontend/src/ui` until a second real consumer justifies extraction.
+- App UI tokens and primitives live under `apps/frontend/src/ui`.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - No raw DOM or React Native primitives belong in feature code. That boundary is reserved for app UI primitives and shell code.
 
@@ -48,4 +47,4 @@ scripts/       frontend registries and stage operations; repo guard rails live i
 
 The stage runtime defaults to backend `ws://127.0.0.1:4274/api/session` and web `http://127.0.0.1:4310`, with isolated app data in `/srv/devops/repos/conduit-stage/data`.
 
-Canonical detail lives in `ARCHITECTURE.md`, `AGENTS.md`, `docs/contributing.md`, and `docs/frontend-architecture.md`.
+Canonical detail lives in `ARCHITECTURE.md`, `AGENTS.md`, and `docs/contributing.md`.

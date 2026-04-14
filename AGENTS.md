@@ -1,6 +1,6 @@
 # Conduit Agent Notes
 
-Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work out of this frontend foundation pass unless the task explicitly says otherwise.
+Use `rtk` as the shell-command prefix when operating in this repo. Keep all new JS or TS source in TypeScript and keep backend work scoped to explicitly backend tasks.
 
 ## Repo Rules
 
@@ -57,9 +57,7 @@ as they exist.
 
 ## Current Intent
 
-This pass is about the React Native Web frontend foundation, rules, workspace shape, and the first navigation panel screen composition.
-
-Official ACP only remains product policy. In this pass that means boundary reservation and provenance only, not ACP host or provider-runtime implementation.
+Official ACP only is product policy. The frontend and backend boundaries in this file are normative and should be applied directly when implementing work.
 
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 

@@ -9,16 +9,16 @@ Add code only inside the approved tree.
 - Pinned external schemas or manifests belong in `vendor/agent-client-protocol/`.
 - Manual proof belongs outside the repo under `/srv/devops/repos/conduit-artifacts/manual/`; generated CI or scripted proof may go in `artifacts/automated/` when it is explicitly meant to stay in the repo.
 
-Structural rules are enforced by `rtk pnpm run structure:check`, which runs the Rust `repo-guard` crate. If a new package or crate is needed, update the approved tree in the structure check and the architecture docs in the same change. If a task starts to require fallback runtime behavior, a provider-specific Conduit protocol, or duplicated live runtime DTOs above ACP, stop and update the Phase notes instead of inventing a temporary path.
+Structural rules are enforced by `rtk pnpm run structure:check`, which runs the Rust `repo-guard` crate. If a new package or crate is needed, update the approved tree in the structure check and the architecture docs in the same change. If a task requires fallback runtime behavior, a provider-specific Conduit protocol, or duplicated live runtime DTOs above ACP, update architecture and policy docs before implementation.
 
 Rust is intentionally hard-default. Keep new crates in the workspace, satisfy the curated workspace lint set, and preserve the crate-edge rules enforced from `cargo metadata`. `service-bin` stays the only runtime composition root, and `repo-guard` is not exempt from any Rust policy. For Rust-specific authoring rules, follow `backend/service/AGENTS.md` and `docs/rust-policy.md`.
 
-For the current frontend shell-init pass:
+Frontend boundary rules:
 
 - `apps/frontend` owns the React Native and React Native Web UI app; `apps/desktop` hosts the web target.
 - `packages/session-client` is the normal consumer transport boundary for versioned `service-bin serve` WebSocket frames.
 - `packages/session-contracts` is the shared command/envelope contract boundary.
 - `packages/app-client` is proof-surface-only and must not grow normal runtime APIs.
 - `packages/app-core` is the framework-neutral logic and provider/session vocabulary boundary.
-- App-local UI primitives and tokens belong under `apps/frontend/src/ui` until a real second consumer justifies extraction.
-- Do not create placeholder feature behavior or “temporary” shared abstractions.
+- App-local UI primitives and tokens belong under `apps/frontend/src/ui`.
+- Do not create placeholder feature behavior or ad hoc shared abstractions.

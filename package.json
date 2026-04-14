@@ -35,6 +35,7 @@
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
     "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p acp-contracts --test protocol_captures && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test golden_testdata",
+    "docs:check": "vitest run scripts/docs-guardrails.test.ts",
     "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "frontend:android": "pnpm --filter @conduit/frontend run android",
     "frontend:doctor": "pnpm --filter @conduit/frontend run doctor",
@@ -59,7 +60,7 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run fixtures:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run fixtures:check && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "25.6.0",
@@ -68,5 +69,21 @@
     "prettier": "3.8.2",
     "typescript": "6.0.2",
     "vitest": "4.1.4"
-  }
+  },
+  "description": "Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime. The frontend workspace has one Expo/React Native app under `apps/frontend`; Electron hosts that app web target instead of owning a separate UI. `packages/session-client` and `packages/session-contracts` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-tokens` keep shared non-UI package boundaries.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sebstaq-org/Conduit.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sebstaq-org/Conduit/issues"
+  },
+  "homepage": "https://github.com/sebstaq-org/Conduit#readme"
 }
