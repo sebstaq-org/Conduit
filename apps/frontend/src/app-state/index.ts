@@ -37,7 +37,11 @@ export type {
   RemoveProjectTrigger,
   UpdateProjectTrigger,
 } from "./project-commands";
-export { selectActiveSession } from "./session-selection";
+export {
+  draftSessionProviderSelected,
+  draftSessionStarted,
+  selectActiveSession,
+} from "./session-selection";
 export type { ActiveSession } from "./session-selection";
 export { useSessionTimeline } from "./session-timeline";
 export { ConduitStoreProvider } from "./provider";

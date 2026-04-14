@@ -1,4 +1,4 @@
-import { getRuntimeHealthQuery } from "./session-api-queries";
+import { getRuntimeHealthQuery } from "./api-runtime-health-query";
 
 const runtimeHealthEndpoint = {
   providesTags: [{ id: "CURRENT", type: "RuntimeHealth" }],

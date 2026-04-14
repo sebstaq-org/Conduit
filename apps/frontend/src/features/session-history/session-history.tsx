@@ -1,5 +1,6 @@
 import { useSelector } from "react-redux";
 import { selectActiveSession, useSessionTimeline } from "@/app-state";
+import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { SessionHistoryList } from "./session-history-list";
 import type { ViewStyle } from "react-native";
@@ -110,9 +111,18 @@ function renderReadyHistory(
   );
 }
 
+function selectedOpenSessionId(
+  activeSession: ActiveSession | null,
+): string | null {
+  if (activeSession?.kind !== "open") {
+    return null;
+  }
+  return activeSession.openSessionId;
+}
+
 function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
-  const openSessionId = activeSession?.openSessionId ?? null;
+  const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
 
   if (activeSession === null || openSessionId === null) {

@@ -13,10 +13,8 @@ import type {
   SessionHistoryWindow,
   SessionNewResult,
 } from "@conduit/session-client";
-import {
-  createSessionTimelineHandlers,
-  createUninitializedSessionTimelineMutations,
-} from "./api-session-timeline-handlers";
+import { createSessionTimelineHandlers } from "./api-session-timeline-handlers";
+import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
 import { bindSessionTimelineMutations } from "./api-session-timeline-cache-wiring";
 import {
   projectAddEndpoint,

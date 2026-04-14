@@ -217,6 +217,7 @@ export default defineConfig({
         "packages/app-client/src/index.ts",
         "packages/session-client/src/index.ts",
         "packages/session-client/src/webSocketSessionClient.ts",
+        "packages/session-client/src/webSocketTransport.ts",
       ],
       rules: {
         "eslint/id-length": "off",

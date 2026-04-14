@@ -5,6 +5,7 @@ import type {
   TranscriptItem,
 } from "@conduit/session-client";
 import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
+import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
 import { activeSessionOpened } from "./session-selection";
 import { createSessionTimelineData } from "./session-timeline-cache";
@@ -108,28 +109,6 @@ interface SessionTimelineHandlers {
   ) => Promise<{ data: SessionTimelineData } | { error: string }>;
 }
 
-function uninitializedMutation(methodName: string): never {
-  throw new Error(`${methodName} is not initialized`);
-}
-
-function createUninitializedSessionTimelineMutations(): SessionTimelineMutations {
-  return {
-    invalidateSessionGroups: () =>
-      uninitializedMutation("invalidateSessionGroups"),
-    invalidateSessionTimeline: () =>
-      uninitializedMutation("invalidateSessionTimeline"),
-    markSessionTimelineOlderFailed: () =>
-      uninitializedMutation("markSessionTimelineOlderFailed"),
-    markSessionTimelineOlderRequested: () =>
-      uninitializedMutation("markSessionTimelineOlderRequested"),
-    mergeOlderSessionTimelinePage: () =>
-      uninitializedMutation("mergeOlderSessionTimelinePage"),
-    updateSessionTimelineItems: () =>
-      uninitializedMutation("updateSessionTimelineItems"),
-    upsertSessionTimeline: () => uninitializedMutation("upsertSessionTimeline"),
-  };
-}
-
 async function handleSessionGroupsCacheEntryAdded(
   _query: SessionGroupsQuery | undefined,
   { cacheDataLoaded, cacheEntryRemoved, dispatch }: CacheLifecycleApi,
@@ -192,6 +171,7 @@ async function handleOpenSessionStarted(
     dispatch(
       activeSessionOpened({
         cwd,
+        kind: "open",
         openSessionId: data.openSessionId,
         provider,
         sessionId,
@@ -214,6 +194,7 @@ async function handleNewSessionStarted(
     dispatch(
       activeSessionOpened({
         cwd,
+        kind: "open",
         openSessionId: data.history.openSessionId,
         provider,
         sessionId: data.sessionId,

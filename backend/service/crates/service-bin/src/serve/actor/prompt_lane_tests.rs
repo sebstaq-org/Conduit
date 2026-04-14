@@ -75,6 +75,61 @@ async fn blocking_prompt_does_not_block_following_history_or_queue_same_session(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn new_session_prompt_does_not_block_following_history() -> TestResult<()> {
+    let path = test_db_path()?;
+    let refresh_path = path.clone();
+    let (started, started_rx) = mpsc::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let actor = RuntimeActor::start_with_store_opener(
+        BlockingPromptFactory {
+            release: Arc::clone(&release),
+            started,
+        },
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+    let new_session = actor
+        .dispatch(command(
+            "1",
+            "session/new",
+            "codex",
+            json!({ "cwd": "/repo", "limit": 8 }),
+        ))
+        .await;
+    ensure_ok(&new_session)?;
+    let open_session_id = new_session
+        .result
+        .get("history")
+        .and_then(|history| history.get("openSessionId"))
+        .and_then(Value::as_str)
+        .ok_or("session/new missing openSessionId")?;
+    let prompt = spawn_prompt(actor.clone(), "2", open_session_id);
+    let started_session = started_rx.recv_timeout(Duration::from_secs(5))?;
+
+    let history = tokio::time::timeout(
+        Duration::from_millis(250),
+        actor.dispatch(command(
+            "3",
+            "session/history",
+            "all",
+            json!({
+                "openSessionId": open_session_id,
+                "limit": 8
+            }),
+        )),
+    )
+    .await?;
+
+    release_prompt(&release)?;
+    let prompt = tokio::time::timeout(Duration::from_secs(5), prompt).await??;
+    if started_session != "session-1" {
+        return Err(format!("unexpected started session: {started_session}").into());
+    }
+    ensure_ok(&history)?;
+    ensure_ok(&prompt)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn prompt_lanes_run_different_open_sessions_in_parallel() -> TestResult<()> {
     let path = test_db_path()?;
     let first_open_session_id = seed_open_session(&path, ProviderId::Codex, "session-1")?;

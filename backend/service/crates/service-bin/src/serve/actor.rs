@@ -1,6 +1,9 @@
 //! Single-owner runtime actor for WebSocket consumers.
 
+mod prompt_lanes;
 mod suggestion_refresh;
+
+use self::prompt_lanes::{PromptLanes, cancel_provider_session, prompt_open_session_id};
 
 use self::suggestion_refresh::spawn_suggestion_refresh_worker;
 use service_runtime::{
@@ -8,8 +11,7 @@ use service_runtime::{
     ServiceRuntime,
 };
 use session_store::LocalStore;
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -154,105 +156,6 @@ impl RefreshWorker {
     }
 }
 
-struct PromptLanes<F> {
-    events: broadcast::Sender<RuntimeEvent>,
-    factory: F,
-    lanes: HashMap<String, PromptLane>,
-    store: StoreOpener,
-    store_lock: StoreLock,
-}
-
-impl<F> PromptLanes<F>
-where
-    F: Clone + ProviderFactory + 'static,
-{
-    fn new(
-        factory: F,
-        events: broadcast::Sender<RuntimeEvent>,
-        store: StoreOpener,
-        store_lock: StoreLock,
-    ) -> Self {
-        Self {
-            events,
-            factory,
-            lanes: HashMap::new(),
-            store,
-            store_lock,
-        }
-    }
-
-    fn dispatch(&mut self, open_session_id: &str, request: ActorRequest) {
-        let lane = self.lane(open_session_id);
-        lane.dispatch(request);
-    }
-
-    fn lane(&mut self, open_session_id: &str) -> PromptLane {
-        self.lanes
-            .entry(open_session_id.to_owned())
-            .or_insert_with(|| {
-                PromptLane::start(
-                    self.factory.clone(),
-                    self.events.clone(),
-                    Arc::clone(&self.store),
-                    Arc::clone(&self.store_lock),
-                )
-            })
-            .clone()
-    }
-}
-
-#[derive(Clone)]
-struct PromptLane {
-    active: Arc<AtomicBool>,
-    requests: mpsc::UnboundedSender<ActorRequest>,
-}
-
-impl PromptLane {
-    fn start<F>(
-        factory: F,
-        events: broadcast::Sender<RuntimeEvent>,
-        store: StoreOpener,
-        store_lock: StoreLock,
-    ) -> Self
-    where
-        F: ProviderFactory + 'static,
-    {
-        let active = Arc::new(AtomicBool::new(false));
-        let (requests, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(run_prompt_lane(PromptLaneContext {
-            receiver,
-            events,
-            factory,
-            store,
-            store_lock,
-            active: Arc::clone(&active),
-        }));
-        Self { active, requests }
-    }
-
-    fn dispatch(&self, request: ActorRequest) {
-        if self.active.swap(true, Ordering::AcqRel) {
-            let id = request.command.id;
-            let _response_status = request.respond_to.send(failure(
-                id,
-                "session_prompt_active",
-                "session already has an active prompt turn",
-            ));
-            return;
-        }
-        if let Err(error) = self.requests.send(request) {
-            self.active.store(false, Ordering::Release);
-            let request = error.0;
-            let id = request.command.id;
-            let _response_status = request.respond_to.send(failure(
-                id,
-                "runtime_unavailable",
-                "prompt lane is unavailable",
-            ));
-        }
-    }
-}
-
 struct ActorContext<F> {
     receiver: mpsc::Receiver<ActorRequest>,
     events: broadcast::Sender<RuntimeEvent>,
@@ -314,58 +217,6 @@ async fn run_refresh_worker<F>(
     }
 }
 
-struct PromptLaneContext<F> {
-    receiver: mpsc::UnboundedReceiver<ActorRequest>,
-    events: broadcast::Sender<RuntimeEvent>,
-    factory: F,
-    store: StoreOpener,
-    store_lock: StoreLock,
-    active: Arc<AtomicBool>,
-}
-
-async fn run_prompt_lane<F>(context: PromptLaneContext<F>)
-where
-    F: ProviderFactory,
-{
-    let PromptLaneContext {
-        mut receiver,
-        events,
-        factory,
-        store,
-        store_lock,
-        active,
-    } = context;
-    let Ok(local_store) = store() else {
-        fail_prompt_lane_requests(receiver, active).await;
-        return;
-    };
-    let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
-    let live_events = events.clone();
-    runtime.set_event_sink(Box::new(move |event| {
-        let _subscriber_count = live_events.send(event);
-    }));
-    while let Some(request) = receiver.recv().await {
-        let response = runtime.dispatch(request.command);
-        let _response_status = request.respond_to.send(response);
-        active.store(false, Ordering::Release);
-    }
-}
-
-async fn fail_prompt_lane_requests(
-    mut receiver: mpsc::UnboundedReceiver<ActorRequest>,
-    active: Arc<AtomicBool>,
-) {
-    while let Some(request) = receiver.recv().await {
-        let id = request.command.id;
-        let _response_status = request.respond_to.send(failure(
-            id,
-            "runtime_unavailable",
-            "prompt lane store is unavailable",
-        ));
-        active.store(false, Ordering::Release);
-    }
-}
-
 fn refresh_index_targets<F>(
     runtime: &mut ServiceRuntime<F>,
     receiver: &mut mpsc::UnboundedReceiver<RefreshRequest>,
@@ -409,13 +260,18 @@ fn handle_request<F>(
         handle_project_add_request(runtime, request, refreshes);
         return;
     }
+    if request.command.command == "session/new" {
+        prompt_lanes.dispatch_new_session(request);
+        return;
+    }
     if let Some(open_session_id) = prompt_open_session_id(&request.command) {
-        if runtime.open_session_is_live(&open_session_id) {
-            let response = runtime.dispatch(request.command);
-            let _response_status = request.respond_to.send(response);
-            return;
-        }
         prompt_lanes.dispatch(&open_session_id, request);
+        return;
+    }
+    if let Some(provider_session) = cancel_provider_session(&request.command)
+        && let Some(lane) = prompt_lanes.owner_for_provider_session(&provider_session)
+    {
+        lane.dispatch_cancel(request);
         return;
     }
     let response = runtime.dispatch(request.command);
@@ -447,17 +303,6 @@ fn handle_grouped_sessions_request<F>(
     let response = runtime.dispatch(request.command);
     let _response_status = request.respond_to.send(response);
     refreshes.request(&provider_target);
-}
-
-fn prompt_open_session_id(command: &ConsumerCommand) -> Option<String> {
-    if command.command != "session/prompt" {
-        return None;
-    }
-    command
-        .params
-        .get("openSessionId")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned)
 }
 
 fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {

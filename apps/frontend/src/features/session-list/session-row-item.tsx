@@ -30,6 +30,7 @@ function isActiveSession(
 ): boolean {
   return (
     activeSession !== null &&
+    activeSession.kind === "open" &&
     activeSession.cwd === session.cwd &&
     activeSession.provider === session.provider &&
     activeSession.sessionId === session.sessionId
