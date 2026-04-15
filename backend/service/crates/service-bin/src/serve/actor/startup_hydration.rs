@@ -1,7 +1,7 @@
 use super::{StoreLock, StoreOpener};
 use serde::Deserialize;
 use serde_json::json;
-use service_runtime::{ConsumerCommand, ConsumerResponse, ProviderFactory, ServiceRuntime};
+use service_runtime::{ConsumerCommand, ProviderFactory, ServiceRuntime};
 use std::collections::HashSet;
 use std::time::Duration;
 use tokio::task::yield_now;
@@ -56,36 +56,36 @@ where
     F: ProviderFactory,
 {
     let Ok(local_store) = store() else {
-        eprintln!("[startup-hydration] skipped: failed to open local store");
         return;
     };
-    eprintln!("[startup-hydration] start");
     let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
+    let _ = runtime.force_refresh_session_index("all");
+    let targets = startup_hydration_targets(&mut runtime);
+    hydrate_targets(&mut runtime, &targets).await;
+}
 
-    if let Err(error) = runtime.force_refresh_session_index("all") {
-        eprintln!("[startup-hydration] refresh failed: {error}");
-    }
-
+fn startup_hydration_targets<F>(runtime: &mut ServiceRuntime<F>) -> Vec<HydrationTarget>
+where
+    F: ProviderFactory,
+{
     let grouped = runtime.dispatch(ConsumerCommand {
         id: "startup-hydration-grouped".to_owned(),
         command: "sessions/grouped".to_owned(),
         provider: "all".to_owned(),
         params: json!({}),
     });
-    if !grouped.ok {
-        eprintln!(
-            "[startup-hydration] grouped query failed: {}",
-            response_error_message(&grouped)
-        );
-        return;
+    if grouped.ok {
+        return hydration_targets(&grouped.result);
     }
+    Vec::new()
+}
 
-    let targets = hydration_targets(&grouped.result);
-    eprintln!("[startup-hydration] discovered {} targets", targets.len());
-    let mut hydrated = 0usize;
-    let mut failed = 0usize;
+async fn hydrate_targets<F>(runtime: &mut ServiceRuntime<F>, targets: &[HydrationTarget])
+where
+    F: ProviderFactory,
+{
     for (index, target) in targets.iter().enumerate() {
-        let open_status = runtime.dispatch(ConsumerCommand {
+        let _ = runtime.dispatch(ConsumerCommand {
             id: format!("startup-hydration-open-{index}"),
             command: "session/open".to_owned(),
             provider: target.provider.clone(),
@@ -95,18 +95,6 @@ where
                 "limit": STARTUP_HYDRATION_LIMIT,
             }),
         });
-        if open_status.ok {
-            hydrated = hydrated.saturating_add(1);
-        } else {
-            failed = failed.saturating_add(1);
-            eprintln!(
-                "[startup-hydration] session/open failed provider={} sessionId={} cwd={} error={}",
-                target.provider,
-                target.session_id,
-                target.cwd,
-                response_error_message(&open_status)
-            );
-        }
         if (index + 1) % STARTUP_HYDRATION_YIELD_EVERY == 0 {
             yield_now().await;
         }
@@ -114,12 +102,6 @@ where
             sleep(STARTUP_HYDRATION_PAUSE).await;
         }
     }
-    eprintln!(
-        "[startup-hydration] complete attempted={} hydrated={} failed={}",
-        targets.len(),
-        hydrated,
-        failed
-    );
 }
 
 fn hydration_targets(result: &serde_json::Value) -> Vec<HydrationTarget> {
@@ -143,12 +125,4 @@ fn hydration_targets(result: &serde_json::Value) -> Vec<HydrationTarget> {
     }
 
     targets
-}
-
-fn response_error_message(response: &ConsumerResponse) -> String {
-    response
-        .error
-        .as_ref()
-        .map(|error| format!("{}: {}", error.code, error.message))
-        .unwrap_or_else(|| "unknown error".to_owned())
 }
