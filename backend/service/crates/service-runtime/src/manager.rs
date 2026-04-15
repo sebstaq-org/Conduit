@@ -265,7 +265,10 @@ where
             .insert(key.clone(), session_state.clone());
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.open_session(key, &[], limit)?
+            let history = self.local_store.open_session(key.clone(), &[], limit)?;
+            self.local_store
+                .set_open_session_state(&key, &session_state)?;
+            history
         };
         let history = to_value(history)?;
         let result = session_open_or_new_result(&session_state, &history);
@@ -345,6 +348,12 @@ where
         } {
             let state = if let Some(state) = self.session_states.get(&key).cloned() {
                 state
+            } else if let Some(state) = {
+                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                self.local_store.open_session_state(&key)?
+            } {
+                self.session_states.insert(key.clone(), state.clone());
+                state
             } else {
                 let provider_result = {
                     let provider_port = self.provider(provider)?;
@@ -353,6 +362,8 @@ where
                 self.loaded_provider_sessions.insert(key.clone());
                 let state = session_state_from_provider_result(&session_id, &provider_result);
                 self.session_states.insert(key.clone(), state.clone());
+                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                self.local_store.set_open_session_state(&key, &state)?;
                 state
             };
             let history = to_value(cached)?;
@@ -372,7 +383,9 @@ where
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            to_value(self.local_store.open_session(key, updates, limit)?)?
+            let history = self.local_store.open_session(key.clone(), updates, limit)?;
+            self.local_store.set_open_session_state(&key, &state)?;
+            to_value(history)?
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
@@ -548,6 +561,14 @@ where
         };
         if provider_tracks_live_session {
             self.loaded_provider_sessions.insert(key.clone());
+            if !self.session_states.contains_key(key)
+                && let Some(state) = {
+                    let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                    self.local_store.open_session_state(key)?
+                }
+            {
+                self.session_states.insert(key.clone(), state);
+            }
             return Ok(());
         }
         let cwd = PathBuf::from(&key.cwd);
@@ -557,10 +578,10 @@ where
         };
         let result = result?;
         self.loaded_provider_sessions.insert(key.clone());
-        self.session_states.insert(
-            key.clone(),
-            session_state_from_provider_result(&key.session_id, &result),
-        );
+        let state = session_state_from_provider_result(&key.session_id, &result);
+        self.session_states.insert(key.clone(), state.clone());
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+        self.local_store.set_open_session_state(key, &state)?;
         Ok(())
     }
 }

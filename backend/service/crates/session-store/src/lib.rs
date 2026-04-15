@@ -63,6 +63,13 @@ const BOOTSTRAP_SCHEMA: &str = "
             REFERENCES open_sessions(open_session_id)
             ON DELETE CASCADE
     );
+    CREATE TABLE open_session_states (
+        open_session_id TEXT PRIMARY KEY,
+        state_json TEXT NOT NULL,
+        FOREIGN KEY(open_session_id)
+            REFERENCES open_sessions(open_session_id)
+            ON DELETE CASCADE
+    );
     CREATE TABLE session_index_meta (
         id INTEGER PRIMARY KEY CHECK(id = 1),
         revision INTEGER NOT NULL
@@ -102,16 +109,6 @@ const BOOTSTRAP_SCHEMA: &str = "
     );
     INSERT INTO global_settings (id, session_groups_updated_within_days)
     VALUES (1, 5);
-    PRAGMA user_version = 6;
-";
-const MIGRATE_SCHEMA_5_TO_6: &str = "
-    CREATE TABLE IF NOT EXISTS global_settings (
-        id INTEGER PRIMARY KEY CHECK(id = 1),
-        session_groups_updated_within_days INTEGER
-    );
-    INSERT INTO global_settings (id, session_groups_updated_within_days)
-    VALUES (1, 5)
-    ON CONFLICT(id) DO NOTHING;
     PRAGMA user_version = 6;
 ";
 
@@ -496,6 +493,56 @@ impl LocalStore {
         })
     }
 
+    /// Returns persisted open-session provider state for one opened session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when persisted state JSON is invalid.
+    pub fn open_session_state(&self, key: &OpenSessionKey) -> Result<Option<Value>> {
+        let open_session_id = open_session_id_for(key);
+        let serialized = self
+            .connection
+            .query_row(
+                "SELECT state_json FROM open_session_states WHERE open_session_id = ?1",
+                params![open_session_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        serialized
+            .map(|value| serde_json::from_str(&value).map_err(Error::from))
+            .transpose()
+    }
+
+    /// Persists open-session provider state for one opened session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the open session key is unknown or state cannot be
+    /// persisted.
+    pub fn set_open_session_state(&mut self, key: &OpenSessionKey, state: &Value) -> Result<()> {
+        let open_session_id = open_session_id_for(key);
+        if self.session_revision_optional(&open_session_id)?.is_none() {
+            return Err(Error::InvalidParameter {
+                command: "session/open",
+                parameter: "sessionId",
+                message: "unknown session key",
+            });
+        }
+        let serialized = serde_json::to_string(state)?;
+        self.connection.execute(
+            "
+            INSERT INTO open_session_states (
+                open_session_id,
+                state_json
+            ) VALUES (?1, ?2)
+            ON CONFLICT(open_session_id) DO UPDATE SET
+                state_json = excluded.state_json
+            ",
+            params![open_session_id, serialized],
+        )?;
+        Ok(())
+    }
+
     fn bootstrap(&self) -> Result<()> {
         let version: i64 = self
             .connection
@@ -503,10 +550,6 @@ impl LocalStore {
         match version {
             0 => {
                 self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
-                Ok(())
-            }
-            5 => {
-                self.connection.execute_batch(MIGRATE_SCHEMA_5_TO_6)?;
                 Ok(())
             }
             SCHEMA_VERSION => Ok(()),
