@@ -17,12 +17,17 @@ export type {
   SessionHistoryWindow,
   SessionNewRequest,
   SessionNewResult,
+  SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  ProvidersConfigSnapshotResult,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
 export type {
   ContentBlock,
   ProviderId,
+  SessionConfigOption,
   SessionGroupsQuery,
   SessionGroupsView,
   TranscriptEventItem,

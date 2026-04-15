@@ -59,6 +59,18 @@ as they exist.
 
 Official ACP only is product policy. The frontend and backend boundaries in this file are normative and should be applied directly when implementing work.
 
+## ACP Contract Policy
+
+Conduit must stay strongly aligned with the official ACP contract at
+https://agentclientprotocol.com/protocol/overview, and vi treat ACP as the
+source of truth for provider-facing behavior.
+
+Vi are expected to support progressively more of ACP over time, so partial
+feature work must not bypass or rewrite ACP semantics in local ad-hoc flows.
+
+If product-specific UI/state data is needed, keep ACP wire contract data intact
+and layer local metadata beside it or as explicit, documented extensions.
+
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 
 Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, broad lint suppressions are forbidden, and crate-edge violations fail structure checks. The repo guardrail crate under `backend/service/crates/repo-guard` is fully bound by the same Rust rules and gets no policy carve-outs.

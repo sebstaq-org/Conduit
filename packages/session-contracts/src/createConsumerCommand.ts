@@ -4,6 +4,7 @@ import {
   isSessionHistoryRequest,
   isSessionOpenRequest,
   isSessionPromptRequest,
+  isSessionSetConfigOptionRequest,
 } from "./commandParams.js";
 import {
   isProjectCommandName,
@@ -131,6 +132,27 @@ function createSessionsWatchCommand(
   });
 }
 
+function createProvidersConfigSnapshotCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ConsumerCommand {
+  const validEmptyParams =
+    params !== null &&
+    typeof params === "object" &&
+    !Array.isArray(params) &&
+    Object.keys(params).length === 0;
+  if (!validEmptyParams) {
+    throw new Error("providers/config_snapshot params are invalid");
+  }
+  return parseConsumerCommand({
+    id,
+    command: "providers/config_snapshot",
+    provider: requireGlobalProvider("providers/config_snapshot", provider),
+    params: {},
+  });
+}
+
 function createSessionHistoryCommand(
   id: string,
   provider: ConsumerCommandTarget,
@@ -179,6 +201,22 @@ function createSessionPromptCommand(
   });
 }
 
+function createSessionSetConfigOptionCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ConsumerCommand {
+  if (!isSessionSetConfigOptionRequest(params)) {
+    throw new Error("session/set_config_option params are invalid");
+  }
+  return parseConsumerCommand({
+    id,
+    command: "session/set_config_option",
+    provider: requireProvider("session/set_config_option", provider),
+    params,
+  });
+}
+
 type ConduitFactory = (
   id: string,
   provider: ConsumerCommandTarget,
@@ -190,7 +228,9 @@ type KnownConduitCommandName =
   | "settings/update"
   | "sessions/grouped"
   | "sessions/watch"
+  | "providers/config_snapshot"
   | "session/open"
+  | "session/set_config_option"
   | "session/history"
   | "session/watch"
   | "session/prompt";
@@ -202,8 +242,10 @@ type NonProjectConduitCommandName = Exclude<
 const conduitFactories: Record<NonProjectConduitCommandName, ConduitFactory> = {
   "settings/get": createSettingsGetCommand,
   "settings/update": createSettingsUpdateCommand,
+  "providers/config_snapshot": createProvidersConfigSnapshotCommand,
   "session/history": createSessionHistoryCommand,
   "session/open": createSessionOpenCommand,
+  "session/set_config_option": createSessionSetConfigOptionCommand,
   "session/prompt": createSessionPromptCommand,
   "session/watch": createSessionWatchCommand,
   "sessions/grouped": createSessionGroupsCommand,

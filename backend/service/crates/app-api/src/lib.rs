@@ -16,6 +16,7 @@ use acp_core::{AcpHost, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use agent_client_protocol_schema::{
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
+    SetSessionConfigOptionResponse,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -176,6 +177,22 @@ impl AppService {
     /// `session/cancel`.
     pub fn cancel_prompt(&mut self, session_id: &str) -> Result<()> {
         self.host.cancel_prompt(session_id)
+    }
+
+    /// Sends one explicit `session/set_config_option` request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the underlying live ACP host cannot complete
+    /// `session/set_config_option`.
+    pub fn set_session_config_option(
+        &mut self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<SetSessionConfigOptionResponse> {
+        self.host
+            .set_session_config_option(session_id, config_id, value)
     }
 
     /// Returns the current operation snapshot for proof tooling.

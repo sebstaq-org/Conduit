@@ -1,7 +1,8 @@
-import type { ProviderId } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
 import { Box } from "@/theme";
 import { DropdownMenuRoot, DropdownMenuTrigger } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
+import { SessionComposerConfigOptionMenu } from "./session-composer-config-option-menu";
 import { SessionComposerProviderMenu } from "./session-composer-provider-menu";
 import {
   sessionComposerGap,
@@ -10,7 +11,10 @@ import {
 } from "./session-composer.styles";
 
 interface SessionComposerControlsProps {
+  configOptions: SessionConfigOption[] | null;
   isDraft: boolean;
+  isUpdatingConfig: boolean;
+  onConfigOptionSelect: (configId: string, value: string) => void;
   onProviderSelect: (provider: ProviderId) => void;
   provider: ProviderId | null;
 }
@@ -29,42 +33,86 @@ function renderComposerControl(
 }
 
 function renderDraftControls({
+  configOptions,
+  isUpdatingConfig,
+  onConfigOptionSelect,
   onProviderSelect,
   provider,
 }: Pick<
   SessionComposerControlsProps,
-  "onProviderSelect" | "provider"
->): React.JSX.Element {
-  return (
-    <DropdownMenuRoot>
+  | "configOptions"
+  | "isUpdatingConfig"
+  | "onConfigOptionSelect"
+  | "onProviderSelect"
+  | "provider"
+>): React.JSX.Element[] {
+  const controls: React.JSX.Element[] = [
+    <DropdownMenuRoot key={`provider-${provider ?? "select-provider"}`}>
       <DropdownMenuTrigger accessibilityLabel="Select provider for new session">
         {renderComposerControl(provider, true)}
       </DropdownMenuTrigger>
       <SessionComposerProviderMenu onProviderSelect={onProviderSelect} />
-    </DropdownMenuRoot>
-  );
+    </DropdownMenuRoot>,
+  ];
+  if (configOptions !== null) {
+    for (const option of configOptions) {
+      controls.push(
+        <SessionComposerConfigOptionMenu
+          disabled={isUpdatingConfig}
+          key={option.id}
+          onSelect={onConfigOptionSelect}
+          option={option}
+        />,
+      );
+    }
+  }
+  return controls;
 }
 
-function renderOpenControls(
-  provider: ProviderId | null,
-): React.JSX.Element | null {
+function renderOpenControls({
+  configOptions,
+  isUpdatingConfig,
+  onConfigOptionSelect,
+  provider,
+}: Pick<
+  SessionComposerControlsProps,
+  "configOptions" | "isUpdatingConfig" | "onConfigOptionSelect" | "provider"
+>): React.JSX.Element[] | null {
   if (provider === null) {
     return null;
   }
-  return renderComposerControl(provider, false);
+  const controls: React.JSX.Element[] = [
+    renderComposerControl(provider, false),
+  ];
+  if (configOptions !== null) {
+    for (const option of configOptions) {
+      controls.push(
+        <SessionComposerConfigOptionMenu
+          disabled={isUpdatingConfig}
+          key={option.id}
+          onSelect={onConfigOptionSelect}
+          option={option}
+        />,
+      );
+    }
+  }
+  return controls;
 }
 
 function renderControls(
   props: SessionComposerControlsProps,
-): React.JSX.Element | null {
+): React.JSX.Element[] | null {
   if (props.isDraft) {
     return renderDraftControls(props);
   }
-  return renderOpenControls(props.provider);
+  return renderOpenControls(props);
 }
 
 function SessionComposerControls({
+  configOptions,
   isDraft,
+  isUpdatingConfig,
+  onConfigOptionSelect,
   onProviderSelect,
   provider,
 }: SessionComposerControlsProps): React.JSX.Element {
@@ -74,7 +122,14 @@ function SessionComposerControls({
       flexDirection={sessionComposerRowFlexDirection}
       gap={sessionComposerGap}
     >
-      {renderControls({ isDraft, onProviderSelect, provider })}
+      {renderControls({
+        configOptions,
+        isDraft,
+        isUpdatingConfig,
+        onConfigOptionSelect,
+        onProviderSelect,
+        provider,
+      })}
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { Box } from "@/theme";
 import { IconButton } from "@/ui";
-import type { ProviderId } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
 import { SessionComposerControls } from "./session-composer-controls";
 import {
   sessionComposerRowAlignItems,
@@ -12,7 +12,10 @@ import {
 
 interface SessionComposerActionRowProps {
   canSend: boolean;
+  configOptions: SessionConfigOption[] | null;
   isDraft: boolean;
+  isUpdatingConfig: boolean;
+  onConfigOptionSelect: (configId: string, value: string) => void;
   onSend: () => void;
   onProviderSelect: (provider: ProviderId) => void;
   provider: ProviderId | null;
@@ -20,7 +23,10 @@ interface SessionComposerActionRowProps {
 
 function SessionComposerActionRow({
   canSend,
+  configOptions,
   isDraft,
+  isUpdatingConfig,
+  onConfigOptionSelect,
   onSend,
   onProviderSelect,
   provider,
@@ -32,7 +38,10 @@ function SessionComposerActionRow({
       justifyContent={sessionComposerRowJustifyContent}
     >
       <SessionComposerControls
+        configOptions={configOptions}
         isDraft={isDraft}
+        isUpdatingConfig={isUpdatingConfig}
+        onConfigOptionSelect={onConfigOptionSelect}
         onProviderSelect={onProviderSelect}
         provider={provider}
       />

@@ -3,6 +3,7 @@ import type {
   GlobalSettingsUpdateRequest,
   GlobalSettingsView,
   ProviderId,
+  ProvidersConfigSnapshotResult,
   ProjectAddRequest,
   ProjectListView,
   ProjectRemoveRequest,
@@ -13,6 +14,8 @@ import type {
   SessionGroupsView,
   SessionHistoryWindow,
   SessionNewResult,
+  SessionOpenResult,
+  SessionSetConfigOptionResult,
 } from "@conduit/session-client";
 import { sessionClient } from "./session-client";
 
@@ -41,6 +44,13 @@ interface PromptSessionMutationArg {
   prompt: ContentBlock[];
 }
 
+interface SetSessionConfigOptionMutationArg {
+  provider: ProviderId;
+  sessionId: string;
+  configId: string;
+  value: string;
+}
+
 type QueryResult<ResponseData> = Promise<
   { data: ResponseData } | { error: string }
 >;
@@ -57,6 +67,15 @@ async function getSessionGroupsQuery(
 ): QueryResult<SessionGroupsView> {
   try {
     const data = await sessionClient.getSessionGroups(query);
+    return { data };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
+async function getProvidersConfigSnapshotQuery(): QueryResult<ProvidersConfigSnapshotResult> {
+  try {
+    const data = await sessionClient.getProvidersConfigSnapshot();
     return { data };
   } catch (error) {
     return { error: toQueryError(error) };
@@ -163,7 +182,7 @@ async function openSessionQuery({
   limit,
   provider,
   sessionId,
-}: OpenSessionMutationArg): QueryResult<SessionHistoryWindow> {
+}: OpenSessionMutationArg): QueryResult<SessionOpenResult> {
   try {
     const response = await sessionClient.openSession(provider, {
       cwd,
@@ -217,8 +236,35 @@ async function promptSessionQuery({
   }
 }
 
+async function setSessionConfigOptionQuery({
+  provider,
+  sessionId,
+  configId,
+  value,
+}: SetSessionConfigOptionMutationArg): QueryResult<SessionSetConfigOptionResult> {
+  try {
+    const response = await sessionClient.setSessionConfigOption(provider, {
+      sessionId,
+      configId,
+      value,
+    });
+    if (!response.ok) {
+      return {
+        error: response.error?.message ?? "session set_config_option failed",
+      };
+    }
+    if (response.result === null) {
+      return { error: "session set_config_option returned no result" };
+    }
+    return { data: response.result };
+  } catch (error) {
+    return { error: toQueryError(error) };
+  }
+}
+
 export {
   addProjectQuery,
+  getProvidersConfigSnapshotQuery,
   getProjectSuggestionsQuery,
   getSettingsQuery,
   getSessionGroupsQuery,
@@ -228,6 +274,7 @@ export {
   promptSessionQuery,
   readSessionHistoryQuery,
   removeProjectQuery,
+  setSessionConfigOptionQuery,
   sessionClient,
   updateProjectQuery,
   updateSettingsQuery,
@@ -237,5 +284,6 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  SetSessionConfigOptionMutationArg,
 };
 export type { RuntimeHealthView } from "./api-runtime-health-query";

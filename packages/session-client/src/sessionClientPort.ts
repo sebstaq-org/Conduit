@@ -12,8 +12,12 @@ import type {
   SessionHistoryWindow,
   SessionNewRequest,
   SessionNewResult,
+  SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  ProvidersConfigSnapshotResult,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
 import type {
   ProviderId,
@@ -33,15 +37,20 @@ interface SessionClientPort {
   ): Promise<ProjectSuggestionsView>;
   getSettings(): Promise<GlobalSettingsView>;
   getSessionGroups(query?: SessionGroupsQuery): Promise<SessionGroupsView>;
+  getProvidersConfigSnapshot(): Promise<ProvidersConfigSnapshotResult>;
   listProjects(): Promise<ProjectListView>;
   openSession(
     provider: ProviderId,
     request: SessionOpenRequest,
-  ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
+  ): Promise<ConsumerResponse<SessionOpenResult | null>>;
   newSession(
     provider: ProviderId,
     request: SessionNewRequest,
   ): Promise<ConsumerResponse<SessionNewResult | null>>;
+  setSessionConfigOption(
+    provider: ProviderId,
+    request: SessionSetConfigOptionRequest,
+  ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>>;
   readSessionHistory(
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;

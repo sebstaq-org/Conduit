@@ -245,6 +245,18 @@ impl ProviderPort for BlockingPromptProvider {
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
         Ok(json!({ "sessionId": session_id }))
     }
+
+    fn session_set_config_option(
+        &mut self,
+        session_id: String,
+        _config_id: String,
+        _value: String,
+    ) -> Result<Value> {
+        Ok(json!({
+            "sessionId": session_id,
+            "configOptions": []
+        }))
+    }
 }
 
 fn ensure_ok(response: &service_runtime::ConsumerResponse) -> TestResult<()> {

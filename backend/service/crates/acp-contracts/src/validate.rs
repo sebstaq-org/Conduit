@@ -6,6 +6,7 @@ use agent_client_protocol_schema::{
     AGENT_METHOD_NAMES, CancelNotification, InitializeRequest, InitializeResponse,
     ListSessionsRequest, ListSessionsResponse, LoadSessionRequest, LoadSessionResponse,
     NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use serde_json::Value;
 
@@ -22,6 +23,8 @@ pub enum LockedMethod {
     SessionLoad,
     /// `session/prompt`
     SessionPrompt,
+    /// `session/set_config_option`
+    SessionSetConfigOption,
     /// `session/cancel`
     SessionCancel,
 }
@@ -36,6 +39,7 @@ impl LockedMethod {
             Self::SessionList => "session_list",
             Self::SessionLoad => "session_load",
             Self::SessionPrompt => "session_prompt",
+            Self::SessionSetConfigOption => "session_set_config_option",
             Self::SessionCancel => "session_cancel",
         }
     }
@@ -49,18 +53,20 @@ impl LockedMethod {
             Self::SessionList => "session/list",
             Self::SessionLoad => "session/load",
             Self::SessionPrompt => "session/prompt",
+            Self::SessionSetConfigOption => "session/set_config_option",
             Self::SessionCancel => "session/cancel",
         }
     }
 }
 
 /// The locked ACP method subset in wire order.
-pub const LOCKED_ACP_METHODS: [LockedMethod; 6] = [
+pub const LOCKED_ACP_METHODS: [LockedMethod; 7] = [
     LockedMethod::Initialize,
     LockedMethod::SessionNew,
     LockedMethod::SessionList,
     LockedMethod::SessionLoad,
     LockedMethod::SessionPrompt,
+    LockedMethod::SessionSetConfigOption,
     LockedMethod::SessionCancel,
 ];
 
@@ -128,6 +134,10 @@ pub fn validate_locked_request_envelope(
             validate_params::<PromptRequest>(params)?;
             Ok(LockedMethod::SessionPrompt)
         }
+        "session/set_config_option" => {
+            validate_params::<SetSessionConfigOptionRequest>(params)?;
+            Ok(LockedMethod::SessionSetConfigOption)
+        }
         "session/cancel" => Err(Error::contract(
             "session/cancel is a notification and must be validated separately",
         )),
@@ -179,6 +189,9 @@ pub fn validate_locked_response_envelope(
         LockedMethod::SessionList => validate_result::<ListSessionsResponse>(result),
         LockedMethod::SessionLoad => validate_result::<LoadSessionResponse>(result),
         LockedMethod::SessionPrompt => validate_result::<PromptResponse>(result),
+        LockedMethod::SessionSetConfigOption => {
+            validate_result::<SetSessionConfigOptionResponse>(result)
+        }
         LockedMethod::SessionCancel => Err(Error::contract(
             "session/cancel does not produce a direct ACP response envelope",
         )),

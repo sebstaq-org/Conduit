@@ -3,6 +3,7 @@ import { conduitApi } from "./api";
 const {
   useAddProjectMutation,
   useGetProjectSuggestionsQuery,
+  useGetProvidersConfigSnapshotQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
   useGetSettingsQuery,
@@ -13,6 +14,7 @@ const {
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
+  useSetSessionConfigOptionMutation,
   useUpdateProjectMutation,
   useUpdateSettingsMutation,
 } = conduitApi;
@@ -20,6 +22,7 @@ const {
 export {
   useAddProjectMutation,
   useGetProjectSuggestionsQuery,
+  useGetProvidersConfigSnapshotQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
   useGetSettingsQuery,
@@ -30,6 +33,7 @@ export {
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
+  useSetSessionConfigOptionMutation,
   useUpdateProjectMutation,
   useUpdateSettingsMutation,
 };

@@ -1,9 +1,13 @@
 //! Single-owner runtime actor for WebSocket consumers.
 
 mod prompt_lanes;
+mod provider_config_snapshot;
 mod suggestion_refresh;
 
 use self::prompt_lanes::{PromptLanes, cancel_provider_session, prompt_open_session_id};
+use self::provider_config_snapshot::{
+    ProviderConfigSnapshots, spawn_provider_config_snapshot_worker,
+};
 
 use self::suggestion_refresh::spawn_suggestion_refresh_worker;
 use service_runtime::{
@@ -65,6 +69,7 @@ impl RuntimeActor {
             Arc::clone(&refresh_store),
             Arc::clone(&store_lock),
         );
+        let provider_config_snapshots = spawn_provider_config_snapshot_worker(factory.clone());
         spawn_suggestion_refresh_worker(
             factory.clone(),
             events.clone(),
@@ -79,6 +84,7 @@ impl RuntimeActor {
             store: refresh_store,
             store_lock,
             refreshes,
+            provider_config_snapshots,
         }));
         Self { commands, events }
     }
@@ -164,6 +170,7 @@ struct ActorContext<F> {
     store: StoreOpener,
     store_lock: StoreLock,
     refreshes: RefreshWorker,
+    provider_config_snapshots: ProviderConfigSnapshots,
 }
 
 async fn run_actor<F>(context: ActorContext<F>)
@@ -178,6 +185,7 @@ where
         store,
         store_lock,
         refreshes,
+        provider_config_snapshots,
     } = context;
     let mut prompt_lanes = PromptLanes::new(
         factory.clone(),
@@ -191,7 +199,13 @@ where
         let _subscriber_count = live_events.send(event);
     }));
     while let Some(request) = receiver.recv().await {
-        handle_request(&mut runtime, request, &refreshes, &mut prompt_lanes);
+        handle_request(
+            &mut runtime,
+            request,
+            &refreshes,
+            &provider_config_snapshots,
+            &mut prompt_lanes,
+        );
     }
 }
 
@@ -248,10 +262,15 @@ fn handle_request<F>(
     runtime: &mut ServiceRuntime<F>,
     request: ActorRequest,
     refreshes: &RefreshWorker,
+    provider_config_snapshots: &ProviderConfigSnapshots,
     prompt_lanes: &mut PromptLanes<F>,
 ) where
     F: Clone + ProviderFactory + 'static,
 {
+    if request.command.command == "providers/config_snapshot" {
+        handle_provider_config_snapshot_request(request, provider_config_snapshots);
+        return;
+    }
     if request.command.command == "sessions/grouped" {
         handle_grouped_sessions_request(runtime, request, refreshes);
         return;
@@ -275,6 +294,33 @@ fn handle_request<F>(
         return;
     }
     let response = runtime.dispatch(request.command);
+    let _response_status = request.respond_to.send(response);
+}
+
+fn handle_provider_config_snapshot_request(
+    request: ActorRequest,
+    provider_config_snapshots: &ProviderConfigSnapshots,
+) {
+    let response = if request.command.provider != "all" {
+        ConsumerResponse {
+            id: request.command.id,
+            ok: false,
+            result: serde_json::Value::Null,
+            error: Some(service_runtime::ConsumerError {
+                code: "invalid_parameter".to_owned(),
+                message: "providers/config_snapshot must target provider all".to_owned(),
+            }),
+            snapshot: None,
+        }
+    } else {
+        ConsumerResponse {
+            id: request.command.id,
+            ok: true,
+            result: provider_config_snapshots.snapshot_value(),
+            error: None,
+            snapshot: None,
+        }
+    };
     let _response_status = request.respond_to.send(response);
 }
 
@@ -322,218 +368,4 @@ fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {
 mod prompt_lane_tests;
 
 #[cfg(test)]
-mod tests {
-    use super::RuntimeActor;
-    use acp_core::{
-        ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
-        WireStream,
-    };
-    use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
-    use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
-    use serde_json::{Value, json};
-    use service_runtime::{ConsumerCommand, ProviderFactory, ProviderPort, Result, RuntimeError};
-    use session_store::LocalStore;
-    use std::path::PathBuf;
-    use std::sync::mpsc;
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-    type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-    #[derive(Clone)]
-    struct BlockingRefreshFactory {
-        release: Arc<(Mutex<bool>, Condvar)>,
-        started: Arc<Mutex<Option<mpsc::Sender<()>>>>,
-    }
-
-    struct BlockingRefreshProvider {
-        provider: ProviderId,
-        release: Arc<(Mutex<bool>, Condvar)>,
-        started: Arc<Mutex<Option<mpsc::Sender<()>>>>,
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn grouped_refresh_does_not_block_following_open_session() -> TestResult<()> {
-        let path = test_db_path()?;
-        let refresh_path = path.clone();
-        let (started, started_rx) = mpsc::channel();
-        let release = Arc::new((Mutex::new(false), Condvar::new()));
-        let factory = BlockingRefreshFactory {
-            release: Arc::clone(&release),
-            started: Arc::new(Mutex::new(Some(started))),
-        };
-        let mut local_store = LocalStore::open_path(&path)?;
-        local_store.add_project("/repo")?;
-        let actor = RuntimeActor::start_with_store_opener(
-            factory,
-            local_store,
-            Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
-        );
-        let grouped = actor
-            .dispatch(command("1", "sessions/grouped", "codex", json!({})))
-            .await;
-        started_rx.recv_timeout(Duration::from_secs(5))?;
-
-        let opened = tokio::time::timeout(
-            Duration::from_millis(250),
-            actor.dispatch(command(
-                "2",
-                "session/open",
-                "codex",
-                json!({
-                    "sessionId": "session-1",
-                    "cwd": "/repo",
-                    "limit": 8
-                }),
-            )),
-        )
-        .await;
-
-        release_refresh(&release)?;
-        let opened = opened?;
-        ensure_ok(&grouped)?;
-        ensure_ok(&opened)
-    }
-
-    impl ProviderFactory for BlockingRefreshFactory {
-        fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
-            Ok(Box::new(BlockingRefreshProvider {
-                provider,
-                release: Arc::clone(&self.release),
-                started: Arc::clone(&self.started),
-            }))
-        }
-    }
-
-    impl ProviderPort for BlockingRefreshProvider {
-        fn snapshot(&self) -> ProviderSnapshot {
-            ProviderSnapshot {
-                provider: self.provider,
-                connection_state: ConnectionState::Ready,
-                discovery: fake_discovery(self.provider),
-                capabilities: json!({}),
-                auth_methods: Vec::new(),
-                live_sessions: Vec::new(),
-                last_prompt: None,
-                loaded_transcripts: Vec::new(),
-            }
-        }
-
-        fn raw_events(&self) -> Vec<RawWireEvent> {
-            vec![RawWireEvent {
-                sequence: 1,
-                stream: WireStream::Outgoing,
-                kind: WireKind::Request,
-                payload: "{}".to_owned(),
-                method: Some("session/list".to_owned()),
-                request_id: Some("1".to_owned()),
-                json: Some(json!({})),
-            }]
-        }
-
-        fn disconnect(&mut self) -> Result<()> {
-            Ok(())
-        }
-
-        fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
-            Ok(json!({ "sessionId": "session-1" }))
-        }
-
-        fn session_list(
-            &mut self,
-            _cwd: Option<PathBuf>,
-            _cursor: Option<String>,
-        ) -> Result<Value> {
-            if let Some(started) = self
-                .started
-                .lock()
-                .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?
-                .take()
-            {
-                let _send_status = started.send(());
-            }
-            let (released, condvar) = &*self.release;
-            let mut released = released
-                .lock()
-                .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
-            while !*released {
-                released = condvar.wait(released).map_err(|error| {
-                    RuntimeError::Provider(format!("fake state poisoned: {error}"))
-                })?;
-            }
-            Ok(json!({ "sessions": [] }))
-        }
-
-        fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {
-            Ok(json!({ "sessionId": session_id }))
-        }
-
-        fn session_prompt(
-            &mut self,
-            session_id: String,
-            _prompt: Vec<Value>,
-            _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
-        ) -> Result<Value> {
-            Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
-        }
-
-        fn session_cancel(&mut self, session_id: String) -> Result<Value> {
-            Ok(json!({ "sessionId": session_id }))
-        }
-    }
-
-    fn release_refresh(release: &Arc<(Mutex<bool>, Condvar)>) -> TestResult<()> {
-        let (released, condvar) = &**release;
-        *released.lock().map_err(|error| format!("{error}"))? = true;
-        condvar.notify_all();
-        Ok(())
-    }
-
-    fn ensure_ok(response: &service_runtime::ConsumerResponse) -> TestResult<()> {
-        if response.ok {
-            return Ok(());
-        }
-        Err(format!("command failed: {:?}", response.error).into())
-    }
-
-    fn command(id: &str, command: &str, provider: &str, params: Value) -> ConsumerCommand {
-        ConsumerCommand {
-            id: id.to_owned(),
-            command: command.to_owned(),
-            provider: provider.to_owned(),
-            params,
-        }
-    }
-
-    fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
-        ProviderDiscovery {
-            provider,
-            launcher: LauncherCommand {
-                executable: PathBuf::from(provider.as_str()),
-                args: Vec::new(),
-                display: provider.as_str().to_owned(),
-            },
-            resolved_path: provider.as_str().to_owned(),
-            version: "fake".to_owned(),
-            auth_hints: Vec::new(),
-            initialize_viable: true,
-            transport_diagnostics: Vec::new(),
-            initialize_probe: InitializeProbe {
-                response: json!({}),
-                payload: InitializeResponse::new(ProtocolVersion::V1)
-                    .agent_info(Implementation::new("fake-agent", "0.5.0")),
-                stdout_lines: Vec::new(),
-                stderr_lines: Vec::new(),
-                elapsed_ms: 1,
-            },
-        }
-    }
-
-    fn test_db_path() -> TestResult<PathBuf> {
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        Ok(std::env::temp_dir().join(format!(
-            "conduit-service-bin-{}-{nanos}.sqlite3",
-            std::process::id()
-        )))
-    }
-}
+mod tests;

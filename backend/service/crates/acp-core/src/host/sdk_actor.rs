@@ -1,5 +1,7 @@
 //! Official ACP SDK actor for one provider connection.
 
+mod internals;
+
 use super::helpers::{identity, session_update_variant, unexpected};
 use super::prompt::{permission_response, prompt_content_blocks, stop_reason_string};
 use crate::error::{AcpError, Result};
@@ -9,6 +11,9 @@ use crate::snapshot::{
 };
 use acp_discovery::{LauncherCommand, ProcessEnvironment, ProviderDiscovery, ProviderId};
 use agent_client_protocol::{self as acp, Agent as _};
+use internals::{
+    apply_process_environment, child_has_exited, disconnected, sdk_error, send_reply, to_values,
+};
 use serde_json::{Value, to_value};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -50,6 +55,12 @@ pub(super) enum HostCommand {
     CancelPrompt {
         session_id: acp::SessionId,
         reply: Sender<Result<()>>,
+    },
+    SetSessionConfigOption {
+        session_id: acp::SessionId,
+        config_id: String,
+        value: String,
+        reply: Sender<Result<acp::SetSessionConfigOptionResponse>>,
     },
 }
 
@@ -149,6 +160,17 @@ impl SdkHostActor {
             }
             HostCommand::CancelPrompt { session_id, reply } => {
                 let result = self.cancel_prompt(session_id).await;
+                send_reply(reply, result);
+            }
+            HostCommand::SetSessionConfigOption {
+                session_id,
+                config_id,
+                value,
+                reply,
+            } => {
+                let result = self
+                    .set_session_config_option(session_id, config_id, value)
+                    .await;
                 send_reply(reply, result);
             }
         }
@@ -263,6 +285,20 @@ impl SdkHostActor {
             },
         );
         Ok(response)
+    }
+
+    async fn set_session_config_option(
+        &mut self,
+        session_id: acp::SessionId,
+        config_id: String,
+        value: String,
+    ) -> Result<acp::SetSessionConfigOptionResponse> {
+        self.connection()?
+            .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+                session_id, config_id, value,
+            ))
+            .await
+            .map_err(|source| sdk_error(self.provider, "session/set_config_option", source))
     }
 
     async fn prompt_content(
@@ -611,34 +647,6 @@ fn take_session_updates(
     })
 }
 
-fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {
-    child
-        .as_mut()
-        .and_then(|process| process.try_wait().ok())
-        .flatten()
-        .is_some()
-}
-
-fn to_values<T>(provider: ProviderId, values: Vec<T>, field: &str) -> Result<Vec<Value>>
-where
-    T: serde::Serialize,
-{
-    values
-        .into_iter()
-        .map(|value| {
-            to_value(value).map_err(|error| unexpected(provider, format!("{field}: {error}")))
-        })
-        .collect()
-}
-
-fn disconnected(provider: ProviderId, operation: &str) -> AcpError {
-    AcpError::StreamClosed {
-        provider,
-        stream: "official-sdk".to_owned(),
-        operation: operation.to_owned(),
-    }
-}
-
 pub(super) fn disconnected_snapshot(
     provider: ProviderId,
     discovery: ProviderDiscovery,
@@ -655,18 +663,6 @@ pub(super) fn disconnected_snapshot(
     }
 }
 
-fn apply_process_environment(
-    command: &mut tokio::process::Command,
-    environment: &ProcessEnvironment,
-) {
-    if let Some(current_dir) = &environment.current_dir {
-        command.current_dir(current_dir);
-    }
-    for (key, value) in &environment.env {
-        command.env(key, value);
-    }
-}
-
 pub(super) fn receive_result<T>(
     provider: ProviderId,
     operation: &'static str,
@@ -675,18 +671,6 @@ pub(super) fn receive_result<T>(
     response
         .recv()
         .map_err(|_error| actor_stopped(provider, operation))?
-}
-
-fn send_reply<T>(reply: Sender<Result<T>>, result: Result<T>) {
-    let _result = reply.send(result);
-}
-
-fn sdk_error(provider: ProviderId, operation: &str, source: acp::Error) -> AcpError {
-    AcpError::Sdk {
-        provider,
-        operation: operation.to_owned(),
-        source,
-    }
 }
 
 pub(super) fn actor_stopped(provider: ProviderId, operation: &str) -> AcpError {

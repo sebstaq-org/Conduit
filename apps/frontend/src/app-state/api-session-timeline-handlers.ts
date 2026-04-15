@@ -1,113 +1,28 @@
 import type {
   SessionGroupsQuery,
   SessionHistoryWindow,
-  SessionNewResult,
-  TranscriptItem,
+  SessionOpenResult,
 } from "@conduit/session-client";
-import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
 import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
+import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
 import { activeSessionOpened } from "./session-selection";
 import { createSessionTimelineData } from "./session-timeline-cache";
 import type {
-  OpenSessionMutationArg,
+  CacheLifecycleApi,
+  LoadOlderSessionTimelineArg,
+  NewSessionQueryStartedApi,
+  OpenSessionQueryStartedApi,
+  QueryStartedApi,
+  SessionTimelineHandlers,
+  SessionTimelineMutations,
+} from "./api-session-timeline-types";
+import type {
   NewSessionMutationArg,
+  OpenSessionMutationArg,
   ReadSessionHistoryQueryArg,
 } from "./session-api-queries";
 import type { SessionTimelineData } from "./session-timeline-cache";
-
-type DispatchLike = (action: unknown) => unknown;
-
-interface CacheLifecycleApi {
-  cacheDataLoaded: Promise<unknown>;
-  cacheEntryRemoved: Promise<unknown>;
-  dispatch: DispatchLike;
-}
-
-interface QueryStartedApi {
-  dispatch: DispatchLike;
-  queryFulfilled: Promise<{ data: SessionHistoryWindow }>;
-}
-
-interface NewSessionQueryStartedApi {
-  dispatch: DispatchLike;
-  queryFulfilled: Promise<{ data: SessionNewResult }>;
-}
-
-interface LoadOlderSessionTimelineArg {
-  cursor: string;
-  limit?: number;
-  openSessionId: string;
-}
-
-interface TimelineItemsUpdate {
-  openSessionId: string;
-  revision: number;
-  items: TranscriptItem[];
-}
-
-interface OlderTimelinePageUpdate {
-  cursor: string;
-  history: SessionHistoryWindow;
-  openSessionId: string;
-}
-
-interface SessionTimelineMutations {
-  upsertSessionTimeline: (
-    dispatch: DispatchLike,
-    history: SessionHistoryWindow,
-  ) => void;
-  invalidateSessionTimeline: (
-    dispatch: DispatchLike,
-    openSessionId: string,
-  ) => void;
-  updateSessionTimelineItems: (
-    dispatch: DispatchLike,
-    update: TimelineItemsUpdate,
-  ) => void;
-  markSessionTimelineOlderRequested: (
-    dispatch: DispatchLike,
-    update: LoadOlderSessionTimelineArg,
-  ) => void;
-  mergeOlderSessionTimelinePage: (
-    dispatch: DispatchLike,
-    update: OlderTimelinePageUpdate,
-  ) => void;
-  markSessionTimelineOlderFailed: (
-    dispatch: DispatchLike,
-    update: LoadOlderSessionTimelineArg,
-  ) => void;
-  invalidateSessionGroups: (dispatch: DispatchLike) => void;
-}
-
-interface SessionTimelineHandlers {
-  handleLoadOlderSessionTimelineStarted: (
-    arg: LoadOlderSessionTimelineArg,
-    api: QueryStartedApi,
-  ) => Promise<void>;
-  handleOpenSessionStarted: (
-    arg: OpenSessionMutationArg,
-    api: QueryStartedApi,
-  ) => Promise<void>;
-  handleNewSessionStarted: (
-    arg: NewSessionMutationArg,
-    api: NewSessionQueryStartedApi,
-  ) => Promise<void>;
-  handleSessionGroupsCacheEntryAdded: (
-    query: SessionGroupsQuery | undefined,
-    api: CacheLifecycleApi,
-  ) => Promise<void>;
-  handleSessionTimelineCacheEntryAdded: (
-    arg: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
-    api: CacheLifecycleApi,
-  ) => Promise<void>;
-  loadOlderTimelineQueryFn: (
-    arg: LoadOlderSessionTimelineArg,
-  ) => Promise<{ data: SessionHistoryWindow } | { error: string }>;
-  readSessionTimelineQueryFn: (
-    arg: Pick<ReadSessionHistoryQueryArg, "openSessionId">,
-  ) => Promise<{ data: SessionTimelineData } | { error: string }>;
-}
 
 async function handleSessionGroupsCacheEntryAdded(
   _query: SessionGroupsQuery | undefined,
@@ -161,24 +76,39 @@ async function handleSessionTimelineCacheEntryAdded(
   }
 }
 
+function openResultHistory(data: SessionOpenResult): SessionHistoryWindow {
+  return {
+    openSessionId: data.openSessionId,
+    revision: data.revision,
+    items: data.items,
+    nextCursor: data.nextCursor,
+  };
+}
+
 async function handleOpenSessionStarted(
-  { cwd, provider, sessionId, title }: OpenSessionMutationArg,
-  { dispatch, queryFulfilled }: QueryStartedApi,
+  { cwd, provider, title }: OpenSessionMutationArg,
+  { dispatch, queryFulfilled }: OpenSessionQueryStartedApi,
   mutations: SessionTimelineMutations,
 ): Promise<void> {
   try {
     const { data } = await queryFulfilled;
+    const history = openResultHistory(data);
     dispatch(
       activeSessionOpened({
+        configOptions: data.configOptions ?? null,
+        configSyncBlocked: false,
+        configSyncError: null,
         cwd,
         kind: "open",
-        openSessionId: data.openSessionId,
+        modes: data.modes,
+        models: data.models,
+        openSessionId: history.openSessionId,
         provider,
-        sessionId,
+        sessionId: data.sessionId,
         title,
       }),
     );
-    mutations.upsertSessionTimeline(dispatch, data);
+    mutations.upsertSessionTimeline(dispatch, history);
   } catch {
     // The query result already carries the user-visible failure.
   }
@@ -193,9 +123,14 @@ async function handleNewSessionStarted(
     const { data } = await queryFulfilled;
     dispatch(
       activeSessionOpened({
+        configOptions: data.configOptions ?? null,
+        configSyncBlocked: false,
+        configSyncError: null,
         cwd,
         kind: "open",
         openSessionId: data.history.openSessionId,
+        modes: data.modes,
+        models: data.models,
         provider,
         sessionId: data.sessionId,
         title: null,

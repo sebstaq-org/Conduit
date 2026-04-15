@@ -1,6 +1,7 @@
 export { conduitApi } from "./api";
 export {
   useAddProjectMutation,
+  useGetProvidersConfigSnapshotQuery,
   useGetProjectSuggestionsQuery,
   useGetRuntimeHealthQuery,
   useGetSessionGroupsQuery,
@@ -12,6 +13,7 @@ export {
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
+  useSetSessionConfigOptionMutation,
   useUpdateProjectMutation,
   useUpdateSettingsMutation,
 } from "./api-hooks";
@@ -31,6 +33,7 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  SetSessionConfigOptionMutationArg,
 } from "./api";
 export type {
   ProjectMutationState,
@@ -38,6 +41,10 @@ export type {
   UpdateProjectTrigger,
 } from "./project-commands";
 export {
+  activeSessionOpened,
+  activeSessionConfigOptionsUpdated,
+  activeSessionConfigSyncBlocked,
+  draftSessionConfigOptionSelected,
   draftSessionProviderSelected,
   draftSessionStarted,
   selectActiveSession,

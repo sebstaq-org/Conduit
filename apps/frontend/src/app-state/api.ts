@@ -1,21 +1,10 @@
 import { createApi, fakeBaseQuery } from "@reduxjs/toolkit/query/react";
-import type {
-  GlobalSettingsUpdateRequest,
-  GlobalSettingsView,
-  ProjectAddRequest,
-  ProjectListView,
-  ProjectRemoveRequest,
-  ProjectSuggestionsQuery,
-  ProjectSuggestionsView,
-  ProjectUpdateRequest,
-  SessionGroupsQuery,
-  SessionGroupsView,
-  SessionHistoryWindow,
-  SessionNewResult,
-} from "@conduit/session-client";
-import { createSessionTimelineHandlers } from "./api-session-timeline-handlers";
-import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
+import {
+  createSessionTimelineHandlers,
+  createUninitializedSessionTimelineMutations,
+} from "./api-session-timeline-handlers";
 import { bindSessionTimelineMutations } from "./api-session-timeline-cache-wiring";
+import { setSessionConfigOptionEndpoint } from "./api-session-config-option-endpoint";
 import {
   projectAddEndpoint,
   projectListEndpoint,
@@ -23,22 +12,22 @@ import {
   projectSuggestionsEndpoint,
   projectUpdateEndpoint,
 } from "./api-project-endpoints";
-import { runtimeHealthEndpoint } from "./api-runtime-health-endpoint";
+import { getRuntimeHealthQuery } from "./api-runtime-health-query";
 import { createSessionTimelineEndpoints } from "./api-session-timeline-endpoints";
 import { createSessionTimelineData } from "./session-timeline-cache";
-import { getSettingsQuery, updateSettingsQuery } from "./session-api-queries";
+import {
+  getSettingsQuery,
+  getProvidersConfigSnapshotQuery,
+  updateSettingsQuery,
+} from "./session-api-queries";
 import type {
-  OpenSessionMutationArg,
   NewSessionMutationArg,
+  OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
-  RuntimeHealthView,
+  SetSessionConfigOptionMutationArg,
 } from "./session-api-queries";
 import type { LoadOlderSessionTimelineArg } from "./api-session-timeline-handlers";
-import type { SessionTimelineData } from "./session-timeline-cache";
-
-type ProjectSuggestionsQueryArg = ProjectSuggestionsQuery | undefined;
-type ProjectUpdateArg = ProjectUpdateRequest;
 
 const sessionTimelineMutations = createUninitializedSessionTimelineMutations();
 const sessionTimelineHandlers = createSessionTimelineHandlers(
@@ -59,6 +48,13 @@ const updateSettingsEndpoint = {
   ],
   queryFn: updateSettingsQuery,
 } as const;
+const runtimeHealthEndpoint = {
+  providesTags: [{ id: "CURRENT", type: "RuntimeHealth" }],
+  queryFn: getRuntimeHealthQuery,
+} as const;
+const providersConfigSnapshotEndpoint = {
+  queryFn: getProvidersConfigSnapshotQuery,
+} as const;
 
 const conduitApi = createApi({
   reducerPath: "conduitApi",
@@ -71,53 +67,30 @@ const conduitApi = createApi({
     "Settings",
   ],
   endpoints: (builder) => ({
-    listProjects: builder.query<ProjectListView, undefined>(
-      projectListEndpoint,
+    listProjects: builder.query(projectListEndpoint),
+    addProject: builder.mutation(projectAddEndpoint),
+    removeProject: builder.mutation(projectRemoveEndpoint),
+    updateProject: builder.mutation(projectUpdateEndpoint),
+    getProjectSuggestions: builder.query(projectSuggestionsEndpoint),
+    getRuntimeHealth: builder.query(runtimeHealthEndpoint),
+    getProvidersConfigSnapshot: builder.query(providersConfigSnapshotEndpoint),
+    getSettings: builder.query(globalSettingsEndpoint),
+    getSessionGroups: builder.query(
+      sessionTimelineEndpoints.sessionGroupsEndpoint,
     ),
-    addProject: builder.mutation<ProjectListView, ProjectAddRequest>(
-      projectAddEndpoint,
-    ),
-    removeProject: builder.mutation<ProjectListView, ProjectRemoveRequest>(
-      projectRemoveEndpoint,
-    ),
-    updateProject: builder.mutation<ProjectListView, ProjectUpdateArg>(
-      projectUpdateEndpoint,
-    ),
-    getProjectSuggestions: builder.query<
-      ProjectSuggestionsView,
-      ProjectSuggestionsQueryArg
-    >(projectSuggestionsEndpoint),
-    getRuntimeHealth: builder.query<RuntimeHealthView, null>(
-      runtimeHealthEndpoint,
-    ),
-    getSettings: builder.query<GlobalSettingsView, null>(
-      globalSettingsEndpoint,
-    ),
-    getSessionGroups: builder.query<
-      SessionGroupsView,
-      SessionGroupsQuery | undefined
-    >(sessionTimelineEndpoints.sessionGroupsEndpoint),
-    updateSettings: builder.mutation<
-      GlobalSettingsView,
-      GlobalSettingsUpdateRequest
-    >(updateSettingsEndpoint),
-    openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
-      sessionTimelineEndpoints.openSessionEndpoint,
-    ),
-    newSession: builder.mutation<SessionNewResult, NewSessionMutationArg>(
-      sessionTimelineEndpoints.newSessionEndpoint,
-    ),
-    promptSession: builder.mutation<null, PromptSessionMutationArg>(
+    updateSettings: builder.mutation(updateSettingsEndpoint),
+    openSession: builder.mutation(sessionTimelineEndpoints.openSessionEndpoint),
+    newSession: builder.mutation(sessionTimelineEndpoints.newSessionEndpoint),
+    setSessionConfigOption: builder.mutation(setSessionConfigOptionEndpoint),
+    promptSession: builder.mutation(
       sessionTimelineEndpoints.promptSessionEndpoint,
     ),
-    readSessionTimeline: builder.query<
-      SessionTimelineData,
-      Pick<ReadSessionHistoryQueryArg, "openSessionId">
-    >(sessionTimelineEndpoints.readSessionTimelineEndpoint),
-    loadOlderSessionTimeline: builder.mutation<
-      SessionHistoryWindow,
-      LoadOlderSessionTimelineArg
-    >(sessionTimelineEndpoints.loadOlderSessionTimelineEndpoint),
+    readSessionTimeline: builder.query(
+      sessionTimelineEndpoints.readSessionTimelineEndpoint,
+    ),
+    loadOlderSessionTimeline: builder.mutation(
+      sessionTimelineEndpoints.loadOlderSessionTimelineEndpoint,
+    ),
   }),
 });
 
@@ -161,4 +134,5 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  SetSessionConfigOptionMutationArg,
 };

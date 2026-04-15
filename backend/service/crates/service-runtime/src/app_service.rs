@@ -79,6 +79,18 @@ impl ProviderPort for AppServicePort {
             .map_err(|error| RuntimeError::Provider(error.to_string()))?;
         Ok(json!({}))
     }
+
+    fn session_set_config_option(
+        &mut self,
+        session_id: String,
+        config_id: String,
+        value: String,
+    ) -> Result<Value> {
+        serialize(
+            self.service
+                .set_session_config_option(&session_id, &config_id, &value),
+        )
+    }
 }
 
 fn serialize<T>(result: acp_core::Result<T>) -> Result<Value>

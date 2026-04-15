@@ -209,6 +209,45 @@ const SessionPromptRequestSchema = z
   })
   .strict();
 type SessionPromptRequest = z.infer<typeof SessionPromptRequestSchema>;
+const SessionConfigOptionValueSchema = z
+  .object({
+    value: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+  })
+  .loose();
+const SessionConfigOptionGroupSchema = z
+  .object({
+    group: z.string(),
+    name: z.string(),
+    options: z.array(SessionConfigOptionValueSchema),
+  })
+  .loose();
+const SessionConfigOptionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullable().optional(),
+    category: z.string().nullable().optional(),
+    type: z.string(),
+    currentValue: z.string(),
+    options: z.union([
+      z.array(SessionConfigOptionValueSchema),
+      z.array(SessionConfigOptionGroupSchema),
+    ]),
+  })
+  .loose();
+type SessionConfigOption = z.infer<typeof SessionConfigOptionSchema>;
+const SessionSetConfigOptionRequestSchema = z
+  .object({
+    sessionId: z.string(),
+    configId: z.string(),
+    value: z.string(),
+  })
+  .strict();
+type SessionSetConfigOptionRequest = z.infer<
+  typeof SessionSetConfigOptionRequestSchema
+>;
 const TranscriptMessageItemSchema = z
   .object({
     kind: z.literal("message"),
@@ -247,10 +286,66 @@ type SessionHistoryWindow = z.infer<typeof SessionHistoryWindowSchema>;
 const SessionNewResultSchema = z
   .object({
     sessionId: z.string(),
+    configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
+    modes: z.unknown().nullable().optional(),
+    models: z.unknown().nullable().optional(),
     history: SessionHistoryWindowSchema,
   })
   .strict();
 type SessionNewResult = z.infer<typeof SessionNewResultSchema>;
+const SessionOpenResultSchema = z
+  .object({
+    sessionId: z.string(),
+    configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
+    modes: z.unknown().nullable().optional(),
+    models: z.unknown().nullable().optional(),
+    openSessionId: z.string(),
+    revision: z.number(),
+    items: z.array(TranscriptItemSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .strict();
+type SessionOpenResult = z.infer<typeof SessionOpenResultSchema>;
+const SessionSetConfigOptionResultSchema = z
+  .object({
+    sessionId: z.string(),
+    configOptions: z.array(SessionConfigOptionSchema),
+  })
+  .strict();
+type SessionSetConfigOptionResult = z.infer<
+  typeof SessionSetConfigOptionResultSchema
+>;
+const ProviderConfigSnapshotStatusSchema = z.enum([
+  "loading",
+  "ready",
+  "error",
+  "unavailable",
+]);
+type ProviderConfigSnapshotStatus = z.infer<
+  typeof ProviderConfigSnapshotStatusSchema
+>;
+const ProviderConfigSnapshotEntrySchema = z
+  .object({
+    provider: ProviderIdSchema,
+    status: ProviderConfigSnapshotStatusSchema,
+    configOptions: z.array(SessionConfigOptionSchema).nullable(),
+    modes: z.unknown().nullable(),
+    models: z.unknown().nullable(),
+    fetchedAt: z.string().nullable(),
+    error: z.string().nullable(),
+  })
+  .strict();
+type ProviderConfigSnapshotEntry = z.infer<
+  typeof ProviderConfigSnapshotEntrySchema
+>;
+const ProvidersConfigSnapshotResultSchema = z
+  .object({
+    entries: z.array(ProviderConfigSnapshotEntrySchema),
+  })
+  .strict();
+type ProvidersConfigSnapshotResult = z.infer<
+  typeof ProvidersConfigSnapshotResultSchema
+>;
 interface ProviderSnapshot {
   provider: ProviderId;
   connectionState: ConnectionState;
@@ -303,8 +398,15 @@ export {
   SessionGroupsUpdatedWithinDaysSchema,
   SessionHistoryRequestSchema,
   SessionHistoryWindowSchema,
+  SessionConfigOptionSchema,
+  SessionSetConfigOptionRequestSchema,
+  SessionSetConfigOptionResultSchema,
+  ProviderConfigSnapshotEntrySchema,
+  ProviderConfigSnapshotStatusSchema,
+  ProvidersConfigSnapshotResultSchema,
   SessionNewRequestSchema,
   SessionNewResultSchema,
+  SessionOpenResultSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   SessionRowSchema,
@@ -340,8 +442,15 @@ export type {
   GlobalSettingsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionConfigOption,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
+  ProviderConfigSnapshotEntry,
+  ProviderConfigSnapshotStatus,
+  ProvidersConfigSnapshotResult,
   SessionNewRequest,
   SessionNewResult,
+  SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
   TranscriptEventItem,

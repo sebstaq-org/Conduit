@@ -56,7 +56,7 @@ mod tests {
     fn bundle_loads_and_registers_locked_methods() -> Result<()> {
         let bundle = load_contract_bundle()?;
         assert_locked_method_registration(&bundle)?;
-        if LOCKED_ACP_METHODS.len() != 6 {
+        if LOCKED_ACP_METHODS.len() != 7 {
             return Err(Error::contract(
                 "locked ACP method count drifted from Phase 1",
             ));
@@ -266,6 +266,50 @@ mod tests {
         ));
         let response_value = serialize_value(response)?;
         validate_locked_response_envelope(&bundle, LockedMethod::SessionPrompt, &response_value)?;
+        Ok(())
+    }
+
+    #[test]
+    fn validates_set_session_config_option_request_and_response() -> Result<()> {
+        let bundle = load_contract_bundle()?;
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": "session/set_config_option",
+            "params": {
+                "sessionId": "session-1",
+                "configId": "model",
+                "value": "gpt-5.4"
+            }
+        });
+        let method = validate_locked_request_envelope(&bundle, &request)?;
+        if method != LockedMethod::SessionSetConfigOption {
+            return Err(Error::contract(
+                "session/set_config_option request validated as the wrong method",
+            ));
+        }
+
+        let response = json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "result": {
+                "configOptions": [{
+                    "id": "model",
+                    "name": "Model",
+                    "type": "select",
+                    "currentValue": "gpt-5.4",
+                    "options": [{
+                        "value": "gpt-5.4",
+                        "name": "GPT-5.4"
+                    }]
+                }]
+            }
+        });
+        validate_locked_response_envelope(
+            &bundle,
+            LockedMethod::SessionSetConfigOption,
+            &response,
+        )?;
         Ok(())
     }
 }
