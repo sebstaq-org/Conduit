@@ -4,6 +4,8 @@ mod support;
 
 use acp_discovery::ProviderId;
 use app_api as _;
+#[cfg(feature = "benchmarks")]
+use criterion as _;
 use serde as _;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};

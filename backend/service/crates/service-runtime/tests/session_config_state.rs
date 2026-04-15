@@ -4,6 +4,8 @@ mod support;
 
 use acp_core::TranscriptUpdateSnapshot;
 use app_api as _;
+#[cfg(feature = "benchmarks")]
+use criterion as _;
 use serde as _;
 use serde_json::Value;
 use serde_json::json;
