@@ -26,7 +26,7 @@ struct ServeState {
     actor: RuntimeActor,
 }
 
-const CATALOG_COMMANDS: [&str; 17] = [
+const CATALOG_COMMANDS: [&str; 19] = [
     "initialize",
     "session/new",
     "session/prompt",
@@ -41,7 +41,9 @@ const CATALOG_COMMANDS: [&str; 17] = [
     "settings/update",
     "sessions/grouped",
     "sessions/watch",
+    "providers/config_snapshot",
     "session/open",
+    "session/set_config_option",
     "session/history",
     "session/watch",
 ];
@@ -540,6 +542,18 @@ mod tests {
 
         fn session_cancel(&mut self, session_id: String) -> Result<serde_json::Value> {
             Ok(json!({ "sessionId": session_id }))
+        }
+
+        fn session_set_config_option(
+            &mut self,
+            session_id: String,
+            _config_id: String,
+            _value: String,
+        ) -> Result<serde_json::Value> {
+            Ok(json!({
+                "sessionId": session_id,
+                "configOptions": []
+            }))
         }
     }
 

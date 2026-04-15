@@ -242,6 +242,28 @@ impl AcpHost {
         })
     }
 
+    /// Sends one `session/set_config_option` request on the current connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `session/set_config_option` request.
+    pub fn set_session_config_option(
+        &mut self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<acp::SetSessionConfigOptionResponse> {
+        self.request("session/set_config_option", |reply| {
+            HostCommand::SetSessionConfigOption {
+                session_id: acp::SessionId::new(session_id),
+                config_id: config_id.to_owned(),
+                value: value.to_owned(),
+                reply,
+            }
+        })
+    }
+
     fn prompt(
         &mut self,
         session_id: &str,

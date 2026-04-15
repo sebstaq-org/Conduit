@@ -8,10 +8,13 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  ProvidersConfigSnapshotResult,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryWindow,
   SessionNewResult,
+  SessionOpenResult,
+  SessionSetConfigOptionResult,
 } from "@conduit/session-client";
 import { createSessionTimelineHandlers } from "./api-session-timeline-handlers";
 import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
@@ -26,13 +29,22 @@ import {
 import { runtimeHealthEndpoint } from "./api-runtime-health-endpoint";
 import { createSessionTimelineEndpoints } from "./api-session-timeline-endpoints";
 import { createSessionTimelineData } from "./session-timeline-cache";
-import { getSettingsQuery, updateSettingsQuery } from "./session-api-queries";
+import {
+  getSettingsQuery,
+  getProvidersConfigSnapshotQuery,
+  setSessionConfigOptionQuery,
+  updateSettingsQuery,
+} from "./session-api-queries";
+import {
+  activeSessionConfigOptionsUpdated,
+} from "./session-selection";
 import type {
   OpenSessionMutationArg,
   NewSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
   RuntimeHealthView,
+  SetSessionConfigOptionMutationArg,
 } from "./session-api-queries";
 import type { LoadOlderSessionTimelineArg } from "./api-session-timeline-handlers";
 import type { SessionTimelineData } from "./session-timeline-cache";
@@ -90,6 +102,11 @@ const conduitApi = createApi({
     getRuntimeHealth: builder.query<RuntimeHealthView, null>(
       runtimeHealthEndpoint,
     ),
+    getProvidersConfigSnapshot: builder.query<ProvidersConfigSnapshotResult, null>(
+      {
+        queryFn: getProvidersConfigSnapshotQuery,
+      },
+    ),
     getSettings: builder.query<GlobalSettingsView, null>(
       globalSettingsEndpoint,
     ),
@@ -101,12 +118,35 @@ const conduitApi = createApi({
       GlobalSettingsView,
       GlobalSettingsUpdateRequest
     >(updateSettingsEndpoint),
-    openSession: builder.mutation<SessionHistoryWindow, OpenSessionMutationArg>(
+    openSession: builder.mutation<SessionOpenResult, OpenSessionMutationArg>(
       sessionTimelineEndpoints.openSessionEndpoint,
     ),
     newSession: builder.mutation<SessionNewResult, NewSessionMutationArg>(
       sessionTimelineEndpoints.newSessionEndpoint,
     ),
+    setSessionConfigOption: builder.mutation<
+      SessionSetConfigOptionResult,
+      SetSessionConfigOptionMutationArg
+    >({
+      queryFn: setSessionConfigOptionQuery,
+      async onQueryStarted(
+        arg,
+        { dispatch, queryFulfilled },
+      ): Promise<void> {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            activeSessionConfigOptionsUpdated({
+              configOptions: data.configOptions,
+              provider: arg.provider,
+              sessionId: data.sessionId,
+            }),
+          );
+        } catch {
+          // The mutation result already carries the user-visible failure.
+        }
+      },
+    }),
     promptSession: builder.mutation<null, PromptSessionMutationArg>(
       sessionTimelineEndpoints.promptSessionEndpoint,
     ),
@@ -161,4 +201,5 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  SetSessionConfigOptionMutationArg,
 };

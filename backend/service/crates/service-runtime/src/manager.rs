@@ -11,7 +11,9 @@ use crate::manager_helpers::{
     parse_provider, prompt_lifecycle, prompt_status,
 };
 use crate::manager_response::{
-    append_snapshot_updates_if_missing, session_new_result_id, store_lock_error,
+    append_snapshot_updates_if_missing, session_new_result_id, session_open_or_new_result,
+    session_open_result, session_set_config_option_result,
+    session_state_from_provider_result, store_lock_error,
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
@@ -31,6 +33,7 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     pub(crate) event_buffer: EventBuffer,
     factory: F,
     loaded_provider_sessions: HashSet<OpenSessionKey>,
+    session_states: HashMap<OpenSessionKey, Value>,
     pub(crate) session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     pub(crate) local_store: LocalStore,
@@ -108,6 +111,7 @@ where
             event_buffer: EventBuffer::new(),
             factory,
             loaded_provider_sessions: HashSet::new(),
+            session_states: HashMap::new(),
             session_index_refreshes: HashMap::new(),
             providers: HashMap::new(),
             local_store,
@@ -232,6 +236,9 @@ where
             "session/list" => self.session_list(command.id, provider),
             "session/load" => self.session_load(command.id, provider, &command.params),
             "session/open" => self.session_open(command.id, provider, &command.params),
+            "session/set_config_option" => {
+                self.session_set_config_option(command.id, provider, &command.params)
+            }
             "session/cancel" => self.session_cancel(command.id, provider, &command.params),
             "provider/disconnect" => self.provider_disconnect(command.id, provider),
             _ => Err(RuntimeError::UnsupportedCommand(command.command)),
@@ -274,13 +281,17 @@ where
             cwd: cwd.display().to_string(),
         };
         self.loaded_provider_sessions.insert(key.clone());
+        let session_state = session_state_from_provider_result(&session_id, &provider_result);
+        self.session_states.insert(key.clone(), session_state.clone());
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.open_session(key, &[], limit)?
         };
+        let history = to_value(history)?;
+        let result = session_open_or_new_result(&session_state, &history);
         Ok(ConsumerResponse::success(
             id,
-            json!({ "sessionId": session_id, "history": history }),
+            result,
             snapshot,
         ))
     }
@@ -300,7 +311,20 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let session_id = string_param("session/load", params, "session_id")?;
+        let session_id = params
+            .get("session_id")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                params
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+            })
+            .ok_or(RuntimeError::MissingParameter {
+                command: "session/load",
+                parameter: "session_id",
+            })?;
         let cwd =
             absolute_normalized_cwd("session/load", path_param("session/load", params, "cwd")?)?;
         let (result, snapshot) = {
@@ -308,11 +332,16 @@ where
             let result = provider_port.session_load(session_id.clone(), cwd.clone())?;
             (result, provider_port.snapshot())
         };
-        self.loaded_provider_sessions.insert(OpenSessionKey {
+        let key = OpenSessionKey {
             provider,
-            session_id,
+            session_id: session_id.clone(),
             cwd: cwd.display().to_string(),
-        });
+        };
+        self.loaded_provider_sessions.insert(key.clone());
+        self.session_states.insert(
+            key,
+            session_state_from_provider_result(&session_id, &result),
+        );
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -334,27 +363,85 @@ where
             session_id: session_id.clone(),
             cwd: cwd.display().to_string(),
         };
-        if let Some(result) = {
+        if let Some(cached) = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.cached_session(&key, limit)?
         } {
+            let state = if let Some(state) = self.session_states.get(&key).cloned() {
+                state
+            } else {
+                let provider_result = {
+                    let provider_port = self.provider(provider)?;
+                    provider_port.session_load(session_id.clone(), cwd.clone())?
+                };
+                self.loaded_provider_sessions.insert(key.clone());
+                let state = session_state_from_provider_result(&session_id, &provider_result);
+                self.session_states.insert(key.clone(), state.clone());
+                state
+            };
+            let history = to_value(cached)?;
             return Ok(ConsumerResponse::success_without_snapshot(
                 id,
-                to_value(result)?,
+                session_open_result(&state, &history),
             ));
         }
-        let snapshot = {
+        let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
-            let _result = provider_port.session_load(session_id.clone(), cwd)?;
-            provider_port.snapshot()
+            let result = provider_port.session_load(session_id.clone(), cwd)?;
+            (result, provider_port.snapshot())
         };
         self.loaded_provider_sessions.insert(key.clone());
+        let state = session_state_from_provider_result(&session_id, &provider_result);
+        self.session_states.insert(key.clone(), state.clone());
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
-        let result = {
+        let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             to_value(self.local_store.open_session(key, updates, limit)?)?
         };
-        Ok(ConsumerResponse::success_without_snapshot(id, result))
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            session_open_result(&state, &history),
+        ))
+    }
+
+    fn session_set_config_option(
+        &mut self,
+        id: String,
+        provider: ProviderId,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let session_id = string_param("session/set_config_option", params, "sessionId")?;
+        let config_id = string_param("session/set_config_option", params, "configId")?;
+        let value = string_param("session/set_config_option", params, "value")?;
+        let (provider_result, snapshot) = {
+            let provider_port = self.provider(provider)?;
+            let result = provider_port.session_set_config_option(
+                session_id.clone(),
+                config_id,
+                value.to_owned(),
+            )?;
+            (result, provider_port.snapshot())
+        };
+        let result = session_set_config_option_result(&session_id, &provider_result)?;
+        let Some(config_options) = result.get("configOptions").cloned() else {
+            return Err(RuntimeError::Provider(
+                "session/set_config_option result missing configOptions".to_owned(),
+            ));
+        };
+        let keys: Vec<OpenSessionKey> = self
+            .session_states
+            .keys()
+            .filter(|key| key.provider == provider && key.session_id == session_id)
+            .cloned()
+            .collect();
+        for key in keys {
+            if let Some(state) = self.session_states.get_mut(&key)
+                && let Some(map) = state.as_object_mut()
+            {
+                map.insert("configOptions".to_owned(), config_options.clone());
+            }
+        }
+        Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn session_history(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
@@ -548,6 +635,26 @@ where
         updates: &[acp_core::TranscriptUpdateSnapshot],
     ) -> Result<()> {
         for update in updates {
+            if let Some(session_update) = update
+                .update
+                .get("sessionUpdate")
+                .and_then(Value::as_str)
+            {
+                if session_update == "config_option_update"
+                    && let Some(config_options) = update.update.get("configOptions").cloned()
+                    && let Some(state) = self.session_states.get_mut(&target.key)
+                    && let Some(map) = state.as_object_mut()
+                {
+                    map.insert("configOptions".to_owned(), config_options);
+                }
+                if session_update == "current_mode_update"
+                    && let Some(current_mode_id) = update.update.get("currentModeId").cloned()
+                    && let Some(state) = self.session_states.get_mut(&target.key)
+                    && let Some(map) = state.as_object_mut()
+                {
+                    map.insert("currentModeId".to_owned(), current_mode_id);
+                }
+            }
             let revision = {
                 let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
                 self.local_store
@@ -620,6 +727,7 @@ where
         self.providers.remove(&provider);
         self.loaded_provider_sessions
             .retain(|key| key.provider != provider);
+        self.session_states.retain(|key, _| key.provider != provider);
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
@@ -632,6 +740,7 @@ where
             self.providers.remove(&provider);
             self.loaded_provider_sessions
                 .retain(|key| key.provider != provider);
+            self.session_states.retain(|key, _| key.provider != provider);
         }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;
@@ -651,6 +760,7 @@ where
             self.providers.remove(&provider);
             self.loaded_provider_sessions
                 .retain(|key| key.provider != provider);
+            self.session_states.retain(|key, _| key.provider != provider);
         }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;
@@ -685,8 +795,12 @@ where
             let provider_port = self.provider(key.provider)?;
             provider_port.session_load(key.session_id.clone(), cwd)
         };
-        result?;
+        let result = result?;
         self.loaded_provider_sessions.insert(key.clone());
+        self.session_states.insert(
+            key.clone(),
+            session_state_from_provider_result(&key.session_id, &result),
+        );
         Ok(())
     }
 }

@@ -2,6 +2,7 @@ import type {
   SessionGroupsQuery,
   SessionHistoryWindow,
   SessionNewResult,
+  SessionOpenResult,
   TranscriptItem,
 } from "@conduit/session-client";
 import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
@@ -27,6 +28,11 @@ interface CacheLifecycleApi {
 interface QueryStartedApi {
   dispatch: DispatchLike;
   queryFulfilled: Promise<{ data: SessionHistoryWindow }>;
+}
+
+interface OpenSessionQueryStartedApi {
+  dispatch: DispatchLike;
+  queryFulfilled: Promise<{ data: SessionOpenResult }>;
 }
 
 interface NewSessionQueryStartedApi {
@@ -87,7 +93,7 @@ interface SessionTimelineHandlers {
   ) => Promise<void>;
   handleOpenSessionStarted: (
     arg: OpenSessionMutationArg,
-    api: QueryStartedApi,
+    api: OpenSessionQueryStartedApi,
   ) => Promise<void>;
   handleNewSessionStarted: (
     arg: NewSessionMutationArg,
@@ -162,23 +168,34 @@ async function handleSessionTimelineCacheEntryAdded(
 }
 
 async function handleOpenSessionStarted(
-  { cwd, provider, sessionId, title }: OpenSessionMutationArg,
-  { dispatch, queryFulfilled }: QueryStartedApi,
+  { cwd, provider, title }: OpenSessionMutationArg,
+  { dispatch, queryFulfilled }: OpenSessionQueryStartedApi,
   mutations: SessionTimelineMutations,
 ): Promise<void> {
   try {
     const { data } = await queryFulfilled;
+    const history: SessionHistoryWindow = {
+      openSessionId: data.openSessionId,
+      revision: data.revision,
+      items: data.items,
+      nextCursor: data.nextCursor,
+    };
     dispatch(
       activeSessionOpened({
+        configOptions: data.configOptions ?? null,
+        configSyncBlocked: false,
+        configSyncError: null,
         cwd,
         kind: "open",
-        openSessionId: data.openSessionId,
+        modes: data.modes ?? null,
+        models: data.models ?? null,
+        openSessionId: history.openSessionId,
         provider,
-        sessionId,
+        sessionId: data.sessionId,
         title,
       }),
     );
-    mutations.upsertSessionTimeline(dispatch, data);
+    mutations.upsertSessionTimeline(dispatch, history);
   } catch {
     // The query result already carries the user-visible failure.
   }
@@ -193,9 +210,14 @@ async function handleNewSessionStarted(
     const { data } = await queryFulfilled;
     dispatch(
       activeSessionOpened({
+        configOptions: data.configOptions ?? null,
+        configSyncBlocked: false,
+        configSyncError: null,
         cwd,
         kind: "open",
         openSessionId: data.history.openSessionId,
+        modes: data.modes ?? null,
+        models: data.models ?? null,
         provider,
         sessionId: data.sessionId,
         title: null,

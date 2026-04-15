@@ -51,6 +51,12 @@ pub(super) enum HostCommand {
         session_id: acp::SessionId,
         reply: Sender<Result<()>>,
     },
+    SetSessionConfigOption {
+        session_id: acp::SessionId,
+        config_id: String,
+        value: String,
+        reply: Sender<Result<acp::SetSessionConfigOptionResponse>>,
+    },
 }
 
 impl HostCommand {
@@ -149,6 +155,17 @@ impl SdkHostActor {
             }
             HostCommand::CancelPrompt { session_id, reply } => {
                 let result = self.cancel_prompt(session_id).await;
+                send_reply(reply, result);
+            }
+            HostCommand::SetSessionConfigOption {
+                session_id,
+                config_id,
+                value,
+                reply,
+            } => {
+                let result = self
+                    .set_session_config_option(session_id, config_id, value)
+                    .await;
                 send_reply(reply, result);
             }
         }
@@ -263,6 +280,22 @@ impl SdkHostActor {
             },
         );
         Ok(response)
+    }
+
+    async fn set_session_config_option(
+        &mut self,
+        session_id: acp::SessionId,
+        config_id: String,
+        value: String,
+    ) -> Result<acp::SetSessionConfigOptionResponse> {
+        self.connection()?
+            .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+                session_id,
+                config_id,
+                value,
+            ))
+            .await
+            .map_err(|source| sdk_error(self.provider, "session/set_config_option", source))
     }
 
     async fn prompt_content(

@@ -42,17 +42,19 @@ function SessionListRows({
     openSessionState.isError && !openSessionState.isSuccess;
   const activeSession = useSelector(selectActiveSession);
   const shouldShowGroups = !isLoading && !isError && data?.groups.length !== 0;
+  const visibleGroups = data?.groups ?? [];
+  const hasVisibleGroups = visibleGroups.length > 0;
 
   return (
     <List>
       {isLoading && <Row label="Loading sessions" muted />}
       {isError && renderSessionsUnavailable(error)}
       {showOpenSessionError && <Row label="Session failed to open" muted />}
-      {!isLoading && !isError && data?.groups.length === 0 && (
+      {!isLoading && !isError && !hasVisibleGroups && (
         <Row label="No sessions" muted />
       )}
       {shouldShowGroups &&
-        data?.groups.map((group) => (
+        visibleGroups.map((group) => (
           <SessionGroupRow
             key={group.groupId}
             group={group}

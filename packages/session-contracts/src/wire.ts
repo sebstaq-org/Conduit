@@ -16,8 +16,12 @@ import type {
   SessionGroupsView,
   SessionHistoryRequest,
   SessionHistoryWindow,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
   SessionNewRequest,
   SessionNewResult,
+  ProvidersConfigSnapshotResult,
+  SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
   TranscriptItem,
@@ -32,6 +36,7 @@ import {
   SessionGroupsQuerySchema,
   SessionHistoryRequestSchema,
   SessionNewRequestSchema,
+  SessionSetConfigOptionRequestSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   TranscriptItemSchema,
@@ -42,6 +47,7 @@ const transportVersionField = "v";
 const SESSION_COMMANDS = [
   "initialize",
   "session/new",
+  "session/set_config_option",
   "session/prompt",
   "session/cancel",
 ] as const;
@@ -56,6 +62,7 @@ const CONDUIT_COMMANDS = [
   "settings/update",
   "sessions/grouped",
   "sessions/watch",
+  "providers/config_snapshot",
   "session/open",
   "session/history",
   "session/watch",
@@ -73,7 +80,9 @@ type ProjectUpdateCommandName = "projects/update";
 type SettingsGetCommandName = "settings/get";
 type SettingsUpdateCommandName = "settings/update";
 type SessionsWatchCommandName = "sessions/watch";
+type ProvidersConfigSnapshotCommandName = "providers/config_snapshot";
 type SessionOpenCommandName = "session/open";
+type SessionSetConfigOptionCommandName = "session/set_config_option";
 type SessionHistoryCommandName = "session/history";
 type SessionWatchCommandName = "session/watch";
 type SessionPromptCommandName = "session/prompt";
@@ -83,6 +92,7 @@ type ConsumerCommandTarget = SessionGroupsCommandTarget;
 type ProviderScopedCommandName =
   | "initialize"
   | "session/new"
+  | "session/set_config_option"
   | "session/cancel"
   | "provider/disconnect"
   | "session/open";
@@ -110,6 +120,14 @@ const ProviderConsumerCommandSchema = z.union([
       command: z.literal("session/new"),
       provider: ProviderIdSchema,
       params: SessionNewRequestSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string(),
+      command: z.literal("session/set_config_option"),
+      provider: ProviderIdSchema,
+      params: SessionSetConfigOptionRequestSchema,
     })
     .strict(),
   z
@@ -210,6 +228,14 @@ const SessionsWatchConsumerCommandSchema = z
     params: EmptyParamsSchema,
   })
   .strict();
+const ProvidersConfigSnapshotConsumerCommandSchema = z
+  .object({
+    id: z.string(),
+    command: z.literal("providers/config_snapshot"),
+    provider: GlobalProviderTargetSchema,
+    params: EmptyParamsSchema,
+  })
+  .strict();
 const SessionHistoryConsumerCommandSchema = z
   .object({
     id: z.string(),
@@ -245,6 +271,7 @@ const ConsumerCommandSchema = z.union([
   SettingsGetConsumerCommandSchema,
   SettingsUpdateConsumerCommandSchema,
   SessionsWatchConsumerCommandSchema,
+  ProvidersConfigSnapshotConsumerCommandSchema,
   SessionHistoryConsumerCommandSchema,
   SessionWatchConsumerCommandSchema,
   SessionPromptConsumerCommandSchema,
@@ -278,6 +305,9 @@ type SettingsUpdateConsumerCommand = z.infer<
 type SessionsWatchConsumerCommand = z.infer<
   typeof SessionsWatchConsumerCommandSchema
 >;
+type ProvidersConfigSnapshotConsumerCommand = z.infer<
+  typeof ProvidersConfigSnapshotConsumerCommandSchema
+>;
 type SessionOpenConsumerCommand = Extract<
   ProviderConsumerCommand,
   { command: "session/open" }
@@ -285,6 +315,10 @@ type SessionOpenConsumerCommand = Extract<
 type SessionNewConsumerCommand = Extract<
   ProviderConsumerCommand,
   { command: "session/new" }
+>;
+type SessionSetConfigOptionConsumerCommand = Extract<
+  ProviderConsumerCommand,
+  { command: "session/set_config_option" }
 >;
 type SessionHistoryConsumerCommand = z.infer<
   typeof SessionHistoryConsumerCommandSchema
@@ -393,12 +427,20 @@ export type {
   SessionNewResult,
   SessionOpenCommandName,
   SessionOpenConsumerCommand,
+  SessionOpenResult,
   SessionOpenRequest,
+  SessionSetConfigOptionCommandName,
+  SessionSetConfigOptionConsumerCommand,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
   SessionPromptCommandName,
   SessionPromptConsumerCommand,
   SessionPromptRequest,
   SessionsWatchCommandName,
   SessionsWatchConsumerCommand,
+  ProvidersConfigSnapshotCommandName,
+  ProvidersConfigSnapshotConsumerCommand,
+  ProvidersConfigSnapshotResult,
   SessionWatchCommandName,
   SessionWatchConsumerCommand,
   SettingsGetCommandName,

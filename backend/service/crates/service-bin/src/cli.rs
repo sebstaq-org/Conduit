@@ -70,6 +70,11 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
             "sessionId": required_value(args, "--session-id")?,
             "cwd": required_value(args, "--cwd")?,
         })),
+        "session/set_config_option" => Ok(json!({
+            "sessionId": required_value(args, "--session-id")?,
+            "configId": required_value(args, "--config-id")?,
+            "value": required_value(args, "--value")?,
+        })),
         "session/history" => Ok(json!({
             "openSessionId": required_value(args, "--open-session-id")?,
         })),

@@ -1,7 +1,10 @@
 import { createConsumerCommand } from "@conduit/session-contracts";
 import {
+  readProvidersConfigSnapshotResponse,
   readSessionHistoryResponse,
   readSessionNewResponse,
+  readSessionOpenResponse,
+  readSessionSetConfigOptionResponse,
 } from "./historyWindow.js";
 import {
   readGlobalSettingsResponse,
@@ -29,6 +32,7 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  ProvidersConfigSnapshotResult,
   RuntimeEvent,
   SessionGroupsQuery,
   SessionGroupsView,
@@ -36,8 +40,11 @@ import type {
   SessionHistoryWindow,
   SessionNewRequest,
   SessionNewResult,
+  SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
 import type { ProviderId } from "@conduit/session-model";
 import type {
@@ -106,6 +113,18 @@ class WebSocketSessionClient implements SessionClientPort {
     );
     return readSessionGroupsResponse(response);
   }
+  public async getProvidersConfigSnapshot(): Promise<ProvidersConfigSnapshotResult> {
+    const response = await this.dispatch(
+      createConsumerCommand("providers/config_snapshot", "all"),
+    );
+    const parsed = readProvidersConfigSnapshotResponse(response);
+    if (!parsed.ok || parsed.result === null) {
+      throw new Error(
+        parsed.error?.message ?? "providers config snapshot failed",
+      );
+    }
+    return parsed.result;
+  }
   public async getSettings(): Promise<GlobalSettingsView> {
     const response = await this.dispatch(
       createConsumerCommand("settings/get", "all"),
@@ -123,11 +142,11 @@ class WebSocketSessionClient implements SessionClientPort {
   public async openSession(
     provider: ProviderId,
     request: SessionOpenRequest,
-  ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
+  ): Promise<ConsumerResponse<SessionOpenResult | null>> {
     const response = await this.dispatch(
       createConsumerCommand("session/open", provider, request),
     );
-    return readSessionHistoryResponse(response);
+    return readSessionOpenResponse(response);
   }
   public async newSession(
     provider: ProviderId,
@@ -145,6 +164,15 @@ class WebSocketSessionClient implements SessionClientPort {
       createConsumerCommand("session/history", "all", request),
     );
     return readSessionHistoryResponse(response);
+  }
+  public async setSessionConfigOption(
+    provider: ProviderId,
+    request: SessionSetConfigOptionRequest,
+  ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/set_config_option", provider, request),
+    );
+    return readSessionSetConfigOptionResponse(response);
   }
   public async promptSession(request: SessionPromptRequest): Promise<void> {
     const response = await this.dispatch(

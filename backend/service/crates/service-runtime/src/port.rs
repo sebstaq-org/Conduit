@@ -70,4 +70,16 @@ pub trait ProviderPort: Send {
     ///
     /// Returns an error when the provider rejects or fails the command.
     fn session_cancel(&mut self, session_id: String) -> Result<Value>;
+
+    /// Runs ACP `session/set_config_option`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the command.
+    fn session_set_config_option(
+        &mut self,
+        session_id: String,
+        config_id: String,
+        value: String,
+    ) -> Result<Value>;
 }
