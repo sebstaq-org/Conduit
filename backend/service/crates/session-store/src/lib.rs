@@ -30,6 +30,7 @@ use transcript::project_items;
 
 mod history_limit;
 mod ids;
+mod open_session_state;
 mod project_suggestions;
 mod projects;
 mod prompt_turn;
@@ -59,6 +60,13 @@ const BOOTSTRAP_SCHEMA: &str = "
         item_ordinal INTEGER NOT NULL,
         item_json TEXT NOT NULL,
         PRIMARY KEY(open_session_id, item_ordinal),
+        FOREIGN KEY(open_session_id)
+            REFERENCES open_sessions(open_session_id)
+            ON DELETE CASCADE
+    );
+    CREATE TABLE open_session_states (
+        open_session_id TEXT PRIMARY KEY,
+        state_json TEXT NOT NULL,
         FOREIGN KEY(open_session_id)
             REFERENCES open_sessions(open_session_id)
             ON DELETE CASCADE
@@ -102,16 +110,6 @@ const BOOTSTRAP_SCHEMA: &str = "
     );
     INSERT INTO global_settings (id, session_groups_updated_within_days)
     VALUES (1, 5);
-    PRAGMA user_version = 6;
-";
-const MIGRATE_SCHEMA_5_TO_6: &str = "
-    CREATE TABLE IF NOT EXISTS global_settings (
-        id INTEGER PRIMARY KEY CHECK(id = 1),
-        session_groups_updated_within_days INTEGER
-    );
-    INSERT INTO global_settings (id, session_groups_updated_within_days)
-    VALUES (1, 5)
-    ON CONFLICT(id) DO NOTHING;
     PRAGMA user_version = 6;
 ";
 
@@ -503,10 +501,6 @@ impl LocalStore {
         match version {
             0 => {
                 self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
-                Ok(())
-            }
-            5 => {
-                self.connection.execute_batch(MIGRATE_SCHEMA_5_TO_6)?;
                 Ok(())
             }
             SCHEMA_VERSION => Ok(()),

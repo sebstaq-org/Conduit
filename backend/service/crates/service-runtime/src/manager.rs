@@ -22,7 +22,7 @@ use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// Consumer API runtime manager keyed by provider.
@@ -265,7 +265,10 @@ where
             .insert(key.clone(), session_state.clone());
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.open_session(key, &[], limit)?
+            let history = self.local_store.open_session(key.clone(), &[], limit)?;
+            self.local_store
+                .set_open_session_state(&key, &session_state)?;
+            history
         };
         let history = to_value(history)?;
         let result = session_open_or_new_result(&session_state, &history);
@@ -343,18 +346,7 @@ where
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.cached_session(&key, limit)?
         } {
-            let state = if let Some(state) = self.session_states.get(&key).cloned() {
-                state
-            } else {
-                let provider_result = {
-                    let provider_port = self.provider(provider)?;
-                    provider_port.session_load(session_id.clone(), cwd.clone())?
-                };
-                self.loaded_provider_sessions.insert(key.clone());
-                let state = session_state_from_provider_result(&session_id, &provider_result);
-                self.session_states.insert(key.clone(), state.clone());
-                state
-            };
+            let state = self.resolve_session_open_state(provider, &session_id, &cwd, &key)?;
             let history = to_value(cached)?;
             return Ok(ConsumerResponse::success_without_snapshot(
                 id,
@@ -372,7 +364,9 @@ where
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            to_value(self.local_store.open_session(key, updates, limit)?)?
+            let history = self.local_store.open_session(key.clone(), updates, limit)?;
+            self.local_store.set_open_session_state(&key, &state)?;
+            to_value(history)?
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
@@ -531,6 +525,35 @@ where
             .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
     }
 
+    fn resolve_session_open_state(
+        &mut self,
+        provider: ProviderId,
+        session_id: &str,
+        cwd: &Path,
+        key: &OpenSessionKey,
+    ) -> Result<Value> {
+        if let Some(state) = self.session_states.get(key).cloned() {
+            return Ok(state);
+        }
+        if let Some(state) = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store.open_session_state(key)?
+        } {
+            self.session_states.insert(key.clone(), state.clone());
+            return Ok(state);
+        }
+        let provider_result = {
+            let provider_port = self.provider(provider)?;
+            provider_port.session_load(session_id.to_owned(), cwd.to_path_buf())?
+        };
+        self.loaded_provider_sessions.insert(key.clone());
+        let state = session_state_from_provider_result(session_id, &provider_result);
+        self.session_states.insert(key.clone(), state.clone());
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+        self.local_store.set_open_session_state(key, &state)?;
+        Ok(state)
+    }
+
     fn ensure_provider_session_loaded(&mut self, key: &OpenSessionKey) -> Result<()> {
         if self.loaded_provider_sessions.contains(key) {
             return Ok(());
@@ -548,6 +571,14 @@ where
         };
         if provider_tracks_live_session {
             self.loaded_provider_sessions.insert(key.clone());
+            if !self.session_states.contains_key(key)
+                && let Some(state) = {
+                    let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+                    self.local_store.open_session_state(key)?
+                }
+            {
+                self.session_states.insert(key.clone(), state);
+            }
             return Ok(());
         }
         let cwd = PathBuf::from(&key.cwd);
@@ -557,10 +588,10 @@ where
         };
         let result = result?;
         self.loaded_provider_sessions.insert(key.clone());
-        self.session_states.insert(
-            key.clone(),
-            session_state_from_provider_result(&key.session_id, &result),
-        );
+        let state = session_state_from_provider_result(&key.session_id, &result);
+        self.session_states.insert(key.clone(), state.clone());
+        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+        self.local_store.set_open_session_state(key, &state)?;
         Ok(())
     }
 }

@@ -38,6 +38,7 @@ pub(crate) fn session_state_from_provider_result(session_id: &str, result: &Valu
         "configOptions": result.get("configOptions").cloned(),
         "modes": result.get("modes").cloned(),
         "models": result.get("models").cloned(),
+        "currentModeId": result.get("currentModeId").cloned(),
     })
 }
 
@@ -47,6 +48,7 @@ pub(crate) fn session_open_or_new_result(state: &Value, history: &Value) -> Valu
         "configOptions": state.get("configOptions").cloned().unwrap_or(Value::Null),
         "modes": state.get("modes").cloned().unwrap_or(Value::Null),
         "models": state.get("models").cloned().unwrap_or(Value::Null),
+        "currentModeId": state.get("currentModeId").cloned().unwrap_or(Value::Null),
         "history": history,
     })
 }
@@ -57,6 +59,7 @@ pub(crate) fn session_open_result(state: &Value, history: &Value) -> Value {
         "configOptions": state.get("configOptions").cloned().unwrap_or(Value::Null),
         "modes": state.get("modes").cloned().unwrap_or(Value::Null),
         "models": state.get("models").cloned().unwrap_or(Value::Null),
+        "currentModeId": state.get("currentModeId").cloned().unwrap_or(Value::Null),
         "openSessionId": history.get("openSessionId").cloned().unwrap_or(Value::Null),
         "revision": history.get("revision").cloned().unwrap_or(Value::Null),
         "items": history.get("items").cloned().unwrap_or(Value::Null),

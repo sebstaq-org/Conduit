@@ -2,13 +2,14 @@
 
 mod prompt_lanes;
 mod provider_config_snapshot;
+mod startup_hydration;
 mod suggestion_refresh;
 
 use self::prompt_lanes::{PromptLanes, cancel_provider_session, prompt_open_session_id};
 use self::provider_config_snapshot::{
     ProviderConfigSnapshots, spawn_provider_config_snapshot_worker,
 };
-
+use self::startup_hydration::spawn_startup_hydration_worker;
 use self::suggestion_refresh::spawn_suggestion_refresh_worker;
 use service_runtime::{
     AppServiceFactory, ConsumerCommand, ConsumerResponse, ProviderFactory, RuntimeEvent,
@@ -18,6 +19,8 @@ use session_store::LocalStore;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc, oneshot};
+
+const STARTUP_HYDRATION_ENABLED: bool = !cfg!(test);
 
 #[derive(Debug)]
 struct ActorRequest {
@@ -76,6 +79,13 @@ impl RuntimeActor {
             Arc::clone(&refresh_store),
             Arc::clone(&store_lock),
         );
+        if STARTUP_HYDRATION_ENABLED {
+            spawn_startup_hydration_worker(
+                factory.clone(),
+                Arc::clone(&refresh_store),
+                Arc::clone(&store_lock),
+            );
+        }
         tokio::spawn(run_actor(ActorContext {
             receiver,
             events: events.clone(),

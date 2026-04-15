@@ -88,20 +88,17 @@ fn unsupported_schema_version_fails_hard() -> TestResult<()> {
 }
 
 #[test]
-fn schema_version_5_migrates_global_settings() -> TestResult<()> {
+fn legacy_schema_version_five_fails_hard() -> TestResult<()> {
     let path = test_db_path()?;
     let connection = rusqlite::Connection::open(&path)?;
     connection.pragma_update(None, "user_version", 5)?;
     drop(connection);
 
-    let store = LocalStore::open_path(&path)?;
-    let settings = store.global_settings()?;
+    let response = LocalStore::open_path(&path);
 
-    ensure_eq(
-        &settings.session_groups_updated_within_days,
-        &Some(5),
-        "migrated default lookback",
-    )?;
+    if response.is_ok() {
+        return Err("legacy schema version unexpectedly opened".into());
+    }
     fs::remove_file(path)?;
     Ok(())
 }
@@ -143,6 +140,39 @@ fn global_settings_rejects_out_of_range_values() -> TestResult<()> {
     if response.is_ok() {
         return Err("out-of-range lookback unexpectedly succeeded".into());
     }
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
+fn open_session_state_roundtrip_reads_latest_state() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let key = key("session-1");
+    store.open_session(key.clone(), &updates("loaded"), limit(4)?)?;
+
+    let first_state = json!({
+        "sessionId": "session-1",
+        "configOptions": []
+    });
+    store.set_open_session_state(&key, &first_state)?;
+    ensure_eq(
+        &store.open_session_state(&key)?,
+        &Some(first_state.clone()),
+        "first open session state",
+    )?;
+
+    let updated_state = json!({
+        "sessionId": "session-1",
+        "configOptions": [{ "id": "mode", "value": "turbo" }]
+    });
+    store.set_open_session_state(&key, &updated_state)?;
+    ensure_eq(
+        &store.open_session_state(&key)?,
+        &Some(updated_state),
+        "updated open session state",
+    )?;
+
     fs::remove_file(path)?;
     Ok(())
 }

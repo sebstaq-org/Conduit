@@ -208,23 +208,10 @@ where
         target: &SessionPromptTarget,
         updates: &[acp_core::TranscriptUpdateSnapshot],
     ) -> Result<()> {
+        let mut state_changed = false;
         for update in updates {
-            if let Some(session_update) = update.update.get("sessionUpdate").and_then(Value::as_str)
-            {
-                if session_update == "config_option_update"
-                    && let Some(config_options) = update.update.get("configOptions").cloned()
-                    && let Some(state) = self.session_states.get_mut(&target.key)
-                    && let Some(map) = state.as_object_mut()
-                {
-                    map.insert("configOptions".to_owned(), config_options);
-                }
-                if session_update == "current_mode_update"
-                    && let Some(current_mode_id) = update.update.get("currentModeId").cloned()
-                    && let Some(state) = self.session_states.get_mut(&target.key)
-                    && let Some(map) = state.as_object_mut()
-                {
-                    map.insert("currentModeId".to_owned(), current_mode_id);
-                }
+            if let Some(state) = self.session_states.get_mut(&target.key) {
+                state_changed |= apply_projected_session_state_update(state, &update.update);
             }
             let revision = {
                 let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
@@ -239,6 +226,11 @@ where
                     json!({ "revision": revision }),
                 );
             }
+        }
+        if state_changed && let Some(state) = self.session_states.get(&target.key).cloned() {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .set_open_session_state(&target.key, &state)?;
         }
         Ok(())
     }
@@ -269,4 +261,29 @@ where
         });
         Ok(())
     }
+}
+
+fn apply_projected_session_state_update(state: &mut Value, update: &Value) -> bool {
+    let Some(session_update) = update.get("sessionUpdate").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(map) = state.as_object_mut() else {
+        return false;
+    };
+    let mut changed = false;
+    if session_update == "config_option_update"
+        && let Some(config_options) = update.get("configOptions")
+        && map.get("configOptions") != Some(config_options)
+    {
+        map.insert("configOptions".to_owned(), config_options.clone());
+        changed = true;
+    }
+    if session_update == "current_mode_update"
+        && let Some(current_mode_id) = update.get("currentModeId")
+        && map.get("currentModeId") != Some(current_mode_id)
+    {
+        map.insert("currentModeId".to_owned(), current_mode_id.clone());
+        changed = true;
+    }
+    changed
 }
