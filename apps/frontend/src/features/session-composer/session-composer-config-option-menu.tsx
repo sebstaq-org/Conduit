@@ -18,40 +18,70 @@ interface SessionComposerConfigOptionMenuProps {
   option: SessionConfigOption;
 }
 
-function flattenOptionValues(option: SessionConfigOption): SessionConfigOptionValue[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toOptionValue(value: unknown): SessionConfigOptionValue | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (typeof value.name !== "string") {
+    return null;
+  }
+  if (typeof value.value !== "string") {
+    return null;
+  }
+  return { name: value.name, value: value.value };
+}
+
+function optionGroupEntries(value: unknown): unknown[] {
+  if (
+    !isRecord(value) ||
+    !("group" in value) ||
+    !Array.isArray(value.options)
+  ) {
+    return [];
+  }
+  return value.options;
+}
+
+function collectGroupedOptionValues(
+  value: unknown,
+): SessionConfigOptionValue[] {
+  const entries = optionGroupEntries(value);
+  const grouped: SessionConfigOptionValue[] = [];
+  for (const entry of entries) {
+    const optionValue = toOptionValue(entry);
+    if (optionValue !== null) {
+      grouped.push(optionValue);
+    }
+  }
+  return grouped;
+}
+
+function flattenOptionValues(
+  option: SessionConfigOption,
+): SessionConfigOptionValue[] {
   const values: SessionConfigOptionValue[] = [];
   for (const entry of option.options) {
-    if ("group" in entry && Array.isArray(entry.options)) {
-      for (const groupedOption of entry.options as Array<{
-        name: string;
-        value: string;
-      }>) {
-        if (
-          typeof groupedOption.name !== "string" ||
-          typeof groupedOption.value !== "string"
-        ) {
-          continue;
-        }
-        values.push({
-          name: groupedOption.name,
-          value: groupedOption.value,
-        });
+    const groupedValues = collectGroupedOptionValues(entry);
+    if (groupedValues.length > 0) {
+      for (const groupedValue of groupedValues) {
+        values.push(groupedValue);
       }
-      continue;
+    } else {
+      const optionValue = toOptionValue(entry);
+      if (optionValue !== null) {
+        values.push(optionValue);
+      }
     }
-    if (typeof entry.name !== "string" || typeof entry.value !== "string") {
-      continue;
-    }
-    values.push({
-      name: entry.name,
-      value: entry.value,
-    });
   }
   return values;
 }
 
 function optionControlLabel(option: SessionConfigOption): string {
-  return `${option.name}: ${String(option.currentValue)}`;
+  return `${option.name}: ${option.currentValue}`;
 }
 
 function SessionComposerConfigOptionMenu({
@@ -81,7 +111,7 @@ function SessionComposerConfigOptionMenu({
       <DropdownMenuContent>
         {values.map((value) => (
           <DropdownMenuItem
-            key={`${option.id}:${String(value.value)}`}
+            key={`${option.id}:${value.value}`}
             label={value.name}
             onSelect={() => {
               onSelect(option.id, value.value);

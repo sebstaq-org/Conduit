@@ -8,10 +8,11 @@ raw command dispatch directly.
 The product session APIs are `useListProjectsQuery`,
 `useAddProjectMutation`, `useRemoveProjectMutation`,
 `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
-`useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
+`useGetProvidersConfigSnapshotQuery`, `useGetSessionGroupsQuery`,
+`useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
 `useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`,
-`useNewSessionMutation`,
-`usePromptSessionMutation`, `useGetSettingsQuery`, and
+`useNewSessionMutation`, `usePromptSessionMutation`,
+`useSetSessionConfigOptionMutation`, `useGetSettingsQuery`, and
 `useUpdateSettingsMutation`. They return Conduit read-model shapes for UI state,
 not raw official ACP provider responses.
 

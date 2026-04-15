@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { useTheme } from "@shopify/restyle";
+import type {
+  ProviderId,
+  ProvidersConfigSnapshotResult,
+} from "@conduit/session-client";
 import { useDispatch, useSelector } from "react-redux";
 import {
   activeSessionOpened,
@@ -16,25 +20,19 @@ import {
   useSetSessionConfigOptionMutation,
 } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
-import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
-import { SessionComposerActionRow } from "./session-composer-action-row";
-import { SessionComposerInput } from "./session-composer-input";
+import { SessionComposerSurface } from "./session-composer-surface";
 import {
-  createSessionComposerSurfaceStyle,
-  sessionComposerBackgroundColor,
-  sessionComposerBorderColor,
-  sessionComposerBorderRadius,
-  sessionComposerGap,
-  sessionComposerPaddingX,
-  sessionComposerPaddingY,
-} from "./session-composer.styles";
+  resolveDraftProviderReady,
+  resolveDraftSnapshotEntry,
+  resolveErrorMessage,
+  resolveVisibleConfigOptions,
+} from "./session-composer-logic";
 
-interface SessionComposerSurfaceArgs {
+interface SessionComposerController {
   activeSession: ActiveSession | null;
   canSend: boolean;
-  configOptions: SessionConfigOption[] | null;
+  configOptions: ReturnType<typeof resolveVisibleConfigOptions>;
   draft: string;
   errorMessage: string | null;
   handleConfigOptionSelect: (configId: string, value: string) => void;
@@ -42,106 +40,174 @@ interface SessionComposerSurfaceArgs {
   handleSend: () => void;
   isConfigUpdating: boolean;
   setDraft: (draft: string) => void;
-  theme: Theme;
 }
 
-type DraftActiveSession = Extract<ActiveSession, { kind: "draft" }>;
-
-function renderComposerErrorMessage(message: string | null): React.JSX.Element | null {
-  if (message === null) {
-    return null;
-  }
-  return <Text variant="rowLabelMuted">{message}</Text>;
+interface SessionComposerRuntime {
+  activeSession: ActiveSession | null;
+  dispatch: ReturnType<typeof useDispatch>;
+  newSession: ReturnType<typeof useNewSessionMutation>[0];
+  newSessionError: boolean;
+  newSessionLoading: boolean;
+  openSession: ReturnType<typeof useOpenSessionMutation>[0];
+  promptSession: ReturnType<typeof usePromptSessionMutation>[0];
+  promptSessionError: boolean;
+  promptSessionLoading: boolean;
+  providersConfigSnapshot: ProvidersConfigSnapshotResult | undefined;
+  providersConfigSnapshotError: boolean;
+  setSessionConfigOption: ReturnType<
+    typeof useSetSessionConfigOptionMutation
+  >[0];
+  setSessionConfigOptionError: boolean;
+  setSessionConfigOptionLoading: boolean;
 }
 
-function selectDraftProvider(
-  dispatch: ReturnType<typeof useDispatch>,
-  provider: ProviderId,
-): void {
-  dispatch(draftSessionProviderSelected(provider));
+function createDraftCommitCallback(args: {
+  activeSession: ActiveSession;
+  dispatch: ReturnType<typeof useDispatch>;
+}): Parameters<typeof submitPrompt>[0]["onDraftPromptCommitted"] {
+  return (session): void => {
+    args.dispatch(
+      activeSessionOpened({
+        configOptions: session.configOptions,
+        configSyncBlocked: session.configSyncBlocked,
+        configSyncError: session.configSyncError,
+        cwd: args.activeSession.cwd,
+        kind: "open",
+        modes: session.modes,
+        models: session.models,
+        openSessionId: session.openSessionId,
+        provider: session.provider,
+        sessionId: session.sessionId,
+        title: null,
+      }),
+    );
+    void args.dispatch(
+      conduitApi.util.invalidateTags([{ id: "LIST", type: "SessionGroups" }]),
+    );
+  };
 }
 
-function applyDraftSelectedConfigValues(
-  configOptions: SessionConfigOption[] | null,
-  selectedValues: Record<string, string> | undefined,
-): SessionConfigOption[] | null {
-  if (configOptions === null || selectedValues === undefined) {
-    return configOptions;
-  }
-  return configOptions.map((option) => {
-    const selected = selectedValues[option.id];
-    if (selected === undefined) {
-      return option;
+function createHandleSend(args: {
+  activeSession: ActiveSession | null;
+  canSend: boolean;
+  dispatch: ReturnType<typeof useDispatch>;
+  newSession: ReturnType<typeof useNewSessionMutation>[0];
+  openSession: ReturnType<typeof useOpenSessionMutation>[0];
+  promptSession: ReturnType<typeof usePromptSessionMutation>[0];
+  setDraft: (draft: string) => void;
+  setSessionConfigOption: ReturnType<
+    typeof useSetSessionConfigOptionMutation
+  >[0];
+  text: string;
+}): () => void {
+  return (): void => {
+    if (!args.canSend || args.activeSession === null) {
+      return;
     }
-    return {
-      ...option,
-      currentValue: selected,
-    };
-  });
+    const activeSession = args.activeSession;
+    void submitPrompt({
+      activeSession,
+      newSession: args.newSession,
+      openSession: args.openSession,
+      onDraftPromptCommitted: createDraftCommitCallback({
+        activeSession,
+        dispatch: args.dispatch,
+      }),
+      promptSession: args.promptSession,
+      setSessionConfigOption: args.setSessionConfigOption,
+      setDraft: args.setDraft,
+      text: args.text,
+    });
+  };
 }
 
-function draftProviderConfigOptions(
-  activeSession: DraftActiveSession,
-  selectedEntry: {
-    status: string;
-    configOptions: SessionConfigOption[] | null;
-  } | null,
-): SessionConfigOption[] | null {
-  if (
-    activeSession.provider === null ||
-    selectedEntry === null ||
-    selectedEntry.status !== "ready"
-  ) {
-    return null;
-  }
-  return applyDraftSelectedConfigValues(
-    selectedEntry.configOptions,
-    activeSession.selectedConfigByProvider[activeSession.provider],
-  );
+function createHandleConfigOptionSelect(args: {
+  activeSession: ActiveSession | null;
+  dispatch: ReturnType<typeof useDispatch>;
+  setSessionConfigOption: ReturnType<
+    typeof useSetSessionConfigOptionMutation
+  >[0];
+}): (configId: string, value: string) => void {
+  return (configId: string, value: string): void => {
+    if (args.activeSession?.kind === "open") {
+      void args.setSessionConfigOption({
+        configId,
+        provider: args.activeSession.provider,
+        sessionId: args.activeSession.sessionId,
+        value,
+      });
+      return;
+    }
+    if (
+      args.activeSession?.kind !== "draft" ||
+      args.activeSession.provider === null
+    ) {
+      return;
+    }
+    args.dispatch(
+      draftSessionConfigOptionSelected({
+        configId,
+        provider: args.activeSession.provider,
+        value,
+      }),
+    );
+  };
 }
 
-function renderSessionComposerSurface({
-  activeSession,
-  canSend,
-  configOptions,
-  draft,
-  errorMessage,
-  handleConfigOptionSelect,
-  handleProviderSelect,
-  handleSend,
-  isConfigUpdating,
-  setDraft,
-  theme,
-}: SessionComposerSurfaceArgs): React.JSX.Element {
-  return (
-    <Box
-      backgroundColor={sessionComposerBackgroundColor}
-      borderColor={sessionComposerBorderColor}
-      borderRadius={sessionComposerBorderRadius}
-      borderWidth={1}
-      gap={sessionComposerGap}
-      px={sessionComposerPaddingX}
-      py={sessionComposerPaddingY}
-      style={createSessionComposerSurfaceStyle(theme)}
-    >
-      <SessionComposerInput draft={draft} setDraft={setDraft} />
-      <SessionComposerActionRow
-        canSend={canSend}
-        configOptions={configOptions}
-        isUpdatingConfig={isConfigUpdating}
-        onSend={handleSend}
-        isDraft={activeSession?.kind === "draft"}
-        onConfigOptionSelect={handleConfigOptionSelect}
-        onProviderSelect={handleProviderSelect}
-        provider={activeSession?.provider ?? null}
-      />
-      {renderComposerErrorMessage(errorMessage)}
-    </Box>
-  );
+function createHandleProviderSelect(
+  dispatch: ReturnType<typeof useDispatch>,
+): (provider: ProviderId) => void {
+  return (provider: ProviderId): void => {
+    dispatch(draftSessionProviderSelected(provider));
+  };
 }
 
-function SessionComposer(): React.JSX.Element {
-  const theme = useTheme<Theme>();
+function buildSessionComposerController(args: {
+  canSend: boolean;
+  draft: string;
+  draftSnapshotEntry: ReturnType<typeof resolveDraftSnapshotEntry>;
+  runtime: SessionComposerRuntime;
+  setDraft: (draft: string) => void;
+  trimmedDraft: string;
+}): SessionComposerController {
+  return {
+    activeSession: args.runtime.activeSession,
+    canSend: args.canSend,
+    configOptions: resolveVisibleConfigOptions(
+      args.runtime.activeSession,
+      args.draftSnapshotEntry,
+    ),
+    draft: args.draft,
+    errorMessage: resolveErrorMessage({
+      activeSession: args.runtime.activeSession,
+      newSessionError: args.runtime.newSessionError,
+      promptError: args.runtime.promptSessionError,
+      providersConfigSnapshotError: args.runtime.providersConfigSnapshotError,
+      setConfigError: args.runtime.setSessionConfigOptionError,
+    }),
+    handleConfigOptionSelect: createHandleConfigOptionSelect({
+      activeSession: args.runtime.activeSession,
+      dispatch: args.runtime.dispatch,
+      setSessionConfigOption: args.runtime.setSessionConfigOption,
+    }),
+    handleProviderSelect: createHandleProviderSelect(args.runtime.dispatch),
+    handleSend: createHandleSend({
+      activeSession: args.runtime.activeSession,
+      canSend: args.canSend,
+      dispatch: args.runtime.dispatch,
+      newSession: args.runtime.newSession,
+      openSession: args.runtime.openSession,
+      promptSession: args.runtime.promptSession,
+      setDraft: args.setDraft,
+      setSessionConfigOption: args.runtime.setSessionConfigOption,
+      text: args.trimmedDraft,
+    }),
+    isConfigUpdating: args.runtime.setSessionConfigOptionLoading,
+    setDraft: args.setDraft,
+  };
+}
+
+function useSessionComposerRuntime(): SessionComposerRuntime {
   const dispatch = useDispatch();
   const activeSession = useSelector(selectActiveSession);
   const [newSession, newSessionState] = useNewSessionMutation();
@@ -153,129 +219,72 @@ function SessionComposer(): React.JSX.Element {
     data: providersConfigSnapshot,
     isError: providersConfigSnapshotError,
   } = useGetProvidersConfigSnapshotQuery(null);
+  return {
+    activeSession,
+    dispatch,
+    newSession,
+    newSessionError: newSessionState.isError,
+    newSessionLoading: newSessionState.isLoading,
+    openSession,
+    promptSession,
+    promptSessionError: promptSessionState.isError,
+    promptSessionLoading: promptSessionState.isLoading,
+    providersConfigSnapshot,
+    providersConfigSnapshotError,
+    setSessionConfigOption,
+    setSessionConfigOptionError: setSessionConfigOptionState.isError,
+    setSessionConfigOptionLoading: setSessionConfigOptionState.isLoading,
+  };
+}
+
+function useSessionComposerController(): SessionComposerController {
+  const runtime = useSessionComposerRuntime();
   const [draft, setDraft] = useState("");
   const trimmedDraft = draft.trim();
-
-  const draftSnapshotEntry =
-    activeSession?.kind === "draft" && activeSession.provider !== null
-      ? (providersConfigSnapshot?.entries.find(
-          (entry) => entry.provider === activeSession.provider,
-        ) ?? null)
-      : null;
-  const draftProviderReady =
-    activeSession?.kind !== "draft"
-      ? true
-      : activeSession.provider !== null && draftSnapshotEntry?.status === "ready";
-  const openSessionConfigSyncBlocked =
-    activeSession?.kind === "open" ? activeSession.configSyncBlocked : false;
-
-  const canSend = canSubmitPrompt(
-    activeSession,
-    promptSessionState.isLoading || newSessionState.isLoading,
-    trimmedDraft,
-    draftProviderReady,
-    openSessionConfigSyncBlocked,
+  const draftSnapshotEntry = resolveDraftSnapshotEntry(
+    runtime.activeSession,
+    runtime.providersConfigSnapshot,
   );
-
-  function handleSend(): void {
-    if (canSend && activeSession !== null) {
-      void submitPrompt({
-        activeSession,
-        newSession,
-        openSession,
-        onDraftPromptCommitted: (session) => {
-          dispatch(
-            activeSessionOpened({
-              configOptions: session.configOptions,
-              configSyncBlocked: session.configSyncBlocked,
-              configSyncError: session.configSyncError,
-              cwd: activeSession.cwd,
-              kind: "open",
-              modes: session.modes,
-              models: session.models,
-              openSessionId: session.openSessionId,
-              provider: session.provider,
-              sessionId: session.sessionId,
-              title: null,
-            }),
-          );
-          void dispatch(
-            conduitApi.util.invalidateTags([
-              { id: "LIST", type: "SessionGroups" },
-            ]),
-          );
-        },
-        promptSession,
-        setSessionConfigOption,
-        setDraft,
-        text: trimmedDraft,
-      });
-    }
-  }
-
-  function handleConfigOptionSelect(
-    configId: string,
-    value: string,
-  ): void {
-    if (activeSession?.kind === "open") {
-      void setSessionConfigOption({
-        configId,
-        provider: activeSession.provider,
-        sessionId: activeSession.sessionId,
-        value,
-      });
-      return;
-    }
-    if (activeSession?.kind !== "draft" || activeSession.provider === null) {
-      return;
-    }
-    dispatch(
-      draftSessionConfigOptionSelected({
-        configId,
-        provider: activeSession.provider,
-        value,
-      }),
-    );
-  }
-
-  function handleProviderSelect(provider: ProviderId): void {
-    selectDraftProvider(dispatch, provider);
-  }
-
-  const visibleConfigOptions =
-    activeSession?.kind === "open"
-      ? activeSession.configOptions
-      : activeSession?.kind === "draft"
-        ? draftProviderConfigOptions(activeSession, draftSnapshotEntry)
-        : null;
-
-  return renderSessionComposerSurface({
-    activeSession,
-    canSend,
-    configOptions: visibleConfigOptions,
-    draft,
-    handleConfigOptionSelect,
-    handleProviderSelect,
-    handleSend,
-    hasError:
-      promptSessionState.isError ||
-      newSessionState.isError ||
-      setSessionConfigOptionState.isError ||
-      providersConfigSnapshotError,
-    isConfigUpdating: setSessionConfigOptionState.isLoading,
-    setDraft,
-    errorMessage:
-      activeSession?.kind === "open" && activeSession.configSyncBlocked
-        ? (activeSession.configSyncError ??
-          "Session config sync failed. Update a config option before sending again.")
-        : promptSessionState.isError ||
-            newSessionState.isError ||
-            setSessionConfigOptionState.isError ||
-            providersConfigSnapshotError
-          ? "Request failed"
-          : null,
-    theme,
+  const canSend = canSubmitPrompt({
+    activeSession: runtime.activeSession,
+    draftProviderReady: resolveDraftProviderReady(
+      runtime.activeSession,
+      draftSnapshotEntry,
+    ),
+    isLoading: runtime.promptSessionLoading || runtime.newSessionLoading,
+    openSessionConfigSyncBlocked:
+      runtime.activeSession?.kind === "open" &&
+      runtime.activeSession.configSyncBlocked,
+    text: trimmedDraft,
   });
+  return buildSessionComposerController({
+    canSend,
+    draft,
+    draftSnapshotEntry,
+    runtime,
+    setDraft,
+    trimmedDraft,
+  });
+}
+
+function SessionComposer(): React.JSX.Element {
+  const theme = useTheme<Theme>();
+  const controller = useSessionComposerController();
+  return (
+    <SessionComposerSurface
+      activeSession={controller.activeSession}
+      canSend={controller.canSend}
+      configOptions={controller.configOptions}
+      draft={controller.draft}
+      errorMessage={controller.errorMessage}
+      onConfigOptionSelect={controller.handleConfigOptionSelect}
+      onProviderSelect={controller.handleProviderSelect}
+      onSend={controller.handleSend}
+      isConfigUpdating={controller.isConfigUpdating}
+      setDraft={controller.setDraft}
+      theme={theme}
+    />
+  );
 }
 
 export { SessionComposer };

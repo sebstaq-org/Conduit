@@ -215,14 +215,14 @@ const SessionConfigOptionValueSchema = z
     name: z.string(),
     description: z.string().nullable().optional(),
   })
-  .passthrough();
+  .loose();
 const SessionConfigOptionGroupSchema = z
   .object({
     group: z.string(),
     name: z.string(),
     options: z.array(SessionConfigOptionValueSchema),
   })
-  .passthrough();
+  .loose();
 const SessionConfigOptionSchema = z
   .object({
     id: z.string(),
@@ -236,7 +236,7 @@ const SessionConfigOptionSchema = z
       z.array(SessionConfigOptionGroupSchema),
     ]),
   })
-  .passthrough();
+  .loose();
 type SessionConfigOption = z.infer<typeof SessionConfigOptionSchema>;
 const SessionSetConfigOptionRequestSchema = z
   .object({

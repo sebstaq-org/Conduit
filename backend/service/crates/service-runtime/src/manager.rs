@@ -1,29 +1,26 @@
 //! Provider manager and command dispatcher.
 
+mod prompt_flow;
+
 use crate::command::ConsumerCommand;
 use crate::command::ConsumerResponse;
 use crate::error::{
     RuntimeError, optional_string_param, optional_u64_param, path_param, string_param,
 };
-use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
+use crate::event::{EventBuffer, RuntimeEvent};
 use crate::manager_helpers::{
-    absolute_normalized_cwd, content_blocks_param, loaded_transcript_snapshot_updates,
-    parse_provider, prompt_lifecycle, prompt_status,
+    absolute_normalized_cwd, loaded_transcript_snapshot_updates, parse_provider,
 };
 use crate::manager_response::{
-    append_snapshot_updates_if_missing, session_new_result_id, session_open_or_new_result,
-    session_open_result, session_set_config_option_result,
-    session_state_from_provider_result, store_lock_error,
+    session_new_result_id, session_open_or_new_result, session_open_result,
+    session_set_config_option_result, session_state_from_provider_result, store_lock_error,
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
-use acp_core::{ConnectionState, ProviderSnapshot, TranscriptUpdateSnapshot};
+use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
-use session_store::{
-    HistoryLimit, LocalStore, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
-    PromptTurnReplace, TranscriptItemStatus,
-};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -38,39 +35,6 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     pub(crate) local_store: LocalStore,
     pub(crate) store_lock: Arc<Mutex<()>>,
-}
-
-struct SessionPromptTarget {
-    open_session_id: String,
-    key: OpenSessionKey,
-}
-
-#[derive(Clone, Copy)]
-struct PromptTurnContext<'a> {
-    provider: ProviderId,
-    target: &'a SessionPromptTarget,
-    turn_id: &'a str,
-    prompt: &'a [Value],
-}
-
-struct PromptTurnProjection<'a> {
-    context: PromptTurnContext<'a>,
-    updates: &'a [TranscriptUpdateSnapshot],
-    status: TranscriptItemStatus,
-    stop_reason: Option<&'a str>,
-}
-
-struct ProviderPromptRun {
-    result: Result<Value>,
-    snapshot: ProviderSnapshot,
-}
-
-struct TimelineMutationEvent<'a> {
-    provider: ProviderId,
-    session_id: &'a str,
-    open_session_id: &'a str,
-    revision: i64,
-    items: &'a [session_store::TranscriptItem],
 }
 
 impl ServiceRuntime<AppServiceFactory> {
@@ -181,53 +145,68 @@ where
         Ok(())
     }
 
+    fn dispatch_global_command(
+        &mut self,
+        command: &ConsumerCommand,
+    ) -> Result<Option<ConsumerResponse>> {
+        let response = match command.command.as_str() {
+            "sessions/grouped" => Some(self.sessions_grouped(
+                command.id.clone(),
+                &command.provider,
+                &command.params,
+            )?),
+            "sessions/watch" => {
+                Self::require_global_provider("sessions/watch", &command.provider)?;
+                Some(self.sessions_watch(command.id.clone())?)
+            }
+            "projects/list" => {
+                Self::require_global_provider("projects/list", &command.provider)?;
+                Some(self.projects_list(command.id.clone())?)
+            }
+            "projects/suggestions" => {
+                Self::require_global_provider("projects/suggestions", &command.provider)?;
+                Some(self.projects_suggestions(command.id.clone(), &command.params)?)
+            }
+            "projects/add" => {
+                Self::require_global_provider("projects/add", &command.provider)?;
+                Some(self.projects_add(command.id.clone(), &command.params)?)
+            }
+            "projects/remove" => {
+                Self::require_global_provider("projects/remove", &command.provider)?;
+                Some(self.projects_remove(command.id.clone(), &command.params)?)
+            }
+            "projects/update" => {
+                Self::require_global_provider("projects/update", &command.provider)?;
+                Some(self.projects_update(command.id.clone(), &command.params)?)
+            }
+            "settings/get" => {
+                Self::require_global_provider("settings/get", &command.provider)?;
+                Some(self.settings_get(command.id.clone())?)
+            }
+            "settings/update" => {
+                Self::require_global_provider("settings/update", &command.provider)?;
+                Some(self.settings_update(command.id.clone(), &command.params)?)
+            }
+            "session/history" => {
+                Self::require_global_provider("session/history", &command.provider)?;
+                Some(self.session_history(command.id.clone(), &command.params)?)
+            }
+            "session/watch" => {
+                Self::require_global_provider("session/watch", &command.provider)?;
+                Some(self.session_watch(command.id.clone(), &command.params)?)
+            }
+            "session/prompt" => {
+                Self::require_global_provider("session/prompt", &command.provider)?;
+                Some(self.session_prompt(command.id.clone(), &command.params)?)
+            }
+            _ => None,
+        };
+        Ok(response)
+    }
+
     fn dispatch_result(&mut self, command: ConsumerCommand) -> Result<ConsumerResponse> {
-        if command.command == "sessions/grouped" {
-            return self.sessions_grouped(command.id, &command.provider, &command.params);
-        }
-        if command.command == "sessions/watch" {
-            Self::require_global_provider("sessions/watch", &command.provider)?;
-            return self.sessions_watch(command.id);
-        }
-        if command.command == "projects/list" {
-            Self::require_global_provider("projects/list", &command.provider)?;
-            return self.projects_list(command.id);
-        }
-        if command.command == "projects/suggestions" {
-            Self::require_global_provider("projects/suggestions", &command.provider)?;
-            return self.projects_suggestions(command.id, &command.params);
-        }
-        if command.command == "projects/add" {
-            Self::require_global_provider("projects/add", &command.provider)?;
-            return self.projects_add(command.id, &command.params);
-        }
-        if command.command == "projects/remove" {
-            Self::require_global_provider("projects/remove", &command.provider)?;
-            return self.projects_remove(command.id, &command.params);
-        }
-        if command.command == "projects/update" {
-            Self::require_global_provider("projects/update", &command.provider)?;
-            return self.projects_update(command.id, &command.params);
-        }
-        if command.command == "settings/get" {
-            Self::require_global_provider("settings/get", &command.provider)?;
-            return self.settings_get(command.id);
-        }
-        if command.command == "settings/update" {
-            Self::require_global_provider("settings/update", &command.provider)?;
-            return self.settings_update(command.id, &command.params);
-        }
-        if command.command == "session/history" {
-            Self::require_global_provider("session/history", &command.provider)?;
-            return self.session_history(command.id, &command.params);
-        }
-        if command.command == "session/watch" {
-            Self::require_global_provider("session/watch", &command.provider)?;
-            return self.session_watch(command.id, &command.params);
-        }
-        if command.command == "session/prompt" {
-            Self::require_global_provider("session/prompt", &command.provider)?;
-            return self.session_prompt(command.id, &command.params);
+        if let Some(response) = self.dispatch_global_command(&command)? {
+            return Ok(response);
         }
         let provider = parse_provider(&command.provider)?;
         match command.command.as_str() {
@@ -282,18 +261,15 @@ where
         };
         self.loaded_provider_sessions.insert(key.clone());
         let session_state = session_state_from_provider_result(&session_id, &provider_result);
-        self.session_states.insert(key.clone(), session_state.clone());
+        self.session_states
+            .insert(key.clone(), session_state.clone());
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.open_session(key, &[], limit)?
         };
         let history = to_value(history)?;
         let result = session_open_or_new_result(&session_state, &history);
-        Ok(ConsumerResponse::success(
-            id,
-            result,
-            snapshot,
-        ))
+        Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn session_list(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
@@ -480,225 +456,6 @@ where
         ))
     }
 
-    fn session_prompt(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let target = self.session_prompt_target(params)?;
-        let provider = target.key.provider;
-        let prompt = content_blocks_param("session/prompt", params, "prompt")?;
-        if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
-            self.append_failed_prompt_turn(provider, &target, &prompt)?;
-            return Err(error);
-        }
-        let prompt_turn = self.begin_prompt_turn(provider, &target, &prompt)?;
-        let mut observed_updates = Vec::new();
-        let context = PromptTurnContext {
-            provider,
-            target: &target,
-            turn_id: &prompt_turn.turn_id,
-            prompt: &prompt,
-        };
-        let run = self.run_provider_prompt_turn(context, &mut observed_updates)?;
-        let result = match run.result {
-            Ok(result) => result,
-            Err(error) => {
-                self.replace_prompt_turn_from_updates(PromptTurnProjection {
-                    context,
-                    updates: &observed_updates,
-                    status: TranscriptItemStatus::Failed,
-                    stop_reason: None,
-                })?;
-                return Err(error);
-            }
-        };
-        append_snapshot_updates_if_missing(
-            &mut observed_updates,
-            &run.snapshot,
-            &target.key.session_id,
-        );
-        let lifecycle = prompt_lifecycle(&run.snapshot, &target.key.session_id);
-        self.replace_prompt_turn_from_updates(PromptTurnProjection {
-            context,
-            updates: &observed_updates,
-            status: prompt_status(lifecycle),
-            stop_reason: lifecycle.and_then(|value| value.stop_reason.as_deref()),
-        })?;
-        Ok(ConsumerResponse::success_without_snapshot(id, result))
-    }
-
-    fn session_prompt_target(&self, params: &Value) -> Result<SessionPromptTarget> {
-        let open_session_id = string_param("session/prompt", params, "openSessionId")?;
-        let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        let key = self
-            .local_store
-            .open_session_key("session/prompt", &open_session_id)?;
-        Ok(SessionPromptTarget {
-            open_session_id,
-            key,
-        })
-    }
-
-    fn begin_prompt_turn(
-        &mut self,
-        provider: ProviderId,
-        target: &SessionPromptTarget,
-        prompt: &[Value],
-    ) -> Result<PromptTurnMutation> {
-        let mutation = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store
-                .begin_prompt_turn(&target.open_session_id, prompt)?
-        };
-        self.emit_timeline_mutation(TimelineMutationEvent {
-            provider,
-            session_id: &target.key.session_id,
-            open_session_id: &mutation.open_session_id,
-            revision: mutation.revision,
-            items: &mutation.items,
-        });
-        Ok(mutation)
-    }
-
-    fn run_provider_prompt_turn(
-        &mut self,
-        context: PromptTurnContext<'_>,
-        observed_updates: &mut Vec<TranscriptUpdateSnapshot>,
-    ) -> Result<ProviderPromptRun> {
-        let mut projection_error = None;
-        let mut provider_port = self.take_provider(context.provider)?;
-        let result = provider_port.session_prompt(
-            context.target.key.session_id.clone(),
-            context.prompt.to_vec(),
-            &mut |update| {
-                observed_updates.push(update);
-                if projection_error.is_none() {
-                    let projection = PromptTurnProjection {
-                        context,
-                        updates: observed_updates,
-                        status: TranscriptItemStatus::Streaming,
-                        stop_reason: None,
-                    };
-                    if let Err(error) = self.replace_prompt_turn_from_updates(projection) {
-                        projection_error = Some(error);
-                    }
-                }
-            },
-        );
-        let snapshot = provider_port.snapshot();
-        self.providers.insert(context.provider, provider_port);
-        if let Some(error) = projection_error {
-            return Err(error);
-        }
-        Ok(ProviderPromptRun { result, snapshot })
-    }
-
-    fn replace_prompt_turn_from_updates(
-        &mut self,
-        projection: PromptTurnProjection<'_>,
-    ) -> Result<()> {
-        let mutation = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store
-                .replace_prompt_turn_updates(PromptTurnReplace {
-                    open_session_id: &projection.context.target.open_session_id,
-                    turn_id: projection.context.turn_id,
-                    prompt: projection.context.prompt,
-                    updates: projection.updates,
-                    status: projection.status,
-                    stop_reason: projection.stop_reason,
-                })?
-        };
-        self.emit_timeline_mutation(TimelineMutationEvent {
-            provider: projection.context.provider,
-            session_id: &projection.context.target.key.session_id,
-            open_session_id: &mutation.open_session_id,
-            revision: mutation.revision,
-            items: &mutation.items,
-        });
-        self.apply_prompt_session_info_updates(projection.context.target, projection.updates)
-    }
-
-    fn emit_timeline_mutation(&mut self, event: TimelineMutationEvent<'_>) {
-        self.event_buffer.emit(
-            event.provider,
-            RuntimeEventKind::SessionTimelineChanged,
-            Some(event.session_id.to_owned()),
-            json!({
-                "openSessionId": event.open_session_id,
-                "revision": event.revision,
-                "items": event.items
-            }),
-        );
-    }
-
-    fn apply_prompt_session_info_updates(
-        &mut self,
-        target: &SessionPromptTarget,
-        updates: &[acp_core::TranscriptUpdateSnapshot],
-    ) -> Result<()> {
-        for update in updates {
-            if let Some(session_update) = update
-                .update
-                .get("sessionUpdate")
-                .and_then(Value::as_str)
-            {
-                if session_update == "config_option_update"
-                    && let Some(config_options) = update.update.get("configOptions").cloned()
-                    && let Some(state) = self.session_states.get_mut(&target.key)
-                    && let Some(map) = state.as_object_mut()
-                {
-                    map.insert("configOptions".to_owned(), config_options);
-                }
-                if session_update == "current_mode_update"
-                    && let Some(current_mode_id) = update.update.get("currentModeId").cloned()
-                    && let Some(state) = self.session_states.get_mut(&target.key)
-                    && let Some(map) = state.as_object_mut()
-                {
-                    map.insert("currentModeId".to_owned(), current_mode_id);
-                }
-            }
-            let revision = {
-                let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-                self.local_store
-                    .apply_session_info_update(&target.key, &update.update)?
-            };
-            if let Some(revision) = revision {
-                self.event_buffer.emit(
-                    target.key.provider,
-                    RuntimeEventKind::SessionsIndexChanged,
-                    None,
-                    json!({ "revision": revision }),
-                );
-            }
-        }
-        Ok(())
-    }
-
-    fn append_failed_prompt_turn(
-        &mut self,
-        provider: ProviderId,
-        target: &SessionPromptTarget,
-        prompt: &[Value],
-    ) -> Result<()> {
-        let mutation = {
-            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store
-                .append_prompt_turn_updates(PromptTurnAppend {
-                    open_session_id: &target.open_session_id,
-                    prompt,
-                    updates: &[],
-                    status: TranscriptItemStatus::Failed,
-                    stop_reason: None,
-                })?
-        };
-        self.emit_timeline_mutation(TimelineMutationEvent {
-            provider,
-            session_id: &target.key.session_id,
-            open_session_id: &mutation.open_session_id,
-            revision: mutation.revision,
-            items: &mutation.items,
-        });
-        Ok(())
-    }
-
     fn session_cancel(
         &mut self,
         id: String,
@@ -727,7 +484,8 @@ where
         self.providers.remove(&provider);
         self.loaded_provider_sessions
             .retain(|key| key.provider != provider);
-        self.session_states.retain(|key, _| key.provider != provider);
+        self.session_states
+            .retain(|key, _| key.provider != provider);
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
@@ -740,7 +498,8 @@ where
             self.providers.remove(&provider);
             self.loaded_provider_sessions
                 .retain(|key| key.provider != provider);
-            self.session_states.retain(|key, _| key.provider != provider);
+            self.session_states
+                .retain(|key, _| key.provider != provider);
         }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;
@@ -760,7 +519,8 @@ where
             self.providers.remove(&provider);
             self.loaded_provider_sessions
                 .retain(|key| key.provider != provider);
-            self.session_states.retain(|key, _| key.provider != provider);
+            self.session_states
+                .retain(|key, _| key.provider != provider);
         }
         if !self.providers.contains_key(&provider) {
             let service = self.factory.connect(provider)?;

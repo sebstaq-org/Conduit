@@ -13,6 +13,7 @@ import type { ClientCommandFrame } from "../packages/session-contracts/src/index
 const EXPECTED_CONSUMER_COMMANDS = [
   "initialize",
   "session/new",
+  "session/set_config_option",
   "session/prompt",
   "session/cancel",
   "provider/disconnect",
@@ -25,6 +26,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "settings/update",
   "sessions/grouped",
   "sessions/watch",
+  "providers/config_snapshot",
   "session/open",
   "session/history",
   "session/watch",

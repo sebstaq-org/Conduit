@@ -1,7 +1,6 @@
 import { Box } from "@/theme";
 import { IconButton } from "@/ui";
-import type { ProviderId } from "@conduit/session-client";
-import type { SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
 import { SessionComposerControls } from "./session-composer-controls";
 import {
   sessionComposerRowAlignItems,

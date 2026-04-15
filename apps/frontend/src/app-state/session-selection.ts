@@ -1,7 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ProviderId } from "@conduit/session-client";
-import type { SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
 import type { RootState } from "./store";
 
 interface OpenActiveSession {
@@ -14,8 +13,8 @@ interface OpenActiveSession {
   configOptions: SessionConfigOption[] | null;
   configSyncBlocked: boolean;
   configSyncError: string | null;
-  modes: unknown | null;
-  models: unknown | null;
+  modes: unknown;
+  models: unknown;
 }
 
 interface DraftActiveSession {
@@ -76,11 +75,12 @@ const sessionSelectionSlice = createSlice({
       if (state.activeSession?.kind !== "draft") {
         return;
       }
-      const existing = state.activeSession.selectedConfigByProvider[action.payload.provider] ?? {};
-      state.activeSession.selectedConfigByProvider[action.payload.provider] = {
-        ...existing,
-        [action.payload.configId]: action.payload.value,
-      };
+      const existing =
+        state.activeSession.selectedConfigByProvider[action.payload.provider] ??
+        {};
+      existing[action.payload.configId] = action.payload.value;
+      state.activeSession.selectedConfigByProvider[action.payload.provider] =
+        existing;
     },
     activeSessionConfigOptionsUpdated: (
       state,
@@ -150,8 +150,4 @@ export {
   selectActiveSession,
   sessionSelectionReducer,
 };
-export type {
-  ActiveSession,
-  DraftActiveSession,
-  OpenActiveSession,
-};
+export type { ActiveSession, DraftActiveSession, OpenActiveSession };

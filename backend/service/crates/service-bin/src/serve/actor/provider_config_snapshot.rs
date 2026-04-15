@@ -211,20 +211,24 @@ fn unix_timestamp_seconds() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        PROVIDER_CONFIG_SNAPSHOT_INTERVAL, ProviderConfigSnapshots, run_provider_config_snapshot_worker_with_wait,
+        PROVIDER_CONFIG_SNAPSHOT_INTERVAL, ProviderConfigSnapshots,
+        run_provider_config_snapshot_worker_with_wait,
     };
     use acp_core::{ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
     use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
     use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
     use serde_json::{Value, json};
-    use service_runtime::{ProviderFactory, ProviderPort, Result};
+    use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     #[test]
     fn worker_uses_six_hour_interval() {
-        assert_eq!(PROVIDER_CONFIG_SNAPSHOT_INTERVAL, Duration::from_secs(6 * 60 * 60));
+        assert_eq!(
+            PROVIDER_CONFIG_SNAPSHOT_INTERVAL,
+            Duration::from_secs(6 * 60 * 60)
+        );
     }
 
     #[test]
@@ -249,7 +253,9 @@ mod tests {
                 false
             },
         );
-        let probed = calls.lock().expect("snapshot calls lock").clone();
+        let probed_lock = calls.lock();
+        assert!(probed_lock.is_ok(), "snapshot calls lock");
+        let probed = probed_lock.map(|locked| locked.clone()).unwrap_or_default();
         assert_eq!(probed.len(), 6);
         assert_eq!(
             probed,
@@ -263,14 +269,11 @@ mod tests {
             ],
         );
         let snapshot = snapshots.snapshot_value();
-        let entries = snapshot["entries"]
-            .as_array()
-            .expect("snapshot entries array");
+        let entries = snapshot["entries"].as_array();
+        assert!(entries.is_some(), "snapshot entries array");
+        let entries = entries.cloned().unwrap_or_default();
         assert_eq!(entries.len(), 3);
-        for (entry, provider) in entries
-            .iter()
-            .zip(["claude", "copilot", "codex"])
-        {
+        for (entry, provider) in entries.into_iter().zip(["claude", "copilot", "codex"]) {
             assert_eq!(entry["provider"], json!(provider));
             assert_eq!(entry["status"], json!("ready"));
             assert_eq!(entry["configOptions"], json!([]));
@@ -347,10 +350,11 @@ mod tests {
         }
 
         fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
-            self.calls
+            let mut locked = self
+                .calls
                 .lock()
-                .expect("snapshot calls lock")
-                .push(self.provider);
+                .map_err(|error| RuntimeError::Provider(format!("snapshot calls lock: {error}")))?;
+            locked.push(self.provider);
             Ok(json!({
                 "sessionId": format!("snapshot-{}", self.provider.as_str()),
                 "configOptions": []

@@ -1,5 +1,4 @@
-import type { ProviderId } from "@conduit/session-client";
-import type { SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
 import { Box } from "@/theme";
 import { DropdownMenuRoot, DropdownMenuTrigger } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
@@ -46,7 +45,7 @@ function renderDraftControls({
   | "onConfigOptionSelect"
   | "onProviderSelect"
   | "provider"
->): React.JSX.Element {
+>): React.JSX.Element[] {
   const controls: React.JSX.Element[] = [
     <DropdownMenuRoot key={`provider-${provider ?? "select-provider"}`}>
       <DropdownMenuTrigger accessibilityLabel="Select provider for new session">
@@ -67,9 +66,7 @@ function renderDraftControls({
       );
     }
   }
-  return (
-    <>{controls}</>
-  );
+  return controls;
 }
 
 function renderOpenControls({
@@ -80,11 +77,13 @@ function renderOpenControls({
 }: Pick<
   SessionComposerControlsProps,
   "configOptions" | "isUpdatingConfig" | "onConfigOptionSelect" | "provider"
->): React.JSX.Element | null {
+>): React.JSX.Element[] | null {
   if (provider === null) {
     return null;
   }
-  const controls: React.JSX.Element[] = [renderComposerControl(provider, false)];
+  const controls: React.JSX.Element[] = [
+    renderComposerControl(provider, false),
+  ];
   if (configOptions !== null) {
     for (const option of configOptions) {
       controls.push(
@@ -97,12 +96,12 @@ function renderOpenControls({
       );
     }
   }
-  return <>{controls}</>;
+  return controls;
 }
 
 function renderControls(
   props: SessionComposerControlsProps,
-): React.JSX.Element | null {
+): React.JSX.Element[] | null {
   if (props.isDraft) {
     return renderDraftControls(props);
   }

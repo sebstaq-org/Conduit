@@ -2,20 +2,19 @@
 
 mod support;
 
-use app_api as _;
 use acp_core::TranscriptUpdateSnapshot;
+use app_api as _;
 use serde as _;
+use serde_json::Value;
 use serde_json::json;
+use service_runtime::ServiceRuntime;
 use std::sync::{Arc, Mutex};
-use support::{FakeState, TestResult, assert_ok, command, runtime};
+use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;
 
-#[test]
-fn set_config_option_updates_open_session_state_projection() -> TestResult<()> {
-    let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state)?;
+fn open_session_id(runtime: &mut ServiceRuntime<FakeFactory>, id: &str) -> TestResult<String> {
     let opened = runtime.dispatch(command(
-        "1",
+        id,
         "session/open",
         "codex",
         json!({
@@ -25,11 +24,39 @@ fn set_config_option_updates_open_session_state_projection() -> TestResult<()> {
         }),
     ));
     assert_ok(&opened)?;
-    let open_session_id = opened
+    opened
         .result
         .get("openSessionId")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("session/open missing openSessionId")?;
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "session/open missing openSessionId".into())
+}
+
+fn seeded_config_option_update() -> TranscriptUpdateSnapshot {
+    TranscriptUpdateSnapshot {
+        index: 0,
+        variant: "config_option_update".to_owned(),
+        update: json!({
+            "sessionUpdate": "config_option_update",
+            "configOptions": [{
+                "id": "model",
+                "name": "Model",
+                "type": "string",
+                "currentValue": "gpt-5.4",
+                "options": [{
+                    "value": "gpt-5.4",
+                    "name": "GPT-5.4"
+                }]
+            }]
+        }),
+    }
+}
+
+#[test]
+fn set_config_option_updates_open_session_state_projection() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(state)?;
+    let open_session_id = open_session_id(&mut runtime, "1")?;
     let configured = runtime.dispatch(command(
         "2",
         "session/set_config_option",
@@ -56,7 +83,7 @@ fn set_config_option_updates_open_session_state_projection() -> TestResult<()> {
         .result
         .get("openSessionId")
         .and_then(serde_json::Value::as_str)
-        != Some(open_session_id)
+        != Some(open_session_id.as_str())
     {
         return Err("session/open changed openSessionId after set_config_option".into());
     }
@@ -77,42 +104,11 @@ fn config_option_update_during_prompt_updates_open_session_state_projection() ->
         let mut locked = state.lock().map_err(|error| format!("{error}"))?;
         locked.prompt_updates.insert(
             (acp_discovery::ProviderId::Codex, "session-1".to_owned()),
-            vec![TranscriptUpdateSnapshot {
-                index: 0,
-                variant: "config_option_update".to_owned(),
-                update: json!({
-                    "sessionUpdate": "config_option_update",
-                    "configOptions": [{
-                        "id": "model",
-                        "name": "Model",
-                        "type": "string",
-                        "currentValue": "gpt-5.4",
-                        "options": [{
-                            "value": "gpt-5.4",
-                            "name": "GPT-5.4"
-                        }]
-                    }]
-                }),
-            }],
+            vec![seeded_config_option_update()],
         );
     }
     let mut runtime = runtime(state)?;
-    let opened = runtime.dispatch(command(
-        "1",
-        "session/open",
-        "codex",
-        json!({
-            "sessionId": "session-1",
-            "cwd": "/repo",
-            "limit": 32
-        }),
-    ));
-    assert_ok(&opened)?;
-    let open_session_id = opened
-        .result
-        .get("openSessionId")
-        .and_then(serde_json::Value::as_str)
-        .ok_or("session/open missing openSessionId")?;
+    let open_session_id = open_session_id(&mut runtime, "1")?;
     let prompted = runtime.dispatch(command(
         "2",
         "session/prompt",

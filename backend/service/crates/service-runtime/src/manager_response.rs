@@ -64,10 +64,7 @@ pub(crate) fn session_open_result(state: &Value, history: &Value) -> Value {
     })
 }
 
-pub(crate) fn session_set_config_option_result(
-    session_id: &str,
-    result: &Value,
-) -> Result<Value> {
+pub(crate) fn session_set_config_option_result(session_id: &str, result: &Value) -> Result<Value> {
     let Some(config_options) = result.get("configOptions").cloned() else {
         return Err(RuntimeError::Provider(
             "session/set_config_option result missing configOptions".to_owned(),

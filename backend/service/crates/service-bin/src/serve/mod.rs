@@ -29,6 +29,7 @@ struct ServeState {
 const CATALOG_COMMANDS: [&str; 19] = [
     "initialize",
     "session/new",
+    "session/set_config_option",
     "session/prompt",
     "session/cancel",
     "provider/disconnect",
@@ -43,7 +44,6 @@ const CATALOG_COMMANDS: [&str; 19] = [
     "sessions/watch",
     "providers/config_snapshot",
     "session/open",
-    "session/set_config_option",
     "session/history",
     "session/watch",
 ];
