@@ -1,6 +1,6 @@
 {
+  "source_run": "RUN_PRB_CONDUIT_LIVE_C",
   "selected_option_payload": {
-    "source_run": "RUN_DIRECT",
     "payload": {
       "result": {
         "outcome": {
@@ -10,8 +10,7 @@
       }
     }
   },
-  "answer_other_payload": {
-    "source_run": "RUN_EDGECASES_FINAL",
+  "answer_other_payload_with_meta": {
     "payload": {
       "result": {
         "outcome": {
@@ -20,8 +19,8 @@
           "_meta": {
             "request_user_input_response": {
               "answers": {
-                "plan_target": {
-                  "answers": ["custom free text from host response"]
+                "plan_focus": {
+                  "answers": ["custom free text from conduit prb proof v2"]
                 }
               }
             }
@@ -31,7 +30,6 @@
     }
   },
   "cancel_payload": {
-    "source_run": "RUN_EDGECASES_FINAL",
     "payload": {
       "result": {
         "outcome": {
@@ -41,7 +39,6 @@
     }
   },
   "invalid_option_payload": {
-    "source_run": "RUN_EDGECASES_FINAL",
     "payload": {
       "result": {
         "outcome": {
@@ -51,25 +48,15 @@
       }
     }
   },
-  "adapter_outcome_for_cancel_or_invalid": {
-    "source_run": "RUN_EDGECASES_FINAL",
-    "incoming_tool_call_updates": [
-      {
-        "phase": "phase-invalid-answer",
-        "status": "failed",
-        "rawOutput": {
-          "request_type": "request_user_input",
-          "outcome": "cancelled"
-        }
-      },
-      {
-        "phase": "phase-cancel-answer",
-        "status": "failed",
-        "rawOutput": {
-          "request_type": "request_user_input",
-          "outcome": "cancelled"
-        }
+  "provider_driven_invalid_semantics": {
+    "respond_interaction_command_ok": true,
+    "prompt_stop_reason": "cancelled",
+    "normalized_tool_call_update": {
+      "status": "failed",
+      "rawOutput": {
+        "request_type": "request_user_input",
+        "outcome": "cancelled"
       }
-    ]
+    }
   }
 }

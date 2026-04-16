@@ -2,10 +2,11 @@
   "schema_version": 1,
   "scope": "codex-acp-pr195",
   "canonical_runs": [
-    "RUN_CONDUIT",
     "RUN_DIRECT",
+    "RUN_EDGECASES_FINAL",
+    "RUN_PRB_CONDUIT_LIVE_C",
     "RUN_INTERACTIONS_ATTEMPT",
-    "RUN_EDGECASES_FINAL"
+    "RUN_CONDUIT"
   ],
   "rows": [
     {
@@ -84,37 +85,33 @@
       "decision": "Direct ACP activation with session/set_config_option works before and after session/load."
     },
     {
-      "row_id": "session_set_config_option_plan_conduit_error",
+      "row_id": "session_set_config_option_plan_conduit_success",
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_CONDUIT",
-          "artifact": "run-summary.json + proxy-wire/codex-wire-*.jsonl",
-          "command": "rtk jq '.scenarioData.\"set-config-collaboration-mode-pre-open\"' RUN_CONDUIT/run-summary.json"
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+          "artifact": "fixtures/backend-interaction-bridge-live.json",
+          "command": "rtk jq '.verified.session_set_config_option_plan' fixtures/backend-interaction-bridge-live.json"
         }
       ],
       "evidence_excerpt": {
-        "serviceError": {
-          "code": "provider_error",
-          "message": "official ACP SDK error from codex during session/set_config_option"
-        },
-        "providerError": {
-          "code": -32002,
-          "message": "Resource not found"
-        }
+        "configId": "collaboration_mode",
+        "value": "plan",
+        "successCount": 4,
+        "currentValuesAfterCall": ["plan"]
       },
-      "normalized_evidence": "Conduit surfaces provider_error for the failing set_config attempt.",
+      "normalized_evidence": "Conduit live delta confirms set_config_option(plan) succeeds and updates currentValue to plan.",
       "gap": null,
-      "decision": "Conduit-hosted lane mismatch is separately tracked from adapter direct behavior."
+      "decision": "Conduit-hosted plan activation now matches direct ACP behavior."
     },
     {
       "row_id": "structured_question_carrier",
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
-          "artifact": "raw-frames.jsonl",
-          "command": "rtk jq -s '[... incoming session/request_permission ...]' RUN_DIRECT/raw-frames.jsonl"
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+          "artifact": "fixtures/backend-interaction-bridge-live.json",
+          "command": "rtk jq '.verified.structured_question_carrier' fixtures/backend-interaction-bridge-live.json"
         }
       ],
       "evidence_excerpt": {
@@ -123,16 +120,16 @@
       },
       "normalized_evidence": null,
       "gap": null,
-      "decision": "Codex questions are carried as ACP permission requests in direct lane."
+      "decision": "Codex questions are carried as ACP permission requests in Conduit live runtime."
     },
     {
       "row_id": "question_payload_shape_and_options",
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/request-permission-sequences.json",
-          "command": "curated from RUN_DIRECT/raw-frames.jsonl"
+          "command": "curated from RUN_PRB_CONDUIT_LIVE_C/incoming-host-requests.json"
         }
       ],
       "evidence_excerpt": {
@@ -160,9 +157,9 @@
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/request-permission-sequences.json",
-          "command": "request id sequence 0 -> 1; response id sequence 0 -> 1"
+          "command": "selected flow request id sequence 0 -> 1; response id sequence 0 -> 1"
         }
       ],
       "evidence_excerpt": {
@@ -178,7 +175,7 @@
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/answer-payloads.json",
           "command": "curated selected payload"
         }
@@ -200,9 +197,9 @@
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_EDGECASES_FINAL",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/answer-payloads.json",
-          "command": "curated answer-other response from phase-answer-other"
+          "command": "curated answer-other response from answer-other-flow"
         }
       ],
       "evidence_excerpt": {
@@ -223,9 +220,9 @@
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_EDGECASES_FINAL",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/answer-payloads.json + fixtures/terminal-and-absence.json",
-          "command": "phase-cancel-answer request -> cancelled response -> tool_call_update failed"
+          "command": "cancel-flow request -> cancelled outcome -> interaction_resolution cancelled"
         }
       ],
       "evidence_excerpt": {
@@ -245,16 +242,16 @@
       },
       "normalized_evidence": null,
       "gap": null,
-      "decision": "Cancel while pending deterministically aborts the turn."
+      "decision": "Cancel while pending deterministically cancels the turn in Conduit live runtime."
     },
     {
       "row_id": "invalid_option_behavior",
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_EDGECASES_FINAL",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/answer-payloads.json + fixtures/terminal-and-absence.json",
-          "command": "phase-invalid-answer request -> answer-invalid -> tool_call_update failed"
+          "command": "invalid-option-flow request -> selected(answer-invalid) -> prompt stopReason cancelled"
         }
       ],
       "evidence_excerpt": {
@@ -275,7 +272,7 @@
       },
       "normalized_evidence": null,
       "gap": null,
-      "decision": "Invalid option maps to failed request_user_input and cancelled prompt."
+      "decision": "Invalid option is provider-driven: respond_interaction returns ok, then provider resolves turn as cancelled."
     },
     {
       "row_id": "continuation_after_plan_and_session_load",
@@ -300,9 +297,9 @@
       "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
-          "artifact": "raw-frames.jsonl",
-          "command": "incoming session/request_permission occurs before final response to session/prompt"
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+          "artifact": "fixtures/backend-interaction-bridge-live.json",
+          "command": "rtk jq '.verified.structured_question_carrier,.verified.normalized_runtime_events' fixtures/backend-interaction-bridge-live.json"
         }
       ],
       "evidence_excerpt": {
@@ -311,7 +308,7 @@
       },
       "normalized_evidence": null,
       "gap": null,
-      "decision": "Out-of-band answer during active prompt is supported."
+      "decision": "Out-of-band answer during active prompt is verified in Conduit live chain."
     },
     {
       "row_id": "typed_terminal_plan_signal",
@@ -343,7 +340,7 @@
       "status": "missing",
       "sources": [
         {
-          "run_id": "RUN_EDGECASES_FINAL",
+          "run_id": "RUN_PRB_CONDUIT_LIVE_C",
           "artifact": "fixtures/terminal-and-absence.json",
           "command": "absence_proofs.explicit_implement_plan_action.command"
         }
@@ -370,7 +367,7 @@
       "gap": "No explicit implement-plan action/token in observed available_commands_update payloads.",
       "decision": "Implement-plan transition must be a Conduit product flow, not a provider command.",
       "proof_of_absence": {
-        "command": "rtk jq -s '{availableCommandNames:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | unique | sort),containsImplement:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | any(test(\"implement\";\"i\")))}' RUN_EDGECASES_FINAL/raw-frames.jsonl",
+        "command": "rtk jq -s '{availableCommandNames:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | unique | sort),containsImplement:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | any(test(\"implement\";\"i\")))}' RUN_PRB_CONDUIT_LIVE_C/raw-frames.jsonl",
         "observed_result": {
           "containsImplement": false
         }

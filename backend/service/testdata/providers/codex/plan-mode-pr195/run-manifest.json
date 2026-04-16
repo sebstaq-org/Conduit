@@ -3,8 +3,8 @@
   "scope": "codex-acp-pr195",
   "conduit": {
     "repo": "Conduit",
-    "branch": "main",
-    "commit": "0adbb20"
+    "branch": "feat/codex-pr195-canonical-proof-pack",
+    "commit": "830270e"
   },
   "adapter": {
     "repo": "codex-acp-pr195",
@@ -55,6 +55,13 @@
       "started_at": "2026-04-16T10:11:25.366Z",
       "completed_at": "2026-04-16T10:13:45.846Z",
       "purpose": "Conduit live delta rerun with explicit request_user_input trigger prompt"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+      "capture_id": "codex-prb-backend-interaction-20260416T123111Z",
+      "started_at": "2026-04-16T12:31:50.243Z",
+      "completed_at": "2026-04-16T12:32:50.756Z",
+      "purpose": "Deterministic Conduit live chain: set_config(plan) -> request_permission -> respond_interaction(selected/answer_other/cancel/invalid) -> interaction_resolution"
     }
   ],
   "key_commands": [
@@ -63,7 +70,8 @@
     "rtk jq -s '...' <run-dir>/proxy-wire/codex-wire-*.jsonl",
     "rtk node <run-dir>/direct-probe.mjs <run-dir>",
     "rtk node <run-dir>/direct-probe-edgecases.mjs <run-dir>",
-    "rtk node <run-dir>/prb-interaction-proof-runner.mjs ws://127.0.0.1:<port>/api/session <run-dir>"
+    "rtk node <run-dir>/prb-interaction-proof-runner.mjs ws://127.0.0.1:<port>/api/session <run-dir>",
+    "rtk node <run-dir>/prb-interaction-proof-runner-v3.mjs ws://127.0.0.1:4320/api/session <run-dir>"
   ],
   "redaction": {
     "env_keys_kept": ["CODEX_*", "OPENAI_*", "ACP_*", "CONDUIT_*", "PATH"],

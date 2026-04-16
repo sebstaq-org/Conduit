@@ -16,12 +16,16 @@ use tokio as _;
 use tokio_util as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
-const REQUIRED_ROWS: [&str; 11] = [
+const REQUIRED_ROWS: [&str; 15] = [
     "patched_adapter_runtime_identity",
     "collaboration_mode_config_option_exposed",
     "session_set_mode_plan_invalid_params",
     "session_set_config_option_plan_direct",
+    "session_set_config_option_plan_conduit_success",
     "structured_question_carrier",
+    "question_payload_shape_and_options",
+    "question_answer_correlation_and_sequence",
+    "selected_answer_payload",
     "answer_other_payload_with_meta",
     "cancel_pending_question_behavior",
     "invalid_option_behavior",
@@ -173,6 +177,84 @@ fn codex_pr195_fixture_pack_deserializes() -> TestResult<()> {
         }
     }
 
+    let backend_live: Value =
+        read_json(&root.join("fixtures/backend-interaction-bridge-live.json"))?;
+    validate_backend_live_fixture(&backend_live)?;
+
+    Ok(())
+}
+
+fn validate_backend_live_fixture(value: &Value) -> TestResult<()> {
+    require_u64_gt_zero(
+        value,
+        "/verified/session_set_config_option_plan/success_count",
+        "backend live fixture must prove at least one successful set_config_option",
+    )?;
+    require_u64_gt_zero(
+        value,
+        "/verified/structured_question_carrier/request_permission_count",
+        "backend live fixture must prove request_permission_count > 0",
+    )?;
+    require_u64_gt_zero(
+        value,
+        "/verified/normalized_runtime_events/interaction_request_event_count",
+        "backend live fixture must prove interaction_request_event_count > 0",
+    )?;
+    require_bool_true(
+        value,
+        "/verified/response_mapping/answer_other_meta_present",
+        "backend live fixture must prove answer_other meta payload presence",
+    )?;
+    require_string_equals(
+        value,
+        "/verified/response_mapping/cancel_prompt_stop_reason",
+        "cancelled",
+    )?;
+    require_string_equals(
+        value,
+        "/verified/response_mapping/invalid_option_prompt_stop_reason",
+        "cancelled",
+    )?;
+    require_string_equals(
+        value,
+        "/verified/unknown_interaction_error/error/code",
+        "invalid_params",
+    )?;
+
+    Ok(())
+}
+
+fn require_u64_gt_zero(value: &Value, pointer: &str, message: &str) -> TestResult<()> {
+    let Some(actual) = value.pointer(pointer).and_then(Value::as_u64) else {
+        return Err(format!("missing numeric proof field at {pointer}").into());
+    };
+    if actual == 0 {
+        return Err(message.to_owned().into());
+    }
+    Ok(())
+}
+
+fn require_bool_true(value: &Value, pointer: &str, message: &str) -> TestResult<()> {
+    let actual = value
+        .pointer(pointer)
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if !actual {
+        return Err(message.to_owned().into());
+    }
+    Ok(())
+}
+
+fn require_string_equals(value: &Value, pointer: &str, expected: &str) -> TestResult<()> {
+    let actual = value
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if actual != expected {
+        return Err(
+            format!("unexpected value at {pointer}: expected {expected}, got {actual}").into(),
+        );
+    }
     Ok(())
 }
 

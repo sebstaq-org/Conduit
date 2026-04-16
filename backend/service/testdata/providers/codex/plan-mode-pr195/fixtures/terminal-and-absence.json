@@ -1,23 +1,33 @@
 {
   "prompt_terminal_signals": {
-    "source_runs": ["RUN_DIRECT", "RUN_EDGECASES_FINAL", "RUN_CONDUIT"],
+    "source_runs": [
+      "RUN_PRB_CONDUIT_LIVE_C",
+      "RUN_DIRECT",
+      "RUN_EDGECASES_FINAL"
+    ],
     "observed_stop_reasons": [
       {
-        "run_id": "RUN_EDGECASES_FINAL",
-        "phase": "phase-invalid-answer",
-        "label": "prompt-forced-questions-invalid-answer",
+        "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+        "phase": "invalid-option-flow",
+        "label": "invalid-option-flow-prompt",
         "stopReason": "cancelled"
       },
       {
-        "run_id": "RUN_EDGECASES_FINAL",
-        "phase": "phase-cancel-answer",
-        "label": "prompt-forced-questions-cancel-answer",
+        "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+        "phase": "cancel-flow",
+        "label": "cancel-flow-prompt",
         "stopReason": "cancelled"
       },
       {
-        "run_id": "RUN_EDGECASES_FINAL",
-        "phase": "phase-answer-other",
-        "label": "prompt-forced-questions-answer-other",
+        "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+        "phase": "answer-other-flow",
+        "label": "answer-other-flow-prompt",
+        "stopReason": "end_turn"
+      },
+      {
+        "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+        "phase": "selected-flow",
+        "label": "selected-flow-prompt",
         "stopReason": "end_turn"
       },
       {
