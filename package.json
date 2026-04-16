@@ -43,6 +43,7 @@
     "frontend:lint": "pnpm --filter @conduit/frontend run lint",
     "frontend:start": "pnpm --filter @conduit/frontend run start",
     "frontend:test": "pnpm --filter @conduit/frontend run test",
+    "frontend:types:generate": "pnpm --filter @conduit/frontend exec expo customize tsconfig.json",
     "frontend:typecheck": "pnpm --filter @conduit/frontend run typecheck",
     "frontend:web": "pnpm --filter @conduit/frontend run web",
     "stage:refresh": "bash scripts/stage/conduit-stage.sh refresh",
@@ -60,7 +61,7 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run fixtures:check && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run fixtures:check && pnpm run frontend:types:generate && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "25.6.0",

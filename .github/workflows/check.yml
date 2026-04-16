@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Expo types
+        run: pnpm run frontend:types:generate
+
       - name: Verify Cargo metadata
         run: cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null
 
