@@ -69,9 +69,20 @@ interface SessionClientPort {
   ): Promise<() => void>;
 }
 
+interface SessionClientTelemetryEvent {
+  event_name: string;
+  level: "debug" | "info" | "warn" | "error";
+  fields?: Record<string, unknown>;
+}
+
 interface SessionClientOptions {
   url?: string;
   WebSocketImpl?: typeof WebSocket;
+  onTelemetryEvent?: (event: SessionClientTelemetryEvent) => void;
 }
 
-export type { SessionClientOptions, SessionClientPort };
+export type {
+  SessionClientOptions,
+  SessionClientPort,
+  SessionClientTelemetryEvent,
+};

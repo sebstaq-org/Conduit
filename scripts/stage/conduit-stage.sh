@@ -13,6 +13,7 @@ BACKEND_PORT="${CONDUIT_STAGE_BACKEND_PORT:-4274}"
 WEB_HOST="${CONDUIT_STAGE_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${CONDUIT_STAGE_WEB_PORT:-4310}"
 WS_URL="${CONDUIT_STAGE_WS_URL:-ws://${BACKEND_HOST}:${BACKEND_PORT}/api/session}"
+BUILD_REF="${CONDUIT_STAGE_BUILD_REF:-origin/main}"
 DATA_ROOT="$STAGE_ROOT/data"
 PID_DIR="$STAGE_ROOT/pids"
 LOG_DIR="$STAGE_ROOT/logs"
@@ -142,9 +143,11 @@ EOF
 
 refresh_stage() {
   ensure_stage_dirs
-  run git -C "$REPO_ROOT" fetch origin
+  if [[ "$BUILD_REF" == origin/* ]]; then
+    run git -C "$REPO_ROOT" fetch origin
+  fi
   local commit
-  commit="$(run git -C "$REPO_ROOT" rev-parse --verify origin/main)"
+  commit="$(run git -C "$REPO_ROOT" rev-parse --verify "$BUILD_REF")"
   local short_commit
   short_commit="$(printf "%s" "$commit" | cut -c1-12)"
   local timestamp
@@ -164,6 +167,7 @@ refresh_stage() {
   (
     cd "$source_dir"
     export EXPO_PUBLIC_CONDUIT_SESSION_WS_URL="$WS_URL"
+    export EXPO_PUBLIC_CONDUIT_LOG_PROFILE="stage"
     run pnpm install --frozen-lockfile
     run pnpm run build
     seed_worklets_cache "$REPO_ROOT" "$source_dir"
@@ -176,6 +180,7 @@ refresh_stage() {
   cat >"$release_dir/meta/build.json" <<EOF
 {
   "commit": "$commit",
+  "buildRef": "$BUILD_REF",
   "createdAt": "$timestamp",
   "backendHost": "$BACKEND_HOST",
   "backendPort": $BACKEND_PORT,
@@ -321,7 +326,7 @@ usage() {
 Usage: $0 <command>
 
 Commands:
-  refresh               Build latest origin/main into a tagged stage release
+  refresh               Build selected ref (default: origin/main) into stage release
   start                 Start stage supervisor and wait for runtime readiness
   stop                  Stop stage supervisor, backend, and web server
   status                Show current release and process status

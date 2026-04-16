@@ -1,5 +1,14 @@
 import { createSessionClient } from "@conduit/session-client";
-import type { SessionClientPort } from "@conduit/session-client";
+import type {
+  SessionClientPort,
+  SessionClientTelemetryEvent,
+} from "@conduit/session-client";
+import {
+  logDebug,
+  logError,
+  logInfo,
+  logWarn,
+} from "./frontend-logger";
 
 function configuredSessionClientUrl(): string {
   const configuredUrl = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
@@ -35,7 +44,24 @@ function configuredSessionHealthUrl(): string {
   return wsUrl.toString();
 }
 
+function logSessionClientTelemetry(event: SessionClientTelemetryEvent): void {
+  if (event.level === "debug") {
+    logDebug(event.event_name, event.fields ?? {});
+    return;
+  }
+  if (event.level === "info") {
+    logInfo(event.event_name, event.fields ?? {});
+    return;
+  }
+  if (event.level === "warn") {
+    logWarn(event.event_name, event.fields ?? {});
+    return;
+  }
+  logError(event.event_name, event.fields ?? {});
+}
+
 const sessionClient: SessionClientPort = createSessionClient({
+  onTelemetryEvent: logSessionClientTelemetry,
   url: configuredSessionClientUrl(),
 });
 

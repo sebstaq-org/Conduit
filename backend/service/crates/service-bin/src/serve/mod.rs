@@ -1,6 +1,7 @@
 //! WebSocket product service for the consumer runtime API.
 
 mod actor;
+mod client_logs;
 mod wire;
 
 use crate::error::Result;
@@ -8,8 +9,9 @@ use crate::local_store::open_product_store;
 use actor::RuntimeActor;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
@@ -28,6 +30,7 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 struct ServeState {
     actor: RuntimeActor,
+    client_log_sink: client_logs::ClientLogSink,
 }
 
 const CATALOG_COMMANDS: [&str; 19] = [
@@ -69,12 +72,17 @@ fn router(local_store: LocalStore) -> Router {
 }
 
 fn router_with_actor(actor: RuntimeActor) -> Router {
+    let client_log_sink = client_logs::ClientLogSink::detect();
     Router::new()
         .route("/health", get(health))
         .route("/api/catalog", get(catalog))
         .route("/api/session", get(session_socket))
+        .route("/api/client-log", post(client_log_ingest))
         .layer(CorsLayer::permissive())
-        .with_state(Arc::new(ServeState { actor }))
+        .with_state(Arc::new(ServeState {
+            actor,
+            client_log_sink,
+        }))
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -97,6 +105,38 @@ async fn session_socket(
     websocket: WebSocketUpgrade,
 ) -> impl IntoResponse {
     websocket.on_upgrade(move |socket| handle_socket(socket, state))
+}
+
+async fn client_log_ingest(
+    State(state): State<Arc<ServeState>>,
+    Json(batch): Json<client_logs::ClientLogBatch>,
+) -> StatusCode {
+    let record_count = batch.record_count();
+    match state.client_log_sink.append(batch).await {
+        Ok(()) => {
+            tracing::debug!(
+                event_name = "client_log.ingest.ok",
+                source = "service-bin",
+                record_count
+            );
+            StatusCode::NO_CONTENT
+        }
+        Err(error) => {
+            let status = if error.is_payload_error() {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            tracing::warn!(
+                event_name = "client_log.ingest.failed",
+                source = "service-bin",
+                status = status.as_u16(),
+                record_count,
+                error = ?error
+            );
+            status
+        }
+    }
 }
 
 async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
