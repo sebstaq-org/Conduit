@@ -86,13 +86,18 @@ pub fn discover_provider_with_environment(
     provider: ProviderId,
     environment: &ProcessEnvironment,
 ) -> Result<ProviderDiscovery> {
+    tracing::info!(
+        event_name = "provider_discovery.start",
+        source = "acp-discovery",
+        provider = %provider.as_str()
+    );
     let launcher = resolve_provider_command(provider)?;
     let resolved = launcher.executable.clone();
     let (probe, diagnostics) = probe_initialize(provider, &launcher, environment)?;
     let version = response_version(provider, &probe.payload)?;
     let auth_hints = response_auth_hints(&probe.response);
 
-    Ok(ProviderDiscovery {
+    let discovery = ProviderDiscovery {
         provider,
         launcher,
         resolved_path: resolved.display().to_string(),
@@ -101,7 +106,16 @@ pub fn discover_provider_with_environment(
         initialize_viable: true,
         transport_diagnostics: diagnostics,
         initialize_probe: probe,
-    })
+    };
+    tracing::info!(
+        event_name = "provider_discovery.finish",
+        source = "acp-discovery",
+        provider = %provider.as_str(),
+        ok = true,
+        resolved_path = %discovery.resolved_path,
+        elapsed_ms = discovery.initialize_probe.elapsed_ms
+    );
+    Ok(discovery)
 }
 
 /// Resolves the exact official launcher command for a provider without probing it.
@@ -113,11 +127,19 @@ pub fn discover_provider_with_environment(
 pub fn resolve_provider_command(provider: ProviderId) -> Result<LauncherCommand> {
     let launcher_spec = provider_launcher(provider);
     let resolved = resolve_executable(launcher_spec.program)?;
-    Ok(LauncherCommand {
+    let command = LauncherCommand {
         executable: resolved,
         args: launcher_spec.args.iter().map(ToString::to_string).collect(),
         display: launcher_spec.display.to_owned(),
-    })
+    };
+    tracing::debug!(
+        event_name = "provider_discovery.resolve_command",
+        source = "acp-discovery",
+        provider = %provider.as_str(),
+        executable = %command.executable.display(),
+        display = %command.display
+    );
+    Ok(command)
 }
 
 fn probe_initialize(
@@ -125,6 +147,14 @@ fn probe_initialize(
     launcher: &LauncherCommand,
     environment: &ProcessEnvironment,
 ) -> Result<(InitializeProbe, Vec<String>)> {
+    tracing::debug!(
+        event_name = "provider_discovery.probe_initialize.start",
+        source = "acp-discovery",
+        provider = %provider.as_str(),
+        executable = %launcher.executable.display(),
+        args = ?launcher.args,
+        environment_vars = environment.env.len()
+    );
     let mut process = spawn_provider_process(provider, launcher, environment)?;
     let request = initialize_request()?;
     send_initialize_request(provider, launcher, &mut process.stdin, &request)?;
@@ -143,7 +173,7 @@ fn probe_initialize(
     let stderr_lines = process.stderr_rx.try_iter().collect::<Vec<_>>();
     let diagnostics = build_diagnostics(provider, capture.elapsed_ms, &stderr_lines);
 
-    Ok((
+    let probe = (
         InitializeProbe {
             response,
             payload,
@@ -152,7 +182,16 @@ fn probe_initialize(
             elapsed_ms: capture.elapsed_ms,
         },
         diagnostics,
-    ))
+    );
+    tracing::debug!(
+        event_name = "provider_discovery.probe_initialize.finish",
+        source = "acp-discovery",
+        provider = %provider.as_str(),
+        elapsed_ms = probe.0.elapsed_ms,
+        stdout_lines = probe.0.stdout_lines.len(),
+        stderr_lines = probe.0.stderr_lines.len()
+    );
+    Ok(probe)
 }
 
 fn initialize_request() -> Result<JsonRpcMessage<OutgoingMessage<ClientSide, AgentSide>>> {

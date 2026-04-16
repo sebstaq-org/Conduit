@@ -8,6 +8,7 @@ import { subscribeSessionIndexInvalidation } from "./session-index-subscription"
 import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
 import { activeSessionOpened } from "./session-selection";
 import { createSessionTimelineData } from "./session-timeline-cache";
+import { logFailure, logInfo } from "./frontend-logger";
 import type {
   CacheLifecycleApi,
   LoadOlderSessionTimelineArg,
@@ -93,6 +94,13 @@ async function handleOpenSessionStarted(
   try {
     const { data } = await queryFulfilled;
     const history = openResultHistory(data);
+    logInfo("frontend.session.open.post_query.start", {
+      open_session_id: history.openSessionId,
+      provider,
+      request_cwd: cwd,
+      request_title: title,
+      session_id: data.sessionId,
+    });
     dispatch(
       activeSessionOpened({
         configOptions: data.configOptions ?? null,
@@ -109,8 +117,18 @@ async function handleOpenSessionStarted(
       }),
     );
     mutations.upsertSessionTimeline(dispatch, history);
-  } catch {
-    // The query result already carries the user-visible failure.
+    logInfo("frontend.session.open.post_query.finish", {
+      ok: true,
+      open_session_id: history.openSessionId,
+      provider,
+      session_id: data.sessionId,
+    });
+  } catch (error) {
+    logFailure("frontend.session.open.post_query.failed", error, {
+      provider,
+      request_cwd: cwd,
+      request_title: title,
+    });
   }
 }
 
@@ -121,6 +139,12 @@ async function handleNewSessionStarted(
 ): Promise<void> {
   try {
     const { data } = await queryFulfilled;
+    logInfo("frontend.session.new.post_query.start", {
+      open_session_id: data.history.openSessionId,
+      provider,
+      request_cwd: cwd,
+      session_id: data.sessionId,
+    });
     dispatch(
       activeSessionOpened({
         configOptions: data.configOptions ?? null,
@@ -138,8 +162,17 @@ async function handleNewSessionStarted(
     );
     mutations.upsertSessionTimeline(dispatch, data.history);
     mutations.invalidateSessionGroups(dispatch);
-  } catch {
-    // The query result already carries the user-visible failure.
+    logInfo("frontend.session.new.post_query.finish", {
+      ok: true,
+      open_session_id: data.history.openSessionId,
+      provider,
+      session_id: data.sessionId,
+    });
+  } catch (error) {
+    logFailure("frontend.session.new.post_query.failed", error, {
+      provider,
+      request_cwd: cwd,
+    });
   }
 }
 

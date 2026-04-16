@@ -13,7 +13,7 @@ environment outside the repo workspace.
 - `stop`: stop stage supervisor and child processes.
 - `status`: print release and process status.
 - `open`: start stage and open browser URL with a cache-busting query string.
-- `logs [backend|web|supervisor]`: print stage logs.
+- `logs [backend|frontend|web|supervisor]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`.
 
 ## Default Runtime Config
@@ -22,6 +22,7 @@ environment outside the repo workspace.
 - web host/port: `127.0.0.1:4310`
 - ws url for stage web build: `ws://127.0.0.1:4274/api/session`
 - stage root: `/srv/devops/repos/conduit-stage`
+- backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
 - stage static server disables browser caching and returns `204` for
   `/favicon.ico` to avoid benign 404 noise.
 - supervisor health polling: every 5 seconds for backend `/health` and web `/`

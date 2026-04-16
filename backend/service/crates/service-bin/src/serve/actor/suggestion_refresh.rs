@@ -30,6 +30,10 @@ fn run_suggestion_refresh_worker<F>(
     F: ProviderFactory,
 {
     let Ok(local_store) = refresh_store() else {
+        tracing::error!(
+            event_name = "suggestion_refresh.store_unavailable",
+            source = "service-bin"
+        );
         return;
     };
     let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
@@ -37,6 +41,10 @@ fn run_suggestion_refresh_worker<F>(
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
+    tracing::info!(
+        event_name = "suggestion_refresh.started",
+        source = "service-bin"
+    );
     refresh_suggestions(&mut runtime);
     loop {
         thread::sleep(SUGGESTION_REFRESH_INTERVAL);
@@ -44,9 +52,22 @@ fn run_suggestion_refresh_worker<F>(
     }
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Refresh outcome is intentionally logged with branch-specific severity."
+)]
 fn refresh_suggestions<F>(runtime: &mut ServiceRuntime<F>)
 where
     F: ProviderFactory,
 {
-    let _refresh_status = runtime.refresh_project_suggestions();
+    let refresh_status = runtime.refresh_project_suggestions();
+    if let Err(error) = refresh_status {
+        tracing::warn!(
+            event_name = "suggestion_refresh.failed",
+            source = "service-bin",
+            error_message = %error
+        );
+    } else {
+        tracing::debug!(event_name = "suggestion_refresh.ok", source = "service-bin");
+    }
 }

@@ -25,6 +25,13 @@ This directory is a hard Rust zone. Follow these rules exactly.
 - `#[allow(...)]` is reserved for cases where `expect` does not work.
 - Broad suppressions are forbidden. Do not use crate-wide or module-wide `allow` or `expect`, including outer attrs on modules.
 
+## Tracing
+
+- Rust logging is `tracing` only. Do not introduce `log`, `env_logger`, `slog`, or similar alternatives.
+- `service-bin` and `repo-guard` own `tracing-subscriber` initialization and must emit JSON logs.
+- Command and worker runtime behavior must emit structured tracing events with stable fields (`event_name`, `source`, command/provider correlation, `ok`, `duration_ms`, and `error_code` when failed).
+- Debug payload logging is allowed in dev/stage; default profile outside dev/stage is info unless explicitly overridden.
+
 ## API And Errors
 
 - Default to private items. Use the smallest possible `pub` surface.

@@ -287,6 +287,15 @@ impl LocalStore {
         updates: &[TranscriptUpdateSnapshot],
         limit: HistoryLimit,
     ) -> Result<SessionHistoryWindow> {
+        tracing::debug!(
+            event_name = "session_store.open_session",
+            source = "session-store",
+            provider = %key.provider.as_str(),
+            session_id = %key.session_id,
+            cwd = %key.cwd,
+            updates = updates.len(),
+            limit = limit.value()
+        );
         let open_session_id = open_session_id_for(&key);
         let items = project_items(updates);
         let revision = self.replace_session_items(&open_session_id, &key, &items)?;
@@ -360,6 +369,14 @@ impl LocalStore {
         &mut self,
         append: PromptTurnAppend<'_>,
     ) -> Result<TimelineMutation> {
+        tracing::debug!(
+            event_name = "session_store.append_prompt_turn_updates",
+            source = "session-store",
+            open_session_id = append.open_session_id,
+            prompt_blocks = append.prompt.len(),
+            updates = append.updates.len(),
+            stop_reason = ?append.stop_reason
+        );
         let existing = self.session_revision("session/prompt", append.open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");

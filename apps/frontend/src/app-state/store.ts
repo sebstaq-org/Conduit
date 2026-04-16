@@ -1,5 +1,6 @@
 import { Tuple, configureStore } from "@reduxjs/toolkit";
 import { conduitApi } from "./api";
+import { frontendLoggingMiddleware } from "./logging-middleware";
 import { sessionSelectionReducer } from "./session-selection";
 
 const store = configureStore({
@@ -8,7 +9,11 @@ const store = configureStore({
     sessionSelection: sessionSelectionReducer,
   },
   middleware: (getDefaultMiddleware) =>
-    new Tuple(...getDefaultMiddleware(), conduitApi.middleware),
+    new Tuple(
+      ...getDefaultMiddleware(),
+      frontendLoggingMiddleware,
+      conduitApi.middleware,
+    ),
 });
 
 type AppDispatch = typeof store.dispatch;

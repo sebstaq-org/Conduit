@@ -25,6 +25,14 @@ Conduit uses a deny-first Rust policy. If a rule is ambiguous between "allow som
 - Stale expectations are forbidden through `unfulfilled_lint_expectations = "deny"`.
 - Direct stdout/stderr emission is forbidden everywhere, including binaries and tooling crates.
 
+## Logging And Observability
+
+- Rust runtime logging is `tracing` only.
+- `service-bin` and `repo-guard` initialize `tracing-subscriber`; log output must be JSON across environments.
+- The runtime logging contract is structured and stable: `event_name`, `source`, command correlation (`command_id`, `command`, `provider`), completion (`ok`, `duration_ms`), and `error_code`/`error_message` for failures.
+- Default level is `debug` in dev/stage profiles and `info` otherwise, with `RUST_LOG` as explicit override.
+- Debug-level payload logging may include full request/response data in dev/stage.
+
 ## Documentation
 
 - Every crate root must have crate-level docs.

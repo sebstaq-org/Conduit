@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use thiserror as _;
 use tokio as _;
 use tokio_util as _;
+use tracing as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 

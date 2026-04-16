@@ -85,6 +85,10 @@ pub struct ContractBundle {
 /// manifest or schema files cannot be read or parsed, or the vendored bundle
 /// checksums no longer match the pinned manifest.
 pub fn load_contract_bundle() -> Result<ContractBundle> {
+    tracing::debug!(
+        event_name = "contract_bundle.load.start",
+        source = "acp-contracts"
+    );
     let repo_root = repo_root()?;
     let vendor_root = repo_root.join("vendor/agent-client-protocol");
     let manifest_path = vendor_root.join("manifest.toml");
@@ -104,13 +108,20 @@ pub fn load_contract_bundle() -> Result<ContractBundle> {
     let validator =
         jsonschema::validator_for(&schema).map_err(|error| Error::contract(error.to_string()))?;
 
-    Ok(ContractBundle {
+    let bundle = ContractBundle {
         repo_root,
         manifest,
         schema,
         meta,
         validator,
-    })
+    };
+    tracing::debug!(
+        event_name = "contract_bundle.load.finish",
+        source = "acp-contracts",
+        ok = true,
+        protocol_version = bundle.manifest.bundle.protocol_version
+    );
+    Ok(bundle)
 }
 
 /// Loads the pinned ACP vendor bundle and enforces the locked method registry.
@@ -120,8 +131,17 @@ pub fn load_contract_bundle() -> Result<ContractBundle> {
 /// Returns an error when the vendored bundle cannot be loaded or when
 /// `meta.json` no longer registers the full locked Phase 1 method subset.
 pub fn load_locked_contract_bundle() -> Result<ContractBundle> {
+    tracing::debug!(
+        event_name = "contract_bundle.load_locked.start",
+        source = "acp-contracts"
+    );
     let bundle = load_contract_bundle()?;
     crate::validate::assert_locked_method_registration(&bundle)?;
+    tracing::debug!(
+        event_name = "contract_bundle.load_locked.finish",
+        source = "acp-contracts",
+        ok = true
+    );
     Ok(bundle)
 }
 

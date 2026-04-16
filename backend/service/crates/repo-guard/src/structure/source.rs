@@ -8,6 +8,16 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 const BANNED_LIB_DEPS: [&str; 2] = ["anyhow", "eyre"];
+const BANNED_LOGGING_DEPS: [&str; 8] = [
+    "env_logger",
+    "fern",
+    "flexi_logger",
+    "log",
+    "pretty_env_logger",
+    "simplelog",
+    "slog",
+    "slog-async",
+];
 const SOURCE_LINE_LIMIT: usize = 700;
 const TEST_LINE_LIMIT: usize = 700;
 
@@ -36,6 +46,7 @@ pub(super) fn collect_failures(
 
     require_workspace_fields(&crate_name, &manifest_value, failures);
     check_library_dependencies(&crate_name, &manifest_dir, package, failures);
+    check_logging_dependencies(&crate_name, package, failures);
     check_crate_root(repo_root, &crate_name, &manifest_dir, failures)?;
     check_rust_files(repo_root, &manifest_dir, failures)
 }
@@ -75,6 +86,40 @@ fn check_library_dependencies(
                 dependency.name
             ));
         }
+    }
+}
+
+fn check_logging_dependencies(crate_name: &str, package: &Package, failures: &mut Vec<String>) {
+    for dependency in &package.dependencies {
+        if BANNED_LOGGING_DEPS.contains(&dependency.name.as_str()) {
+            failures.push(format!(
+                "{crate_name} may not depend on {}; Rust logging must use tracing.",
+                dependency.name
+            ));
+        }
+    }
+
+    if !matches!(crate_name, "service-bin" | "repo-guard") {
+        return;
+    }
+    let has_tracing = package
+        .dependencies
+        .iter()
+        .any(|dependency| dependency.name == "tracing");
+    let has_tracing_subscriber = package
+        .dependencies
+        .iter()
+        .any(|dependency| dependency.name == "tracing-subscriber");
+
+    if !has_tracing {
+        failures.push(format!(
+            "{crate_name} must depend on tracing for runtime logging."
+        ));
+    }
+    if !has_tracing_subscriber {
+        failures.push(format!(
+            "{crate_name} must depend on tracing-subscriber for runtime logging."
+        ));
     }
 }
 

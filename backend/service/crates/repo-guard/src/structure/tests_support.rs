@@ -191,7 +191,7 @@ fn metadata(repo_root: &Path) -> Metadata {
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
-        ("repo-guard", Vec::<&str>::new()),
+        ("repo-guard", vec!["tracing", "tracing-subscriber"]),
         (
             "service-bin",
             vec![
@@ -201,6 +201,8 @@ fn metadata(repo_root: &Path) -> Metadata {
                 "provider-codex",
                 "provider-copilot",
                 "session-store",
+                "tracing",
+                "tracing-subscriber",
             ],
         ),
         (
