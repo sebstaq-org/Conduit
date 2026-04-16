@@ -130,6 +130,48 @@ async fn new_session_prompt_does_not_block_following_history() -> TestResult<()>
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn blocking_prompt_allows_out_of_band_interaction_responses() -> TestResult<()> {
+    let path = test_db_path()?;
+    let open_session_id = seed_open_session(&path, ProviderId::Codex, "session-1")?;
+    let refresh_path = path.clone();
+    let (started, started_rx) = mpsc::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let actor = RuntimeActor::start_with_store_opener(
+        BlockingPromptFactory {
+            release: Arc::clone(&release),
+            started,
+        },
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+    let prompt = spawn_prompt(actor.clone(), "1", &open_session_id);
+    let _started_session = started_rx.recv_timeout(Duration::from_secs(5))?;
+
+    let interaction = tokio::time::timeout(
+        Duration::from_millis(250),
+        actor.dispatch(command(
+            "2",
+            "session/respond_interaction",
+            "all",
+            json!({
+                "openSessionId": open_session_id,
+                "interactionId": "interaction-1",
+                "response": {
+                    "kind": "selected",
+                    "optionId": "answer-0"
+                }
+            }),
+        )),
+    )
+    .await?;
+
+    release_prompt(&release)?;
+    let prompt = tokio::time::timeout(Duration::from_secs(5), prompt).await??;
+    ensure_ok(&interaction)?;
+    ensure_ok(&prompt)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn prompt_lanes_run_different_open_sessions_in_parallel() -> TestResult<()> {
     let path = test_db_path()?;
     let first_open_session_id = seed_open_session(&path, ProviderId::Codex, "session-1")?;
@@ -255,6 +297,19 @@ impl ProviderPort for BlockingPromptProvider {
         Ok(json!({
             "sessionId": session_id,
             "configOptions": []
+        }))
+    }
+
+    fn session_respond_interaction(
+        &mut self,
+        session_id: String,
+        interaction_id: String,
+        response: acp_core::InteractionResponse,
+    ) -> Result<Value> {
+        Ok(json!({
+            "sessionId": session_id,
+            "interactionId": interaction_id,
+            "response": format!("{response:?}")
         }))
     }
 }

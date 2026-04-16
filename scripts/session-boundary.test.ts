@@ -15,6 +15,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "session/new",
   "session/set_config_option",
   "session/prompt",
+  "session/respond_interaction",
   "session/cancel",
   "provider/disconnect",
   "projects/add",

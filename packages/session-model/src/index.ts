@@ -209,6 +209,43 @@ const SessionPromptRequestSchema = z
   })
   .strict();
 type SessionPromptRequest = z.infer<typeof SessionPromptRequestSchema>;
+const SessionRespondInteractionSelectedSchema = z
+  .object({
+    kind: z.literal("selected"),
+    optionId: z.string().min(1),
+  })
+  .strict();
+const SessionRespondInteractionAnswerOtherSchema = z
+  .object({
+    kind: z.literal("answer_other"),
+    optionId: z.string().min(1).optional(),
+    questionId: z.string().min(1),
+    text: z.string(),
+  })
+  .strict();
+const SessionRespondInteractionCancelSchema = z
+  .object({
+    kind: z.literal("cancel"),
+  })
+  .strict();
+const SessionRespondInteractionResponseSchema = z.union([
+  SessionRespondInteractionSelectedSchema,
+  SessionRespondInteractionAnswerOtherSchema,
+  SessionRespondInteractionCancelSchema,
+]);
+type SessionRespondInteractionResponse = z.infer<
+  typeof SessionRespondInteractionResponseSchema
+>;
+const SessionRespondInteractionRequestSchema = z
+  .object({
+    openSessionId: z.string(),
+    interactionId: z.string(),
+    response: SessionRespondInteractionResponseSchema,
+  })
+  .strict();
+type SessionRespondInteractionRequest = z.infer<
+  typeof SessionRespondInteractionRequestSchema
+>;
 const SessionConfigOptionValueSchema = z
   .object({
     value: z.string(),
@@ -409,6 +446,8 @@ export {
   SessionOpenResultSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
+  SessionRespondInteractionRequestSchema,
+  SessionRespondInteractionResponseSchema,
   SessionRowSchema,
   TranscriptItemSchema,
   createLiveSessionIdentity,
@@ -453,6 +492,8 @@ export type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
+  SessionRespondInteractionResponse,
   TranscriptEventItem,
   TranscriptItem,
   TranscriptItemStatus,

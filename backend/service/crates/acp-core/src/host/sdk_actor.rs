@@ -2,8 +2,9 @@
 
 mod internals;
 
+use super::InteractionResponse;
 use super::helpers::{identity, session_update_variant, unexpected};
-use super::prompt::{permission_response, prompt_content_blocks, stop_reason_string};
+use super::prompt::{prompt_content_blocks, stop_reason_string};
 use crate::error::{AcpError, Result};
 use crate::snapshot::{
     ConnectionState, LiveSessionSnapshot, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
@@ -14,14 +15,15 @@ use agent_client_protocol::{self as acp, Agent as _};
 use internals::{
     apply_process_environment, child_has_exited, disconnected, sdk_error, send_reply, to_values,
 };
-use serde_json::{Value, to_value};
-use std::collections::BTreeMap;
+use serde_json::{Value, json, to_value};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 pub(super) enum HostCommand {
@@ -71,6 +73,203 @@ impl HostCommand {
 
     pub(super) fn disconnect(reply: Sender<Result<()>>) -> Self {
         Self::Disconnect { reply }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct InteractionKey {
+    provider: ProviderId,
+    session_id: String,
+    interaction_id: String,
+}
+
+struct PendingInteraction {
+    response_tx: oneshot::Sender<acp::RequestPermissionResponse>,
+}
+
+#[derive(Default)]
+struct InteractionRegistry {
+    pending: HashMap<InteractionKey, PendingInteraction>,
+    resolved: HashSet<InteractionKey>,
+}
+
+static INTERACTION_REGISTRY: LazyLock<Mutex<InteractionRegistry>> =
+    LazyLock::new(|| Mutex::new(InteractionRegistry::default()));
+
+pub(super) fn respond_interaction(
+    provider: ProviderId,
+    session_id: &str,
+    interaction_id: &str,
+    response: InteractionResponse,
+) -> Result<()> {
+    let key = InteractionKey {
+        provider,
+        session_id: session_id.to_owned(),
+        interaction_id: interaction_id.to_owned(),
+    };
+    let pending = {
+        let mut registry = INTERACTION_REGISTRY
+            .lock()
+            .map_err(|error| unexpected(provider, error.to_string()))?;
+        if let Some(pending) = registry.pending.remove(&key) {
+            registry.resolved.insert(key.clone());
+            pending
+        } else if registry.resolved.contains(&key) {
+            return Err(AcpError::ResolvedInteraction {
+                provider,
+                session_id: session_id.to_owned(),
+                interaction_id: interaction_id.to_owned(),
+            });
+        } else {
+            return Err(AcpError::UnknownInteraction {
+                provider,
+                session_id: session_id.to_owned(),
+                interaction_id: interaction_id.to_owned(),
+            });
+        }
+    };
+    let payload = permission_response_from_interaction(provider, interaction_id, response)?;
+    pending
+        .response_tx
+        .send(payload)
+        .map_err(|_error| AcpError::ResolvedInteraction {
+            provider,
+            session_id: session_id.to_owned(),
+            interaction_id: interaction_id.to_owned(),
+        })?;
+    Ok(())
+}
+
+fn permission_response_from_interaction(
+    provider: ProviderId,
+    interaction_id: &str,
+    response: InteractionResponse,
+) -> Result<acp::RequestPermissionResponse> {
+    match response {
+        InteractionResponse::Selected { option_id } => {
+            if option_id.trim().is_empty() {
+                return Err(invalid_interaction_response(
+                    provider,
+                    interaction_id,
+                    "selected option id must be non-empty",
+                ));
+            }
+            Ok(acp::RequestPermissionResponse::new(
+                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+                    option_id,
+                )),
+            ))
+        }
+        InteractionResponse::AnswerOther {
+            option_id,
+            question_id,
+            text,
+        } => {
+            permission_response_answer_other(provider, interaction_id, option_id, question_id, text)
+        }
+        InteractionResponse::Cancelled => Ok(acp::RequestPermissionResponse::new(
+            acp::RequestPermissionOutcome::Cancelled,
+        )),
+    }
+}
+
+fn permission_response_answer_other(
+    provider: ProviderId,
+    interaction_id: &str,
+    option_id: String,
+    question_id: String,
+    text: String,
+) -> Result<acp::RequestPermissionResponse> {
+    if option_id.trim().is_empty() {
+        return Err(invalid_interaction_response(
+            provider,
+            interaction_id,
+            "answer-other option id must be non-empty",
+        ));
+    }
+    if question_id.trim().is_empty() {
+        return Err(invalid_interaction_response(
+            provider,
+            interaction_id,
+            "answer-other question id must be non-empty",
+        ));
+    }
+    if text.trim().is_empty() {
+        return Err(invalid_interaction_response(
+            provider,
+            interaction_id,
+            "answer-other text must be non-empty",
+        ));
+    }
+    let meta = serde_json::Map::from_iter([(
+        "request_user_input_response".to_owned(),
+        json!({
+            "answers": {
+                question_id: {
+                    "answers": [text]
+                }
+            }
+        }),
+    )]);
+    Ok(acp::RequestPermissionResponse::new(
+        acp::RequestPermissionOutcome::Selected(
+            acp::SelectedPermissionOutcome::new(option_id).meta(meta),
+        ),
+    ))
+}
+
+fn invalid_interaction_response(
+    provider: ProviderId,
+    interaction_id: &str,
+    message: &'static str,
+) -> AcpError {
+    AcpError::InvalidInteractionResponse {
+        provider,
+        interaction_id: interaction_id.to_owned(),
+        message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn answer_other_response_includes_request_user_input_meta()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let response = permission_response_from_interaction(
+            ProviderId::Codex,
+            "interaction-1",
+            InteractionResponse::AnswerOther {
+                option_id: "answer-other".to_owned(),
+                question_id: "plan_target".to_owned(),
+                text: "custom choice".to_owned(),
+            },
+        )?;
+        let payload = serde_json::to_value(response)?;
+        if payload
+            .pointer("/outcome/_meta/request_user_input_response/answers/plan_target/answers/0")
+            .and_then(Value::as_str)
+            == Some("custom choice")
+        {
+            return Ok(());
+        }
+        Err(format!("missing answer-other meta payload: {payload}").into())
+    }
+
+    #[test]
+    fn selected_response_requires_non_empty_option_id() {
+        let result = permission_response_from_interaction(
+            ProviderId::Codex,
+            "interaction-1",
+            InteractionResponse::Selected {
+                option_id: " ".to_owned(),
+            },
+        );
+        assert!(
+            matches!(result, Err(AcpError::InvalidInteractionResponse { .. })),
+            "expected invalid interaction response, got {result:?}"
+        );
     }
 }
 
@@ -190,6 +389,7 @@ impl SdkHostActor {
     }
 
     async fn disconnect(&mut self) {
+        cancel_pending_interactions_for_provider(self.provider);
         self.connection = None;
         if let Some(mut child) = self.child.take() {
             let _result = child.start_kill();
@@ -337,6 +537,7 @@ impl SdkHostActor {
     }
 
     async fn cancel_prompt(&self, session_id: acp::SessionId) -> Result<()> {
+        cancel_pending_interactions_for_session(self.provider, &session_id.to_string());
         self.connection()?
             .cancel(acp::CancelNotification::new(session_id))
             .await
@@ -436,246 +637,4 @@ impl SdkHostActor {
     }
 }
 
-#[derive(Default)]
-struct PromptUpdateState {
-    active_session: Option<String>,
-    raw_update_count: usize,
-    agent_text_chunks: Vec<String>,
-    updates: Vec<TranscriptUpdateSnapshot>,
-    update_sender: Option<Sender<TranscriptUpdateSnapshot>>,
-}
-
-struct PromptUpdates {
-    raw_update_count: usize,
-    agent_text_chunks: Vec<String>,
-    updates: Vec<TranscriptUpdateSnapshot>,
-}
-
-#[derive(Clone)]
-struct SdkClient {
-    provider: ProviderId,
-    updates: Arc<Mutex<PromptUpdateState>>,
-}
-
-#[async_trait::async_trait(?Send)]
-impl acp::Client for SdkClient {
-    async fn request_permission(
-        &self,
-        args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
-        Ok(permission_response(args))
-    }
-
-    async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
-        let mut updates = self.updates.lock().map_err(|error| {
-            acp::Error::internal_error().data(format!(
-                "prompt update lock poisoned for {}: {error}",
-                self.provider
-            ))
-        })?;
-        if updates.active_session.as_deref() == Some(&args.session_id.to_string()) {
-            updates.raw_update_count += 1;
-            let index = updates.raw_update_count.saturating_sub(1);
-            let update = to_value(&args.update).map_err(|error| {
-                acp::Error::internal_error().data(format!(
-                    "session update serialization failed for {}: {error}",
-                    self.provider
-                ))
-            })?;
-            let variant = session_update_variant(&args.update, &update);
-            let snapshot = TranscriptUpdateSnapshot {
-                index,
-                variant,
-                update,
-            };
-            if let Some(update_sender) = &updates.update_sender {
-                let _result = update_sender.send(snapshot.clone());
-            }
-            updates.updates.push(snapshot);
-            if let acp::SessionUpdate::AgentMessageChunk(chunk) = &args.update
-                && let acp::ContentBlock::Text(text) = &chunk.content
-            {
-                updates.agent_text_chunks.push(text.text.clone());
-            }
-        }
-        Ok(())
-    }
-}
-
-pub(super) struct ActorBootstrap {
-    pub(super) provider: ProviderId,
-    pub(super) discovery: ProviderDiscovery,
-    pub(super) launcher: LauncherCommand,
-    pub(super) environment: ProcessEnvironment,
-    pub(super) commands: UnboundedReceiver<HostCommand>,
-    pub(super) init: Sender<Result<ProviderSnapshot>>,
-}
-
-pub(super) fn spawn_actor(bootstrap: ActorBootstrap) -> Result<()> {
-    let provider = bootstrap.provider;
-    thread::Builder::new()
-        .name(format!("conduit-acp-host-{provider}"))
-        .spawn(move || run_actor_thread(bootstrap))
-        .map(|_handle| ())
-        .map_err(|source| AcpError::Spawn { provider, source })
-}
-
-fn run_actor_thread(bootstrap: ActorBootstrap) {
-    let provider = bootstrap.provider;
-    let runtime = match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            send_reply(bootstrap.init, Err(unexpected(provider, error.to_string())));
-            return;
-        }
-    };
-    let local = tokio::task::LocalSet::new();
-    local.block_on(&runtime, async move {
-        run_actor(bootstrap).await;
-    });
-}
-
-async fn run_actor(bootstrap: ActorBootstrap) {
-    let provider = bootstrap.provider;
-    match SdkHostActor::connect(
-        provider,
-        bootstrap.discovery,
-        bootstrap.launcher,
-        bootstrap.environment,
-    )
-    .await
-    {
-        Ok(mut actor) => {
-            send_reply(bootstrap.init, Ok(actor.snapshot()));
-            actor.run(bootstrap.commands).await;
-        }
-        Err(error) => send_reply(bootstrap.init, Err(error)),
-    }
-}
-
-fn spawn_sdk_connection(
-    provider: ProviderId,
-    launcher: &LauncherCommand,
-    environment: &ProcessEnvironment,
-    updates: &Arc<Mutex<PromptUpdateState>>,
-) -> Result<(acp::ClientSideConnection, tokio::process::Child)> {
-    let mut command = tokio::process::Command::new(&launcher.executable);
-    command
-        .args(&launcher.args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
-    apply_process_environment(&mut command, environment);
-    let mut child = command
-        .spawn()
-        .map_err(|source| AcpError::Spawn { provider, source })?;
-    let outgoing = child_stdin(provider, &mut child)?;
-    let incoming = child_stdout(provider, &mut child)?;
-    let client = SdkClient {
-        provider,
-        updates: Arc::clone(updates),
-    };
-    let (connection, io_task) =
-        acp::ClientSideConnection::new(client, outgoing, incoming, |future| {
-            tokio::task::spawn_local(future);
-        });
-    tokio::task::spawn_local(io_task);
-    Ok((connection, child))
-}
-
-fn child_stdin(
-    provider: ProviderId,
-    child: &mut tokio::process::Child,
-) -> Result<tokio_util::compat::Compat<tokio::process::ChildStdin>> {
-    child
-        .stdin
-        .take()
-        .map(TokioAsyncWriteCompatExt::compat_write)
-        .ok_or_else(|| disconnected(provider, "stdin"))
-}
-
-fn child_stdout(
-    provider: ProviderId,
-    child: &mut tokio::process::Child,
-) -> Result<tokio_util::compat::Compat<tokio::process::ChildStdout>> {
-    child
-        .stdout
-        .take()
-        .map(TokioAsyncReadCompatExt::compat)
-        .ok_or_else(|| disconnected(provider, "stdout"))
-}
-
-fn update_session_tracker(
-    updates: &Arc<Mutex<PromptUpdateState>>,
-    active_session: Option<String>,
-    raw_update_count: usize,
-    update_sender: Option<Sender<TranscriptUpdateSnapshot>>,
-    provider: ProviderId,
-) -> Result<()> {
-    let mut updates = updates
-        .lock()
-        .map_err(|error| unexpected(provider, error.to_string()))?;
-    updates.active_session = active_session;
-    updates.raw_update_count = raw_update_count;
-    updates.agent_text_chunks.clear();
-    updates.updates.clear();
-    updates.update_sender = update_sender;
-    Ok(())
-}
-
-fn take_session_updates(
-    updates: &Arc<Mutex<PromptUpdateState>>,
-    provider: ProviderId,
-) -> Result<PromptUpdates> {
-    let mut updates = updates
-        .lock()
-        .map_err(|error| unexpected(provider, error.to_string()))?;
-    let count = updates.raw_update_count;
-    let agent_text_chunks = std::mem::take(&mut updates.agent_text_chunks);
-    let captured_updates = std::mem::take(&mut updates.updates);
-    updates.active_session = None;
-    updates.raw_update_count = 0;
-    updates.update_sender = None;
-    Ok(PromptUpdates {
-        raw_update_count: count,
-        agent_text_chunks,
-        updates: captured_updates,
-    })
-}
-
-pub(super) fn disconnected_snapshot(
-    provider: ProviderId,
-    discovery: ProviderDiscovery,
-) -> ProviderSnapshot {
-    ProviderSnapshot {
-        provider,
-        connection_state: ConnectionState::Disconnected,
-        discovery,
-        capabilities: Value::Null,
-        auth_methods: Vec::new(),
-        live_sessions: Vec::new(),
-        last_prompt: None,
-        loaded_transcripts: Vec::new(),
-    }
-}
-
-pub(super) fn receive_result<T>(
-    provider: ProviderId,
-    operation: &'static str,
-    response: Receiver<Result<T>>,
-) -> Result<T> {
-    response
-        .recv()
-        .map_err(|_error| actor_stopped(provider, operation))?
-}
-
-pub(super) fn actor_stopped(provider: ProviderId, operation: &str) -> AcpError {
-    AcpError::ActorStopped {
-        provider,
-        operation: operation.to_owned(),
-    }
-}
+include!("sdk_actor_tail.rs");

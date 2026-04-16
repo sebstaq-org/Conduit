@@ -12,7 +12,9 @@
 )]
 
 use acp_contracts::LOCKED_ACP_METHODS;
-use acp_core::{AcpHost, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+use acp_core::{
+    AcpHost, InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
+};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use agent_client_protocol_schema::{
     ListSessionsResponse, LoadSessionResponse, NewSessionResponse, PromptResponse,
@@ -193,6 +195,22 @@ impl AppService {
     ) -> Result<SetSessionConfigOptionResponse> {
         self.host
             .set_session_config_option(session_id, config_id, value)
+    }
+
+    /// Responds to one pending interaction for an active prompt turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the interaction is unknown, already resolved, or
+    /// the response payload is invalid.
+    pub fn respond_interaction(
+        &self,
+        session_id: &str,
+        interaction_id: &str,
+        response: InteractionResponse,
+    ) -> Result<()> {
+        self.host
+            .respond_interaction(session_id, interaction_id, response)
     }
 
     /// Returns the current operation snapshot for proof tooling.

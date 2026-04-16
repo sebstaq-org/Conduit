@@ -26,11 +26,12 @@ struct ServeState {
     actor: RuntimeActor,
 }
 
-const CATALOG_COMMANDS: [&str; 19] = [
+const CATALOG_COMMANDS: [&str; 20] = [
     "initialize",
     "session/new",
     "session/set_config_option",
     "session/prompt",
+    "session/respond_interaction",
     "session/cancel",
     "provider/disconnect",
     "projects/add",

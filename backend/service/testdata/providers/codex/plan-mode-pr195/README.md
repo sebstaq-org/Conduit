@@ -26,6 +26,12 @@ workspace (`codex-live-observation`), identified by run id:
 - `codex-acp-direct-probe-refactored-pr195-20260416T064922Z`
 - `codex-acp-direct-probe-refactored-pr195-interactions-20260416T065726Z`
 - `codex-acp-direct-probe-refactored-pr195-edgecases-20260416T081650Z`
+- `codex-prb-backend-interaction-20260416T100116Z`
+- `codex-prb-backend-interaction-20260416T101057Z`
+
+PR B backend bridge live-delta curation is captured in:
+
+- `fixtures/backend-interaction-bridge-live.json`
 
 Thread Lens references are copied into `thread-lens-reference/` as secondary
 shape evidence only. They are not the canonical source of truth for Conduit

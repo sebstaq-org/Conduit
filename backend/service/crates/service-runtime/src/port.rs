@@ -1,7 +1,7 @@
 //! Provider runtime ports used by the consumer manager.
 
 use crate::Result;
-use acp_core::{ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+use acp_core::{InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -82,4 +82,22 @@ pub trait ProviderPort: Send {
         config_id: String,
         value: String,
     ) -> Result<Value>;
+
+    /// Runs one out-of-band interaction response while a prompt is active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider runtime does not support the command
+    /// or the interaction response is rejected.
+    fn session_respond_interaction(
+        &mut self,
+        session_id: String,
+        interaction_id: String,
+        response: InteractionResponse,
+    ) -> Result<Value> {
+        let _unused = (session_id, interaction_id, response);
+        Err(crate::RuntimeError::UnsupportedCommand(
+            "session/respond_interaction".to_owned(),
+        ))
+    }
 }

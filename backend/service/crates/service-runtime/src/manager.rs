@@ -17,7 +17,7 @@ use crate::manager_response::{
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
-use acp_core::ConnectionState;
+use acp_core::{ConnectionState, InteractionResponse};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
@@ -198,6 +198,10 @@ where
             "session/prompt" => {
                 Self::require_global_provider("session/prompt", &command.provider)?;
                 Some(self.session_prompt(command.id.clone(), &command.params)?)
+            }
+            "session/respond_interaction" => {
+                Self::require_global_provider("session/respond_interaction", &command.provider)?;
+                Some(self.session_respond_interaction(command.id.clone(), &command.params)?)
             }
             _ => None,
         };
@@ -450,6 +454,38 @@ where
         ))
     }
 
+    fn session_respond_interaction(
+        &mut self,
+        id: String,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let open_session_id = string_param("session/respond_interaction", params, "openSessionId")?;
+        let interaction_id = string_param("session/respond_interaction", params, "interactionId")?;
+        let response = parse_interaction_response(params)?;
+        let key = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .open_session_key("session/respond_interaction", &open_session_id)?
+        };
+        let provider_response = {
+            let provider_port = self.provider(key.provider)?;
+            provider_port.session_respond_interaction(
+                key.session_id.clone(),
+                interaction_id.clone(),
+                response,
+            )?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            json!({
+                "openSessionId": open_session_id,
+                "sessionId": key.session_id,
+                "interactionId": interaction_id,
+                "providerResult": provider_response
+            }),
+        ))
+    }
+
     fn session_cancel(
         &mut self,
         id: String,
@@ -593,5 +629,67 @@ where
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         self.local_store.set_open_session_state(key, &state)?;
         Ok(())
+    }
+}
+
+fn parse_interaction_response(params: &Value) -> Result<InteractionResponse> {
+    let command = "session/respond_interaction";
+    let Some(response) = params.get("response") else {
+        return Err(RuntimeError::MissingParameter {
+            command,
+            parameter: "response",
+        });
+    };
+    let Some(kind) = response.get("kind").and_then(Value::as_str) else {
+        return Err(RuntimeError::InvalidParameter {
+            command,
+            parameter: "response.kind",
+            message: "must be selected, answer_other, or cancel",
+        });
+    };
+    match kind {
+        "selected" => {
+            let option_id = response.get("optionId").and_then(Value::as_str).ok_or(
+                RuntimeError::InvalidParameter {
+                    command,
+                    parameter: "response.optionId",
+                    message: "selected response requires optionId",
+                },
+            )?;
+            Ok(InteractionResponse::Selected {
+                option_id: option_id.to_owned(),
+            })
+        }
+        "answer_other" => {
+            let question_id = response.get("questionId").and_then(Value::as_str).ok_or(
+                RuntimeError::InvalidParameter {
+                    command,
+                    parameter: "response.questionId",
+                    message: "answer_other response requires questionId",
+                },
+            )?;
+            let text = response.get("text").and_then(Value::as_str).ok_or(
+                RuntimeError::InvalidParameter {
+                    command,
+                    parameter: "response.text",
+                    message: "answer_other response requires text",
+                },
+            )?;
+            let option_id = response
+                .get("optionId")
+                .and_then(Value::as_str)
+                .unwrap_or("answer-other");
+            Ok(InteractionResponse::AnswerOther {
+                option_id: option_id.to_owned(),
+                question_id: question_id.to_owned(),
+                text: text.to_owned(),
+            })
+        }
+        "cancel" => Ok(InteractionResponse::Cancelled),
+        _ => Err(RuntimeError::InvalidParameter {
+            command,
+            parameter: "response.kind",
+            message: "must be selected, answer_other, or cancel",
+        }),
     }
 }

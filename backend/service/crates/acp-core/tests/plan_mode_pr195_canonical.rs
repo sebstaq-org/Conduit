@@ -16,6 +16,19 @@ use tokio as _;
 use tokio_util as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
+const REQUIRED_ROWS: [&str; 11] = [
+    "patched_adapter_runtime_identity",
+    "collaboration_mode_config_option_exposed",
+    "session_set_mode_plan_invalid_params",
+    "session_set_config_option_plan_direct",
+    "structured_question_carrier",
+    "answer_other_payload_with_meta",
+    "cancel_pending_question_behavior",
+    "invalid_option_behavior",
+    "continuation_after_plan_and_session_load",
+    "typed_terminal_plan_signal",
+    "explicit_implement_plan_action",
+];
 
 #[derive(Debug, Deserialize)]
 struct ProofIndex {
@@ -57,72 +70,8 @@ fn codex_pr195_canonical_index_is_decision_complete() -> TestResult<()> {
         return Err("proof-index rows must not be empty".into());
     }
 
-    let required_rows = [
-        "patched_adapter_runtime_identity",
-        "collaboration_mode_config_option_exposed",
-        "session_set_mode_plan_invalid_params",
-        "session_set_config_option_plan_direct",
-        "structured_question_carrier",
-        "answer_other_payload_with_meta",
-        "cancel_pending_question_behavior",
-        "invalid_option_behavior",
-        "continuation_after_plan_and_session_load",
-        "typed_terminal_plan_signal",
-        "explicit_implement_plan_action",
-    ];
-
-    for required in required_rows {
-        let exists = index.rows.iter().any(|row| row.row_id == required);
-        if !exists {
-            return Err(format!("missing required proof row: {required}").into());
-        }
-    }
-
-    let mut missing_rows = BTreeSet::new();
-    for row in &index.rows {
-        if row.sources.is_empty() {
-            return Err(format!("row {} has no sources", row.row_id).into());
-        }
-        for source in &row.sources {
-            if source.run_id.trim().is_empty()
-                || source.artifact.trim().is_empty()
-                || source.command.trim().is_empty()
-            {
-                return Err(format!("row {} contains empty source fields", row.row_id).into());
-            }
-        }
-        match row.status {
-            ProofStatus::Verified => {
-                if row.proof_of_absence.is_some() {
-                    return Err(format!(
-                        "verified row {} must not carry proof_of_absence",
-                        row.row_id
-                    )
-                    .into());
-                }
-            }
-            ProofStatus::Missing => {
-                missing_rows.insert(row.row_id.as_str());
-                let Some(proof) = &row.proof_of_absence else {
-                    return Err(format!(
-                        "missing row {} must include proof_of_absence",
-                        row.row_id
-                    )
-                    .into());
-                };
-                if proof.command.trim().is_empty() {
-                    return Err(
-                        format!("missing row {} has empty proof command", row.row_id).into(),
-                    );
-                }
-                if proof.observed_result.is_null() {
-                    return Err(
-                        format!("missing row {} has null observed_result", row.row_id).into(),
-                    );
-                }
-            }
-        }
-    }
+    assert_required_rows(&index)?;
+    let missing_rows = validate_row_shapes(&index)?;
 
     let expected_missing: BTreeSet<&str> = BTreeSet::from([
         "typed_terminal_plan_signal",
@@ -139,6 +88,70 @@ fn codex_pr195_canonical_index_is_decision_complete() -> TestResult<()> {
     Ok(())
 }
 
+fn assert_required_rows(index: &ProofIndex) -> TestResult<()> {
+    for required in REQUIRED_ROWS {
+        let exists = index.rows.iter().any(|row| row.row_id == required);
+        if !exists {
+            return Err(format!("missing required proof row: {required}").into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_row_shapes(index: &ProofIndex) -> TestResult<BTreeSet<&str>> {
+    let mut missing_rows = BTreeSet::new();
+    for row in &index.rows {
+        validate_sources(row)?;
+        match row.status {
+            ProofStatus::Verified => validate_verified_row(row)?,
+            ProofStatus::Missing => {
+                validate_missing_row(row)?;
+                missing_rows.insert(row.row_id.as_str());
+            }
+        }
+    }
+    Ok(missing_rows)
+}
+
+fn validate_sources(row: &ProofRow) -> TestResult<()> {
+    if row.sources.is_empty() {
+        return Err(format!("row {} has no sources", row.row_id).into());
+    }
+    for source in &row.sources {
+        if source.run_id.trim().is_empty()
+            || source.artifact.trim().is_empty()
+            || source.command.trim().is_empty()
+        {
+            return Err(format!("row {} contains empty source fields", row.row_id).into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_verified_row(row: &ProofRow) -> TestResult<()> {
+    if row.proof_of_absence.is_some() {
+        return Err(format!(
+            "verified row {} must not carry proof_of_absence",
+            row.row_id
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_missing_row(row: &ProofRow) -> TestResult<()> {
+    let Some(proof) = &row.proof_of_absence else {
+        return Err(format!("missing row {} must include proof_of_absence", row.row_id).into());
+    };
+    if proof.command.trim().is_empty() {
+        return Err(format!("missing row {} has empty proof command", row.row_id).into());
+    }
+    if proof.observed_result.is_null() {
+        return Err(format!("missing row {} has null observed_result", row.row_id).into());
+    }
+    Ok(())
+}
+
 #[test]
 fn codex_pr195_fixture_pack_deserializes() -> TestResult<()> {
     let root = canonical_root()?;
@@ -148,6 +161,7 @@ fn codex_pr195_fixture_pack_deserializes() -> TestResult<()> {
         "fixtures/answer-payloads.json",
         "fixtures/terminal-and-absence.json",
         "fixtures/continuation-load.json",
+        "fixtures/backend-interaction-bridge-live.json",
         "thread-lens-reference/codex-plan-shape-excerpt.json",
     ];
 

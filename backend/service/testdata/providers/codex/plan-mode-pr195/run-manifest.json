@@ -10,10 +10,7 @@
     "repo": "codex-acp-pr195",
     "branch": "pr-195-head",
     "head_commit": "4ae9064",
-    "local_patch_files": [
-      "src/codex_agent.rs",
-      "src/thread.rs"
-    ],
+    "local_patch_files": ["src/codex_agent.rs", "src/thread.rs"],
     "target_executable": "vendor/codex-acp-pr195/target/release/codex-acp",
     "build_command": "rtk env PKG_CONFIG_PATH=/srv/devops/repos/vendor/libcap-dev-extract/usr/lib/x86_64-linux-gnu/pkgconfig PKG_CONFIG_SYSROOT_DIR=/srv/devops/repos/vendor/libcap-dev-extract cargo build --release",
     "request_user_input_test_command": "rtk env PKG_CONFIG_PATH=/srv/devops/repos/vendor/libcap-dev-extract/usr/lib/x86_64-linux-gnu/pkgconfig PKG_CONFIG_SYSROOT_DIR=/srv/devops/repos/vendor/libcap-dev-extract cargo test request_user_input -- --nocapture"
@@ -44,6 +41,20 @@
       "started_at": "2026-04-16T08:17:06.502Z",
       "completed_at": "2026-04-16T08:18:16.920Z",
       "purpose": "Deterministic answer-other, cancel, and invalid-option behavior under pending question"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_A",
+      "capture_id": "codex-prb-backend-interaction-20260416T100116Z",
+      "started_at": "2026-04-16T10:01:43.190Z",
+      "completed_at": "2026-04-16T10:02:49.021Z",
+      "purpose": "Conduit live delta for session/respond_interaction bridge with forced question prompt"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_B",
+      "capture_id": "codex-prb-backend-interaction-20260416T101057Z",
+      "started_at": "2026-04-16T10:11:25.366Z",
+      "completed_at": "2026-04-16T10:13:45.846Z",
+      "purpose": "Conduit live delta rerun with explicit request_user_input trigger prompt"
     }
   ],
   "key_commands": [
@@ -51,16 +62,11 @@
     "rtk node <run-dir>/proof-runner.mjs ws://127.0.0.1:4294/api/session <run-dir>",
     "rtk jq -s '...' <run-dir>/proxy-wire/codex-wire-*.jsonl",
     "rtk node <run-dir>/direct-probe.mjs <run-dir>",
-    "rtk node <run-dir>/direct-probe-edgecases.mjs <run-dir>"
+    "rtk node <run-dir>/direct-probe-edgecases.mjs <run-dir>",
+    "rtk node <run-dir>/prb-interaction-proof-runner.mjs ws://127.0.0.1:<port>/api/session <run-dir>"
   ],
   "redaction": {
-    "env_keys_kept": [
-      "CODEX_*",
-      "OPENAI_*",
-      "ACP_*",
-      "CONDUIT_*",
-      "PATH"
-    ],
+    "env_keys_kept": ["CODEX_*", "OPENAI_*", "ACP_*", "CONDUIT_*", "PATH"],
     "secrets_committed": false
   }
 }

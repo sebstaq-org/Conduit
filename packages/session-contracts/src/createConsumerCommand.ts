@@ -4,6 +4,7 @@ import {
   isSessionHistoryRequest,
   isSessionOpenRequest,
   isSessionPromptRequest,
+  isSessionRespondInteractionRequest,
   isSessionSetConfigOptionRequest,
 } from "./commandParams.js";
 import {
@@ -25,14 +26,6 @@ let nextCommandSequence = 0;
 function nextConsumerCommandId(): string {
   nextCommandSequence += 1;
   return `conduit-command-${String(nextCommandSequence)}`;
-}
-
-function toRecordParams(params: object): Record<string, unknown> {
-  const record: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params)) {
-    record[key] = value;
-  }
-  return record;
 }
 
 function requireProvider(
@@ -201,6 +194,22 @@ function createSessionPromptCommand(
   });
 }
 
+function createSessionRespondInteractionCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ConsumerCommand {
+  if (!isSessionRespondInteractionRequest(params)) {
+    throw new Error("session/respond_interaction params are invalid");
+  }
+  return parseConsumerCommand({
+    id,
+    command: "session/respond_interaction",
+    provider: requireGlobalProvider("session/respond_interaction", provider),
+    params,
+  });
+}
+
 function createSessionSetConfigOptionCommand(
   id: string,
   provider: ConsumerCommandTarget,
@@ -231,6 +240,7 @@ type KnownConduitCommandName =
   | "providers/config_snapshot"
   | "session/open"
   | "session/set_config_option"
+  | "session/respond_interaction"
   | "session/history"
   | "session/watch"
   | "session/prompt";
@@ -246,6 +256,7 @@ const conduitFactories: Record<NonProjectConduitCommandName, ConduitFactory> = {
   "session/history": createSessionHistoryCommand,
   "session/open": createSessionOpenCommand,
   "session/set_config_option": createSessionSetConfigOptionCommand,
+  "session/respond_interaction": createSessionRespondInteractionCommand,
   "session/prompt": createSessionPromptCommand,
   "session/watch": createSessionWatchCommand,
   "sessions/grouped": createSessionGroupsCommand,
@@ -279,7 +290,7 @@ function createConsumerCommand(
     id,
     command,
     provider: requireProvider(command, provider),
-    params: toRecordParams(params),
+    params: Object.fromEntries(Object.entries(params)),
   });
 }
 

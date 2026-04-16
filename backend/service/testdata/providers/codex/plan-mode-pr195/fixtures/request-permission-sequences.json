@@ -101,9 +101,7 @@
               "request_user_input_response": {
                 "answers": {
                   "plan_target": {
-                    "answers": [
-                      "custom free text from host response"
-                    ]
+                    "answers": ["custom free text from host response"]
                   }
                 }
               }

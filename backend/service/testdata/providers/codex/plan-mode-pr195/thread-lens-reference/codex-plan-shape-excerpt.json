@@ -10,9 +10,7 @@
     "response_shape": {
       "answers": {
         "<question_id>": {
-          "answers": [
-            "<selected label>"
-          ]
+          "answers": ["<selected label>"]
         }
       }
     },

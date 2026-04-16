@@ -37,10 +37,7 @@
       ],
       "evidence_excerpt": {
         "configOptionId": "collaboration_mode",
-        "values": [
-          "plan",
-          "default"
-        ]
+        "values": ["plan", "default"]
       },
       "normalized_evidence": null,
       "gap": null,
@@ -169,14 +166,8 @@
         }
       ],
       "evidence_excerpt": {
-        "requestIds": [
-          0,
-          1
-        ],
-        "responseIds": [
-          0,
-          1
-        ]
+        "requestIds": [0, 1],
+        "responseIds": [0, 1]
       },
       "normalized_evidence": null,
       "gap": null,

@@ -17,7 +17,7 @@ mod snapshot;
 mod wire;
 
 pub use error::{AcpError, Result};
-pub use host::AcpHost;
+pub use host::{AcpHost, InteractionResponse};
 pub use snapshot::{
     ConnectionState, LiveSessionIdentity, LiveSessionSnapshot, LoadedTranscriptSnapshot,
     PromptLifecycleSnapshot, PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,

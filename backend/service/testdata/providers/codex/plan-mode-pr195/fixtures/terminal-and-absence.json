@@ -1,10 +1,6 @@
 {
   "prompt_terminal_signals": {
-    "source_runs": [
-      "RUN_DIRECT",
-      "RUN_EDGECASES_FINAL",
-      "RUN_CONDUIT"
-    ],
+    "source_runs": ["RUN_DIRECT", "RUN_EDGECASES_FINAL", "RUN_CONDUIT"],
     "observed_stop_reasons": [
       {
         "run_id": "RUN_EDGECASES_FINAL",
