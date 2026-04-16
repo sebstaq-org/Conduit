@@ -21,6 +21,7 @@ import {
 } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import type { Theme } from "@/theme";
+import { useSessionComposerPlanInteractionMock } from "./session-composer-plan-interaction-mock";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
   resolveDraftProviderReady,
@@ -270,6 +271,7 @@ function useSessionComposerController(): SessionComposerController {
 function SessionComposer(): React.JSX.Element {
   const theme = useTheme<Theme>();
   const controller = useSessionComposerController();
+  const planInteractionMock = useSessionComposerPlanInteractionMock();
   return (
     <SessionComposerSurface
       activeSession={controller.activeSession}
@@ -281,6 +283,8 @@ function SessionComposer(): React.JSX.Element {
       onProviderSelect={controller.handleProviderSelect}
       onSend={controller.handleSend}
       isConfigUpdating={controller.isConfigUpdating}
+      planInteractionMockActions={planInteractionMock.actions}
+      planInteractionMockView={planInteractionMock.view}
       setDraft={controller.setDraft}
       theme={theme}
     />

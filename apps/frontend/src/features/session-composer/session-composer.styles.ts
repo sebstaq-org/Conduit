@@ -41,6 +41,10 @@ function createSessionComposerSurfaceStyle(
   return { minHeight: theme.panel.composerSurfaceMinHeight };
 }
 
+function createSessionComposerInteractionSurfaceStyle(): SessionComposerSurfaceStyle {
+  return { minHeight: 184 };
+}
+
 function createSessionComposerControlStyle(
   theme: Theme,
 ): SessionComposerControlStyle {
@@ -53,6 +57,7 @@ function createSessionComposerControlStyle(
 
 export {
   createSessionComposerControlStyle,
+  createSessionComposerInteractionSurfaceStyle,
   createSessionComposerSurfaceStyle,
   sessionComposerAccessibilityLabel,
   sessionComposerBackgroundColor,
