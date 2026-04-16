@@ -9,9 +9,7 @@ interface FrontendLogRecord {
   timestamp: string;
   [field: string]: unknown;
 }
-const LOG_PROFILE_ENV = "EXPO_PUBLIC_CONDUIT_LOG_PROFILE";
 const WS_URL_ENV = "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL";
-const CLIENT_LOG_URL_ENV = "EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL";
 const MAX_BATCH_SIZE = 64;
 const MAX_QUEUE_SIZE = 4096;
 const FLUSH_INTERVAL_MS = 1000;
@@ -41,11 +39,11 @@ function normalizeProfile(raw: string | undefined): FrontendLogProfile {
 }
 
 function configuredLogProfile(): string | undefined {
-  return process.env[LOG_PROFILE_ENV];
+  return process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE;
 }
 
 function parseWsUrl(): URL {
-  const configuredWsUrl = process.env[WS_URL_ENV];
+  const configuredWsUrl = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
   if (configuredWsUrl === undefined) {
     throw new Error(`${WS_URL_ENV} is required when frontend logging is enabled.`);
   }
@@ -56,7 +54,7 @@ function parseWsUrl(): URL {
   return new URL(wsUrl);
 }
 function resolveClientLogOverride(): string | null {
-  const configuredOverride = process.env[CLIENT_LOG_URL_ENV];
+  const configuredOverride = process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL;
   if (configuredOverride === undefined) {
     return null;
   }
