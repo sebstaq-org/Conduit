@@ -1,0 +1,66 @@
+{
+  "prompt_terminal_signals": {
+    "source_runs": [
+      "RUN_DIRECT",
+      "RUN_EDGECASES_FINAL",
+      "RUN_CONDUIT"
+    ],
+    "observed_stop_reasons": [
+      {
+        "run_id": "RUN_EDGECASES_FINAL",
+        "phase": "phase-invalid-answer",
+        "label": "prompt-forced-questions-invalid-answer",
+        "stopReason": "cancelled"
+      },
+      {
+        "run_id": "RUN_EDGECASES_FINAL",
+        "phase": "phase-cancel-answer",
+        "label": "prompt-forced-questions-cancel-answer",
+        "stopReason": "cancelled"
+      },
+      {
+        "run_id": "RUN_EDGECASES_FINAL",
+        "phase": "phase-answer-other",
+        "label": "prompt-forced-questions-answer-other",
+        "stopReason": "end_turn"
+      },
+      {
+        "run_id": "RUN_DIRECT",
+        "phase": "phase-2-reconnect-load",
+        "label": "prompt-continuation",
+        "stopReason": "end_turn"
+      }
+    ],
+    "typed_plan_terminal_observed": false
+  },
+  "absence_proofs": {
+    "typed_terminal_plan_signal": {
+      "command": "rtk jq -s '{planUpdateCount:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"plan\")] | length),turnItemPlanTokenCount:([.[] | select((.frame|tostring)|contains(\"TurnItem::Plan\"))] | length)}' RUN_DIRECT/raw-frames.jsonl",
+      "result": {
+        "planUpdateCount": 0,
+        "turnItemPlanTokenCount": 0
+      }
+    },
+    "explicit_implement_plan_action": {
+      "command": "rtk jq -s '{availableCommandNames:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | unique | sort),containsImplement:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"available_commands_update\") | .frame.params.update.availableCommands[]?.name] | any(test(\"implement\";\"i\")))}' RUN_EDGECASES_FINAL/raw-frames.jsonl",
+      "result": {
+        "availableCommandNames": [
+          "build",
+          "compact",
+          "deploy",
+          "e2e",
+          "init",
+          "logout",
+          "pr",
+          "preflight",
+          "review",
+          "review-branch",
+          "review-commit",
+          "run",
+          "undo"
+        ],
+        "containsImplement": false
+      }
+    }
+  }
+}

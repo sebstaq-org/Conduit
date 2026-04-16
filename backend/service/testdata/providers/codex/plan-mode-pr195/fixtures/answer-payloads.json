@@ -1,0 +1,77 @@
+{
+  "selected_option_payload": {
+    "source_run": "RUN_DIRECT",
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-0"
+        }
+      }
+    }
+  },
+  "answer_other_payload": {
+    "source_run": "RUN_EDGECASES_FINAL",
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-other",
+          "_meta": {
+            "request_user_input_response": {
+              "answers": {
+                "plan_target": {
+                  "answers": [
+                    "custom free text from host response"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "cancel_payload": {
+    "source_run": "RUN_EDGECASES_FINAL",
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "cancelled"
+        }
+      }
+    }
+  },
+  "invalid_option_payload": {
+    "source_run": "RUN_EDGECASES_FINAL",
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-invalid"
+        }
+      }
+    }
+  },
+  "adapter_outcome_for_cancel_or_invalid": {
+    "source_run": "RUN_EDGECASES_FINAL",
+    "incoming_tool_call_updates": [
+      {
+        "phase": "phase-invalid-answer",
+        "status": "failed",
+        "rawOutput": {
+          "request_type": "request_user_input",
+          "outcome": "cancelled"
+        }
+      },
+      {
+        "phase": "phase-cancel-answer",
+        "status": "failed",
+        "rawOutput": {
+          "request_type": "request_user_input",
+          "outcome": "cancelled"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "trace_plan_mode_excerpt": {
+    "collaboration_mode": "plan",
+    "question_tool_name": "request_user_input",
+    "assistant_terminal_phase": "final_answer",
+    "assistant_terminal_contains_tag": "<proposed_plan>"
+  },
+  "app_server_probe_excerpt": {
+    "question_method": "item/tool/requestUserInput",
+    "response_shape": {
+      "answers": {
+        "<question_id>": {
+          "answers": [
+            "<selected label>"
+          ]
+        }
+      }
+    },
+    "turn_terminal_method": "turn/completed",
+    "turn_status": "completed"
+  }
+}
