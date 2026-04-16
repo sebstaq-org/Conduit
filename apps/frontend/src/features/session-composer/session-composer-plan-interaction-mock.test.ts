@@ -8,17 +8,25 @@ import {
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
   startPlanInteractionMockScenario,
+  respondPlanInteractionMock,
   submitPlanInteractionMockChoice,
   submitPlanInteractionMock,
 } from "./session-composer-plan-interaction-mock-state";
+import {
+  interactionRequestData,
+  interactionResolutionData,
+} from "./session-composer-plan-interaction-projection";
 
 function completeTwoQuestionScenario(): SessionComposerPlanInteractionMockState {
   const started = startPlanInteractionMockScenario(
     createSessionComposerPlanInteractionMockState(),
     "two-questions",
   );
-  const afterFirstSubmit = submitPlanInteractionMock(started);
-  return submitPlanInteractionMock(afterFirstSubmit);
+  const afterFirstSubmit = submitPlanInteractionMockChoice(
+    started,
+    "theme-everyday",
+  );
+  return submitPlanInteractionMockChoice(afterFirstSubmit, "scope-three-steps");
 }
 
 function completeImplementOtherScenario(): SessionComposerPlanInteractionMockState {
@@ -54,7 +62,7 @@ function advanceToFirstPlanDecision(): SessionComposerPlanInteractionMockState {
   state = submitPlanInteractionMockChoice(state, "theme-everyday");
   expectActiveQuestion(state, "question-detail-level");
   state = submitPlanInteractionMockChoice(state, "scope-three-steps");
-  expectActiveQuestion(state, "question-implement-1");
+  expectActiveQuestion(state, "terminal-plan");
   return state;
 }
 
@@ -70,9 +78,9 @@ function stayInPlanMode(
 }
 
 function textItems(state: SessionComposerPlanInteractionMockState): string[] {
-  return state.historyItems.map((item) => {
+  return state.historyItems.flatMap((item) => {
     if (item.kind !== "message") {
-      return "";
+      return [];
     }
     const block = item.content[0];
     if (
@@ -81,9 +89,9 @@ function textItems(state: SessionComposerPlanInteractionMockState): string[] {
       "text" in block &&
       typeof block.text === "string"
     ) {
-      return block.text;
+      return [block.text];
     }
-    return "";
+    return [];
   });
 }
 
@@ -92,13 +100,86 @@ describe("session composer plan interaction mock state", () => {
     const state = completeTwoQuestionScenario();
     expect({
       activeScenarioId: state.activeScenarioId,
+      activeCard: resolveActivePlanInteractionMockCard(state),
       lastResolution: state.lastResolution,
-      mode: state.mode,
     }).toStrictEqual({
       activeScenarioId: null,
+      activeCard: null,
       lastResolution: "Mock completed: Mock: två frågor",
-      mode: "message",
     });
+  });
+});
+
+describe("session composer plan interaction backend-shaped mock", () => {
+  it("emits backend-like interaction_request events", () => {
+    const state = startPlanInteractionMockScenario(
+      createSessionComposerPlanInteractionMockState(),
+      "two-questions",
+    );
+    const request = interactionRequestData(state.historyItems[0]);
+
+    expect(request).toMatchObject({
+      interactionId: "mock-clarify-1",
+      questionId: "question-theme",
+      requestType: "request_user_input",
+      sessionUpdate: "interaction_request",
+      status: "pending",
+      toolCallId: "tool-mock-clarify-1",
+    });
+    expect(request?.options.map((option) => option.optionId)).toContain("cancel");
+  });
+});
+
+describe("session composer plan interaction response mock", () => {
+  it("responds with backend-like selected resolution events", () => {
+    const state = startPlanInteractionMockScenario(
+      createSessionComposerPlanInteractionMockState(),
+      "two-questions",
+    );
+    const result = respondPlanInteractionMock(state, {
+      interactionId: "mock-clarify-1",
+      openSessionId: "plan-mode-ui-mock",
+      response: { kind: "selected", optionId: "theme-everyday" },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    const resolution = interactionResolutionData(result.state.historyItems[1]);
+    expect(resolution).toMatchObject({
+      interactionId: "mock-clarify-1",
+      sessionUpdate: "interaction_resolution",
+      status: "resolved",
+      toolCallId: "tool-mock-clarify-1",
+    });
+  });
+});
+
+describe("session composer plan interaction command errors", () => {
+  it("returns deterministic unknown and resolved command errors", () => {
+    const state = startPlanInteractionMockScenario(
+      createSessionComposerPlanInteractionMockState(),
+      "two-questions",
+    );
+    const unknown = respondPlanInteractionMock(state, {
+      interactionId: "missing",
+      openSessionId: "plan-mode-ui-mock",
+      response: { kind: "selected", optionId: "theme-everyday" },
+    });
+    const selected = respondPlanInteractionMock(state, {
+      interactionId: "mock-clarify-1",
+      openSessionId: "plan-mode-ui-mock",
+      response: { kind: "selected", optionId: "theme-everyday" },
+    });
+    if (!selected.ok) {
+      throw new Error("selected response should be accepted");
+    }
+    const resolved = respondPlanInteractionMock(selected.state, {
+      interactionId: "mock-clarify-1",
+      openSessionId: "plan-mode-ui-mock",
+      response: { kind: "selected", optionId: "theme-everyday" },
+    });
+
+    expect(unknown).toMatchObject({ error: "interaction_unknown", ok: false });
+    expect(resolved).toMatchObject({ error: "interaction_resolved", ok: false });
   });
 });
 
@@ -117,20 +198,22 @@ describe("session composer product-flow main path", () => {
     ]);
 
     state = submitPlanInteractionMockChoice(state, "scope-narrow");
-    expectActiveQuestion(state, "question-implement-2");
+    expectActiveQuestion(state, "terminal-plan");
     expect(textItems(state)).toEqual([
       expect.stringContaining("## Proposed plan"),
       "Jättebra. Men ändra kaffe till JUICE",
       expect.stringContaining("## Proposed plan"),
     ]);
 
-    state = submitPlanInteractionMock(state);
+    state = submitPlanInteractionMockChoice(state, "implement-now");
     expect({
       lastMessage: textItems(state).at(-1),
-      mode: state.mode,
+      activeCard: resolveActivePlanInteractionMockCard(state),
+      collaborationMode: state.collaborationMode,
     }).toStrictEqual({
+      activeCard: null,
+      collaborationMode: "default",
       lastMessage: "Implement plan",
-      mode: "message",
     });
   });
 
@@ -158,10 +241,16 @@ describe("session composer product-flow history", () => {
       state,
     });
     expect(history).toMatchObject({
-      items: [{ kind: "message", role: "agent" }],
+      items: [
+        { kind: "event", variant: "interaction_request" },
+        { kind: "event", variant: "interaction_resolution" },
+        { kind: "event", variant: "interaction_request" },
+        { kind: "event", variant: "interaction_resolution" },
+        { kind: "message", role: "agent" },
+      ],
       nextCursor: null,
       openSessionId: "plan-mode-ui-mock",
-      revision: 1,
+      revision: 5,
     });
   });
 });
@@ -173,16 +262,18 @@ describe("session composer terminal interaction mock state", () => {
     state = selectPlanInteractionMockOption(state, "answer-other");
 
     const blocked = submitPlanInteractionMock(state);
-    expect(blocked.mode).toBe("interaction");
+    expect(resolveActivePlanInteractionMockCard(blocked)?.kind).toBe(
+      "terminal_decision",
+    );
     expect(blocked.activeScenarioId).toBe("implement-decision");
 
     const resolved = completeImplementOtherScenario();
     expect({
+      activeCard: resolveActivePlanInteractionMockCard(resolved),
       lastResolution: resolved.lastResolution,
-      mode: resolved.mode,
     }).toStrictEqual({
+      activeCard: null,
       lastResolution: "Mock completed: Mock: implement-beslut",
-      mode: "message",
     });
   });
 });

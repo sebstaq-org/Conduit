@@ -1,24 +1,9 @@
-import type {
-  SessionHistoryWindow,
-  TranscriptItem,
-} from "@conduit/session-client";
-import { PLAN_MODE_UI_MOCK_OPEN_SESSION_ID } from "./session-composer-plan-interaction-mock-model";
+import type { SessionHistoryWindow } from "@conduit/session-client";
+import {
+  PLAN_MODE_UI_MOCK_OPEN_SESSION_ID,
+  createMockTranscriptMessage,
+} from "./session-composer-plan-interaction-backend-shape";
 import type { SessionComposerPlanInteractionMockState } from "./session-composer-plan-interaction-mock-model";
-
-function createMockTranscriptMessage(args: {
-  role: "agent" | "user";
-  sequence: number;
-  text: string;
-}): TranscriptItem {
-  return {
-    content: [{ text: args.text, type: "text" }],
-    id: `plan-mode-ui-mock-${args.sequence}`,
-    kind: "message",
-    role: args.role,
-    status: "complete",
-    turnId: `plan-mode-ui-mock-turn-${args.sequence}`,
-  };
-}
 
 function appendMockTranscriptMessage(
   state: SessionComposerPlanInteractionMockState,
@@ -31,15 +16,15 @@ function appendMockTranscriptMessage(
     historyItems: [
       ...state.historyItems,
       createMockTranscriptMessage({
+        items: state.historyItems,
         role,
-        sequence: state.historyItems.length + 1,
         text,
       }),
     ],
     lastResolution: state.lastResolution,
-    mode: state.mode,
     otherText: state.otherText,
     selectedOptionId: state.selectedOptionId,
+    collaborationMode: state.collaborationMode,
   };
 }
 

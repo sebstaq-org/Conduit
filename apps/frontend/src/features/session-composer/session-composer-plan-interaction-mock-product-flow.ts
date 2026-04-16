@@ -62,7 +62,7 @@ const PRODUCT_FLOW_PLAN_MODE_MOCK_SCENARIO: PlanInteractionMockScenario = {
       id: "mock-plan-1",
       kind: "agent_plan",
       markdown:
-        "## Proposed plan\n\n1. Skissa en liten vardagsfeature med tre konkreta steg.\n2. Lägg till den minsta säkra backend-ytan.\n3. Verifiera med en riktad UI-check innan implementation.",
+        "<proposed_plan>\n## Proposed plan\n\n1. Skissa en liten vardagsfeature med tre konkreta steg.\n2. Lägg till den minsta säkra backend-ytan.\n3. Verifiera med en riktad UI-check innan implementation.\n</proposed_plan>",
     },
     {
       card: {
@@ -118,7 +118,7 @@ const PRODUCT_FLOW_PLAN_MODE_MOCK_SCENARIO: PlanInteractionMockScenario = {
       id: "mock-plan-2",
       kind: "agent_plan",
       markdown:
-        "## Proposed plan\n\n1. Behåll scopet smalt och bygg bara den minsta säkra ändringen.\n2. Lägg till en regressionstest som visar produktflödet.\n3. Kör UI-verifiering innan implementationen startas.",
+        "<proposed_plan>\n## Proposed plan\n\n1. Behåll scopet smalt och bygg bara den minsta säkra ändringen.\n2. Lägg till en regressionstest som visar produktflödet.\n3. Kör UI-verifiering innan implementationen startas.\n</proposed_plan>",
     },
     {
       card: {

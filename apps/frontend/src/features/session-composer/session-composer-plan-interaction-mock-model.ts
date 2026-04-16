@@ -1,4 +1,5 @@
 import type { TranscriptItem } from "@conduit/session-client";
+import type { CollaborationMode } from "./session-composer-plan-interaction-backend-shape";
 import type {
   PLAN_INTERACTION_MOCK_SCENARIOS,
   PlanInteractionMockCard,
@@ -7,9 +8,9 @@ import type {
 interface SessionComposerPlanInteractionMockState {
   activeScenarioId: string | null;
   activeStepIndex: number;
+  collaborationMode: CollaborationMode;
   historyItems: TranscriptItem[];
   lastResolution: string | null;
-  mode: "interaction" | "message";
   otherText: string;
   selectedOptionId: string | null;
 }
@@ -27,13 +28,9 @@ interface SessionComposerPlanInteractionMockView {
 const PLAN_MODE_UI_MOCK_ENV = "EXPO_PUBLIC_CONDUIT_PLAN_MODE_UI_MOCK";
 const PLAN_MODE_UI_MOCK_SCENARIO_ENV =
   "EXPO_PUBLIC_CONDUIT_PLAN_MODE_UI_MOCK_SCENARIO";
-const PLAN_MODE_UI_MOCK_OPEN_SESSION_ID = "plan-mode-ui-mock";
-const IMPLEMENT_PLAN_USER_MESSAGE = "Implement plan";
 
 export {
-  IMPLEMENT_PLAN_USER_MESSAGE,
   PLAN_MODE_UI_MOCK_ENV,
-  PLAN_MODE_UI_MOCK_OPEN_SESSION_ID,
   PLAN_MODE_UI_MOCK_SCENARIO_ENV,
 };
 export type {

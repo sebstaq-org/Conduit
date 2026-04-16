@@ -5,7 +5,7 @@ import { TextButton, TextField } from "@/ui";
 import type {
   PlanInteractionMockCard,
   PlanInteractionMockOption,
-  SessionComposerPlanInteractionMockActions,
+  SessionComposerPlanInteractionActions,
 } from "./session-composer-plan-interaction-mock";
 import {
   createPlanInteractionEscStyle,
@@ -18,7 +18,7 @@ import {
 } from "./session-composer-plan-interaction.styles";
 
 interface SessionComposerPlanInteractionSurfaceProps {
-  actions: SessionComposerPlanInteractionMockActions;
+  actions: SessionComposerPlanInteractionActions;
   card: PlanInteractionMockCard;
   canSubmit: boolean;
   otherText: string;
@@ -42,7 +42,7 @@ function selectedOption(
 }
 
 function resolveSubmitHandler(args: {
-  actions: SessionComposerPlanInteractionMockActions;
+  actions: SessionComposerPlanInteractionActions;
   canSubmit: boolean;
 }): (() => void) | undefined {
   if (!args.canSubmit) {
@@ -52,7 +52,7 @@ function resolveSubmitHandler(args: {
 }
 
 function createChoiceSubmitHandler(args: {
-  actions: SessionComposerPlanInteractionMockActions;
+  actions: SessionComposerPlanInteractionActions;
 }): (optionId: string) => void {
   return (optionId: string): void => {
     args.actions.submitChoice(optionId);

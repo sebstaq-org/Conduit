@@ -113,6 +113,12 @@ const PLAN_INTERACTION_MOCK_SCENARIOS: readonly PlanInteractionMockScenario[] = 
     label: "Mock: implement-beslut",
     steps: [
       {
+        id: "mock-terminal-plan",
+        kind: "agent_plan",
+        markdown:
+          "<proposed_plan>\n## Proposed plan\n\n1. Keep this plan small.\n2. Implement the smallest useful path.\n</proposed_plan>",
+      },
+      {
         card: {
           interactionId: "mock-implement-1",
           kind: "terminal_decision",

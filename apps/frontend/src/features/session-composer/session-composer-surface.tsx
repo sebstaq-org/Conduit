@@ -6,8 +6,8 @@ import {
   SessionComposerPlanInteractionSurface,
 } from "./session-composer-plan-interaction";
 import type {
-  SessionComposerPlanInteractionMockActions,
-  SessionComposerPlanInteractionMockView,
+  SessionComposerPlanInteractionActions,
+  SessionComposerPlanInteractionView,
 } from "./session-composer-plan-interaction-mock";
 import { SessionComposerActionRow } from "./session-composer-action-row";
 import { SessionComposerInput } from "./session-composer-input";
@@ -32,8 +32,8 @@ interface SessionComposerSurfaceProps {
   onProviderSelect: (provider: ProviderId) => void;
   onSend: () => void;
   isConfigUpdating: boolean;
-  planInteractionMockActions: SessionComposerPlanInteractionMockActions;
-  planInteractionMockView: SessionComposerPlanInteractionMockView;
+  planInteractionActions: SessionComposerPlanInteractionActions;
+  planInteractionView: SessionComposerPlanInteractionView;
   setDraft: (draft: string) => void;
   theme: Theme;
 }
@@ -87,18 +87,18 @@ function renderStandardComposerBody({
   );
 }
 
-function renderMockInteractionBody(args: {
-  activeMockCard: NonNullable<SessionComposerPlanInteractionMockView["activeCard"]>;
-  planInteractionMockActions: SessionComposerPlanInteractionMockActions;
-  planInteractionMockView: SessionComposerPlanInteractionMockView;
+function renderInteractionBody(args: {
+  activeCard: NonNullable<SessionComposerPlanInteractionView["activeCard"]>;
+  planInteractionActions: SessionComposerPlanInteractionActions;
+  planInteractionView: SessionComposerPlanInteractionView;
 }): React.JSX.Element {
   return (
     <SessionComposerPlanInteractionSurface
-      actions={args.planInteractionMockActions}
-      canSubmit={args.planInteractionMockView.canSubmit}
-      card={args.activeMockCard}
-      otherText={args.planInteractionMockView.otherText}
-      selectedOptionId={args.planInteractionMockView.selectedOptionId}
+      actions={args.planInteractionActions}
+      canSubmit={args.planInteractionView.canSubmit}
+      card={args.activeCard}
+      otherText={args.planInteractionView.otherText}
+      selectedOptionId={args.planInteractionView.selectedOptionId}
     />
   );
 }
@@ -112,22 +112,22 @@ function renderComposerBody(args: {
   onConfigOptionSelect: (configId: string, value: string) => void;
   onProviderSelect: (provider: ProviderId) => void;
   onSend: () => void;
-  planInteractionMockActions: SessionComposerPlanInteractionMockActions;
-  planInteractionMockView: SessionComposerPlanInteractionMockView;
+  planInteractionActions: SessionComposerPlanInteractionActions;
+  planInteractionView: SessionComposerPlanInteractionView;
   setDraft: (draft: string) => void;
 }): React.JSX.Element {
-  if (args.planInteractionMockView.activeCard === null) {
+  if (args.planInteractionView.activeCard === null) {
     return renderStandardComposerBody(args);
   }
-  return renderMockInteractionBody({
-    activeMockCard: args.planInteractionMockView.activeCard,
-    planInteractionMockActions: args.planInteractionMockActions,
-    planInteractionMockView: args.planInteractionMockView,
+  return renderInteractionBody({
+    activeCard: args.planInteractionView.activeCard,
+    planInteractionActions: args.planInteractionActions,
+    planInteractionView: args.planInteractionView,
   });
 }
 
 function createActiveComposerSurfaceStyle(args: {
-  activeCard: SessionComposerPlanInteractionMockView["activeCard"];
+  activeCard: SessionComposerPlanInteractionView["activeCard"];
   theme: Theme;
 }): ReturnType<typeof createSessionComposerSurfaceStyle> {
   if (args.activeCard !== null) {
@@ -146,8 +146,8 @@ function SessionComposerSurface({
   onProviderSelect,
   onSend,
   isConfigUpdating,
-  planInteractionMockActions,
-  planInteractionMockView,
+  planInteractionActions,
+  planInteractionView,
   setDraft,
   theme,
 }: SessionComposerSurfaceProps): React.JSX.Element {
@@ -160,12 +160,12 @@ function SessionComposerSurface({
     onConfigOptionSelect,
     onProviderSelect,
     onSend,
-    planInteractionMockActions,
-    planInteractionMockView,
+    planInteractionActions,
+    planInteractionView,
     setDraft,
   });
   const surfaceStyle = createActiveComposerSurfaceStyle({
-    activeCard: planInteractionMockView.activeCard,
+    activeCard: planInteractionView.activeCard,
     theme,
   });
   return (

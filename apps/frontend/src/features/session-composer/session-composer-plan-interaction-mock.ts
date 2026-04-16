@@ -21,7 +21,7 @@ import type {
 } from "./session-composer-plan-interaction-mock-scenarios";
 import type { SessionHistoryWindow } from "@conduit/session-client";
 
-interface SessionComposerPlanInteractionMockActions {
+interface SessionComposerPlanInteractionActions {
   dismissInteraction: () => void;
   selectOption: (optionId: string) => void;
   setOtherText: (text: string) => void;
@@ -30,8 +30,8 @@ interface SessionComposerPlanInteractionMockActions {
   submitInteraction: () => void;
 }
 
-interface SessionComposerPlanInteractionMockController {
-  actions: SessionComposerPlanInteractionMockActions;
+interface SessionComposerPlanInteractionController {
+  actions: SessionComposerPlanInteractionActions;
   history: SessionHistoryWindow | null;
   view: SessionComposerPlanInteractionMockView;
 }
@@ -40,7 +40,7 @@ function createDisabledPlanInteractionMockActions(
   setState: React.Dispatch<
     React.SetStateAction<ReturnType<typeof createSessionComposerPlanInteractionMockState>>
   >,
-): SessionComposerPlanInteractionMockActions {
+): SessionComposerPlanInteractionActions {
   return {
     dismissInteraction: (): void => {
       setState((current) => current);
@@ -67,7 +67,7 @@ function createEnabledPlanInteractionMockActions(
   setState: React.Dispatch<
     React.SetStateAction<ReturnType<typeof createSessionComposerPlanInteractionMockState>>
   >,
-): SessionComposerPlanInteractionMockActions {
+): SessionComposerPlanInteractionActions {
   return {
     dismissInteraction: (): void => {
       setState((current) => dismissPlanInteractionMock(current));
@@ -90,7 +90,7 @@ function createEnabledPlanInteractionMockActions(
   };
 }
 
-function useSessionComposerPlanInteractionMock(): SessionComposerPlanInteractionMockController {
+function useSessionComposerPlanInteractionSource(): SessionComposerPlanInteractionController {
   const enabled = isPlanModeUiMockEnabled();
   const [state, setState] = useState(() => {
     let initialState = createSessionComposerPlanInteractionMockState();
@@ -114,11 +114,11 @@ function useSessionComposerPlanInteractionMock(): SessionComposerPlanInteraction
   };
 }
 
-export { useSessionComposerPlanInteractionMock };
+export { useSessionComposerPlanInteractionSource };
 export type {
   PlanInteractionMockCard,
   PlanInteractionMockOption,
-  SessionComposerPlanInteractionMockActions,
-  SessionComposerPlanInteractionMockController,
-  SessionComposerPlanInteractionMockView,
+  SessionComposerPlanInteractionActions,
+  SessionComposerPlanInteractionController,
+  SessionComposerPlanInteractionMockView as SessionComposerPlanInteractionView,
 };
