@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing as _;
+use tracing_subscriber as _;
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);

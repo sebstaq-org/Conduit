@@ -68,6 +68,48 @@ fn rejects_forbidden_library_error_aggregators() -> Result<()> {
 }
 
 #[test]
+fn rejects_non_tracing_logging_dependencies() -> Result<()> {
+    let mut fixture = fixture()?;
+    if let Some(package) = fixture
+        .metadata
+        .packages
+        .iter_mut()
+        .find(|package| package.name == "session-store")
+    {
+        package.dependencies.push(Dependency {
+            name: "log".to_owned(),
+        });
+    }
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "session-store may not depend on log; Rust logging must use tracing.",
+    )
+}
+
+#[test]
+fn requires_tracing_subscriber_in_service_binaries() -> Result<()> {
+    let mut fixture = fixture()?;
+    if let Some(package) = fixture
+        .metadata
+        .packages
+        .iter_mut()
+        .find(|package| package.name == "service-bin")
+    {
+        package
+            .dependencies
+            .retain(|dependency| dependency.name != "tracing-subscriber");
+    }
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "service-bin must depend on tracing-subscriber for runtime logging.",
+    )
+}
+
+#[test]
 fn rejects_forbidden_service_runtime_dependencies() -> Result<()> {
     let mut fixture = fixture()?;
     if let Some(resolve) = fixture.metadata.resolve.as_mut()

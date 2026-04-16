@@ -208,6 +208,7 @@ where
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
+    tracing::info!(event_name = "runtime_actor.started", source = "service-bin");
     while let Some(request) = receiver.recv().await {
         handle_request(
             &mut runtime,
@@ -217,6 +218,7 @@ where
             &mut prompt_lanes,
         );
     }
+    tracing::warn!(event_name = "runtime_actor.stopped", source = "service-bin");
 }
 
 async fn run_refresh_worker<F>(
@@ -229,6 +231,10 @@ async fn run_refresh_worker<F>(
     F: ProviderFactory,
 {
     let Ok(local_store) = refresh_store() else {
+        tracing::error!(
+            event_name = "refresh_worker.store_unavailable",
+            source = "service-bin"
+        );
         return;
     };
     let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
@@ -236,9 +242,17 @@ async fn run_refresh_worker<F>(
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
+    tracing::info!(
+        event_name = "refresh_worker.started",
+        source = "service-bin"
+    );
     while let Some(provider_target) = receiver.recv().await {
         refresh_index_targets(&mut runtime, &mut receiver, provider_target);
     }
+    tracing::warn!(
+        event_name = "refresh_worker.stopped",
+        source = "service-bin"
+    );
 }
 
 fn refresh_index_targets<F>(
@@ -255,16 +269,32 @@ fn refresh_index_targets<F>(
         provider_targets.insert(request.provider_target);
     }
     for provider_target in provider_targets {
-        let _refresh_status = if force {
+        let refresh_status = if force {
             runtime.force_refresh_session_index(&provider_target)
         } else {
             runtime.refresh_after_response(&ConsumerCommand {
                 id: "background-session-index-refresh".to_owned(),
                 command: "sessions/grouped".to_owned(),
-                provider: provider_target,
+                provider: provider_target.clone(),
                 params: serde_json::Value::Null,
             })
         };
+        if let Err(error) = refresh_status {
+            tracing::warn!(
+                event_name = "refresh_worker.refresh_failed",
+                source = "service-bin",
+                provider_target = %provider_target,
+                force,
+                error_message = %error
+            );
+        } else {
+            tracing::debug!(
+                event_name = "refresh_worker.refresh_ok",
+                source = "service-bin",
+                provider_target = %provider_target,
+                force
+            );
+        }
     }
 }
 
@@ -277,6 +307,13 @@ fn handle_request<F>(
 ) where
     F: Clone + ProviderFactory + 'static,
 {
+    tracing::debug!(
+        event_name = "runtime_actor.request",
+        source = "service-bin",
+        command_id = %request.command.id,
+        command = %request.command.command,
+        provider = %request.command.provider
+    );
     if request.command.command == "providers/config_snapshot" {
         handle_provider_config_snapshot_request(request, provider_config_snapshots);
         return;
@@ -304,16 +341,24 @@ fn handle_request<F>(
         return;
     }
     let response = runtime.dispatch(request.command);
-    let _response_status = request.respond_to.send(response);
+    let response_status = request.respond_to.send(response);
+    if response_status.is_err() {
+        tracing::warn!(
+            event_name = "runtime_actor.response_channel_closed",
+            source = "service-bin",
+            command = "runtime.dispatch"
+        );
+    }
 }
 
 fn handle_provider_config_snapshot_request(
     request: ActorRequest,
     provider_config_snapshots: &ProviderConfigSnapshots,
 ) {
+    let command_id = request.command.id.clone();
     let response = if request.command.provider != "all" {
         ConsumerResponse {
-            id: request.command.id,
+            id: command_id.clone(),
             ok: false,
             result: serde_json::Value::Null,
             error: Some(service_runtime::ConsumerError {
@@ -324,14 +369,22 @@ fn handle_provider_config_snapshot_request(
         }
     } else {
         ConsumerResponse {
-            id: request.command.id,
+            id: command_id.clone(),
             ok: true,
             result: provider_config_snapshots.snapshot_value(),
             error: None,
             snapshot: None,
         }
     };
-    let _response_status = request.respond_to.send(response);
+    let response_status = request.respond_to.send(response);
+    if response_status.is_err() {
+        tracing::warn!(
+            event_name = "runtime_actor.response_channel_closed",
+            source = "service-bin",
+            command_id = %command_id,
+            command = "providers/config_snapshot"
+        );
+    }
 }
 
 fn handle_project_add_request<F>(
@@ -345,7 +398,14 @@ fn handle_project_add_request<F>(
     if response.ok {
         refreshes.force("all");
     }
-    let _response_status = request.respond_to.send(response);
+    let response_status = request.respond_to.send(response);
+    if response_status.is_err() {
+        tracing::warn!(
+            event_name = "runtime_actor.response_channel_closed",
+            source = "service-bin",
+            command = "projects/add"
+        );
+    }
 }
 
 fn handle_grouped_sessions_request<F>(
@@ -357,7 +417,15 @@ fn handle_grouped_sessions_request<F>(
 {
     let provider_target = request.command.provider.clone();
     let response = runtime.dispatch(request.command);
-    let _response_status = request.respond_to.send(response);
+    let response_status = request.respond_to.send(response);
+    if response_status.is_err() {
+        tracing::warn!(
+            event_name = "runtime_actor.response_channel_closed",
+            source = "service-bin",
+            command = "sessions/grouped",
+            provider_target = %provider_target
+        );
+    }
     refreshes.request(&provider_target);
 }
 

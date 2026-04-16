@@ -75,6 +75,8 @@ Rust under `backend/service/` is governed by the Rust-specific policy in `backen
 
 Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, broad lint suppressions are forbidden, and crate-edge violations fail structure checks. The repo guardrail crate under `backend/service/crates/repo-guard` is fully bound by the same Rust rules and gets no policy carve-outs.
 
+Rust logging must use `tracing` only. `service-bin` and `repo-guard` own subscriber initialization through `tracing-subscriber` JSON output; new Rust runtime features must emit command/worker events through the shared tracing contract instead of ad hoc logging patterns.
+
 ## Repo-Local Skills
 
 Use `$conduit-pr-green` from `.agents/skills/conduit-pr-green` when creating or updating Conduit pull requests. It defines the required PR body style and the rule that agents must poll GitHub until the PR is merge-clean and all checks are completed green.

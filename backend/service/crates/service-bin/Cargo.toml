@@ -18,6 +18,8 @@ session-store = { path = "../session-store" }
 thiserror = "2.0.17"
 tokio = { version = "1.51.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tower-http = { version = "0.6.8", features = ["cors"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
 
 [dev-dependencies]
 acp-core = { path = "../acp-core" }

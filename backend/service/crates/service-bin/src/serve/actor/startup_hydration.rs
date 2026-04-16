@@ -56,12 +56,35 @@ where
     F: ProviderFactory,
 {
     let Ok(local_store) = store() else {
+        tracing::error!(
+            event_name = "startup_hydration.store_unavailable",
+            source = "service-bin"
+        );
         return;
     };
     let mut runtime = ServiceRuntime::with_factory_and_store_lock(factory, local_store, store_lock);
-    let _ = runtime.force_refresh_session_index("all");
+    tracing::info!(
+        event_name = "startup_hydration.started",
+        source = "service-bin"
+    );
+    if let Err(error) = runtime.force_refresh_session_index("all") {
+        tracing::warn!(
+            event_name = "startup_hydration.refresh_failed",
+            source = "service-bin",
+            error_message = %error
+        );
+    }
     let targets = startup_hydration_targets(&mut runtime);
+    tracing::info!(
+        event_name = "startup_hydration.targets",
+        source = "service-bin",
+        target_count = targets.len()
+    );
     hydrate_targets(&mut runtime, &targets).await;
+    tracing::info!(
+        event_name = "startup_hydration.finished",
+        source = "service-bin"
+    );
 }
 
 fn startup_hydration_targets<F>(runtime: &mut ServiceRuntime<F>) -> Vec<HydrationTarget>
@@ -85,7 +108,7 @@ where
     F: ProviderFactory,
 {
     for (index, target) in targets.iter().enumerate() {
-        let _ = runtime.dispatch(ConsumerCommand {
+        let response = runtime.dispatch(ConsumerCommand {
             id: format!("startup-hydration-open-{index}"),
             command: "session/open".to_owned(),
             provider: target.provider.clone(),
@@ -95,6 +118,37 @@ where
                 "limit": STARTUP_HYDRATION_LIMIT,
             }),
         });
+        if response.ok {
+            tracing::debug!(
+                event_name = "startup_hydration.open.ok",
+                source = "service-bin",
+                provider = %target.provider,
+                session_id = %target.session_id,
+                cwd = %target.cwd,
+                index
+            );
+        } else {
+            let error_code = response
+                .error
+                .as_ref()
+                .map(|error| error.code.as_str())
+                .unwrap_or("unknown");
+            let error_message = response
+                .error
+                .as_ref()
+                .map(|error| error.message.as_str())
+                .unwrap_or("missing response error");
+            tracing::warn!(
+                event_name = "startup_hydration.open.failed",
+                source = "service-bin",
+                provider = %target.provider,
+                session_id = %target.session_id,
+                cwd = %target.cwd,
+                index,
+                error_code = %error_code,
+                error_message = %error_message
+            );
+        }
         if (index + 1) % STARTUP_HYDRATION_YIELD_EVERY == 0 {
             yield_now().await;
         }

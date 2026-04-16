@@ -14,6 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror as _;
+use tracing as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 

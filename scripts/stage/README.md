@@ -22,6 +22,7 @@ environment outside the repo workspace.
 - web host/port: `127.0.0.1:4310`
 - ws url for stage web build: `ws://127.0.0.1:4274/api/session`
 - stage root: `/srv/devops/repos/conduit-stage`
+- backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
 - stage static server disables browser caching and returns `204` for
   `/favicon.ico` to avoid benign 404 noise.
 - supervisor health polling: every 5 seconds for backend `/health` and web `/`

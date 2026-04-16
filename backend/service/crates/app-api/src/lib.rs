@@ -47,6 +47,11 @@ impl AppService {
     /// Returns an error when discovery fails, the provider process cannot be
     /// spawned, or the live `initialize` exchange fails ACP validation.
     pub fn connect_provider(provider: ProviderId) -> Result<Self> {
+        tracing::info!(
+            event_name = "app_api.connect_provider.start",
+            source = "app-api",
+            provider = %provider.as_str()
+        );
         Ok(Self {
             host: AcpHost::connect(provider)?,
         })
@@ -63,6 +68,12 @@ impl AppService {
         provider: ProviderId,
         environment: &ProcessEnvironment,
     ) -> Result<Self> {
+        tracing::info!(
+            event_name = "app_api.connect_provider_with_environment.start",
+            source = "app-api",
+            provider = %provider.as_str(),
+            environment_vars = environment.env.len()
+        );
         Ok(Self {
             host: AcpHost::connect_with_environment(provider, environment)?,
         })
@@ -70,6 +81,10 @@ impl AppService {
 
     /// Disconnects the active provider.
     pub fn disconnect_provider(&mut self) {
+        tracing::debug!(
+            event_name = "app_api.disconnect_provider",
+            source = "app-api"
+        );
         self.host.disconnect();
     }
 
@@ -86,6 +101,11 @@ impl AppService {
     /// Returns an error when the underlying live ACP host cannot complete
     /// `session/new`.
     pub fn new_session(&mut self, cwd: PathBuf) -> Result<NewSessionResponse> {
+        tracing::debug!(
+            event_name = "app_api.new_session",
+            source = "app-api",
+            cwd = %cwd.display()
+        );
         self.host.new_session(cwd)
     }
 
@@ -96,6 +116,7 @@ impl AppService {
     /// Returns an error when the underlying live ACP host cannot complete
     /// `session/list`.
     pub fn list_sessions(&mut self) -> Result<ListSessionsResponse> {
+        tracing::debug!(event_name = "app_api.list_sessions", source = "app-api");
         self.host.list_sessions()
     }
 
@@ -124,7 +145,14 @@ impl AppService {
         session_id: impl Into<String>,
         cwd: PathBuf,
     ) -> Result<LoadSessionResponse> {
-        self.host.load_session(session_id.into(), cwd)
+        let session_id = session_id.into();
+        tracing::debug!(
+            event_name = "app_api.load_session",
+            source = "app-api",
+            session_id = %session_id,
+            cwd = %cwd.display()
+        );
+        self.host.load_session(session_id, cwd)
     }
 
     /// Sends one text-only prompt without cancellation.
@@ -134,6 +162,12 @@ impl AppService {
     /// Returns an error when the underlying live ACP host cannot complete
     /// `session/prompt`.
     pub fn prompt_text(&mut self, session_id: &str, text: &str) -> Result<PromptResponse> {
+        tracing::debug!(
+            event_name = "app_api.prompt_text",
+            source = "app-api",
+            session_id,
+            text
+        );
         self.host.prompt_text(session_id, text)
     }
 
@@ -176,6 +210,11 @@ impl AppService {
     /// Returns an error when the underlying live ACP host cannot send
     /// `session/cancel`.
     pub fn cancel_prompt(&mut self, session_id: &str) -> Result<()> {
+        tracing::debug!(
+            event_name = "app_api.cancel_prompt",
+            source = "app-api",
+            session_id
+        );
         self.host.cancel_prompt(session_id)
     }
 
@@ -191,6 +230,13 @@ impl AppService {
         config_id: &str,
         value: &str,
     ) -> Result<SetSessionConfigOptionResponse> {
+        tracing::debug!(
+            event_name = "app_api.set_session_config_option",
+            source = "app-api",
+            session_id,
+            config_id,
+            value
+        );
         self.host
             .set_session_config_option(session_id, config_id, value)
     }

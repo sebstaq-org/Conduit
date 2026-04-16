@@ -16,6 +16,7 @@ mod clean;
 mod error;
 mod process;
 mod structure;
+mod telemetry;
 mod toolchain;
 
 use crate::error::{Error, Result};
@@ -35,13 +36,36 @@ fn main() -> Result<()> {
 }
 
 fn run() -> Result<()> {
+    telemetry::init();
     let repo_root = repo_root()?;
-    match parse_command(env::args().skip(1))? {
+    let command = parse_command(env::args().skip(1))?;
+    tracing::info!(
+        event_name = "repo_guard.command.start",
+        source = "repo-guard",
+        command = ?command
+    );
+    let result = match command {
         CommandKind::Bootstrap => bootstrap::run(&repo_root),
         CommandKind::Clean => clean::run(&repo_root),
         CommandKind::StructureCheck => structure::check(&repo_root),
         CommandKind::ToolchainCheck => toolchain::check(&repo_root),
+    };
+    match &result {
+        Ok(()) => tracing::info!(
+            event_name = "repo_guard.command.finish",
+            source = "repo-guard",
+            command = ?command,
+            ok = true
+        ),
+        Err(error) => tracing::error!(
+            event_name = "repo_guard.command.finish",
+            source = "repo-guard",
+            command = ?command,
+            ok = false,
+            error_message = %error
+        ),
     }
+    result
 }
 
 fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandKind> {

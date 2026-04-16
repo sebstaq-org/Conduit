@@ -16,6 +16,7 @@ mod error;
 mod local_store;
 mod runtime;
 mod serve;
+mod telemetry;
 
 use crate::cli::parse_command;
 use crate::error::Result;
@@ -23,7 +24,13 @@ use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    telemetry::init();
     let args = env::args().skip(1).collect::<Vec<_>>();
+    tracing::debug!(
+        event_name = "service_bin.startup",
+        source = "service-bin",
+        args = ?args
+    );
     let command = parse_command(&args)?;
     match command {
         cli::Command::Serve { host, port } => serve::run(&host, port).await,
