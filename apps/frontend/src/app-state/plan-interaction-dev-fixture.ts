@@ -173,7 +173,6 @@ function appendResolution(args: {
   request: PlanInteractionRespondRequest;
 }): PlanInteractionFixtureState {
   const card = activePlanInteractionCard({
-    collaborationMode: args.state.collaborationMode,
     items: args.state.historyItems,
   });
   if (

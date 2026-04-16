@@ -112,6 +112,16 @@ const BOOTSTRAP_SCHEMA: &str = "
     VALUES (1, 5);
     PRAGMA user_version = 6;
 ";
+const MIGRATE_SCHEMA_5_TO_6: &str = "
+    CREATE TABLE IF NOT EXISTS open_session_states (
+        open_session_id TEXT PRIMARY KEY,
+        state_json TEXT NOT NULL,
+        FOREIGN KEY(open_session_id)
+            REFERENCES open_sessions(open_session_id)
+            ON DELETE CASCADE
+    );
+    PRAGMA user_version = 6;
+";
 
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -501,6 +511,10 @@ impl LocalStore {
         match version {
             0 => {
                 self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
+                Ok(())
+            }
+            5 => {
+                self.connection.execute_batch(MIGRATE_SCHEMA_5_TO_6)?;
                 Ok(())
             }
             SCHEMA_VERSION => Ok(()),

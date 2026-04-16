@@ -9,7 +9,6 @@ import type {
   BackendInteractionOption,
   BackendInteractionRequestData,
   BackendInteractionResolutionData,
-  CollaborationMode,
   PlanInteractionCard,
   PlanInteractionOption,
 } from "./plan-interaction-types";
@@ -78,6 +77,17 @@ function resolvedInteractionIds(items: TranscriptItem[]): Set<string> {
   return ids;
 }
 
+function resolvedToolCallIds(items: TranscriptItem[]): Set<string> {
+  const ids = new Set<string>();
+  for (const item of items) {
+    const resolution = interactionResolutionData(item);
+    if (resolution !== null) {
+      ids.add(resolution.toolCallId);
+    }
+  }
+  return ids;
+}
+
 function optionFromBackend(
   option: BackendInteractionOption,
 ): PlanInteractionOption | null {
@@ -120,9 +130,14 @@ function latestPendingQuestionCard(
   items: TranscriptItem[],
 ): PlanInteractionCard | null {
   const resolvedIds = resolvedInteractionIds(items);
+  const resolvedToolCalls = resolvedToolCallIds(items);
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const request = interactionRequestData(items[index]);
-    if (request !== null && !resolvedIds.has(request.interactionId)) {
+    if (
+      request !== null &&
+      !resolvedIds.has(request.interactionId) &&
+      !resolvedToolCalls.has(request.toolCallId)
+    ) {
       return cardFromRequest(request);
     }
   }
@@ -162,13 +177,7 @@ function latestUnansweredProposedPlan(
   return null;
 }
 
-function terminalPlanCardFor(
-  items: TranscriptItem[],
-  collaborationMode: CollaborationMode,
-): PlanInteractionCard | null {
-  if (collaborationMode !== "plan") {
-    return null;
-  }
+function terminalPlanCardFor(items: TranscriptItem[]): PlanInteractionCard | null {
   const planItem = latestUnansweredProposedPlan(items);
   if (planItem === null) {
     return null;
@@ -197,12 +206,11 @@ function terminalPlanCardFor(
 }
 
 function activePlanInteractionCard(args: {
-  collaborationMode: CollaborationMode;
   items: TranscriptItem[];
 }): PlanInteractionCard | null {
   return (
     latestPendingQuestionCard(args.items) ??
-    terminalPlanCardFor(args.items, args.collaborationMode)
+    terminalPlanCardFor(args.items)
   );
 }
 

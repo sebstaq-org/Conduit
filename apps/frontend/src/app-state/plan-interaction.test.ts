@@ -1,6 +1,7 @@
 /* eslint-disable import/no-nodejs-modules, vitest/prefer-strict-boolean-matchers, vitest/prefer-to-be-falsy */
 
 import { describe, expect, it } from "vitest";
+import type { TranscriptItem } from "@conduit/session-client";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -23,7 +24,6 @@ function activeQuestionId(
 ): string | null {
   return (
     activePlanInteractionCard({
-      collaborationMode: state.collaborationMode,
       items: state.historyItems,
     })?.questionId ?? null
   );
@@ -37,6 +37,55 @@ function selectedResponse(args: {
     interactionId: args.interactionId,
     openSessionId: "plan-interaction-dev-fixture",
     response: { kind: "selected", optionId: args.optionId },
+  };
+}
+
+function siblingInteractionQuestion(
+  interactionId: string,
+  questionId: string,
+): TranscriptItem {
+  return {
+    data: {
+      interactionId,
+      isOther: true,
+      options: [
+        { kind: "allow_once", name: "A", optionId: "answer-0" },
+        { kind: "reject_once", name: "Cancel", optionId: "cancel" },
+      ],
+      question: questionId,
+      questionHeader: "Question",
+      questionId,
+      rawInput: {
+        question: {
+          header: "Question",
+          id: questionId,
+          isOther: true,
+          question: questionId,
+        },
+      },
+      requestType: "request_user_input",
+      sessionUpdate: "interaction_request",
+      status: "pending",
+      toolCallId: "tool-call-1",
+    },
+    id: interactionId,
+    kind: "event",
+    variant: "interaction_request",
+  };
+}
+
+function siblingInteractionResolution(): TranscriptItem {
+  return {
+    data: {
+      interactionId: "interaction-1",
+      rawOutput: null,
+      sessionUpdate: "interaction_resolution",
+      status: "resolved",
+      toolCallId: "tool-call-1",
+    },
+    id: "interaction-resolution-1",
+    kind: "event",
+    variant: "interaction_resolution",
   };
 }
 
@@ -111,7 +160,27 @@ describe("plan interaction fixture source", () => {
     );
     expect(activeQuestionId(answered)).toBe("question-detail-level");
   });
+});
 
+describe("plan interaction projection", () => {
+  it("closes sibling questions from the same provider request", () => {
+    const questions = [
+      siblingInteractionQuestion("interaction-1", "question-one"),
+      siblingInteractionQuestion("interaction-2", "question-two"),
+    ];
+
+    expect(activePlanInteractionCard({ items: questions })?.questionId).toBe(
+      "question-two",
+    );
+    expect(
+      activePlanInteractionCard({
+        items: [...questions, siblingInteractionResolution()],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("plan interaction fixture decisions", () => {
   it("pauses on proposed plans before follow-up or implementation", () => {
     const state = stateAtFirstPlanDecision();
     expect(activeQuestionId(state)).toBe("terminal-plan");

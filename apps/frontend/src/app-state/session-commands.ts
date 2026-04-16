@@ -1,4 +1,8 @@
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
+import type {
+  ProviderId,
+  SessionConfigOption,
+  SessionNewResult,
+} from "@conduit/session-client";
 import type { NewSessionMutationArg, OpenSessionMutationArg } from "./api";
 import type {
   useNewSessionMutation,
@@ -49,6 +53,31 @@ interface DraftCommittedSession {
   openSessionId: string;
   provider: ProviderId;
   sessionId: string;
+}
+
+function committedDraftSession(args: {
+  activeSession: Extract<ActiveSession, { kind: "draft" }>;
+  response: SessionNewResult;
+  syncState: {
+    configOptions: SessionConfigOption[] | null;
+    configSyncBlocked: boolean;
+    configSyncError: string | null;
+    openSessionId: string;
+  };
+}): DraftCommittedSession {
+  if (args.activeSession.provider === null) {
+    throw new Error("draft provider missing");
+  }
+  return {
+    configOptions: args.syncState.configOptions,
+    configSyncBlocked: args.syncState.configSyncBlocked,
+    configSyncError: args.syncState.configSyncError,
+    modes: args.response.modes,
+    models: args.response.models,
+    openSessionId: args.syncState.openSessionId,
+    provider: args.activeSession.provider,
+    sessionId: args.response.sessionId,
+  };
 }
 
 interface CanSubmitPromptArgs {
@@ -102,6 +131,58 @@ async function promptOpenSession(
   }).unwrap();
 }
 
+async function createDraftSession(args: {
+  activeSession: Extract<ActiveSession, { kind: "draft" }>;
+  newSession: NewSessionTrigger;
+}): Promise<SessionNewResult | null> {
+  if (args.activeSession.provider === null) {
+    return null;
+  }
+  const response = await args
+    .newSession({
+      cwd: args.activeSession.cwd,
+      limit: NEW_SESSION_HISTORY_LIMIT,
+      provider: args.activeSession.provider,
+    } satisfies NewSessionMutationArg)
+    .unwrap();
+  return response;
+}
+
+function draftSelectedConfig(
+  activeSession: Extract<ActiveSession, { kind: "draft" }>,
+): Record<string, string> {
+  if (activeSession.provider === null) {
+    return {};
+  }
+  return activeSession.selectedConfigByProvider[activeSession.provider] ?? {};
+}
+
+function commitDraftIfConfigBlocked(args: {
+  activeSession: Extract<ActiveSession, { kind: "draft" }>;
+  onDraftPromptCommitted:
+    | ((session: DraftCommittedSession) => void)
+    | undefined;
+  response: SessionNewResult;
+  syncState: {
+    configOptions: SessionConfigOption[] | null;
+    configSyncBlocked: boolean;
+    configSyncError: string | null;
+    openSessionId: string;
+  };
+}): boolean {
+  if (!args.syncState.configSyncBlocked) {
+    return false;
+  }
+  args.onDraftPromptCommitted?.(
+    committedDraftSession({
+      activeSession: args.activeSession,
+      response: args.response,
+      syncState: args.syncState,
+    }),
+  );
+  return true;
+}
+
 async function submitDraftPrompt({
   activeSession,
   newSession,
@@ -114,21 +195,14 @@ async function submitDraftPrompt({
 }: SubmitPromptArgs & {
   activeSession: Extract<ActiveSession, { kind: "draft" }>;
 }): Promise<void> {
-  if (activeSession.provider === null) {
+  const response = await createDraftSession({ activeSession, newSession });
+  if (response === null) {
     return;
   }
-  const response = await newSession({
-    cwd: activeSession.cwd,
-    limit: NEW_SESSION_HISTORY_LIMIT,
-    provider: activeSession.provider,
-  } satisfies NewSessionMutationArg).unwrap();
-  await promptOpenSession(promptSession, response.history.openSessionId, text);
-  const selectedConfig =
-    activeSession.selectedConfigByProvider[activeSession.provider] ?? {};
   const syncState = await syncDraftConfigAfterPrompt({
     activeSession,
     openSession,
-    selectedConfig,
+    selectedConfig: draftSelectedConfig(activeSession),
     sessionId: response.sessionId,
     setSessionConfigOption,
     state: initialDraftConfigSyncState(
@@ -136,16 +210,20 @@ async function submitDraftPrompt({
       response.history.openSessionId,
     ),
   });
-  onDraftPromptCommitted?.({
-    configOptions: syncState.configOptions,
-    configSyncBlocked: syncState.configSyncBlocked,
-    configSyncError: syncState.configSyncError,
-    modes: response.modes,
-    models: response.models,
-    openSessionId: syncState.openSessionId,
-    provider: activeSession.provider,
-    sessionId: response.sessionId,
-  });
+  if (
+    commitDraftIfConfigBlocked({
+      activeSession,
+      onDraftPromptCommitted,
+      response,
+      syncState,
+    })
+  ) {
+    return;
+  }
+  await promptOpenSession(promptSession, syncState.openSessionId, text);
+  onDraftPromptCommitted?.(
+    committedDraftSession({ activeSession, response, syncState }),
+  );
   setDraft("");
 }
 

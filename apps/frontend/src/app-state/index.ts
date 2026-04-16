@@ -13,6 +13,7 @@ export {
   usePromptSessionMutation,
   useReadSessionTimelineQuery,
   useRemoveProjectMutation,
+  useRespondInteractionMutation,
   useSetSessionConfigOptionMutation,
   useUpdateProjectMutation,
   useUpdateSettingsMutation,
@@ -33,6 +34,7 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  RespondInteractionMutationArg,
   SetSessionConfigOptionMutationArg,
 } from "./api";
 export type {

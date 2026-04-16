@@ -43,6 +43,7 @@ import type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
   SessionSetConfigOptionRequest,
   SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
@@ -180,6 +181,18 @@ class WebSocketSessionClient implements SessionClientPort {
     );
     if (!response.ok) {
       throw new Error(response.error?.message ?? "session prompt failed");
+    }
+  }
+  public async respondInteraction(
+    request: SessionRespondInteractionRequest,
+  ): Promise<void> {
+    const response = await this.dispatch(
+      createConsumerCommand("session/respond_interaction", "all", request),
+    );
+    if (!response.ok) {
+      throw new Error(
+        response.error?.message ?? "session respond_interaction failed",
+      );
     }
   }
   public async subscribeTimelineChanges(

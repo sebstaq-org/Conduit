@@ -13,6 +13,7 @@ import {
   projectUpdateEndpoint,
 } from "./api-project-endpoints";
 import { getRuntimeHealthQuery } from "./api-runtime-health-query";
+import { respondInteractionEndpoint } from "./api-session-respond-interaction-endpoint";
 import { createSessionTimelineEndpoints } from "./api-session-timeline-endpoints";
 import { createSessionTimelineData } from "./session-timeline-cache";
 import {
@@ -27,6 +28,7 @@ import type {
   ReadSessionHistoryQueryArg,
   SetSessionConfigOptionMutationArg,
 } from "./session-api-queries";
+import type { RespondInteractionMutationArg } from "./api-session-respond-interaction-endpoint";
 import type { LoadOlderSessionTimelineArg } from "./api-session-timeline-handlers";
 
 const sessionTimelineMutations = createUninitializedSessionTimelineMutations();
@@ -85,6 +87,9 @@ const conduitApi = createApi({
     promptSession: builder.mutation(
       sessionTimelineEndpoints.promptSessionEndpoint,
     ),
+    respondInteraction: builder.mutation(
+      respondInteractionEndpoint,
+    ),
     readSessionTimeline: builder.query(
       sessionTimelineEndpoints.readSessionTimelineEndpoint,
     ),
@@ -134,5 +139,6 @@ export type {
   OpenSessionMutationArg,
   PromptSessionMutationArg,
   ReadSessionHistoryQueryArg,
+  RespondInteractionMutationArg,
   SetSessionConfigOptionMutationArg,
 };

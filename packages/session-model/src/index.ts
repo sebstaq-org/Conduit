@@ -323,6 +323,7 @@ type SessionHistoryWindow = z.infer<typeof SessionHistoryWindowSchema>;
 const SessionNewResultSchema = z
   .object({
     sessionId: z.string(),
+    currentModeId: z.string().nullable().optional(),
     configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
     modes: z.unknown().nullable().optional(),
     models: z.unknown().nullable().optional(),
@@ -333,6 +334,7 @@ type SessionNewResult = z.infer<typeof SessionNewResultSchema>;
 const SessionOpenResultSchema = z
   .object({
     sessionId: z.string(),
+    currentModeId: z.string().nullable().optional(),
     configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
     modes: z.unknown().nullable().optional(),
     models: z.unknown().nullable().optional(),

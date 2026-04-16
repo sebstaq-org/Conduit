@@ -31,7 +31,6 @@ function activeCardFor(
     return null;
   }
   return activePlanInteractionCard({
-    collaborationMode: port.collaborationMode,
     items: port.history.items,
   });
 }
