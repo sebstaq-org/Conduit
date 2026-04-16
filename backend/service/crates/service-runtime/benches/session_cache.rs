@@ -21,6 +21,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror as _;
+use tracing as _;
+use tracing_subscriber as _;
 
 static NEXT_BENCH_DB: AtomicU64 = AtomicU64::new(1);
 

@@ -1,4 +1,4 @@
-use super::{OutboundFrame, WatchState, handle_client_message};
+use super::{OutboundFrame, WatchState, handle_client_message, is_loopback_client};
 use crate::serve::actor::RuntimeActor;
 use acp_core::{
     ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind, WireStream,
@@ -12,6 +12,7 @@ use service_runtime::{
 };
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::error::Error;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
@@ -142,6 +143,33 @@ fn session_watch_filters_by_open_session_id() -> TestResult<()> {
         return Ok(());
     }
     Err("session watch did not project a minimal timeline event".into())
+}
+
+#[test]
+fn client_log_ingest_accepts_ipv4_loopback() -> TestResult<()> {
+    let client_addr: SocketAddr = "127.0.0.1:4274".parse()?;
+    if is_loopback_client(client_addr) {
+        return Ok(());
+    }
+    Err("ipv4 loopback client was rejected".into())
+}
+
+#[test]
+fn client_log_ingest_rejects_non_loopback_client() -> TestResult<()> {
+    let client_addr: SocketAddr = "10.0.0.42:4274".parse()?;
+    if !is_loopback_client(client_addr) {
+        return Ok(());
+    }
+    Err("non-loopback client was accepted".into())
+}
+
+#[test]
+fn client_log_ingest_accepts_ipv6_loopback() -> TestResult<()> {
+    let client_addr: SocketAddr = "[::1]:4274".parse()?;
+    if is_loopback_client(client_addr) {
+        return Ok(());
+    }
+    Err("ipv6 loopback client was rejected".into())
 }
 
 fn runtime_event(kind: RuntimeEventKind, payload: serde_json::Value) -> TestResult<RuntimeEvent> {

@@ -183,6 +183,10 @@ struct ActorContext<F> {
     provider_config_snapshots: ProviderConfigSnapshots,
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Actor bootstrap wires prompt lanes, runtime, event sink, and request loop in one place."
+)]
 async fn run_actor<F>(context: ActorContext<F>)
 where
     F: Clone + ProviderFactory + 'static,
@@ -221,6 +225,10 @@ where
     tracing::warn!(event_name = "runtime_actor.stopped", source = "service-bin");
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Refresh worker handles bootstrap failures, runtime wiring, and request-drain loop."
+)]
 async fn run_refresh_worker<F>(
     mut receiver: mpsc::UnboundedReceiver<RefreshRequest>,
     events: broadcast::Sender<RuntimeEvent>,
@@ -255,6 +263,10 @@ async fn run_refresh_worker<F>(
     );
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Refresh batching coalesces queued requests and logs per-target refresh outcomes."
+)]
 fn refresh_index_targets<F>(
     runtime: &mut ServiceRuntime<F>,
     receiver: &mut mpsc::UnboundedReceiver<RefreshRequest>,
@@ -298,6 +310,10 @@ fn refresh_index_targets<F>(
     }
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Runtime request routing dispatches several command classes with distinct handling paths."
+)]
 fn handle_request<F>(
     runtime: &mut ServiceRuntime<F>,
     request: ActorRequest,

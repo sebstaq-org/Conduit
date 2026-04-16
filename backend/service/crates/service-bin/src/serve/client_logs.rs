@@ -70,6 +70,10 @@ impl ClientLogError {
 }
 
 impl ClientLogSink {
+    #[allow(
+        clippy::cognitive_complexity,
+        reason = "Sink detection intentionally handles profile/path fallbacks with explicit observability logs."
+    )]
     pub(super) fn detect() -> Self {
         if !client_log_profile_enabled() {
             tracing::info!(

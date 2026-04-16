@@ -43,10 +43,9 @@ struct SharedLogWriter {
 
 impl Write for SharedLogWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut bytes = self
-            .buffer
-            .lock()
-            .map_err(|_| io::Error::other("shared log buffer lock poisoned"))?;
+        let mut bytes = self.buffer.lock().map_err(|error| {
+            io::Error::other(format!("shared log buffer lock poisoned: {error}"))
+        })?;
         bytes.extend_from_slice(buf);
         Ok(buf.len())
     }

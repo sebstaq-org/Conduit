@@ -13,7 +13,7 @@ environment outside the repo workspace.
 - `stop`: stop stage supervisor and child processes.
 - `status`: print release and process status.
 - `open`: start stage and open browser URL with a cache-busting query string.
-- `logs [backend|web|supervisor]`: print stage logs.
+- `logs [backend|frontend|web|supervisor]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`.
 
 ## Default Runtime Config

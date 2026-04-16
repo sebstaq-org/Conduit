@@ -39,33 +39,56 @@ fn run() -> Result<()> {
     telemetry::init();
     let repo_root = repo_root()?;
     let command = parse_command(env::args().skip(1))?;
+    log_command_start(command);
+    let result = execute_command(command, &repo_root);
+    log_command_finish(command, &result);
+    result
+}
+
+fn execute_command(command: CommandKind, repo_root: &Path) -> Result<()> {
+    match command {
+        CommandKind::Bootstrap => bootstrap::run(repo_root),
+        CommandKind::Clean => clean::run(repo_root),
+        CommandKind::StructureCheck => structure::check(repo_root),
+        CommandKind::ToolchainCheck => toolchain::check(repo_root),
+    }
+}
+
+fn log_command_start(command: CommandKind) {
     tracing::info!(
         event_name = "repo_guard.command.start",
         source = "repo-guard",
         command = ?command
     );
-    let result = match command {
-        CommandKind::Bootstrap => bootstrap::run(&repo_root),
-        CommandKind::Clean => clean::run(&repo_root),
-        CommandKind::StructureCheck => structure::check(&repo_root),
-        CommandKind::ToolchainCheck => toolchain::check(&repo_root),
-    };
-    match &result {
-        Ok(()) => tracing::info!(
-            event_name = "repo_guard.command.finish",
-            source = "repo-guard",
-            command = ?command,
-            ok = true
-        ),
-        Err(error) => tracing::error!(
-            event_name = "repo_guard.command.finish",
-            source = "repo-guard",
-            command = ?command,
-            ok = false,
-            error_message = %error
-        ),
+}
+
+fn log_command_finish(command: CommandKind, result: &Result<()>) {
+    if result.is_ok() {
+        log_command_success(command);
+        return;
     }
-    result
+    if let Err(error) = result {
+        log_command_failure(command, error);
+    }
+}
+
+fn log_command_success(command: CommandKind) {
+    tracing::info!(
+        event_name = "repo_guard.command.finish",
+        source = "repo-guard",
+        command = ?command,
+        ok = true
+    );
+}
+
+fn log_command_failure(command: CommandKind, error: &Error) {
+    tracing::error!(
+        event_name = "repo_guard.command.finish",
+        source = "repo-guard",
+        command = ?command,
+        ok = false,
+        error_message = %error
+    );
 }
 
 fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandKind> {

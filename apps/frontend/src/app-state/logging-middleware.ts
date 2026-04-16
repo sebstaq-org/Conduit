@@ -1,5 +1,6 @@
 import type { Middleware } from "@reduxjs/toolkit";
 import { logDebug, logInfo, logWarn } from "./frontend-logger";
+import { appendRejectedFields } from "./logging-middleware-rejections";
 
 interface PendingRequestContext {
   endpointName: string;
@@ -42,17 +43,6 @@ function readStringField(
 ): string | null {
   const value = record[field];
   if (typeof value !== "string" || value.length === 0) {
-    return null;
-  }
-  return value;
-}
-
-function readBooleanField(
-  record: Record<string, unknown>,
-  field: string,
-): boolean | null {
-  const value = record[field];
-  if (typeof value !== "boolean") {
     return null;
   }
   return value;
@@ -102,7 +92,9 @@ function readApiPhase(type: string): ApiLifecycleAction["phase"] | null {
   return null;
 }
 
-function readApiArg(meta: Record<string, unknown>): Record<string, unknown> | null {
+function readApiArg(
+  meta: Record<string, unknown>,
+): Record<string, unknown> | null {
   if (!isObjectRecord(meta.arg)) {
     return null;
   }
@@ -182,67 +174,6 @@ function parseApiLifecycleAction(action: unknown): ApiLifecycleAction | null {
     requestId: context.requestId,
     requestKind: context.requestKind,
   };
-}
-
-function tryParsePayloadIssues(payload: unknown): Record<string, unknown> | null {
-  if (typeof payload !== "string") {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(payload);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return null;
-    }
-    const first = parsed[0];
-    if (!isObjectRecord(first)) {
-      return {
-        validation_issue_count: parsed.length,
-      };
-    }
-    return {
-      validation_issue_code: typeof first.code === "string" ? first.code : null,
-      validation_issue_count: parsed.length,
-      validation_issue_message:
-        typeof first.message === "string" ? first.message : null,
-      validation_issue_path: Array.isArray(first.path) ? first.path : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function appendRejectedFields(
-  fields: Record<string, unknown>,
-  action: ApiLifecycleAction,
-): void {
-  fields.error = action.error;
-  fields.error_code = "query_rejected";
-  fields.ok = false;
-  fields.rejection_action_type = action.actionType;
-  fields.response_payload_type =
-    action.payload === null ? "null" : typeof action.payload;
-
-  if (isObjectRecord(action.error)) {
-    fields.error_name = readStringField(action.error, "name");
-    fields.error_message = readStringField(action.error, "message");
-    fields.error_code_field = readStringField(action.error, "code");
-  }
-
-  const parsedIssues = tryParsePayloadIssues(action.payload);
-  if (parsedIssues !== null) {
-    for (const [key, value] of Object.entries(parsedIssues)) {
-      fields[key] = value;
-    }
-  }
-
-  if (action.actionMeta !== null) {
-    fields.rejected_aborted = readBooleanField(action.actionMeta, "aborted");
-    fields.rejected_condition = readBooleanField(action.actionMeta, "condition");
-    fields.rejected_with_value = readBooleanField(
-      action.actionMeta,
-      "rejectedWithValue",
-    );
-  }
 }
 
 function logApiPending(action: ApiLifecycleAction): void {

@@ -51,6 +51,10 @@ pub(super) fn spawn_startup_hydration_worker<F>(
     });
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Startup hydration orchestrates store bootstrap, index refresh, target discovery, and batched hydration."
+)]
 async fn run_startup_hydration<F>(factory: F, store: StoreOpener, store_lock: StoreLock)
 where
     F: ProviderFactory,
@@ -103,6 +107,10 @@ where
     Vec::new()
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Hydration loop logs success/failure details and applies cooperative scheduling throttles."
+)]
 async fn hydrate_targets<F>(runtime: &mut ServiceRuntime<F>, targets: &[HydrationTarget])
 where
     F: ProviderFactory,

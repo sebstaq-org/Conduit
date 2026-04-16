@@ -3,12 +3,7 @@ import type {
   SessionClientPort,
   SessionClientTelemetryEvent,
 } from "@conduit/session-client";
-import {
-  logDebug,
-  logError,
-  logInfo,
-  logWarn,
-} from "./frontend-logger";
+import { logDebug, logError, logInfo, logWarn } from "./frontend-logger";
 
 function configuredSessionClientUrl(): string {
   const configuredUrl = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;

@@ -1,8 +1,8 @@
 import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
 import { createDeferred } from "./deferred.js";
 import { parseServerFrame } from "./wireFrame.js";
+import type { SessionClientTelemetryEvent } from "./sessionClientTelemetryEvent.js";
 import { requireWebSocketUrl } from "./webSocketUrl.js";
-import type { SessionClientTelemetryEvent } from "../sessionClientPort.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
@@ -38,13 +38,76 @@ class WebSocketTransport {
 
   public async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
     const startedAt = Date.now();
+    this.logDispatchStart(command);
+    const responseDeferred = await this.sendCommand(command, startedAt);
+    return this.awaitDispatchResponse(command, responseDeferred, startedAt);
+  }
+
+  private logDispatchStart(command: ConsumerCommand): void {
     this.emitTelemetry({
       event_name: "session_client.transport.dispatch.start",
-      fields: {
-        command,
-      },
+      fields: { command },
       level: "debug",
     });
+  }
+
+  private sendCommandFailure(
+    command: ConsumerCommand,
+    startedAt: number,
+    error: unknown,
+  ): void {
+    this.emitTelemetry({
+      event_name: "session_client.transport.dispatch.finish",
+      fields: {
+        command,
+        duration_ms: Date.now() - startedAt,
+        error,
+        error_code: "socket_send_failed",
+        ok: false,
+      },
+      level: "warn",
+    });
+  }
+
+  private dispatchFailure(
+    command: ConsumerCommand,
+    startedAt: number,
+    error: unknown,
+  ): void {
+    this.emitTelemetry({
+      event_name: "session_client.transport.dispatch.finish",
+      fields: {
+        command,
+        duration_ms: Date.now() - startedAt,
+        error,
+        error_code: "dispatch_failed",
+        ok: false,
+      },
+      level: "warn",
+    });
+  }
+
+  private dispatchSuccess(
+    command: ConsumerCommand,
+    startedAt: number,
+    response: ConsumerResponse,
+  ): void {
+    this.emitTelemetry({
+      event_name: "session_client.transport.dispatch.finish",
+      fields: {
+        command,
+        duration_ms: Date.now() - startedAt,
+        ok: true,
+        response,
+      },
+      level: "info",
+    });
+  }
+
+  private async sendCommand(
+    command: ConsumerCommand,
+    startedAt: number,
+  ): Promise<PromiseWithResolvers<ConsumerResponse>> {
     const socket = await this.openSocket();
     const responseDeferred = this.trackResponse(command.id);
     try {
@@ -56,47 +119,26 @@ class WebSocketTransport {
           command,
         }),
       );
+      return responseDeferred;
     } catch (error) {
       this.pending.delete(command.id);
       responseDeferred.reject(new Error("session websocket send failed"));
-      this.emitTelemetry({
-        event_name: "session_client.transport.dispatch.finish",
-        fields: {
-          command,
-          duration_ms: Date.now() - startedAt,
-          error,
-          error_code: "socket_send_failed",
-          ok: false,
-        },
-        level: "warn",
-      });
+      this.sendCommandFailure(command, startedAt, error);
       throw error;
     }
+  }
+
+  private async awaitDispatchResponse(
+    command: ConsumerCommand,
+    responseDeferred: PromiseWithResolvers<ConsumerResponse>,
+    startedAt: number,
+  ): Promise<ConsumerResponse> {
     try {
       const response = await responseDeferred.promise;
-      this.emitTelemetry({
-        event_name: "session_client.transport.dispatch.finish",
-        fields: {
-          command,
-          duration_ms: Date.now() - startedAt,
-          ok: true,
-          response,
-        },
-        level: "info",
-      });
+      this.dispatchSuccess(command, startedAt, response);
       return response;
     } catch (error) {
-      this.emitTelemetry({
-        event_name: "session_client.transport.dispatch.finish",
-        fields: {
-          command,
-          duration_ms: Date.now() - startedAt,
-          error,
-          error_code: "dispatch_failed",
-          ok: false,
-        },
-        level: "warn",
-      });
+      this.dispatchFailure(command, startedAt, error);
       throw error;
     }
   }

@@ -22,6 +22,12 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
+enum PromptReceiveStep {
+    Disconnected,
+    Done(Result<acp::PromptResponse>),
+    Pending,
+}
+
 /// One live ACP host connection owned by Conduit.
 pub struct AcpHost {
     discovery: ProviderDiscovery,
@@ -290,15 +296,7 @@ impl AcpHost {
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<acp::PromptResponse> {
         let started_at = Instant::now();
-        tracing::debug!(
-            event_name = "acp_host.request.start",
-            source = "acp-core",
-            provider = %self.provider.as_str(),
-            operation = "session/prompt",
-            session_id,
-            cancel_after_ms = cancel_after.map(|value| value.as_millis()),
-            prompt = ?prompt
-        );
+        log_prompt_start(self.provider, session_id, cancel_after, &prompt);
         let (reply, response) = channel();
         let (updates, prompt_updates) = channel();
         self.commands
@@ -311,25 +309,7 @@ impl AcpHost {
             })
             .map_err(|_error| actor_stopped(self.provider, "session/prompt"))?;
         let result = receive_prompt_result(self.provider, response, prompt_updates, update_sink);
-        match &result {
-            Ok(_response) => tracing::info!(
-                event_name = "acp_host.request.finish",
-                source = "acp-core",
-                provider = %self.provider.as_str(),
-                operation = "session/prompt",
-                ok = true,
-                duration_ms = started_at.elapsed().as_millis()
-            ),
-            Err(error) => tracing::warn!(
-                event_name = "acp_host.request.finish",
-                source = "acp-core",
-                provider = %self.provider.as_str(),
-                operation = "session/prompt",
-                ok = false,
-                duration_ms = started_at.elapsed().as_millis(),
-                error_message = %error
-            ),
-        }
+        log_request_finish(self.provider, "session/prompt", started_at, &result);
         result
     }
 
@@ -342,36 +322,13 @@ impl AcpHost {
         T: Send + 'static,
     {
         let started_at = Instant::now();
-        tracing::debug!(
-            event_name = "acp_host.request.start",
-            source = "acp-core",
-            provider = %self.provider.as_str(),
-            operation
-        );
+        log_request_start(self.provider, operation);
         let (reply, response) = channel();
         self.commands
             .send(command(reply))
             .map_err(|_error| actor_stopped(self.provider, operation))?;
         let result = receive_result(self.provider, operation, response);
-        match &result {
-            Ok(_response) => tracing::info!(
-                event_name = "acp_host.request.finish",
-                source = "acp-core",
-                provider = %self.provider.as_str(),
-                operation,
-                ok = true,
-                duration_ms = started_at.elapsed().as_millis()
-            ),
-            Err(error) => tracing::warn!(
-                event_name = "acp_host.request.finish",
-                source = "acp-core",
-                provider = %self.provider.as_str(),
-                operation,
-                ok = false,
-                duration_ms = started_at.elapsed().as_millis(),
-                error_message = %error
-            ),
-        }
+        log_request_finish(self.provider, operation, started_at, &result);
         result
     }
 }
@@ -388,39 +345,135 @@ fn receive_prompt_result(
     prompt_updates: Receiver<TranscriptUpdateSnapshot>,
     update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
 ) -> Result<acp::PromptResponse> {
+    log_prompt_updates_listen_start(provider);
+    loop {
+        drain_prompt_updates(&prompt_updates, update_sink);
+        match receive_prompt_step(&response) {
+            PromptReceiveStep::Pending => {}
+            PromptReceiveStep::Done(result) => {
+                return finish_prompt_result(provider, &prompt_updates, update_sink, result);
+            }
+            PromptReceiveStep::Disconnected => {
+                return prompt_response_disconnected(provider);
+            }
+        }
+    }
+}
+
+fn log_request_start(provider: ProviderId, operation: &'static str) {
+    tracing::debug!(
+        event_name = "acp_host.request.start",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        operation
+    );
+}
+
+fn log_prompt_start(
+    provider: ProviderId,
+    session_id: &str,
+    cancel_after: Option<Duration>,
+    prompt: &[Value],
+) {
+    tracing::debug!(
+        event_name = "acp_host.request.start",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        operation = "session/prompt",
+        session_id,
+        cancel_after_ms = cancel_after.map(|value| value.as_millis()),
+        prompt = ?prompt
+    );
+}
+
+fn log_request_finish<T>(
+    provider: ProviderId,
+    operation: &'static str,
+    started_at: Instant,
+    result: &Result<T>,
+) {
+    match result {
+        Ok(_) => log_request_success(provider, operation, started_at),
+        Err(error) => log_request_failure(provider, operation, started_at, error),
+    }
+}
+
+fn log_request_success(provider: ProviderId, operation: &'static str, started_at: Instant) {
+    tracing::info!(
+        event_name = "acp_host.request.finish",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        operation,
+        ok = true,
+        duration_ms = started_at.elapsed().as_millis()
+    );
+}
+
+fn log_request_failure(
+    provider: ProviderId,
+    operation: &'static str,
+    started_at: Instant,
+    error: &impl std::fmt::Display,
+) {
+    tracing::warn!(
+        event_name = "acp_host.request.finish",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        operation,
+        ok = false,
+        duration_ms = started_at.elapsed().as_millis(),
+        error_message = %error
+    );
+}
+
+fn log_prompt_updates_listen_start(provider: ProviderId) {
     tracing::debug!(
         event_name = "acp_host.prompt_updates.listen.start",
         source = "acp-core",
         provider = %provider.as_str()
     );
-    loop {
-        for update in prompt_updates.try_iter() {
-            update_sink(update);
-        }
-        match response.recv_timeout(Duration::from_millis(10)) {
-            Ok(result) => {
-                for update in prompt_updates.try_iter() {
-                    update_sink(update);
-                }
-                tracing::debug!(
-                    event_name = "acp_host.prompt_updates.listen.finish",
-                    source = "acp-core",
-                    provider = %provider.as_str(),
-                    ok = true
-                );
-                return result;
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                tracing::warn!(
-                    event_name = "acp_host.prompt_updates.listen.finish",
-                    source = "acp-core",
-                    provider = %provider.as_str(),
-                    ok = false,
-                    error_message = "prompt response channel disconnected"
-                );
-                return Err(actor_stopped(provider, "session/prompt"));
-            }
-        }
+}
+
+fn drain_prompt_updates(
+    prompt_updates: &Receiver<TranscriptUpdateSnapshot>,
+    update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+) {
+    for update in prompt_updates.try_iter() {
+        update_sink(update);
     }
+}
+
+fn receive_prompt_step(response: &Receiver<Result<acp::PromptResponse>>) -> PromptReceiveStep {
+    match response.recv_timeout(Duration::from_millis(10)) {
+        Ok(result) => PromptReceiveStep::Done(result),
+        Err(RecvTimeoutError::Timeout) => PromptReceiveStep::Pending,
+        Err(RecvTimeoutError::Disconnected) => PromptReceiveStep::Disconnected,
+    }
+}
+
+fn finish_prompt_result(
+    provider: ProviderId,
+    prompt_updates: &Receiver<TranscriptUpdateSnapshot>,
+    update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    result: Result<acp::PromptResponse>,
+) -> Result<acp::PromptResponse> {
+    drain_prompt_updates(prompt_updates, update_sink);
+    tracing::debug!(
+        event_name = "acp_host.prompt_updates.listen.finish",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        ok = true
+    );
+    result
+}
+
+fn prompt_response_disconnected(provider: ProviderId) -> Result<acp::PromptResponse> {
+    tracing::warn!(
+        event_name = "acp_host.prompt_updates.listen.finish",
+        source = "acp-core",
+        provider = %provider.as_str(),
+        ok = false,
+        error_message = "prompt response channel disconnected"
+    );
+    Err(actor_stopped(provider, "session/prompt"))
 }

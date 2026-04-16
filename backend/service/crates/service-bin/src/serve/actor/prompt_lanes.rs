@@ -154,6 +154,10 @@ impl PromptLane {
         lane
     }
 
+    #[allow(
+        clippy::cognitive_complexity,
+        reason = "Prompt-lane dispatch must handle active-lane and channel-failure branches inline."
+    )]
     fn dispatch(&self, request: ActorRequest) {
         if self.active.swap(true, Ordering::AcqRel) {
             let id = request.command.id;
@@ -222,6 +226,10 @@ struct PromptLaneContext<F> {
     owner_lane: PromptLane,
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Lane loop coordinates runtime dispatch, ownership updates, and response-channel handling."
+)]
 async fn run_prompt_lane<F>(context: PromptLaneContext<F>)
 where
     F: ProviderFactory,

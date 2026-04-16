@@ -303,6 +303,9 @@ show_logs() {
     backend)
       tail -n 200 "$LOG_DIR/backend.log"
       ;;
+    frontend)
+      tail -n 200 "$LOG_DIR/frontend.log"
+      ;;
     web)
       tail -n 200 "$LOG_DIR/web.log"
       ;;
@@ -311,6 +314,7 @@ show_logs() {
       ;;
     all)
       printf "Backend log: %s/backend.log\n" "$LOG_DIR"
+      printf "Frontend log: %s/frontend.log\n" "$LOG_DIR"
       printf "Web log: %s/web.log\n" "$LOG_DIR"
       printf "Supervisor log: %s/supervisor.log\n" "$LOG_DIR"
       ;;
@@ -331,7 +335,7 @@ Commands:
   stop                  Stop stage supervisor, backend, and web server
   status                Show current release and process status
   open                  Start stage if needed and open browser
-  logs [backend|web|supervisor] Show recent log output
+  logs [backend|frontend|web|supervisor] Show recent log output
   install-desktop-entry Install a desktop launcher for stage open
 EOF
 }

@@ -52,6 +52,10 @@ fn run_suggestion_refresh_worker<F>(
     }
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Refresh outcome is intentionally logged with branch-specific severity."
+)]
 fn refresh_suggestions<F>(runtime: &mut ServiceRuntime<F>)
 where
     F: ProviderFactory,

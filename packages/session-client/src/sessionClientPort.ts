@@ -28,6 +28,7 @@ import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
 } from "./timelineEvent.js";
+import type { SessionClientTelemetryEvent } from "./transport/sessionClientTelemetryEvent.js";
 
 interface SessionClientPort {
   readonly policy: "official-acp-only";
@@ -67,12 +68,6 @@ interface SessionClientPort {
   subscribeSessionIndexChanges(
     handler: (event: SessionsIndexChanged) => void,
   ): Promise<() => void>;
-}
-
-interface SessionClientTelemetryEvent {
-  event_name: string;
-  level: "debug" | "info" | "warn" | "error";
-  fields?: Record<string, unknown>;
 }
 
 interface SessionClientOptions {

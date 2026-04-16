@@ -336,6 +336,10 @@ pub(crate) fn command(id: &str, command: &str, provider: &str, params: Value) ->
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "Shared integration-test helper imported selectively across test crates."
+)]
 pub(crate) fn assert_ok(response: &ConsumerResponse) -> TestResult<()> {
     if !response.ok {
         return Err(format!("command failed: {:?}", response.error).into());

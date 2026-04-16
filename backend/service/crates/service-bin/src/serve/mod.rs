@@ -7,8 +7,8 @@ mod wire;
 use crate::error::Result;
 use crate::local_store::open_product_store;
 use actor::RuntimeActor;
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -17,6 +17,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use session_store::LocalStore;
 use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -63,7 +64,11 @@ const CATALOG_COMMANDS: [&str; 19] = [
 /// an I/O failure.
 pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
-    axum::serve(listener, router(open_product_store()?)).await?;
+    axum::serve(
+        listener,
+        router(open_product_store()?).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -107,10 +112,25 @@ async fn session_socket(
     websocket.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Client-log ingest validates client scope and maps sink outcomes to HTTP status with telemetry."
+)]
 async fn client_log_ingest(
     State(state): State<Arc<ServeState>>,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Json(batch): Json<client_logs::ClientLogBatch>,
 ) -> StatusCode {
+    if !is_loopback_client(client_addr) {
+        tracing::warn!(
+            event_name = "client_log.ingest.rejected",
+            source = "service-bin",
+            reason = "non_loopback_client",
+            client_addr = %client_addr
+        );
+        return StatusCode::FORBIDDEN;
+    }
+
     let record_count = batch.record_count();
     match state.client_log_sink.append(batch).await {
         Ok(()) => {
@@ -139,6 +159,14 @@ async fn client_log_ingest(
     }
 }
 
+fn is_loopback_client(client_addr: SocketAddr) -> bool {
+    client_addr.ip().is_loopback()
+}
+
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Socket loop coordinates client frames, outbound queue, and lifecycle telemetry."
+)]
 async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
     tracing::info!(
@@ -233,6 +261,10 @@ enum OutboundFrame {
     },
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Frame dispatch covers validation, actor dispatch, watch updates, and response telemetry."
+)]
 async fn dispatch_client_frame(
     actor: RuntimeActor,
     frame: ClientCommandFrame,
@@ -300,6 +332,10 @@ async fn dispatch_client_frame(
     });
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Live-event forwarding intentionally gates on watches and handles backpressure/closure conditions."
+)]
 async fn forward_live_events(
     mut live_events: tokio::sync::broadcast::Receiver<service_runtime::RuntimeEvent>,
     watches: SharedWatchState,
