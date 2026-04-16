@@ -278,16 +278,21 @@ function submitPlanInteractionMock(
   return advanceToNextPlanInteraction(nextStepState(state));
 }
 
+function submitPlanInteractionMockChoice(
+  state: SessionComposerPlanInteractionMockState,
+  optionId: string,
+): SessionComposerPlanInteractionMockState {
+  const selectedState = selectPlanInteractionMockOption(state, optionId);
+  return submitPlanInteractionMock(selectedState);
+}
+
 export {
   canSubmitPlanInteractionMock,
   createSessionComposerPlanInteractionMockState,
   dismissPlanInteractionMock,
-  resolveActivePlanInteractionMockCard,
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
   startPlanInteractionMockScenario,
+  submitPlanInteractionMockChoice,
   submitPlanInteractionMock,
-};
-export type {
-  SessionComposerPlanInteractionMockState,
 };

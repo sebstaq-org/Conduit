@@ -51,9 +51,18 @@ function resolveSubmitHandler(args: {
   return args.actions.submitInteraction;
 }
 
+function createChoiceSubmitHandler(args: {
+  actions: SessionComposerPlanInteractionMockActions;
+}): (optionId: string) => void {
+  return (optionId: string): void => {
+    args.actions.submitChoice(optionId);
+  };
+}
+
 function renderQuestionOptionRows(args: {
   card: PlanInteractionMockCard;
   onSelectOption: (optionId: string) => void;
+  onSubmitChoice: (optionId: string) => void;
   selectedOptionId: string | null;
 }): React.JSX.Element {
   return (
@@ -63,7 +72,11 @@ function renderQuestionOptionRows(args: {
           key={option.optionId}
           label={optionLabel(index, option)}
           onPress={() => {
-            args.onSelectOption(option.optionId);
+            if (option.kind === "other") {
+              args.onSelectOption(option.optionId);
+              return;
+            }
+            args.onSubmitChoice(option.optionId);
           }}
           selected={option.optionId === args.selectedOptionId}
         />
@@ -103,6 +116,7 @@ function renderTerminalOptionRows(args: {
   handleOtherTextChange: (value: string) => void;
   handleSubmit: (() => void) | undefined;
   onSelectOption: (optionId: string) => void;
+  onSubmitChoice: (optionId: string) => void;
   otherText: string;
   selectedOptionId: string | null;
   theme: Theme;
@@ -128,7 +142,11 @@ function renderTerminalOptionRows(args: {
             key={option.optionId}
             label={optionLabel(index, option)}
             onPress={() => {
-              args.onSelectOption(option.optionId);
+              if (option.kind === "other") {
+                args.onSelectOption(option.optionId);
+                return;
+              }
+              args.onSubmitChoice(option.optionId);
             }}
             selected={option.optionId === args.selectedOptionId}
           />
@@ -143,6 +161,7 @@ function renderOptionRows(args: {
   handleOtherTextChange: (value: string) => void;
   handleSubmit: (() => void) | undefined;
   onSelectOption: (optionId: string) => void;
+  onSubmitChoice: (optionId: string) => void;
   otherText: string;
   selectedOptionId: string | null;
   theme: Theme;
@@ -155,11 +174,26 @@ function renderOptionRows(args: {
 
 function renderActionRows(args: {
   canSubmit: boolean;
+  hasOtherSelection: boolean;
   handleDismissInteraction: () => void;
   handleSubmit: (() => void) | undefined;
   submitLabel: string;
   theme: Theme;
 }): React.JSX.Element {
+  if (!args.hasOtherSelection) {
+    return (
+      <Box style={createPlanInteractionFooterStyle()}>
+        <TextButton
+          appearance="secondary"
+          label="Dismiss"
+          onPress={args.handleDismissInteraction}
+        />
+        <Box style={createPlanInteractionEscStyle(args.theme)}>
+          <Text variant="meta">ESC</Text>
+        </Box>
+      </Box>
+    );
+  }
   return (
     <Box style={createPlanInteractionFooterStyle()}>
       <TextButton
@@ -204,6 +238,14 @@ function renderOtherInput(args: {
   );
 }
 
+function isOtherSelection(
+  card: PlanInteractionMockCard,
+  selectedOptionId: string | null,
+): boolean {
+  const option = selectedOption(card, selectedOptionId);
+  return option?.kind === "other";
+}
+
 function SessionComposerPlanInteractionSurface({
   actions,
   card,
@@ -214,6 +256,8 @@ function SessionComposerPlanInteractionSurface({
   const theme = useTheme<Theme>();
   const handleDismissInteraction = actions.dismissInteraction;
   const handleSubmit = resolveSubmitHandler({ actions, canSubmit });
+  const hasOtherSelection = isOtherSelection(card, selectedOptionId);
+  const handleSubmitChoice = createChoiceSubmitHandler({ actions });
 
   return (
     <Box gap="sm">
@@ -228,6 +272,7 @@ function SessionComposerPlanInteractionSurface({
         handleOtherTextChange: actions.setOtherText,
         handleSubmit,
         onSelectOption: actions.selectOption,
+        onSubmitChoice: handleSubmitChoice,
         otherText,
         selectedOptionId,
         theme,
@@ -241,6 +286,7 @@ function SessionComposerPlanInteractionSurface({
       })}
       {renderActionRows({
         canSubmit,
+        hasOtherSelection,
         handleDismissInteraction,
         handleSubmit,
         submitLabel: card.submitLabel,

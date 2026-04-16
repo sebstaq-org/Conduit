@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { readPlanModeUiMockFlag } from "./session-composer-plan-interaction-mock-env";
 import { buildSessionComposerPlanInteractionMockHistory } from "./session-composer-plan-interaction-mock-history";
-import type { SessionComposerPlanInteractionMockState } from "./session-composer-plan-interaction-mock-state";
+import type { SessionComposerPlanInteractionMockState } from "./session-composer-plan-interaction-mock-model";
+import { resolveActivePlanInteractionMockCard } from "./session-composer-plan-interaction-mock-queries";
 import {
   createSessionComposerPlanInteractionMockState,
-  resolveActivePlanInteractionMockCard,
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
   startPlanInteractionMockScenario,
+  submitPlanInteractionMockChoice,
   submitPlanInteractionMock,
 } from "./session-composer-plan-interaction-mock-state";
 
@@ -50,9 +51,9 @@ function expectActiveQuestion(
 function advanceToFirstPlanDecision(): SessionComposerPlanInteractionMockState {
   let state = startProductFlow();
   expectActiveQuestion(state, "question-theme");
-  state = submitPlanInteractionMock(state);
+  state = submitPlanInteractionMockChoice(state, "theme-everyday");
   expectActiveQuestion(state, "question-detail-level");
-  state = submitPlanInteractionMock(state);
+  state = submitPlanInteractionMockChoice(state, "scope-three-steps");
   expectActiveQuestion(state, "question-implement-1");
   return state;
 }
@@ -101,7 +102,7 @@ describe("session composer plan interaction mock state", () => {
   });
 });
 
-describe("session composer product-flow mock state", () => {
+describe("session composer product-flow main path", () => {
   it("simulates plan markdown, stay in plan mode, repeated questions, and implement", () => {
     let state = advanceToFirstPlanDecision();
     expect(textItems(state)).toEqual([
@@ -115,7 +116,7 @@ describe("session composer product-flow mock state", () => {
       "Jättebra. Men ändra kaffe till JUICE",
     ]);
 
-    state = submitPlanInteractionMock(state);
+    state = submitPlanInteractionMockChoice(state, "scope-narrow");
     expectActiveQuestion(state, "question-implement-2");
     expect(textItems(state)).toEqual([
       expect.stringContaining("## Proposed plan"),
@@ -133,6 +134,22 @@ describe("session composer product-flow mock state", () => {
     });
   });
 
+});
+
+describe("session composer product-flow choice handling", () => {
+  it("submits choice options immediately without requiring text submit", () => {
+    let state = startProductFlow();
+    state = submitPlanInteractionMockChoice(state, "theme-everyday");
+    expectActiveQuestion(state, "question-detail-level");
+
+    state = selectPlanInteractionMockOption(state, "answer-other");
+    const blocked = submitPlanInteractionMock(state);
+    expectActiveQuestion(blocked, "question-detail-level");
+  });
+
+});
+
+describe("session composer product-flow history", () => {
   it("builds a mock history window for the session history renderer", () => {
     const state = advanceToFirstPlanDecision();
 

@@ -16,3 +16,4 @@ artifacts/manual/*
 # Expo CNG generated native projects
 apps/frontend/android/
 apps/frontend/ios/
+apps/frontend/expo-env.d.ts

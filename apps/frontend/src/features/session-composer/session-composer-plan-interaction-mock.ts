@@ -10,6 +10,7 @@ import {
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
   startPlanInteractionMockScenario,
+  submitPlanInteractionMockChoice,
   submitPlanInteractionMock,
 } from "./session-composer-plan-interaction-mock-state";
 import { buildSessionComposerPlanInteractionMockView } from "./session-composer-plan-interaction-mock-view";
@@ -25,6 +26,7 @@ interface SessionComposerPlanInteractionMockActions {
   selectOption: (optionId: string) => void;
   setOtherText: (text: string) => void;
   startScenario: (scenarioId: string) => void;
+  submitChoice: (optionId: string) => void;
   submitInteraction: () => void;
 }
 
@@ -52,6 +54,9 @@ function createDisabledPlanInteractionMockActions(
     startScenario: (): void => {
       setState((current) => current);
     },
+    submitChoice: (): void => {
+      setState((current) => current);
+    },
     submitInteraction: (): void => {
       setState((current) => current);
     },
@@ -75,6 +80,9 @@ function createEnabledPlanInteractionMockActions(
     },
     startScenario: (scenarioId: string): void => {
       setState((current) => startPlanInteractionMockScenario(current, scenarioId));
+    },
+    submitChoice: (optionId: string): void => {
+      setState((current) => submitPlanInteractionMockChoice(current, optionId));
     },
     submitInteraction: (): void => {
       setState((current) => submitPlanInteractionMock(current));
