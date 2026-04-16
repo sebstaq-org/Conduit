@@ -20,6 +20,7 @@ export type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
   ProvidersConfigSnapshotResult,
   SessionSetConfigOptionRequest,
   SessionSetConfigOptionResult,

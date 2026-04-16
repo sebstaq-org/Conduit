@@ -1,0 +1,62 @@
+{
+  "source_run": "RUN_PRB_CONDUIT_LIVE_C",
+  "selected_option_payload": {
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-0"
+        }
+      }
+    }
+  },
+  "answer_other_payload_with_meta": {
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-other",
+          "_meta": {
+            "request_user_input_response": {
+              "answers": {
+                "plan_focus": {
+                  "answers": ["custom free text from conduit prb proof v2"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "cancel_payload": {
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "cancelled"
+        }
+      }
+    }
+  },
+  "invalid_option_payload": {
+    "payload": {
+      "result": {
+        "outcome": {
+          "outcome": "selected",
+          "optionId": "answer-invalid"
+        }
+      }
+    }
+  },
+  "provider_driven_invalid_semantics": {
+    "respond_interaction_command_ok": true,
+    "prompt_stop_reason": "cancelled",
+    "normalized_tool_call_update": {
+      "status": "failed",
+      "rawOutput": {
+        "request_type": "request_user_input",
+        "outcome": "cancelled"
+      }
+    }
+  }
+}

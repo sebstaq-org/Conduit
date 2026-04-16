@@ -22,6 +22,27 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
+/// User interaction response payload accepted by `session/respond_interaction`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InteractionResponse {
+    /// Select one predefined option.
+    Selected {
+        /// Selected option identifier.
+        option_id: String,
+    },
+    /// Select the free-text option with one answer string.
+    AnswerOther {
+        /// Option id, typically `answer-other`.
+        option_id: String,
+        /// Question id associated with the free-text answer.
+        question_id: String,
+        /// Free-text response content.
+        text: String,
+    },
+    /// Cancel the pending interaction.
+    Cancelled,
+}
+
 enum PromptReceiveStep {
     Disconnected,
     Done(Result<acp::PromptResponse>),
@@ -286,6 +307,21 @@ impl AcpHost {
                 reply,
             }
         })
+    }
+
+    /// Responds to one pending provider interaction while prompt is active.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the interaction id is unknown, already resolved,
+    /// or the response payload does not satisfy ACP interaction requirements.
+    pub fn respond_interaction(
+        &self,
+        session_id: &str,
+        interaction_id: &str,
+        response: InteractionResponse,
+    ) -> Result<()> {
+        sdk_actor::respond_interaction(self.provider, session_id, interaction_id, response)
     }
 
     fn prompt(

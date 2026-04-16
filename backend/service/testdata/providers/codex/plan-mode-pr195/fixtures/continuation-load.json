@@ -1,0 +1,68 @@
+{
+  "direct_acp_continuation": {
+    "source_run": "RUN_DIRECT",
+    "session_id": "019d950e-be90-7792-8fff-db93a94578a7",
+    "commands": [
+      {
+        "label": "set-config-plan",
+        "method": "session/set_config_option",
+        "config_id": "collaboration_mode",
+        "value": "plan",
+        "error": null,
+        "collaboration_mode_current": "plan"
+      },
+      {
+        "label": "session-load",
+        "method": "session/load",
+        "error": null
+      },
+      {
+        "label": "set-config-plan-after-load",
+        "method": "session/set_config_option",
+        "config_id": "collaboration_mode",
+        "value": "plan",
+        "error": null,
+        "collaboration_mode_current": "plan"
+      },
+      {
+        "label": "prompt-continuation",
+        "method": "session/prompt",
+        "error": null,
+        "stopReason": "end_turn"
+      }
+    ]
+  },
+  "set_mode_lane_check": {
+    "source_run": "RUN_EDGECASES_FINAL",
+    "command": {
+      "label": "set-mode-plan",
+      "method": "session/set_mode",
+      "params": {
+        "modeId": "plan"
+      }
+    },
+    "error": {
+      "code": -32602,
+      "message": "Invalid params"
+    }
+  },
+  "conduit_hosted_set_config_failures": {
+    "source_run": "RUN_CONDUIT",
+    "errors": [
+      {
+        "id": "set-config-collaboration-mode-pre-open-009",
+        "code": "provider_error",
+        "message": "official ACP SDK error from codex during session/set_config_option"
+      },
+      {
+        "id": "set-config-collaboration-mode-post-open-011",
+        "code": "provider_error",
+        "message": "official ACP SDK error from codex during session/set_config_option"
+      }
+    ],
+    "proxy_wire_error": {
+      "code": -32002,
+      "message": "Resource not found"
+    }
+  }
+}

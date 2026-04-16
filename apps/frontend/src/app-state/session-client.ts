@@ -3,10 +3,11 @@ import type {
   SessionClientPort,
   SessionClientTelemetryEvent,
 } from "@conduit/session-client";
+import { frontendEnvValue } from "./frontend-env";
 import { logDebug, logError, logInfo, logWarn } from "./frontend-logger";
 
 function configuredSessionClientUrl(): string {
-  const configuredUrl = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
+  const configuredUrl = frontendEnvValue("EXPO_PUBLIC_CONDUIT_SESSION_WS_URL");
   if (configuredUrl === undefined) {
     throw new Error(
       "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL is required for frontend session transport.",

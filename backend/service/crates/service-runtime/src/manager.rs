@@ -1,8 +1,10 @@
 //! Provider manager and command dispatcher.
 
+mod interaction_response;
 mod logging;
 mod prompt_flow;
 
+use self::interaction_response::parse_interaction_response;
 use crate::command::ConsumerCommand;
 use crate::command::ConsumerResponse;
 use crate::error::{
@@ -224,6 +226,10 @@ where
             "session/prompt" => {
                 Self::require_global_provider("session/prompt", &command.provider)?;
                 Some(self.session_prompt(command.id.clone(), &command.params)?)
+            }
+            "session/respond_interaction" => {
+                Self::require_global_provider("session/respond_interaction", &command.provider)?;
+                Some(self.session_respond_interaction(command.id.clone(), &command.params)?)
             }
             _ => None,
         };
@@ -490,6 +496,38 @@ where
             json!({
                 "subscribed": true,
                 "openSessionId": open_session_id
+            }),
+        ))
+    }
+
+    fn session_respond_interaction(
+        &mut self,
+        id: String,
+        params: &Value,
+    ) -> Result<ConsumerResponse> {
+        let open_session_id = string_param("session/respond_interaction", params, "openSessionId")?;
+        let interaction_id = string_param("session/respond_interaction", params, "interactionId")?;
+        let response = parse_interaction_response(params)?;
+        let key = {
+            let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
+            self.local_store
+                .open_session_key("session/respond_interaction", &open_session_id)?
+        };
+        let provider_response = {
+            let provider_port = self.provider(key.provider)?;
+            provider_port.session_respond_interaction(
+                key.session_id.clone(),
+                interaction_id.clone(),
+                response,
+            )?
+        };
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            json!({
+                "openSessionId": open_session_id,
+                "sessionId": key.session_id,
+                "interactionId": interaction_id,
+                "providerResult": provider_response
             }),
         ))
     }

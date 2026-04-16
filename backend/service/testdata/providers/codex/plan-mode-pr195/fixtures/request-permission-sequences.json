@@ -1,0 +1,117 @@
+{
+  "run_prb_conduit_live_c_selected_flow": {
+    "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+    "host_request_method": "session/request_permission",
+    "host_request_count": 5,
+    "selected_flow": {
+      "session_id": "019d9647-0996-7e63-9326-c38107a3c7b4",
+      "requests": [
+        {
+          "id": 0,
+          "question_id": "plan_goal",
+          "question_header": "Goal",
+          "request_type": "request_user_input",
+          "is_other": true,
+          "option_ids": [
+            "answer-0",
+            "answer-1",
+            "answer-2",
+            "answer-other",
+            "cancel"
+          ]
+        },
+        {
+          "id": 1,
+          "question_id": "detail_level",
+          "question_header": "Detail",
+          "request_type": "request_user_input",
+          "is_other": true,
+          "option_ids": [
+            "answer-0",
+            "answer-1",
+            "answer-2",
+            "answer-other",
+            "cancel"
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "id": 0,
+          "result": {
+            "outcome": {
+              "outcome": "selected",
+              "optionId": "answer-0"
+            }
+          }
+        },
+        {
+          "id": 1,
+          "result": {
+            "outcome": {
+              "outcome": "selected",
+              "optionId": "answer-0"
+            }
+          }
+        }
+      ],
+      "correlation_rule": "response JSON-RPC id equals request JSON-RPC id"
+    }
+  },
+  "run_prb_conduit_live_c_single_question_flows": {
+    "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+    "answer_other_flow": {
+      "request": {
+        "id": 0,
+        "question_id": "plan_focus",
+        "question_header": "Plan Scope",
+        "option_ids": [
+          "answer-0",
+          "answer-1",
+          "answer-2",
+          "answer-other",
+          "cancel"
+        ]
+      },
+      "response": {
+        "id": 0,
+        "result": {
+          "outcome": {
+            "outcome": "selected",
+            "optionId": "answer-other",
+            "_meta": {
+              "request_user_input_response": {
+                "answers": {
+                  "plan_focus": {
+                    "answers": ["custom free text from conduit prb proof v2"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "cancel_flow": {
+      "response": {
+        "id": 0,
+        "result": {
+          "outcome": {
+            "outcome": "cancelled"
+          }
+        }
+      }
+    },
+    "invalid_option_flow": {
+      "response": {
+        "id": 0,
+        "result": {
+          "outcome": {
+            "outcome": "selected",
+            "optionId": "answer-invalid"
+          }
+        }
+      }
+    }
+  }
+}

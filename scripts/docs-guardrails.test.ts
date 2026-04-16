@@ -99,6 +99,15 @@ function parseEnvVars(source: string): string[] {
   );
 }
 
+function parseFrontendEnvValues(source: string): string[] {
+  return sortedUnique(
+    Array.from(
+      source.matchAll(/frontendEnvValue\("([A-Z0-9_]+)"\)/g),
+      (match) => match[1] ?? "",
+    ),
+  );
+}
+
 function findMarkdownLinks(source: string): string[] {
   return Array.from(
     source.matchAll(/\[[^\]]+\]\(([^)]+)\)/g),
@@ -196,6 +205,24 @@ function readExpectedTransportUrl(): string {
   return `ws://127.0.0.1:${String(defaultPort)}${sessionRoute}`;
 }
 
+function commandIndex(command: string, requiredPart: string): number {
+  const index = command.indexOf(requiredPart);
+  if (index === -1) {
+    throw new Error(`Missing command part: ${requiredPart}`);
+  }
+  return index;
+}
+
+function requirePackageScript(name: string): string {
+  const match = new RegExp(`"${name}"\\s*:\\s*"([^"]+)"`).exec(
+    readText("package.json"),
+  );
+  if (match?.[1] === undefined) {
+    throw new Error(`Missing package.json script: ${name}`);
+  }
+  return match[1];
+}
+
 describe("docs guardrails", () => {
   test("markdown files do not contain stale time-bound phrases", () => {
     const violations = listMarkdownFiles().flatMap((path) =>
@@ -227,7 +254,10 @@ describe("docs guardrails", () => {
     const sessionClientSource = readText(
       "apps/frontend/src/app-state/session-client.ts",
     );
-    const envVars = parseEnvVars(sessionClientSource);
+    const envVars = sortedUnique([
+      ...parseEnvVars(sessionClientSource),
+      ...parseFrontendEnvValues(sessionClientSource),
+    ]);
 
     expect(envVars).toStrictEqual(["EXPO_PUBLIC_CONDUIT_SESSION_WS_URL"]);
     expect(readText("apps/frontend/src/app-state/README.md")).toContain(
@@ -241,5 +271,24 @@ describe("docs guardrails", () => {
     );
 
     expect(violations).toStrictEqual([]);
+  });
+});
+
+describe("frontend CI guardrails", () => {
+  test("Expo generated types are prepared before frontend checks", () => {
+    const check = requirePackageScript("check");
+
+    expect(requirePackageScript("frontend:types:generate")).toBe(
+      "pnpm --filter @conduit/frontend exec expo customize tsconfig.json",
+    );
+    expect(
+      commandIndex(check, "pnpm run frontend:types:generate"),
+    ).toBeLessThan(commandIndex(check, "pnpm run frontend:typecheck"));
+    expect(
+      commandIndex(check, "pnpm run frontend:types:generate"),
+    ).toBeLessThan(commandIndex(check, "pnpm run frontend:lint"));
+    expect(readText(".github/workflows/check.yml")).toContain(
+      "run: pnpm run frontend:types:generate",
+    );
   });
 });

@@ -11,6 +11,10 @@ interface MultilineInputProps {
   value: string;
 }
 
+function nativeInputId(accessibilityLabel: string): string {
+  return accessibilityLabel.toLowerCase().replaceAll(/\s+/g, "-");
+}
+
 function MultilineInput({
   accessibilityLabel,
   disabled = false,
@@ -25,6 +29,7 @@ function MultilineInput({
       accessibilityLabel={accessibilityLabel}
       editable={!disabled}
       multiline
+      nativeID={nativeInputId(accessibilityLabel)}
       onChangeText={onChangeText}
       placeholder={placeholder}
       placeholderTextColor={theme.colors.textMuted}

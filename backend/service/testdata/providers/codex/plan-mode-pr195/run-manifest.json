@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "scope": "codex-acp-pr195",
+  "conduit": {
+    "repo": "Conduit",
+    "branch": "feat/codex-pr195-canonical-proof-pack",
+    "commit": "830270e"
+  },
+  "adapter": {
+    "repo": "codex-acp-pr195",
+    "branch": "pr-195-head",
+    "head_commit": "4ae9064",
+    "local_patch_files": ["src/codex_agent.rs", "src/thread.rs"],
+    "target_executable": "vendor/codex-acp-pr195/target/release/codex-acp",
+    "build_command": "rtk env PKG_CONFIG_PATH=/srv/devops/repos/vendor/libcap-dev-extract/usr/lib/x86_64-linux-gnu/pkgconfig PKG_CONFIG_SYSROOT_DIR=/srv/devops/repos/vendor/libcap-dev-extract cargo build --release",
+    "request_user_input_test_command": "rtk env PKG_CONFIG_PATH=/srv/devops/repos/vendor/libcap-dev-extract/usr/lib/x86_64-linux-gnu/pkgconfig PKG_CONFIG_SYSROOT_DIR=/srv/devops/repos/vendor/libcap-dev-extract cargo test request_user_input -- --nocapture"
+  },
+  "runs": [
+    {
+      "run_id": "RUN_CONDUIT",
+      "capture_id": "codex-plan-wire-proof-refactored-pr195-20260415T222911Z",
+      "started_at": "2026-04-15T22:30:26.582Z",
+      "completed_at": "2026-04-15T22:31:40.335Z",
+      "purpose": "Conduit-hosted ACP wire behavior and normalized lane checks"
+    },
+    {
+      "run_id": "RUN_DIRECT",
+      "capture_id": "codex-acp-direct-probe-refactored-pr195-20260416T064922Z",
+      "started_at": "2026-04-16T06:51:04.417Z",
+      "completed_at": "2026-04-16T06:53:00.723Z",
+      "purpose": "Direct ACP proof for plan activation, structured question, answer, and continuation"
+    },
+    {
+      "run_id": "RUN_INTERACTIONS_ATTEMPT",
+      "capture_id": "codex-acp-direct-probe-refactored-pr195-interactions-20260416T065726Z",
+      "purpose": "Historical proof-of-absence attempt before deterministic edgecase run"
+    },
+    {
+      "run_id": "RUN_EDGECASES_FINAL",
+      "capture_id": "codex-acp-direct-probe-refactored-pr195-edgecases-20260416T081650Z",
+      "started_at": "2026-04-16T08:17:06.502Z",
+      "completed_at": "2026-04-16T08:18:16.920Z",
+      "purpose": "Deterministic answer-other, cancel, and invalid-option behavior under pending question"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_A",
+      "capture_id": "codex-prb-backend-interaction-20260416T100116Z",
+      "started_at": "2026-04-16T10:01:43.190Z",
+      "completed_at": "2026-04-16T10:02:49.021Z",
+      "purpose": "Conduit live delta for session/respond_interaction bridge with forced question prompt"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_B",
+      "capture_id": "codex-prb-backend-interaction-20260416T101057Z",
+      "started_at": "2026-04-16T10:11:25.366Z",
+      "completed_at": "2026-04-16T10:13:45.846Z",
+      "purpose": "Conduit live delta rerun with explicit request_user_input trigger prompt"
+    },
+    {
+      "run_id": "RUN_PRB_CONDUIT_LIVE_C",
+      "capture_id": "codex-prb-backend-interaction-20260416T123111Z",
+      "started_at": "2026-04-16T12:31:50.243Z",
+      "completed_at": "2026-04-16T12:32:50.756Z",
+      "purpose": "Deterministic Conduit live chain: set_config(plan) -> request_permission -> respond_interaction(selected/answer_other/cancel/invalid) -> interaction_resolution"
+    }
+  ],
+  "key_commands": [
+    "rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- serve --host 127.0.0.1 --port 4294",
+    "rtk node <run-dir>/proof-runner.mjs ws://127.0.0.1:4294/api/session <run-dir>",
+    "rtk jq -s '...' <run-dir>/proxy-wire/codex-wire-*.jsonl",
+    "rtk node <run-dir>/direct-probe.mjs <run-dir>",
+    "rtk node <run-dir>/direct-probe-edgecases.mjs <run-dir>",
+    "rtk node <run-dir>/prb-interaction-proof-runner.mjs ws://127.0.0.1:<port>/api/session <run-dir>",
+    "rtk node <run-dir>/prb-interaction-proof-runner-v3.mjs ws://127.0.0.1:4320/api/session <run-dir>"
+  ],
+  "redaction": {
+    "env_keys_kept": ["CODEX_*", "OPENAI_*", "ACP_*", "CONDUIT_*", "PATH"],
+    "secrets_committed": false
+  }
+}

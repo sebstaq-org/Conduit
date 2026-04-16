@@ -110,4 +110,36 @@ pub enum AcpError {
         /// The ACP session id that was missing.
         session_id: String,
     },
+    /// An interaction identity was required but missing.
+    #[error("unknown interaction {interaction_id} for session {session_id} on {provider}")]
+    UnknownInteraction {
+        /// The provider whose interaction lookup failed.
+        provider: ProviderId,
+        /// The ACP session id that owns the interaction.
+        session_id: String,
+        /// The interaction id supplied by the caller.
+        interaction_id: String,
+    },
+    /// The interaction was already resolved.
+    #[error(
+        "interaction {interaction_id} is already resolved for session {session_id} on {provider}"
+    )]
+    ResolvedInteraction {
+        /// The provider whose interaction is already resolved.
+        provider: ProviderId,
+        /// The ACP session id that owns the interaction.
+        session_id: String,
+        /// The interaction id supplied by the caller.
+        interaction_id: String,
+    },
+    /// A response payload was invalid for the pending interaction.
+    #[error("invalid interaction response for {interaction_id} on {provider}: {message}")]
+    InvalidInteractionResponse {
+        /// The provider receiving the response.
+        provider: ProviderId,
+        /// The interaction id supplied by the caller.
+        interaction_id: String,
+        /// Human-readable validation details.
+        message: &'static str,
+    },
 }

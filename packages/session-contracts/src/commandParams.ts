@@ -9,6 +9,7 @@ import type {
   SessionNewRequest,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
   SessionSetConfigOptionRequest,
 } from "@conduit/session-model";
 import {
@@ -21,6 +22,7 @@ import {
   SessionNewRequestSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
+  SessionRespondInteractionRequestSchema,
   SessionSetConfigOptionRequestSchema,
   SessionGroupsQuerySchema,
 } from "@conduit/session-model";
@@ -71,6 +73,12 @@ function isSessionSetConfigOptionRequest(
   return SessionSetConfigOptionRequestSchema.safeParse(value).success;
 }
 
+function isSessionRespondInteractionRequest(
+  value: unknown,
+): value is SessionRespondInteractionRequest {
+  return SessionRespondInteractionRequestSchema.safeParse(value).success;
+}
+
 function isGlobalSettingsUpdateRequest(
   value: unknown,
 ): value is GlobalSettingsUpdateRequest {
@@ -87,6 +95,7 @@ export {
   isSessionNewRequest,
   isSessionOpenRequest,
   isSessionPromptRequest,
+  isSessionRespondInteractionRequest,
   isSessionSetConfigOptionRequest,
   isGlobalSettingsUpdateRequest,
 };

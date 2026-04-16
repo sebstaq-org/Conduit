@@ -24,6 +24,7 @@ import type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
   TranscriptItem,
 } from "@conduit/session-model";
 import {
@@ -39,6 +40,7 @@ import {
   SessionSetConfigOptionRequestSchema,
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
+  SessionRespondInteractionRequestSchema,
   TranscriptItemSchema,
 } from "@conduit/session-model";
 
@@ -49,6 +51,7 @@ const SESSION_COMMANDS = [
   "session/new",
   "session/set_config_option",
   "session/prompt",
+  "session/respond_interaction",
   "session/cancel",
 ] as const;
 const CONDUIT_COMMANDS = [
@@ -86,6 +89,7 @@ type SessionSetConfigOptionCommandName = "session/set_config_option";
 type SessionHistoryCommandName = "session/history";
 type SessionWatchCommandName = "session/watch";
 type SessionPromptCommandName = "session/prompt";
+type SessionRespondInteractionCommandName = "session/respond_interaction";
 type GlobalCommandTarget = "all";
 type SessionGroupsCommandTarget = ProviderId | GlobalCommandTarget;
 type ConsumerCommandTarget = SessionGroupsCommandTarget;
@@ -260,6 +264,14 @@ const SessionPromptConsumerCommandSchema = z
     params: SessionPromptRequestSchema,
   })
   .strict();
+const SessionRespondInteractionConsumerCommandSchema = z
+  .object({
+    id: z.string(),
+    command: z.literal("session/respond_interaction"),
+    provider: GlobalProviderTargetSchema,
+    params: SessionRespondInteractionRequestSchema,
+  })
+  .strict();
 const ConsumerCommandSchema = z.union([
   ProviderConsumerCommandSchema,
   SessionGroupsConsumerCommandSchema,
@@ -275,6 +287,7 @@ const ConsumerCommandSchema = z.union([
   SessionHistoryConsumerCommandSchema,
   SessionWatchConsumerCommandSchema,
   SessionPromptConsumerCommandSchema,
+  SessionRespondInteractionConsumerCommandSchema,
 ]);
 
 type ProviderConsumerCommand = z.infer<typeof ProviderConsumerCommandSchema>;
@@ -328,6 +341,9 @@ type SessionWatchConsumerCommand = z.infer<
 >;
 type SessionPromptConsumerCommand = z.infer<
   typeof SessionPromptConsumerCommandSchema
+>;
+type SessionRespondInteractionConsumerCommand = z.infer<
+  typeof SessionRespondInteractionConsumerCommandSchema
 >;
 type ConsumerCommand = z.infer<typeof ConsumerCommandSchema>;
 
@@ -436,6 +452,9 @@ export type {
   SessionPromptCommandName,
   SessionPromptConsumerCommand,
   SessionPromptRequest,
+  SessionRespondInteractionCommandName,
+  SessionRespondInteractionConsumerCommand,
+  SessionRespondInteractionRequest,
   SessionsWatchCommandName,
   SessionsWatchConsumerCommand,
   ProvidersConfigSnapshotCommandName,

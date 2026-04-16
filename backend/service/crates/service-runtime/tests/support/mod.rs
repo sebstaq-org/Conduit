@@ -1,9 +1,9 @@
 //! Test support for `service-runtime` integration tests.
 
 use acp_core::{
-    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
-    PromptLifecycleState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
-    WireStream,
+    ConnectionState, InteractionResponse, LiveSessionIdentity, LoadedTranscriptSnapshot,
+    PromptLifecycleSnapshot, PromptLifecycleState, ProviderSnapshot, RawWireEvent,
+    TranscriptUpdateSnapshot, WireKind, WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
@@ -41,6 +41,8 @@ pub(crate) struct FakeState {
     pub(crate) prompt_errors: HashMap<(ProviderId, String), String>,
     pub(crate) prompt_lifecycle_missing: HashSet<(ProviderId, String)>,
     pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
+    pub(crate) interaction_responses: Vec<(ProviderId, String, String, Value)>,
+    pub(crate) interaction_response_errors: HashMap<(ProviderId, String, String), String>,
     loaded_transcripts: HashMap<(ProviderId, String), LoadedTranscriptSnapshot>,
     last_prompt: Option<PromptLifecycleSnapshot>,
     disconnected: bool,
@@ -250,6 +252,37 @@ impl ProviderPort for FakeProvider {
             "configOptions": []
         }))
     }
+
+    fn session_respond_interaction(
+        &mut self,
+        session_id: String,
+        interaction_id: String,
+        response: InteractionResponse,
+    ) -> Result<Value> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        if let Some(error) = state.interaction_response_errors.get(&(
+            self.provider,
+            session_id.clone(),
+            interaction_id.clone(),
+        )) {
+            return Err(RuntimeError::Provider(error.clone()));
+        }
+        let response_payload = interaction_response_payload(response);
+        state.interaction_responses.push((
+            self.provider,
+            session_id.clone(),
+            interaction_id.clone(),
+            response_payload.clone(),
+        ));
+        Ok(json!({
+            "sessionId": session_id,
+            "interactionId": interaction_id,
+            "response": response_payload
+        }))
+    }
 }
 
 fn prompt_text(prompt: &[Value]) -> String {
@@ -308,6 +341,32 @@ fn fake_prompt_lifecycle_state(stop_reason: &str) -> PromptLifecycleState {
         PromptLifecycleState::Cancelled
     } else {
         PromptLifecycleState::Completed
+    }
+}
+
+fn interaction_response_payload(response: InteractionResponse) -> Value {
+    match response {
+        InteractionResponse::Selected { option_id } => {
+            json!({
+                "kind": "selected",
+                "optionId": option_id
+            })
+        }
+        InteractionResponse::AnswerOther {
+            option_id,
+            question_id,
+            text,
+        } => json!({
+            "kind": "answer_other",
+            "optionId": option_id,
+            "questionId": question_id,
+            "text": text
+        }),
+        InteractionResponse::Cancelled => {
+            json!({
+                "kind": "cancel"
+            })
+        }
     }
 }
 

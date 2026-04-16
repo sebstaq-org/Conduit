@@ -85,6 +85,21 @@ fn runtime_params(command: &str, args: &[String]) -> Result<Value> {
             "openSessionId": required_value(args, "--open-session-id")?,
             "prompt": [{ "type": "text", "text": required_value(args, "--prompt")? }],
         })),
+        "session/respond_interaction" => {
+            let response_json = required_value(args, "--response-json")?;
+            let response: Value = serde_json::from_str(&response_json).map_err(|source| {
+                ServiceError::InvalidFlagValue {
+                    flag: "--response-json".to_owned(),
+                    value: response_json.clone(),
+                    message: source.to_string(),
+                }
+            })?;
+            Ok(json!({
+                "openSessionId": required_value(args, "--open-session-id")?,
+                "interactionId": required_value(args, "--interaction-id")?,
+                "response": response
+            }))
+        }
         "session/cancel" => Ok(json!({ "session_id": required_value(args, "--session-id")? })),
         "settings/update" => Ok(json!({
             "sessionGroupsUpdatedWithinDays": settings_lookback_value(args)?

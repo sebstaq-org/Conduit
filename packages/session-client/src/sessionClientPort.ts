@@ -15,6 +15,7 @@ import type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
+  SessionRespondInteractionRequest,
   ProvidersConfigSnapshotResult,
   SessionSetConfigOptionRequest,
   SessionSetConfigOptionResult,
@@ -56,6 +57,7 @@ interface SessionClientPort {
     request: SessionHistoryRequest,
   ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
   promptSession(request: SessionPromptRequest): Promise<void>;
+  respondInteraction(request: SessionRespondInteractionRequest): Promise<void>;
   removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
   updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;
   updateSettings(
