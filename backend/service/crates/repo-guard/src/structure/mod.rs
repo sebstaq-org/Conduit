@@ -22,13 +22,12 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
 const APPROVED_APPS: [&str; 2] = ["desktop", "frontend"];
-const APPROVED_PACKAGES: [&str; 6] = [
+const APPROVED_PACKAGES: [&str; 5] = [
     "app-client",
     "app-core",
+    "app-protocol",
     "design-system-tokens",
     "session-client",
-    "session-contracts",
-    "session-model",
 ];
 const APPROVED_CRATES: [&str; 11] = [
     "acp-contracts",

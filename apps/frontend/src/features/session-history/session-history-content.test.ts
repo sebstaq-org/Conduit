@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  textFromContentBlocks,
+  textFromTranscriptContent,
   transcriptItemLabel,
   transcriptItemMeta,
 } from "./session-history-content";
-import type { TranscriptItem } from "@conduit/session-client";
+import type { TranscriptItem } from "@/app-state/models";
 
 describe("session history content", () => {
-  it("renders text blocks from ACP content without replacing the source shape", () => {
+  it("renders text from app-facing transcript content", () => {
     expect(
-      textFromContentBlocks([
-        { type: "text", text: "hello" },
-        { type: "resource", resource: { uri: "file:///example" } },
-        { type: "text", text: " world" },
+      textFromTranscriptContent([
+        { kind: "text", text: "hello" },
+        { kind: "unsupported", type: "resource" },
+        { kind: "text", text: " world" },
       ]),
     ).toBe("hello world");
   });

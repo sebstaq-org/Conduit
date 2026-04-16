@@ -1,5 +1,4 @@
 import type {
-  ConsumerResponse,
   GlobalSettingsUpdateRequest,
   GlobalSettingsView,
   ProjectAddRequest,
@@ -15,15 +14,13 @@ import type {
   SessionOpenResult,
   SessionOpenRequest,
   SessionPromptRequest,
-  ProvidersConfigSnapshotResult,
-  SessionSetConfigOptionRequest,
-  SessionSetConfigOptionResult,
-} from "@conduit/session-contracts";
-import type {
   ProviderId,
+  ProvidersConfigSnapshotResult,
   SessionGroupsQuery,
   SessionGroupsView,
-} from "@conduit/session-model";
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
+} from "@conduit/app-protocol";
 import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
@@ -43,18 +40,18 @@ interface SessionClientPort {
   openSession(
     provider: ProviderId,
     request: SessionOpenRequest,
-  ): Promise<ConsumerResponse<SessionOpenResult | null>>;
+  ): Promise<SessionOpenResult>;
   newSession(
     provider: ProviderId,
     request: SessionNewRequest,
-  ): Promise<ConsumerResponse<SessionNewResult | null>>;
+  ): Promise<SessionNewResult>;
   setSessionConfigOption(
     provider: ProviderId,
     request: SessionSetConfigOptionRequest,
-  ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>>;
+  ): Promise<SessionSetConfigOptionResult>;
   readSessionHistory(
     request: SessionHistoryRequest,
-  ): Promise<ConsumerResponse<SessionHistoryWindow | null>>;
+  ): Promise<SessionHistoryWindow>;
   promptSession(request: SessionPromptRequest): Promise<void>;
   removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
   updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;

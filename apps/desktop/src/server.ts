@@ -14,12 +14,10 @@ import type {
   DesktopProofConfig,
   DesktopProofRequest,
   DesktopProofResult,
-} from "@conduit/app-client";
-import type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/session-model";
+} from "@conduit/app-client";
 
 import { createDesktopProofConfig } from "./proof-config.js";
 
@@ -416,8 +414,7 @@ function normalizeSnapshot(raw: Record<string, unknown>): ProviderSnapshot {
     : [];
   return {
     provider: raw.provider as ProviderId,
-    connectionState:
-      raw.connection_state as ProviderSnapshot["connectionState"],
+    connectionState: readConnectionState(raw.connection_state),
     discovery: raw.discovery ?? null,
     capabilities: raw.capabilities ?? null,
     authMethods: Array.isArray(raw.auth_methods) ? raw.auth_methods : [],
@@ -425,6 +422,13 @@ function normalizeSnapshot(raw: Record<string, unknown>): ProviderSnapshot {
     lastPrompt,
     loadedTranscripts,
   };
+}
+
+function readConnectionState(value: unknown): "disconnected" | "ready" {
+  if (value === "disconnected" || value === "ready") {
+    return value;
+  }
+  throw new Error("provider snapshot connection_state is invalid");
 }
 
 function normalizeLoadedTranscript(

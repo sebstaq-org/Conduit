@@ -1,20 +1,12 @@
-import type { ContentBlock, TranscriptItem } from "@conduit/session-client";
+import type { TranscriptContentPart, TranscriptItem } from "@/app-state/models";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function textFromContentBlocks(content: ContentBlock[]): string {
+function textFromTranscriptContent(content: TranscriptContentPart[]): string {
   return content
-    .flatMap((block) => {
-      if (
-        !isRecord(block) ||
-        block.type !== "text" ||
-        typeof block.text !== "string"
-      ) {
+    .flatMap((part) => {
+      if (part.kind !== "text") {
         return [];
       }
-      return [block.text];
+      return [part.text];
     })
     .join("");
 }
@@ -23,7 +15,7 @@ function transcriptItemLabel(item: TranscriptItem): string {
   if (item.kind === "event") {
     return item.variant;
   }
-  const text = textFromContentBlocks(item.content).trim();
+  const text = textFromTranscriptContent(item.content).trim();
   if (text.length > 0) {
     return text;
   }
@@ -38,4 +30,4 @@ function transcriptItemMeta(item: TranscriptItem): string {
   return `${item.role} ${status}`;
 }
 
-export { textFromContentBlocks, transcriptItemLabel, transcriptItemMeta };
+export { textFromTranscriptContent, transcriptItemLabel, transcriptItemMeta };

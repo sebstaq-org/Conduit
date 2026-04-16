@@ -1,7 +1,4 @@
-import type {
-  SessionHistoryWindow,
-  TranscriptItem,
-} from "@conduit/session-client";
+import type { SessionHistoryWindow, TranscriptItem } from "./models";
 
 interface SessionTimelinePagination {
   exhausted: boolean;
@@ -111,10 +108,12 @@ function applyTimelineItems(
       pagination: timeline.pagination,
     };
   }
-  const retainedItems = timeline.history.items.filter((item) => {
-    const turnId = turnIdFor(item);
-    return turnId === null || !turnIds.has(turnId);
-  });
+  const retainedItems = timeline.history.items.filter(
+    (item: TranscriptItem) => {
+      const turnId = turnIdFor(item);
+      return turnId === null || !turnIds.has(turnId);
+    },
+  );
   return {
     history: {
       items: [...retainedItems, ...items],

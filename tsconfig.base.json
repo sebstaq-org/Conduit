@@ -9,15 +9,12 @@
     "paths": {
       "@conduit/app-client": ["./packages/app-client/src/index.ts"],
       "@conduit/app-core": ["./packages/app-core/src/index.ts"],
+      "@conduit/app-protocol": ["./packages/app-protocol/src/index.ts"],
       "@conduit/desktop/preload": ["./apps/desktop/src/preload/index.ts"],
       "@conduit/design-system-tokens": [
         "./packages/design-system-tokens/src/index.ts"
       ],
       "@conduit/session-client": ["./packages/session-client/src/index.ts"],
-      "@conduit/session-contracts": [
-        "./packages/session-contracts/src/index.ts"
-      ],
-      "@conduit/session-model": ["./packages/session-model/src/index.ts"],
       "@conduit/frontend/bootstrap": ["./apps/frontend/src/index.ts"]
     },
     "strict": true,

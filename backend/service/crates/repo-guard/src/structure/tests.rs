@@ -28,6 +28,62 @@ fn rejects_framework_runtime_imports_in_framework_neutral_packages() -> Result<(
 }
 
 #[test]
+fn accepts_app_protocol_imports_in_frontend_app_state() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture.repo_root.join("apps/frontend/package.json"),
+        r#"{
+  "name": "@conduit/frontend",
+  "private": true,
+  "version": "0.5.0",
+  "dependencies": {
+    "@conduit/app-protocol": "workspace:*"
+  }
+}
+"#,
+    )?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("apps/frontend/src/app-state/session-client.ts"),
+        "import type { ProviderId } from '@conduit/app-protocol';\nconst provider: ProviderId = 'codex';\nvoid provider;\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure(
+        failures.is_empty(),
+        "expected app-state protocol imports to stay within the approved boundary",
+    )
+}
+
+#[test]
+fn rejects_app_protocol_imports_outside_frontend_app_state() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture.repo_root.join("apps/frontend/package.json"),
+        r#"{
+  "name": "@conduit/frontend",
+  "private": true,
+  "version": "0.5.0",
+  "dependencies": {
+    "@conduit/app-protocol": "workspace:*"
+  }
+}
+"#,
+    )?;
+    write_file(
+        &fixture.repo_root.join("apps/frontend/src/ui/runtime.ts"),
+        "import type { ProviderId } from '@conduit/app-protocol';\nconst provider: ProviderId = 'codex';\nvoid provider;\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "apps/frontend/src/ui/runtime.ts imports protocol boundary outside an approved adaptation layer via @conduit/app-protocol.",
+    )
+}
+
+#[test]
 fn rejects_forbidden_provider_dependencies() -> Result<()> {
     let mut fixture = fixture()?;
     if let Some(resolve) = fixture.metadata.resolve.as_mut()

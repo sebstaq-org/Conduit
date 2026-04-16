@@ -5,6 +5,7 @@ use acp_core::{LiveSessionSnapshot, PromptLifecycleSnapshot, ProviderSnapshot};
 use acp_discovery as _;
 use agent_client_protocol as _;
 use async_trait as _;
+use schemars as _;
 use serde as _;
 use std::error::Error;
 use std::fs::read_to_string;

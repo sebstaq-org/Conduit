@@ -53,4 +53,14 @@ export type { ActiveSession } from "./session-selection";
 export { useSessionTimeline } from "./session-timeline";
 export { ConduitStoreProvider } from "./provider";
 export { store } from "./store";
+export { PROVIDERS } from "./models";
 export type { AppDispatch, RootState } from "./store";
+export type {
+  ProviderId,
+  ProvidersConfigSnapshotResult,
+  SessionConfigOption,
+  SessionGroupsView,
+  SessionHistoryWindow,
+  TranscriptContentPart,
+  TranscriptItem,
+} from "./models";

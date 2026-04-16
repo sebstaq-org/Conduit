@@ -4,6 +4,7 @@ import {
   useGetSessionGroupsQuery,
   useOpenSessionMutation,
 } from "@/app-state";
+import type { SessionGroupsView } from "@/app-state/models";
 import { List, Row } from "@/ui";
 import { SessionGroupRow } from "./session-group-row";
 
@@ -54,7 +55,7 @@ function SessionListRows({
         <Row label="No sessions" muted />
       )}
       {shouldShowGroups &&
-        visibleGroups.map((group) => (
+        visibleGroups.map((group: SessionGroupsView["groups"][number]) => (
           <SessionGroupRow
             key={group.groupId}
             group={group}

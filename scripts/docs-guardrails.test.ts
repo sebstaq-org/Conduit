@@ -31,7 +31,8 @@ function listMarkdownFiles(): string[] {
   return output
     .split("\n")
     .map((path) => path.trim())
-    .filter((path) => path.length > 0);
+    .filter((path) => path.length > 0)
+    .filter((path) => existsSync(resolve(REPO_ROOT, path)));
 }
 
 function readText(path: string): string {

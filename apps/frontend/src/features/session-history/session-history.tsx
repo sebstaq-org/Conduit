@@ -1,6 +1,6 @@
 import { useSelector } from "react-redux";
 import { selectActiveSession, useSessionTimeline } from "@/app-state";
-import type { ActiveSession } from "@/app-state";
+import type { ActiveSession } from "@/app-state/session-selection";
 import { Box, Text } from "@/theme";
 import { SessionHistoryList } from "./session-history-list";
 import type { ViewStyle } from "react-native";

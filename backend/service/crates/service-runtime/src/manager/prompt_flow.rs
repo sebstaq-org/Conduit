@@ -1,12 +1,13 @@
 use super::ServiceRuntime;
 use crate::command::ConsumerResponse;
-use crate::error::string_param;
+use crate::contracts::{SessionPromptRequest, SessionStateProjection, from_params};
 use crate::event::RuntimeEventKind;
-use crate::manager_helpers::{content_blocks_param, prompt_lifecycle, prompt_status};
+use crate::manager_helpers::{prompt_lifecycle, prompt_status};
 use crate::manager_response::{append_snapshot_updates_if_missing, store_lock_error};
-use crate::{ProviderFactory, Result};
+use crate::{ProviderFactory, Result, RuntimeError};
 use acp_core::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
+use agent_client_protocol_schema::{ContentBlock, SessionConfigOption, SessionModeId};
 use serde_json::{Value, json};
 use session_store::{
     OpenSessionKey, PromptTurnAppend, PromptTurnMutation, PromptTurnReplace, TranscriptItem,
@@ -23,7 +24,7 @@ struct PromptTurnContext<'a> {
     provider: ProviderId,
     target: &'a SessionPromptTarget,
     turn_id: &'a str,
-    prompt: &'a [Value],
+    prompt: &'a [ContentBlock],
 }
 
 struct PromptTurnProjection<'a> {
@@ -55,9 +56,11 @@ where
         id: String,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let target = self.session_prompt_target(params)?;
+        let request =
+            from_params::<SessionPromptRequest>("session/prompt", "SessionPromptRequest", params)?;
+        let target = self.session_prompt_target(&request.open_session_id)?;
         let provider = target.key.provider;
-        let prompt = content_blocks_param("session/prompt", params, "prompt")?;
+        let prompt = request.prompt;
         if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
             self.append_failed_prompt_turn(provider, &target, &prompt)?;
             return Err(error);
@@ -98,14 +101,13 @@ where
         Ok(ConsumerResponse::success_without_snapshot(id, result))
     }
 
-    fn session_prompt_target(&self, params: &Value) -> Result<SessionPromptTarget> {
-        let open_session_id = string_param("session/prompt", params, "openSessionId")?;
+    fn session_prompt_target(&self, open_session_id: &str) -> Result<SessionPromptTarget> {
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         let key = self
             .local_store
-            .open_session_key("session/prompt", &open_session_id)?;
+            .open_session_key("session/prompt", open_session_id)?;
         Ok(SessionPromptTarget {
-            open_session_id,
+            open_session_id: open_session_id.to_owned(),
             key,
         })
     }
@@ -114,7 +116,7 @@ where
         &mut self,
         provider: ProviderId,
         target: &SessionPromptTarget,
-        prompt: &[Value],
+        prompt: &[ContentBlock],
     ) -> Result<PromptTurnMutation> {
         let mutation = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
@@ -138,9 +140,14 @@ where
     ) -> Result<ProviderPromptRun> {
         let mut projection_error = None;
         let mut provider_port = self.take_provider(context.provider)?;
+        let provider_prompt = context
+            .prompt
+            .iter()
+            .map(serde_json::to_value)
+            .collect::<serde_json::Result<Vec<_>>>()?;
         let result = provider_port.session_prompt(
             context.target.key.session_id.clone(),
-            context.prompt.to_vec(),
+            provider_prompt,
             &mut |update| {
                 observed_updates.push(update);
                 if projection_error.is_none() {
@@ -211,7 +218,7 @@ where
         let mut state_changed = false;
         for update in updates {
             if let Some(state) = self.session_states.get_mut(&target.key) {
-                state_changed |= apply_projected_session_state_update(state, &update.update);
+                state_changed |= apply_projected_session_state_update(state, &update.update)?;
             }
             let revision = {
                 let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
@@ -230,7 +237,7 @@ where
         if state_changed && let Some(state) = self.session_states.get(&target.key).cloned() {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store
-                .set_open_session_state(&target.key, &state)?;
+                .set_open_session_state(&target.key, &serde_json::to_value(&state)?)?;
         }
         Ok(())
     }
@@ -239,7 +246,7 @@ where
         &mut self,
         provider: ProviderId,
         target: &SessionPromptTarget,
-        prompt: &[Value],
+        prompt: &[ContentBlock],
     ) -> Result<()> {
         let mutation = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
@@ -263,27 +270,38 @@ where
     }
 }
 
-fn apply_projected_session_state_update(state: &mut Value, update: &Value) -> bool {
+fn apply_projected_session_state_update(
+    state: &mut SessionStateProjection,
+    update: &Value,
+) -> Result<bool> {
     let Some(session_update) = update.get("sessionUpdate").and_then(Value::as_str) else {
-        return false;
-    };
-    let Some(map) = state.as_object_mut() else {
-        return false;
+        return Ok(false);
     };
     let mut changed = false;
     if session_update == "config_option_update"
         && let Some(config_options) = update.get("configOptions")
-        && map.get("configOptions") != Some(config_options)
     {
-        map.insert("configOptions".to_owned(), config_options.clone());
-        changed = true;
+        let config_options = serde_json::from_value::<Vec<SessionConfigOption>>(
+            config_options.clone(),
+        )
+        .map_err(|error| RuntimeError::ContractViolation {
+            contract: "SessionStateProjection",
+            message: error.to_string(),
+        })?;
+        if state.config_options.as_ref() != Some(&config_options) {
+            state.config_options = Some(config_options);
+            changed = true;
+        }
     }
     if session_update == "current_mode_update"
-        && let Some(current_mode_id) = update.get("currentModeId")
-        && map.get("currentModeId") != Some(current_mode_id)
+        && let Some(current_mode_id) = update.get("currentModeId").and_then(Value::as_str)
+        && let Some(modes) = state.modes.as_mut()
     {
-        map.insert("currentModeId".to_owned(), current_mode_id.clone());
-        changed = true;
+        let current_mode_id = SessionModeId::new(current_mode_id.to_owned());
+        if modes.current_mode_id != current_mode_id {
+            modes.current_mode_id = current_mode_id;
+            changed = true;
+        }
     }
-    changed
+    Ok(changed)
 }

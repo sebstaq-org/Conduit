@@ -1,8 +1,9 @@
+import { PROVIDERS } from "@conduit/app-protocol";
 import type {
   ProviderId,
   ProviderSnapshot,
   RawWireEvent,
-} from "@conduit/session-model";
+} from "@conduit/app-protocol";
 
 const DESKTOP_PROOF_ACTIONS = [
   "connect",
@@ -85,19 +86,19 @@ class DesktopProofClient implements AppClientPort {
   public async runAction(
     request: DesktopProofRequest,
   ): Promise<DesktopProofResult> {
-    const result = await this.post("/api/run", request);
-    return result;
+    const response = await this.post("/api/run", request);
+    return response;
   }
 
   public async getProviderSnapshot(
     provider: ProviderId,
   ): Promise<DesktopProofResult> {
-    const result = await this.runAction({
+    const response = await this.runAction({
       provider,
       action: "connect",
       cwd: process.cwd(),
     });
-    return result;
+    return response;
   }
 
   private async post(
@@ -128,8 +129,12 @@ function createDesktopProofClient(options?: FetchOptions): AppClientPort {
   return new DesktopProofClient(options);
 }
 
-export { DESKTOP_PROOF_ACTIONS, DesktopProofClient, createDesktopProofClient };
-
+export {
+  DESKTOP_PROOF_ACTIONS,
+  DesktopProofClient,
+  PROVIDERS,
+  createDesktopProofClient,
+};
 export type {
   AppClientPort,
   DesktopProofAction,

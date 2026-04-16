@@ -4,7 +4,7 @@ import {
   useLoadOlderSessionTimelineMutation,
   useReadSessionTimelineQuery,
 } from "./api-hooks";
-import type { SessionHistoryWindow } from "@conduit/session-client";
+import type { SessionHistoryWindow } from "./models";
 
 interface SessionTimelineView {
   exhausted: boolean;
@@ -34,7 +34,7 @@ function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
       return;
     }
     const cursor = timelineQuery.data.history.nextCursor;
-    if (cursor === null) {
+    if (typeof cursor !== "string") {
       return;
     }
     void loadOlder({

@@ -1,12 +1,13 @@
 //! Static official ACP launcher definitions.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 /// The three providers supported by Conduit Phase 1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderId {
     /// Anthropic Claude via the official ACP adapter.
@@ -49,7 +50,7 @@ impl FromStr for ProviderId {
 }
 
 /// The exact launcher command Conduit is allowed to run for a provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct LauncherCommand {
     /// The resolved executable path after discovery.
     pub executable: PathBuf,

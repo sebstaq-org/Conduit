@@ -1,37 +1,13 @@
 # Frontend Session Data Contract
 
-`src/app-state` is the only frontend path for backend read-model fetching and
-caching. Feature modules should consume RTK Query hooks from here, not
-`@conduit/session-client`, `@conduit/session-contracts`, WebSocket transport, or
-raw command dispatch directly.
+`src/app-state` is the only frontend path for backend read-model fetching, caching, and app-facing session services. Feature and screen modules should consume hooks, commands, selectors, and types from here, not `@conduit/session-client`, `@conduit/app-protocol`, WebSocket transport, or raw command dispatch directly.
 
-The product session APIs are `useListProjectsQuery`,
-`useAddProjectMutation`, `useRemoveProjectMutation`,
-`useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`,
-`useGetProvidersConfigSnapshotQuery`, `useGetSessionGroupsQuery`,
-`useGetRuntimeHealthQuery`, `useOpenSessionMutation`,
-`useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`,
-`useNewSessionMutation`, `usePromptSessionMutation`,
-`useSetSessionConfigOptionMutation`, `useGetSettingsQuery`, and
-`useUpdateSettingsMutation`. They return Conduit read-model shapes for UI state,
-not raw official ACP provider responses.
+The product session APIs are `useListProjectsQuery`, `useAddProjectMutation`, `useRemoveProjectMutation`, `useUpdateProjectMutation`, `useGetProjectSuggestionsQuery`, `useGetProvidersConfigSnapshotQuery`, `useGetSessionGroupsQuery`, `useGetRuntimeHealthQuery`, `useOpenSessionMutation`, `useReadSessionTimelineQuery`, `useLoadOlderSessionTimelineMutation`, `useNewSessionMutation`, `usePromptSessionMutation`, `useSetSessionConfigOptionMutation`, `useGetSettingsQuery`, and `useUpdateSettingsMutation`. They return Conduit read-model shapes for UI state, not raw official ACP provider responses.
 
-`useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI
-should add or remove projects through the project hooks instead of passing cwd
-filters into the sessions query.
+`useGetSessionGroupsQuery` is scoped by the persisted projects list. Feature UI should add or remove projects through the project hooks instead of passing cwd filters into the sessions query.
 
-Do not wire feature UI to `ProviderSnapshot`, `LoadedTranscriptSnapshot`,
-`lastPrompt`, `RawWireEvent`, raw command dispatch, or backend provider internals.
-The product event path is `sessions/watch` and `session/watch`, surfaced through
-the client subscription methods in `src/app-state`.
+Do not wire feature UI to `ProviderSnapshot`, `LoadedTranscriptSnapshot`, `lastPrompt`, `RawWireEvent`, raw command dispatch, or backend provider internals. The product event path is `sessions/watch` and `session/watch`, surfaced through the client subscription methods in `src/app-state`.
 
-Session timeline data is cursor-windowed behind one canonical cache entry per
-`openSessionId`. The latest window is fetched without a cursor, older windows
-prepend into the same timeline entry through `nextCursor`, and live
-`session/prompt` output is projected into that same timeline before feature UI
-renders it.
+Session timeline data is cursor-windowed behind one canonical cache entry per `openSessionId`. The latest window is fetched without a cursor, older windows prepend into the same timeline entry through `nextCursor`, and live `session/prompt` output is projected into that same timeline before feature UI renders it.
 
-The session transport URL is required through
-`EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. Frontend fails fast when the variable is
-missing, empty, or not a `ws://` or `wss://` URL.
-Runtime health uses the same host and port and polls `http(s)://.../health`.
+The session transport URL is required through `EXPO_PUBLIC_CONDUIT_SESSION_WS_URL`. Frontend fails fast when the variable is missing, empty, or not a `ws://` or `wss://` URL. Runtime health uses the same host and port and polls `http(s)://.../health`.

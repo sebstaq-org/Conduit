@@ -1,11 +1,15 @@
 //! Transcript projection primitives for Conduit history windows.
 
 use acp_core::TranscriptUpdateSnapshot;
+use agent_client_protocol_schema::ContentBlock;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::{Error, Result};
+
 /// One projected transcript item for UI consumption.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(
     tag = "kind",
     rename_all = "snake_case",
@@ -28,7 +32,7 @@ pub enum TranscriptItem {
         /// Message author role.
         role: MessageRole,
         /// ACP content blocks in transcript order.
-        content: Vec<Value>,
+        content: Vec<ContentBlock>,
     },
     /// Non-message ACP update represented as a collapsed event.
     Event {
@@ -51,7 +55,7 @@ pub enum TranscriptItem {
 }
 
 /// Status for prompt-turn transcript items.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TranscriptItemStatus {
     /// The item is complete.
@@ -65,7 +69,7 @@ pub enum TranscriptItemStatus {
 }
 
 /// Author role for projected transcript messages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageRole {
     /// User-authored text.
@@ -75,12 +79,12 @@ pub enum MessageRole {
 }
 
 /// Projects provider transcript updates into UI transcript items.
-pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<TranscriptItem> {
+pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Result<Vec<TranscriptItem>> {
     let mut updates = updates.to_vec();
     updates.sort_by_key(|update| update.index);
     let mut items = Vec::new();
     for update in updates {
-        match text_role(&update) {
+        match text_role(&update)? {
             Some((role, content)) => {
                 append_content_item(&mut items, update.index, role, content);
             }
@@ -94,7 +98,7 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
             }),
         }
     }
-    items
+    Ok(items)
 }
 
 /// Projects live prompt-turn updates into UI transcript items.
@@ -103,12 +107,12 @@ pub(crate) fn project_prompt_turn_items(
     updates: &[TranscriptUpdateSnapshot],
     status: TranscriptItemStatus,
     stop_reason: Option<&str>,
-) -> Vec<TranscriptItem> {
+) -> Result<Vec<TranscriptItem>> {
     let mut updates = updates.to_vec();
     updates.sort_by_key(|update| update.index);
     let mut items = Vec::new();
     for update in updates {
-        match text_role(&update) {
+        match text_role(&update)? {
             Some((role, content)) => {
                 append_prompt_content_item(
                     &mut items,
@@ -132,14 +136,14 @@ pub(crate) fn project_prompt_turn_items(
             }),
         }
     }
-    items
+    Ok(items)
 }
 
 fn append_content_item(
     items: &mut Vec<TranscriptItem>,
     index: usize,
     role: MessageRole,
-    content: Value,
+    content: ContentBlock,
 ) {
     if let Some(TranscriptItem::Message {
         role: existing_role,
@@ -164,7 +168,7 @@ fn append_content_item(
 struct PromptContentItem<'a> {
     turn_id: &'a str,
     role: MessageRole,
-    content: Value,
+    content: ContentBlock,
     update: &'a TranscriptUpdateSnapshot,
     status: TranscriptItemStatus,
     stop_reason: Option<&'a str>,
@@ -197,12 +201,24 @@ fn append_prompt_content_item(items: &mut Vec<TranscriptItem>, input: PromptCont
     });
 }
 
-fn text_role(update: &TranscriptUpdateSnapshot) -> Option<(MessageRole, Value)> {
+fn text_role(update: &TranscriptUpdateSnapshot) -> Result<Option<(MessageRole, ContentBlock)>> {
     let role = match update.variant.as_str() {
         "user_message_chunk" => MessageRole::User,
         "agent_message_chunk" => MessageRole::Agent,
-        _ => return None,
+        _ => return Ok(None),
     };
-    let content = update.update.get("content")?.clone();
-    Some((role, content))
+    let Some(content) = update.update.get("content") else {
+        return Err(Error::ContractViolation {
+            message: format!("{} update is missing ACP content", update.variant),
+        });
+    };
+    let content = serde_json::from_value::<ContentBlock>(content.clone()).map_err(|error| {
+        Error::ContractViolation {
+            message: format!(
+                "{} update content does not match ACP ContentBlock: {error}",
+                update.variant
+            ),
+        }
+    })?;
+    Ok(Some((role, content)))
 }

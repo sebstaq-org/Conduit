@@ -30,10 +30,9 @@ scripts/       stage operations and repository checks
 - Apps talk through packages and the app API boundary, never by reaching into backend internals.
 - `artifacts/` and `vendor/` hold generated or pinned evidence, not hand-authored runtime code; volatile proof workspaces are ignored.
 - `apps/frontend` owns the product UI app for native and web. `apps/desktop` hosts the web target only.
-- `packages/session-client` and `packages/session-contracts` own normal runtime command transport and envelopes.
-- `packages/app-client` owns proof-surface contracts only.
-- `packages/app-core` owns provider/session vocabulary and framework-neutral view-model logic.
-- App UI tokens and primitives live under `apps/frontend/src/ui`.
+- `packages/app-protocol` owns generated UI<>backend protocol types plus versioned wire contracts.
+- `packages/session-client` and `packages/app-client` are the only app-facing adapters above that protocol boundary.
+- Frontend features and screens consume backend-facing behavior through `apps/frontend/src/app-state`, not through protocol imports.
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - No raw DOM or React Native primitives belong in feature code. That boundary is reserved for app UI primitives and shell code.
 

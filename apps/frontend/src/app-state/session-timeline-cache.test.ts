@@ -8,7 +8,7 @@ import {
   failOlderPageLoad,
   mergeOlderPage,
 } from "./session-timeline-cache";
-import type { SessionHistoryWindow } from "@conduit/session-client";
+import type { SessionHistoryWindow, TranscriptItem } from "./models";
 
 interface HistoryFixture {
   ids: string[];
@@ -25,7 +25,7 @@ function historyWindow({
 }: HistoryFixture): SessionHistoryWindow {
   return {
     items: ids.map((id) => ({
-      content: [{ text: id, type: "text" }],
+      content: [{ kind: "text", text: id }],
       id,
       kind: "message",
       role: "agent",
@@ -60,12 +60,9 @@ describe("session timeline cache older-page merge", () => {
     });
 
     expect(result).toEqual({ merged: true, reason: "merged" });
-    expect(merged.history.items.map((item) => item.id)).toEqual([
-      "old-a",
-      "old-b",
-      "new-a",
-      "new-b",
-    ]);
+    expect(merged.history.items.map((item: TranscriptItem) => item.id)).toEqual(
+      ["old-a", "old-b", "new-a", "new-b"],
+    );
     expect(merged.history.nextCursor).toBe("cursor-2");
     expect(merged.pagination.isFetchingOlder).toBe(false);
     expect(merged.pagination.inflightCursor).toBeNull();
@@ -94,7 +91,9 @@ describe("session timeline cache stale older-page responses", () => {
     });
 
     expect(result).toEqual({ merged: false, reason: "cursor_mismatch" });
-    expect(updated.history.items.map((item) => item.id)).toEqual(["new"]);
+    expect(
+      updated.history.items.map((item: TranscriptItem) => item.id),
+    ).toEqual(["new"]);
   });
 });
 
@@ -133,7 +132,7 @@ describe("session timeline cache live turn projection", () => {
 
     const updated = applyTimelineItems(timeline, 3, [
       {
-        content: [{ text: "turn-2-new", type: "text" }],
+        content: [{ kind: "text", text: "turn-2-new" }],
         id: "turn-2-new",
         kind: "message",
         role: "agent",
@@ -142,9 +141,8 @@ describe("session timeline cache live turn projection", () => {
     ]);
 
     expect(updated.history.revision).toBe(3);
-    expect(updated.history.items.map((item) => item.id)).toEqual([
-      "turn-1-old",
-      "turn-2-new",
-    ]);
+    expect(
+      updated.history.items.map((item: TranscriptItem) => item.id),
+    ).toEqual(["turn-1-old", "turn-2-new"]);
   });
 });

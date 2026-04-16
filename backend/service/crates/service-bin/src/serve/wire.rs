@@ -1,18 +1,16 @@
 //! Versioned WebSocket envelopes for the consumer runtime API.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use service_runtime::contracts::{
+    ClientCommandFrame as WireClientCommandFrame, ConsumerCommand as WireConsumerCommand,
+    RuntimeEvent as WireRuntimeEvent, ServerEventFrame as WireServerEventFrame,
+    ServerEventFrameType, ServerResponseFrame as WireServerResponseFrame, ServerResponseFrameType,
+    validate_contract_value,
+};
 use service_runtime::{ConsumerCommand, ConsumerError, ConsumerResponse};
 
 const PROTOCOL_VERSION: u8 = 1;
-
-#[derive(Debug, Deserialize)]
-struct IncomingCommandFrame {
-    v: u8,
-    #[serde(rename = "type")]
-    frame_type: String,
-    id: String,
-    command: ConsumerCommand,
-}
 
 /// Parsed or rejected client command frame.
 pub(crate) struct ClientCommandFrame {
@@ -25,9 +23,17 @@ impl ClientCommandFrame {
     /// Parses a client frame, preserving correlation even on validation errors.
     #[must_use]
     pub(crate) fn from_text(text: &str) -> Self {
-        match serde_json::from_str::<IncomingCommandFrame>(text) {
-            Ok(frame) => validate_frame(frame),
-            Err(error) => invalid("invalid-frame", &error.to_string()),
+        let frame_value = match serde_json::from_str::<Value>(text) {
+            Ok(frame) => frame,
+            Err(error) => return invalid("invalid-frame", &error.to_string()),
+        };
+        let id = frame_id(&frame_value);
+        if let Err(error) = validate_contract_value("ClientCommandFrame", &frame_value) {
+            return invalid(&id, &error.to_string());
+        }
+        match serde_json::from_value::<WireClientCommandFrame>(frame_value) {
+            Ok(frame) => accept_frame(frame),
+            Err(error) => invalid(&id, &format!("invalid frame payload: {error}")),
         }
     }
 
@@ -57,68 +63,49 @@ impl ClientCommandFrame {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct ServerResponseFrame {
-    v: u8,
-    #[serde(rename = "type")]
-    frame_type: &'static str,
+/// Builds one response frame owned by the generated product contract.
+pub(crate) fn server_response_frame(
     id: String,
     response: ConsumerResponse,
+) -> Result<WireServerResponseFrame, serde_json::Error> {
+    Ok(WireServerResponseFrame {
+        v: PROTOCOL_VERSION,
+        frame_type: ServerResponseFrameType::Value,
+        id,
+        response: convert_contract_shape(response)?,
+    })
 }
 
-impl ServerResponseFrame {
-    /// Creates one response frame.
-    #[must_use]
-    pub(crate) fn new(id: String, response: ConsumerResponse) -> Self {
-        Self {
-            v: PROTOCOL_VERSION,
-            frame_type: "response",
-            id,
-            response,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct ServerEventFrame<T> {
-    v: u8,
-    #[serde(rename = "type")]
-    frame_type: &'static str,
-    event: T,
-}
-
-impl<T> ServerEventFrame<T> {
-    /// Creates one event frame.
-    #[must_use]
-    pub(crate) fn new(event: T) -> Self {
-        Self {
-            v: PROTOCOL_VERSION,
-            frame_type: "event",
-            event,
-        }
+/// Builds one event frame owned by the generated product contract.
+#[must_use]
+pub(crate) fn server_event_frame(event: WireRuntimeEvent) -> WireServerEventFrame {
+    WireServerEventFrame {
+        v: PROTOCOL_VERSION,
+        frame_type: ServerEventFrameType::Value,
+        event,
     }
 }
 
-fn validate_frame(frame: IncomingCommandFrame) -> ClientCommandFrame {
-    if frame.v != PROTOCOL_VERSION {
-        return invalid(&frame.id, "unsupported protocol version");
-    }
-    if frame.frame_type != "command" {
-        return invalid(&frame.id, "unsupported frame type");
-    }
-    if frame.id.is_empty() {
-        return invalid("invalid-frame", "frame id must be non-empty");
-    }
+fn accept_frame(frame: WireClientCommandFrame) -> ClientCommandFrame {
+    let command = match into_runtime_command(frame.id.clone(), frame.command) {
+        Ok(command) => command,
+        Err(message) => return invalid(&frame.id, &message),
+    };
     ClientCommandFrame {
-        id: frame.id.clone(),
-        command: Some(ConsumerCommand {
-            id: frame.id,
-            command: frame.command.command,
-            provider: frame.command.provider,
-            params: frame.command.params,
-        }),
+        id: frame.id,
+        command: Some(command),
         rejection: None,
     }
+}
+
+fn frame_id(value: &Value) -> String {
+    value
+        .as_object()
+        .and_then(|object| object.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .unwrap_or("invalid-frame")
+        .to_owned()
 }
 
 fn invalid(id: &str, message: &str) -> ClientCommandFrame {
@@ -145,6 +132,24 @@ fn invalid_command(id: &str) -> ConsumerCommand {
         provider: "codex".to_owned(),
         params: serde_json::Value::Null,
     }
+}
+
+fn into_runtime_command(
+    frame_id: String,
+    command: WireConsumerCommand,
+) -> Result<ConsumerCommand, String> {
+    let mut runtime_command: ConsumerCommand = convert_contract_shape(command)
+        .map_err(|error| format!("invalid command payload: {error}"))?;
+    runtime_command.id = frame_id;
+    Ok(runtime_command)
+}
+
+fn convert_contract_shape<Input, Output>(value: Input) -> Result<Output, serde_json::Error>
+where
+    Input: Serialize,
+    Output: for<'de> Deserialize<'de>,
+{
+    serde_json::from_value(serde_json::to_value(value)?)
 }
 
 #[cfg(test)]
@@ -198,8 +203,57 @@ mod tests {
         if frame.command_name() != "__invalid_frame__" {
             return Err(format!("unexpected command {}", frame.command_name()).into());
         }
+        let Some(rejection) = frame.rejection() else {
+            return Err("missing transport rejection".into());
+        };
+        if rejection.id != "wire-2" {
+            return Err(format!("unexpected rejection id {}", rejection.id).into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unsupported_frame_type_is_rejected_before_runtime_dispatch() -> TestResult<()> {
+        let frame = ClientCommandFrame::from_text(
+            r#"{
+                "v": 1,
+                "type": "event",
+                "id": "wire-3",
+                "command": {
+                    "id": "wire-3",
+                    "command": "sessions/watch",
+                    "provider": "all",
+                    "params": {}
+                }
+            }"#,
+        );
+
         if frame.rejection().is_none() {
             return Err("missing transport rejection".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_frame_without_correlation_uses_invalid_frame_id() -> TestResult<()> {
+        let frame = ClientCommandFrame::from_text(
+            r#"{
+                "v": 1,
+                "type": "command",
+                "command": {
+                    "id": "wire-4",
+                    "command": "sessions/watch",
+                    "provider": "all",
+                    "params": {}
+                }
+            }"#,
+        );
+
+        let Some(rejection) = frame.rejection() else {
+            return Err("missing transport rejection".into());
+        };
+        if rejection.id != "invalid-frame" {
+            return Err(format!("unexpected rejection id {}", rejection.id).into());
         }
         Ok(())
     }

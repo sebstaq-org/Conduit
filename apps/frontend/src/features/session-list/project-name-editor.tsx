@@ -1,5 +1,8 @@
 import { updateProjectDisplayName } from "@/app-state";
-import type { ProjectMutationState, UpdateProjectTrigger } from "@/app-state";
+import type {
+  ProjectMutationState,
+  UpdateProjectTrigger,
+} from "@/app-state/project-commands";
 import type { ProjectActionsMenuMode } from "./project-actions-menu-content";
 import { ProjectNameEditorForm } from "./project-name-editor-form";
 

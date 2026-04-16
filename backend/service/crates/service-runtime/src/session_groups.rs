@@ -1,9 +1,12 @@
 //! Conduit-owned session grouping read model.
 
+use crate::contracts::{
+    SessionGroup, SessionGroupsQuery, SessionGroupsView, SessionRow, from_params, to_contract_value,
+};
 use crate::{Result, RuntimeError};
 use acp_discovery::ProviderId;
-use serde::{Deserialize, Serialize};
-use serde_json::{Value, json, to_value};
+use agent_client_protocol_schema::ListSessionsResponse;
+use serde_json::Value;
 use session_store::{ProjectRow, SessionIndexEntry, SessionIndexSnapshot};
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -15,51 +18,15 @@ const MAX_UPDATED_WITHIN_DAYS: u64 = 365;
 const ALL_PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
 
 #[derive(Debug, Clone)]
-pub(crate) struct SessionGroupsQuery {
+pub(crate) struct IndexedSessionGroupsQuery {
     updated_since_epoch: Option<u64>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListedSession {
-    session_id: String,
-    cwd: String,
-    title: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionRow {
-    provider: ProviderId,
-    session_id: String,
-    title: Option<String>,
-    updated_at: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct SessionGroup {
-    group_id: String,
-    cwd: String,
-    display_name: String,
-    sessions: Vec<SessionRow>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionGroupsView {
-    revision: i64,
-    refreshed_at: Option<String>,
-    is_refreshing: bool,
-    groups: Vec<SessionGroup>,
 }
 
 impl SessionGroupsQuery {
     pub(crate) fn from_params(
         params: &Value,
         default_updated_within_days: Option<u64>,
-    ) -> Result<Self> {
+    ) -> Result<IndexedSessionGroupsQuery> {
         if params.get("providers").is_some() {
             return Err(RuntimeError::InvalidParameter {
                 command: "sessions/grouped",
@@ -74,15 +41,17 @@ impl SessionGroupsQuery {
                 message: "cwd scope is selected by persisted projects",
             });
         }
-        let updated_within_days = params.get("updatedWithinDays").cloned();
-        Ok(Self {
+        let query = from_params::<Self>("sessions/grouped", "SessionGroupsQuery", params)?;
+        Ok(IndexedSessionGroupsQuery {
             updated_since_epoch: updated_since_epoch(
-                updated_within_days,
+                query.updated_within_days,
                 default_updated_within_days,
             )?,
         })
     }
+}
 
+impl IndexedSessionGroupsQuery {
     pub(crate) fn accepts_entry(
         &self,
         session: &SessionIndexEntry,
@@ -118,15 +87,16 @@ pub(crate) fn entries_from_session_list(
     provider: ProviderId,
     result: &Value,
 ) -> Result<Vec<SessionIndexEntry>> {
-    let sessions = result.get("sessions").cloned().unwrap_or_else(|| json!([]));
-    let sessions: Vec<ListedSession> = serde_json::from_value(sessions).map_err(invalid_params)?;
-    sessions
+    let response =
+        serde_json::from_value::<ListSessionsResponse>(result.clone()).map_err(invalid_params)?;
+    response
+        .sessions
         .into_iter()
         .map(|session| {
-            let cwd = normalize_cwd(&session.cwd);
+            let cwd = normalize_cwd(session.cwd.to_string_lossy().as_ref());
             Ok(SessionIndexEntry {
                 provider,
-                session_id: session.session_id,
+                session_id: session.session_id.to_string(),
                 cwd,
                 title: session.title,
                 updated_at: session.updated_at,
@@ -149,7 +119,7 @@ pub(crate) fn next_cursor(result: &Value) -> Result<Option<String>> {
 
 pub(crate) fn grouped_view(
     snapshot: SessionIndexSnapshot,
-    query: &SessionGroupsQuery,
+    query: &IndexedSessionGroupsQuery,
     projects: &[ProjectRow],
     is_refreshing: bool,
 ) -> Result<Value> {
@@ -187,34 +157,24 @@ pub(crate) fn grouped_view(
         })
         .collect::<Vec<_>>();
     groups.sort_by(compare_groups);
-    to_value(SessionGroupsView {
-        revision: snapshot.revision,
-        refreshed_at: snapshot.refreshed_at,
-        is_refreshing,
-        groups,
-    })
-    .map_err(RuntimeError::from)
+    to_contract_value(
+        "SessionGroupsView",
+        &SessionGroupsView {
+            revision: snapshot.revision,
+            refreshed_at: snapshot.refreshed_at,
+            is_refreshing,
+            groups,
+        },
+    )
 }
 
 fn updated_since_epoch(
-    updated_within_days: Option<Value>,
+    updated_within_days: Option<Option<u64>>,
     default_updated_within_days: Option<u64>,
 ) -> Result<Option<u64>> {
     let updated_within_days = match updated_within_days {
+        Some(days) => days,
         None => default_updated_within_days,
-        Some(Value::Null) => None,
-        Some(Value::Number(number)) => Some(number.as_u64().ok_or(
-            RuntimeError::InvalidStringParameter {
-                command: "sessions/grouped",
-                parameter: "updatedWithinDays",
-            },
-        )?),
-        Some(_) => {
-            return Err(RuntimeError::InvalidStringParameter {
-                command: "sessions/grouped",
-                parameter: "updatedWithinDays",
-            });
-        }
     };
     let Some(updated_within_days) = updated_within_days else {
         return Ok(None);

@@ -35,5 +35,6 @@ async fn main() -> Result<()> {
     match command {
         cli::Command::Serve { host, port } => serve::run(&host, port).await,
         cli::Command::Runtime { command } => runtime::run(command),
+        cli::Command::ExportContracts { out } => runtime::export_contracts(out),
     }
 }

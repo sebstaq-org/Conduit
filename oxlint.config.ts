@@ -28,6 +28,7 @@ export default defineConfig({
     "**/.expo-shared/**/*",
     "**/node_modules/**/*",
     "**/target/**/*",
+    "packages/app-protocol/src/generated.ts",
   ],
   jsPlugins: ["./scripts/oxlint-conduit-plugin.ts"],
   options: {
@@ -70,6 +71,7 @@ export default defineConfig({
     "jest/require-hook": "off",
     "import/no-named-export": "off",
     "import/prefer-default-export": "off",
+    "import/consistent-type-specifier-style": "off",
     "oxc/no-optional-chaining": "off",
     "react/jsx-filename-extension": [error, { extensions: [".tsx"] }],
     "react/react-in-jsx-scope": "off",
@@ -95,6 +97,7 @@ export default defineConfig({
     {
       files: ["**/*.config.ts", "**/*.config.mts", "oxlint.config.ts"],
       rules: {
+        "eslint/max-lines": "off",
         "import/no-nodejs-modules": "off",
         "import/no-default-export": "off",
         "typescript/no-unsafe-argument": "off",
@@ -122,6 +125,43 @@ export default defineConfig({
       rules: {
         "conduit/no-frontend-raw-hex-color": error,
         "conduit/no-frontend-stylesheet": error,
+        "eslint/no-restricted-imports": [
+          error,
+          {
+            paths: [
+              {
+                importNames: [
+                  "useEffect",
+                  "useInsertionEffect",
+                  "useLayoutEffect",
+                ],
+                message:
+                  "Repo-authored frontend code must not use React effect hooks.",
+                name: "react",
+              },
+              {
+                message:
+                  "Generated protocol types are reserved for app-state and package adaptation layers.",
+                name: "@conduit/app-protocol",
+              },
+              {
+                message:
+                  "Backend transport clients are reserved for app-state and package adaptation layers.",
+                name: "@conduit/session-client",
+              },
+              {
+                message:
+                  "Frontend code must not depend on removed legacy session contract packages.",
+                name: "@conduit/session-model",
+              },
+              {
+                message:
+                  "Frontend code must not depend on removed legacy session contract packages.",
+                name: "@conduit/session-contracts",
+              },
+            ],
+          },
+        ],
       },
     },
     {
@@ -131,6 +171,23 @@ export default defineConfig({
         "**/src/app-state/**/*.ts",
       ],
       rules: {
+        "eslint/no-restricted-imports": [
+          error,
+          {
+            paths: [
+              {
+                importNames: [
+                  "useEffect",
+                  "useInsertionEffect",
+                  "useLayoutEffect",
+                ],
+                message:
+                  "Repo-authored frontend code must not use React effect hooks.",
+                name: "react",
+              },
+            ],
+          },
+        ],
         "oxc/no-async-await": "off",
       },
     },
@@ -148,6 +205,33 @@ export default defineConfig({
       files: ["scripts/oxlint-conduit-plugin.ts"],
       rules: {
         "import/no-default-export": "off",
+      },
+    },
+    {
+      files: [
+        "scripts/generate-app-protocol.ts",
+        "scripts/contract-guardrails.test.ts",
+      ],
+      rules: {
+        "eslint/no-shadow": "off",
+        "eslint/no-ternary": "off",
+        "eslint/no-use-before-define": "off",
+        "eslint/max-lines-per-function": "off",
+        "eslint/max-params": "off",
+        "eslint/max-statements": "off",
+        "import/no-nodejs-modules": "off",
+        "oxc/no-async-await": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "eslint/require-await": "off",
+        "typescript/require-await": "off",
+        "unicorn/no-await-expression-member": "off",
+        "unicorn/no-array-sort": "off",
+        "unicorn/prefer-string-replace-all": "off",
+        "vitest/prefer-strict-boolean-matchers": "off",
+        "vitest/prefer-to-be-falsy": "off",
       },
     },
     {
@@ -172,18 +256,22 @@ export default defineConfig({
       ],
       rules: {
         "import/no-relative-parent-imports": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-member-access": "off",
       },
     },
     {
       files: [
         "apps/desktop/src/client.ts",
         "apps/desktop/src/server.ts",
+        "packages/app-protocol/src/wire.ts",
         "src/client.ts",
         "src/server.ts",
         "**/src/client.ts",
         "**/src/server.ts",
       ],
       rules: {
+        "eslint/complexity": "off",
         "eslint/no-ternary": "off",
         "eslint/default-case": "off",
         "eslint/id-length": "off",
@@ -233,7 +321,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/session-contracts/src/index.ts"],
+      files: ["packages/app-protocol/src/index.ts"],
       rules: {
         "eslint/id-length": "off",
       },

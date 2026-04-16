@@ -8,8 +8,11 @@ use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, Provide
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
 use app_api as _;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, black_box};
+use jsonschema as _;
+use schemars as _;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use serde_with as _;
 use service_runtime::{
     ConsumerCommand, ProviderFactory, ProviderPort, RuntimeError, ServiceRuntime,
 };

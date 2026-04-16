@@ -1,8 +1,5 @@
-import type {
-  ContentBlock,
-  ProviderId,
-  SessionSetConfigOptionResult,
-} from "@conduit/session-client";
+import type { ContentBlock } from "@conduit/app-protocol";
+import type { ProviderId, SessionSetConfigOptionResult } from "./models";
 
 interface OpenSessionMutationArg {
   provider: ProviderId;

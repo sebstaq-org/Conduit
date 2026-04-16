@@ -1,9 +1,12 @@
 //! Background provider config-option snapshot for draft composer usage.
 
 use acp_discovery::ProviderId;
-use serde::Serialize;
-use serde_json::{Value, json};
-use service_runtime::ProviderFactory;
+use serde_json::Value;
+use service_runtime::contracts::{
+    ProviderConfigSnapshotEntry, ProviderConfigSnapshotStatus, ProvidersConfigSnapshotResult,
+    session_state_from_new_result, to_contract_value,
+};
+use service_runtime::{ProviderFactory, RuntimeError};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -14,27 +17,6 @@ const PROVIDER_CONFIG_SNAPSHOT_INTERVAL: Duration = Duration::from_secs(6 * 60 *
 #[derive(Clone)]
 pub(super) struct ProviderConfigSnapshots {
     entries: Arc<RwLock<Vec<ProviderConfigSnapshotEntry>>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ProviderConfigSnapshotStatus {
-    Loading,
-    Ready,
-    Error,
-    Unavailable,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProviderConfigSnapshotEntry {
-    provider: ProviderId,
-    status: ProviderConfigSnapshotStatus,
-    config_options: Value,
-    modes: Value,
-    models: Value,
-    fetched_at: Option<String>,
-    error: Option<String>,
 }
 
 impl ProviderConfigSnapshots {
@@ -49,13 +31,16 @@ impl ProviderConfigSnapshots {
         }
     }
 
-    pub(super) fn snapshot_value(&self) -> Value {
+    pub(super) fn snapshot_value(&self) -> Result<Value, RuntimeError> {
         let entries = self
             .entries
             .read()
             .ok()
             .map_or_else(Vec::new, |guard| guard.clone());
-        json!({ "entries": entries })
+        to_contract_value(
+            "ProvidersConfigSnapshotResult",
+            &ProvidersConfigSnapshotResult { entries },
+        )
     }
 
     fn replace_entries(&self, entries: Vec<ProviderConfigSnapshotEntry>) {
@@ -140,15 +125,24 @@ where
     let probe_result = port.session_new(cwd);
     let _disconnect_status = port.disconnect();
     match probe_result {
-        Ok(result) => ProviderConfigSnapshotEntry {
-            provider,
-            status: ProviderConfigSnapshotStatus::Ready,
-            config_options: result.get("configOptions").cloned().unwrap_or(Value::Null),
-            modes: result.get("modes").cloned().unwrap_or(Value::Null),
-            models: result.get("models").cloned().unwrap_or(Value::Null),
-            fetched_at,
-            error: None,
-        },
+        Ok(result) => {
+            let state = match session_state_from_new_result("provider-config-snapshot", &result) {
+                Ok(state) => state,
+                Err(error) => {
+                    let message = error.to_string();
+                    return failed_entry(provider, classify_status(&message), fetched_at, message);
+                }
+            };
+            ProviderConfigSnapshotEntry {
+                provider,
+                status: ProviderConfigSnapshotStatus::Ready,
+                config_options: state.config_options,
+                modes: state.modes,
+                models: state.models,
+                fetched_at,
+                error: None,
+            }
+        }
         Err(error) => {
             let message = error.to_string();
             failed_entry(provider, classify_status(&message), fetched_at, message)
@@ -160,9 +154,9 @@ fn loading_entry(provider: ProviderId) -> ProviderConfigSnapshotEntry {
     ProviderConfigSnapshotEntry {
         provider,
         status: ProviderConfigSnapshotStatus::Loading,
-        config_options: Value::Null,
-        modes: Value::Null,
-        models: Value::Null,
+        config_options: None,
+        modes: None,
+        models: None,
         fetched_at: None,
         error: None,
     }
@@ -177,9 +171,9 @@ fn failed_entry(
     ProviderConfigSnapshotEntry {
         provider,
         status,
-        config_options: Value::Null,
-        modes: Value::Null,
-        models: Value::Null,
+        config_options: None,
+        modes: None,
+        models: None,
         fetched_at,
         error: Some(error),
     }
@@ -268,7 +262,19 @@ mod tests {
                 ProviderId::Codex,
             ],
         );
-        let snapshot = snapshots.snapshot_value();
+        assert_ready_snapshot(read_snapshot_value(snapshots.snapshot_value()));
+        assert_eq!(
+            waits,
+            vec![Duration::from_secs(21_600), Duration::from_secs(21_600)],
+        );
+    }
+
+    fn read_snapshot_value(result: Result<Value>) -> Value {
+        assert!(result.is_ok(), "snapshot contract failed: {result:?}");
+        result.unwrap_or_else(|_| json!({}))
+    }
+
+    fn assert_ready_snapshot(snapshot: Value) {
         let entries = snapshot["entries"].as_array();
         assert!(entries.is_some(), "snapshot entries array");
         let entries = entries.cloned().unwrap_or_default();
@@ -282,10 +288,6 @@ mod tests {
             assert!(entry["fetchedAt"].as_str().is_some());
             assert_eq!(entry["error"], Value::Null);
         }
-        assert_eq!(
-            waits,
-            vec![Duration::from_secs(21_600), Duration::from_secs(21_600)],
-        );
     }
 
     #[derive(Clone)]

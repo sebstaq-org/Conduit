@@ -1,4 +1,4 @@
-import type { SessionClientPort } from "@conduit/session-client";
+import type { SessionClientPort } from "./session-client";
 
 type DispatchLike = (action: unknown) => unknown;
 type InvalidateSessionGroups = (dispatch: DispatchLike) => void;

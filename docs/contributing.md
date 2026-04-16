@@ -16,9 +16,9 @@ Rust is intentionally hard-default. Keep new crates in the workspace, satisfy th
 Frontend boundary rules:
 
 - `apps/frontend` owns the React Native and React Native Web UI app; `apps/desktop` hosts the web target.
-- `packages/session-client` is the normal consumer transport boundary for versioned `service-bin serve` WebSocket frames.
-- `packages/session-contracts` is the shared command/envelope contract boundary.
+- `packages/app-protocol` is the shared generated and versioned UI<>backend protocol boundary.
+- `packages/session-client` is the normal runtime client boundary above that protocol.
 - `packages/app-client` is proof-surface-only and must not grow normal runtime APIs.
-- `packages/app-core` is the framework-neutral logic and provider/session vocabulary boundary.
+- Feature and screen code in `apps/frontend/src` must consume backend-facing behavior through `src/app-state`.
 - App-local UI primitives and tokens belong under `apps/frontend/src/ui`.
 - Do not create placeholder feature behavior or ad hoc shared abstractions.

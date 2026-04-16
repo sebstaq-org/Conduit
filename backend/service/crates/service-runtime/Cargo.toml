@@ -9,10 +9,14 @@ publish.workspace = true
 [dependencies]
 acp-core = { path = "../acp-core" }
 acp-discovery = { path = "../acp-discovery" }
+agent-client-protocol-schema = "=0.11.4"
 app-api = { path = "../app-api" }
 criterion = { version = "0.5.1", optional = true }
+jsonschema = "0.45.1"
+schemars = "1.0.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+serde_with = "3.15.1"
 session-store = { path = "../session-store" }
 thiserror = "2.0.17"
 tracing = "0.1.41"

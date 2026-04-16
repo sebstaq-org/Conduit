@@ -1,4 +1,4 @@
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "./models";
 import type { NewSessionMutationArg, OpenSessionMutationArg } from "./api";
 import type {
   useNewSessionMutation,

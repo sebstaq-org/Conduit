@@ -1,12 +1,17 @@
 import { expect, it } from "vitest";
 import {
+  ClientCommandFrameSchema,
+  ConsumerCommandSchema,
   GlobalSettingsUpdateRequestSchema,
   GlobalSettingsViewSchema,
   ProjectListViewSchema,
   ProjectSuggestionsViewSchema,
+  ServerFrameSchema,
   SessionGroupsQuerySchema,
   SessionGroupsViewSchema,
 } from "./src/index.js";
+
+const transportVersionField = "v";
 
 it("accepts the grouped sessions read model", () => {
   const payload = {
@@ -156,4 +161,55 @@ it("rejects out-of-range global settings lookback", () => {
   };
 
   expect(() => GlobalSettingsUpdateRequestSchema.parse(payload)).toThrow();
+});
+
+it("accepts generated consumer command and client frame contracts", () => {
+  const command = ConsumerCommandSchema.parse({
+    id: "command-1",
+    command: "session/watch",
+    provider: "all",
+    params: {
+      openSessionId: "open-session-1",
+    },
+  });
+  const frame = ClientCommandFrameSchema.parse({
+    [transportVersionField]: 1,
+    type: "command",
+    id: command.id,
+    command,
+  });
+
+  expect(frame).toMatchObject({
+    id: "command-1",
+    type: "command",
+    [transportVersionField]: 1,
+  });
+});
+
+it("accepts generated server response and event frames", () => {
+  expect(
+    ServerFrameSchema.parse({
+      [transportVersionField]: 1,
+      type: "response",
+      id: "response-1",
+      response: {
+        id: "response-1",
+        ok: true,
+        result: {},
+        error: null,
+        snapshot: null,
+      },
+    }),
+  ).toMatchObject({ type: "response" });
+
+  expect(
+    ServerFrameSchema.parse({
+      [transportVersionField]: 1,
+      type: "event",
+      event: {
+        kind: "sessions_index_changed",
+        revision: 4,
+      },
+    }),
+  ).toMatchObject({ type: "event" });
 });

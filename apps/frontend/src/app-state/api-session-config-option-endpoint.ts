@@ -1,4 +1,4 @@
-import type { SessionSetConfigOptionResult } from "@conduit/session-client";
+import type { SessionSetConfigOptionResult } from "./models";
 import type { SetSessionConfigOptionMutationArg } from "./session-api-queries";
 import { setSessionConfigOptionQuery } from "./session-api-queries";
 import { activeSessionConfigOptionsUpdated } from "./session-selection";

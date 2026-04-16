@@ -3,6 +3,7 @@
 use crate::error::{Result, ServiceError};
 use serde_json::{Value, json};
 use service_runtime::ConsumerCommand;
+use std::path::PathBuf;
 
 /// The supported service commands.
 pub(crate) enum Command {
@@ -18,6 +19,11 @@ pub(crate) enum Command {
         /// The runtime command envelope.
         command: ConsumerCommand,
     },
+    /// Exports backend-owned consumer contracts as JSON Schema.
+    ExportContracts {
+        /// Output path for the schema bundle.
+        out: PathBuf,
+    },
 }
 
 /// Parses service CLI arguments.
@@ -32,6 +38,9 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         }),
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,
+        }),
+        "export-contracts" => Ok(Command::ExportContracts {
+            out: PathBuf::from(required_value(args, "--out")?),
         }),
         _ => Err(unsupported(command)),
     }

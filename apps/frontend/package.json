@@ -14,10 +14,9 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@conduit/app-protocol": "workspace:*",
     "@conduit/design-system-tokens": "workspace:*",
     "@conduit/session-client": "workspace:*",
-    "@conduit/session-contracts": "workspace:*",
-    "@conduit/session-model": "workspace:*",
     "@expo/vector-icons": "15.1.1",
     "@reduxjs/toolkit": "2.11.2",
     "@rn-primitives/dropdown-menu": "1.4.0",

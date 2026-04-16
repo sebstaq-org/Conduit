@@ -1,5 +1,6 @@
 import { openSessionRow } from "@/app-state";
-import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
+import type { useOpenSessionMutation } from "@/app-state/api-hooks";
+import type { ActiveSession } from "@/app-state/session-selection";
 import { Row } from "@/ui";
 import { sessionRowDepth } from "./session-list.constants";
 import type { SessionGroup, SessionRow } from "./session-list.types";
@@ -55,8 +56,8 @@ function SessionRowItem({
   return (
     <Row
       depth={sessionRowDepth}
-      label={sessionTitle(session.title)}
-      meta={formatSessionMeta(session.provider, session.updatedAt)}
+      label={sessionTitle(session.title ?? null)}
+      meta={formatSessionMeta(session.provider, session.updatedAt ?? null)}
       onPress={() => {
         void openSessionRow({
           onSessionSelected,
@@ -66,7 +67,7 @@ function SessionRowItem({
             limit: 100,
             provider: session.provider,
             sessionId: session.sessionId,
-            title: session.title,
+            title: session.title ?? null,
           },
         });
       }}

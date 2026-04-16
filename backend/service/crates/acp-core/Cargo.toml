@@ -11,6 +11,7 @@ acp-contracts = { path = "../acp-contracts" }
 acp-discovery = { path = "../acp-discovery" }
 agent-client-protocol = "=0.10.4"
 async-trait = "0.1.89"
+schemars = "1.0.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 thiserror = "2.0.17"

@@ -2,13 +2,14 @@
 
 use crate::{Error, LocalStore, Result};
 use rusqlite::{OptionalExtension, params};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 const MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 1;
 const MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 365;
 
 /// Persisted global settings for Conduit's session browser.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalSettings {
     /// Default session lookback window in days for `sessions/grouped`.

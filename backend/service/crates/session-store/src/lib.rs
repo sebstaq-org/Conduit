@@ -13,11 +13,12 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
+use agent_client_protocol_schema::ContentBlock;
 use ids::{history_cursor, open_session_id_for};
 use prompt_turn::prompt_turn_items;
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::Serialize;
-use serde_json::Value;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -34,6 +35,7 @@ mod open_session_state;
 mod project_suggestions;
 mod projects;
 mod prompt_turn;
+mod schema;
 mod session_index;
 mod settings;
 mod timeline_storage;
@@ -44,74 +46,6 @@ pub use projects::{ProjectRow, project_id_for_cwd};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
 pub use settings::GlobalSettings;
 pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
-
-const SCHEMA_VERSION: i64 = 6;
-const BOOTSTRAP_SCHEMA: &str = "
-    CREATE TABLE open_sessions (
-        open_session_id TEXT PRIMARY KEY,
-        provider TEXT NOT NULL,
-        session_id TEXT NOT NULL,
-        cwd TEXT NOT NULL,
-        revision INTEGER NOT NULL,
-        UNIQUE(provider, session_id, cwd)
-    );
-    CREATE TABLE transcript_items (
-        open_session_id TEXT NOT NULL,
-        item_ordinal INTEGER NOT NULL,
-        item_json TEXT NOT NULL,
-        PRIMARY KEY(open_session_id, item_ordinal),
-        FOREIGN KEY(open_session_id)
-            REFERENCES open_sessions(open_session_id)
-            ON DELETE CASCADE
-    );
-    CREATE TABLE open_session_states (
-        open_session_id TEXT PRIMARY KEY,
-        state_json TEXT NOT NULL,
-        FOREIGN KEY(open_session_id)
-            REFERENCES open_sessions(open_session_id)
-            ON DELETE CASCADE
-    );
-    CREATE TABLE session_index_meta (
-        id INTEGER PRIMARY KEY CHECK(id = 1),
-        revision INTEGER NOT NULL
-    );
-    INSERT INTO session_index_meta (id, revision) VALUES (1, 0);
-    CREATE TABLE session_index_sources (
-        provider TEXT PRIMARY KEY,
-        refreshed_at TEXT NOT NULL
-    );
-    CREATE TABLE session_index_entries (
-        provider TEXT NOT NULL,
-        session_id TEXT NOT NULL,
-        cwd TEXT NOT NULL,
-        title TEXT,
-        updated_at TEXT,
-        PRIMARY KEY(provider, session_id, cwd)
-    );
-    CREATE TABLE projects (
-        project_id TEXT PRIMARY KEY,
-        cwd TEXT NOT NULL UNIQUE,
-        display_name TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-    );
-    CREATE TABLE project_suggestion_sources (
-        provider TEXT PRIMARY KEY,
-        refreshed_at TEXT NOT NULL
-    );
-    CREATE TABLE project_suggestions (
-        provider TEXT NOT NULL,
-        cwd TEXT NOT NULL,
-        suggestion_id TEXT NOT NULL,
-        PRIMARY KEY(provider, cwd)
-    );
-    CREATE TABLE global_settings (
-        id INTEGER PRIMARY KEY CHECK(id = 1),
-        session_groups_updated_within_days INTEGER
-    );
-    INSERT INTO global_settings (id, session_groups_updated_within_days)
-    VALUES (1, 5);
-    PRAGMA user_version = 6;
-";
 
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -134,6 +68,12 @@ pub enum Error {
     /// JSON serialization for stored read-model payloads failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// A stored or live ACP payload failed the backend-owned transcript contract.
+    #[error("transcript contract violation: {message}")]
+    ContractViolation {
+        /// Human-readable contract mismatch detail.
+        message: String,
+    },
     /// The store schema version is not supported by this binary.
     #[error("unsupported local store schema version {version}")]
     UnsupportedSchemaVersion {
@@ -176,7 +116,7 @@ pub struct LocalStore {
 }
 
 /// One transcript history window returned to UI consumers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionHistoryWindow {
     /// Opaque Conduit id for the opened session.
@@ -190,7 +130,7 @@ pub struct SessionHistoryWindow {
 }
 
 /// Result of mutating a session timeline.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TimelineMutation {
     /// Opaque Conduit id for the opened session.
     pub open_session_id: String,
@@ -206,7 +146,7 @@ pub struct PromptTurnAppend<'a> {
     /// Opaque Conduit id for the opened session.
     pub open_session_id: &'a str,
     /// User prompt ACP content blocks.
-    pub prompt: &'a [Value],
+    pub prompt: &'a [ContentBlock],
     /// ACP updates observed during the prompt turn.
     pub updates: &'a [TranscriptUpdateSnapshot],
     /// Terminal transcript status for agent-authored prompt items.
@@ -216,7 +156,7 @@ pub struct PromptTurnAppend<'a> {
 }
 
 /// Result of starting one prompt turn.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PromptTurnMutation {
     /// Opaque Conduit id for the opened session.
     pub open_session_id: String,
@@ -236,7 +176,7 @@ pub struct PromptTurnReplace<'a> {
     /// Prompt turn id allocated by [`LocalStore::begin_prompt_turn`].
     pub turn_id: &'a str,
     /// User prompt ACP content blocks.
-    pub prompt: &'a [Value],
+    pub prompt: &'a [ContentBlock],
     /// ACP updates observed so far during the prompt turn.
     pub updates: &'a [TranscriptUpdateSnapshot],
     /// Current transcript status for agent-authored prompt items.
@@ -297,7 +237,7 @@ impl LocalStore {
             limit = limit.value()
         );
         let open_session_id = open_session_id_for(&key);
-        let items = project_items(updates);
+        let items = project_items(updates)?;
         let revision = self.replace_session_items(&open_session_id, &key, &items)?;
         self.window_at_revision(
             WindowScope {
@@ -386,7 +326,7 @@ impl LocalStore {
             append.updates,
             append.status,
             append.stop_reason,
-        );
+        )?;
         self.append_items(append.open_session_id, revision, &items)?;
         Ok(TimelineMutation {
             open_session_id: append.open_session_id.to_owned(),
@@ -404,12 +344,13 @@ impl LocalStore {
     pub fn begin_prompt_turn(
         &mut self,
         open_session_id: &str,
-        prompt: &[Value],
+        prompt: &[ContentBlock],
     ) -> Result<PromptTurnMutation> {
         let existing = self.session_revision("session/prompt", open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");
-        let items = prompt_turn_items(&turn_id, prompt, &[], TranscriptItemStatus::Streaming, None);
+        let items =
+            prompt_turn_items(&turn_id, prompt, &[], TranscriptItemStatus::Streaming, None)?;
         self.append_items(open_session_id, revision, &items)?;
         Ok(PromptTurnMutation {
             open_session_id: open_session_id.to_owned(),
@@ -437,7 +378,7 @@ impl LocalStore {
             replace.updates,
             replace.status,
             replace.stop_reason,
-        );
+        )?;
         let tx = self.connection.transaction()?;
         replace_turn_items(&tx, replace.open_session_id, replace.turn_id, &items)?;
         tx.execute(
@@ -517,10 +458,10 @@ impl LocalStore {
             .query_row("PRAGMA user_version", [], |row| row.get(0))?;
         match version {
             0 => {
-                self.connection.execute_batch(BOOTSTRAP_SCHEMA)?;
+                self.connection.execute_batch(schema::BOOTSTRAP)?;
                 Ok(())
             }
-            SCHEMA_VERSION => Ok(()),
+            schema::VERSION => Ok(()),
             _ => Err(Error::UnsupportedSchemaVersion { version }),
         }
     }

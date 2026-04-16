@@ -13,6 +13,7 @@
 
 mod app_service;
 mod command;
+pub mod contracts;
 mod error;
 mod event;
 mod manager;

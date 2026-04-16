@@ -1,10 +1,10 @@
+import type { SessionGroupsQuery } from "@conduit/app-protocol";
 import type {
-  SessionGroupsQuery,
   SessionHistoryWindow,
   SessionNewResult,
   SessionOpenResult,
   TranscriptItem,
-} from "@conduit/session-client";
+} from "./models";
 import type {
   NewSessionMutationArg,
   OpenSessionMutationArg,

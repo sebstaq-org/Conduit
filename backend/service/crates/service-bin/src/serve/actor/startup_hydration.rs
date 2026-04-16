@@ -1,6 +1,6 @@
 use super::{StoreLock, StoreOpener};
-use serde::Deserialize;
 use serde_json::json;
+use service_runtime::contracts::SessionGroupsView;
 use service_runtime::{ConsumerCommand, ProviderFactory, ServiceRuntime};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -17,26 +17,6 @@ struct HydrationTarget {
     provider: String,
     session_id: String,
     cwd: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionGroupsView {
-    groups: Vec<SessionGroup>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionGroup {
-    cwd: String,
-    sessions: Vec<SessionRow>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionRow {
-    provider: String,
-    session_id: String,
 }
 
 pub(super) fn spawn_startup_hydration_worker<F>(
@@ -176,7 +156,7 @@ fn hydration_targets(result: &serde_json::Value) -> Vec<HydrationTarget> {
     for group in view.groups {
         for session in group.sessions {
             let target = HydrationTarget {
-                provider: session.provider,
+                provider: session.provider.to_string(),
                 session_id: session.session_id,
                 cwd: group.cwd.clone(),
             };

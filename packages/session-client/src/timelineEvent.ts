@@ -1,5 +1,4 @@
-import type { RuntimeEvent } from "@conduit/session-contracts";
-import type { TranscriptItem } from "@conduit/session-model";
+import type { RuntimeEvent, TranscriptItem } from "@conduit/app-protocol";
 
 interface SessionTimelineChanged {
   items?: TranscriptItem[];

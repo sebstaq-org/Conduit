@@ -8,8 +8,11 @@ use acp_discovery::ProviderId;
 use app_api as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+use jsonschema as _;
+use schemars as _;
 use serde as _;
 use serde_json::{Value, json};
+use serde_with as _;
 use service_runtime::{RuntimeEventKind, ServiceRuntime};
 use session_history_support::{
     assert_invalid_params, assert_items, assert_prompt_content, assert_prompt_turn_status,

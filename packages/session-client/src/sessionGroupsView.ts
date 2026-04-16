@@ -1,8 +1,8 @@
-import { SessionGroupsViewSchema } from "@conduit/session-model";
+import { SessionGroupsViewSchema } from "@conduit/app-protocol";
 import type {
   ConsumerResponse,
   SessionGroupsView,
-} from "@conduit/session-contracts";
+} from "@conduit/app-protocol";
 
 function readSessionGroupsResponse(
   response: ConsumerResponse,

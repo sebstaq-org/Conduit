@@ -3,7 +3,7 @@ import { useTheme } from "@shopify/restyle";
 import type {
   ProviderId,
   ProvidersConfigSnapshotResult,
-} from "@conduit/session-client";
+} from "@/app-state/models";
 import { useDispatch, useSelector } from "react-redux";
 import {
   activeSessionOpened,
@@ -19,7 +19,7 @@ import {
   usePromptSessionMutation,
   useSetSessionConfigOptionMutation,
 } from "@/app-state";
-import type { ActiveSession } from "@/app-state";
+import type { ActiveSession } from "@/app-state/session-selection";
 import type { Theme } from "@/theme";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {

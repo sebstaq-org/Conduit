@@ -1,13 +1,10 @@
 import type {
   ProvidersConfigSnapshotResult,
   SessionConfigOption,
-} from "@conduit/session-client";
-import type { ActiveSession } from "@/app-state";
+} from "@/app-state/models";
+import type { ActiveSession } from "@/app-state/session-selection";
 
-interface DraftSnapshotEntry {
-  status: string;
-  configOptions: SessionConfigOption[] | null;
-}
+type DraftSnapshotEntry = ProvidersConfigSnapshotResult["entries"][number];
 
 function copyOptionWithCurrentValue(
   option: SessionConfigOption,
@@ -87,7 +84,7 @@ function resolveVisibleConfigOptions(
     return null;
   }
   return applyDraftSelectedConfigValues(
-    draftSnapshotEntry.configOptions,
+    draftSnapshotEntry.configOptions ?? null,
     activeSession.selectedConfigByProvider[activeSession.provider],
   );
 }

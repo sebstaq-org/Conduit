@@ -5,8 +5,11 @@ mod support;
 use app_api as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+use jsonschema as _;
+use schemars as _;
 use serde as _;
 use serde_json::{Value, json};
+use serde_with as _;
 use service_runtime::{ConsumerResponse, ServiceRuntime};
 use std::sync::{Arc, Mutex};
 use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};

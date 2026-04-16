@@ -1,4 +1,5 @@
-import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
+import type { useOpenSessionMutation } from "@/app-state/api-hooks";
+import type { ActiveSession } from "@/app-state/session-selection";
 import { Row } from "@/ui";
 import { SessionGroupHeader } from "./session-group-header";
 import { sessionRowDepth } from "./session-list.constants";
@@ -24,7 +25,7 @@ function SessionGroupRow({
       {group.sessions.length === 0 && (
         <Row depth={sessionRowDepth} label="No recent sessions" muted />
       )}
-      {group.sessions.map((session) => (
+      {group.sessions.map((session: SessionGroup["sessions"][number]) => (
         <SessionRowItem
           key={`${session.provider}:${session.sessionId}`}
           group={group}

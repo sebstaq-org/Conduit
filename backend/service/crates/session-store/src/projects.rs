@@ -2,10 +2,11 @@
 
 use crate::{LocalStore, Result};
 use rusqlite::{OptionalExtension, params};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// One persisted cwd selected for Conduit's session browser.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRow {
     /// Stable render and mutation identity for the project.

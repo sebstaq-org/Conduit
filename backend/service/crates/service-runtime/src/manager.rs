@@ -5,22 +5,24 @@ mod prompt_flow;
 
 use crate::command::ConsumerCommand;
 use crate::command::ConsumerResponse;
-use crate::error::{
-    RuntimeError, optional_string_param, optional_u64_param, path_param, string_param,
+use crate::contracts::{
+    SessionHistoryRequest, SessionNewRequest, SessionOpenRequest, SessionSetConfigOptionRequest,
+    SessionStateProjection, SessionWatchRequest, from_params, to_contract_value,
 };
+use crate::error::{RuntimeError, path_param, string_param};
 use crate::event::{EventBuffer, RuntimeEvent};
 use crate::manager_helpers::{
     absolute_normalized_cwd, loaded_transcript_snapshot_updates, parse_provider,
 };
 use crate::manager_response::{
-    session_new_result_id, session_open_or_new_result, session_open_result,
-    session_set_config_option_result, session_state_from_provider_result, store_lock_error,
+    session_new_result, session_new_result_id, session_new_state, session_open_result,
+    session_open_state, session_set_config_option_result, store_lock_error,
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
-use serde_json::{Value, json, to_value};
+use serde_json::{Value, json};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -32,11 +34,33 @@ pub struct ServiceRuntime<F = AppServiceFactory> {
     pub(crate) event_buffer: EventBuffer,
     factory: F,
     loaded_provider_sessions: HashSet<OpenSessionKey>,
-    session_states: HashMap<OpenSessionKey, Value>,
+    session_states: HashMap<OpenSessionKey, SessionStateProjection>,
     pub(crate) session_index_refreshes: HashMap<ProviderId, u64>,
     providers: HashMap<ProviderId, Box<dyn ProviderPort>>,
     pub(crate) local_store: LocalStore,
     pub(crate) store_lock: Arc<Mutex<()>>,
+}
+
+struct SessionOpenCacheLog<'a> {
+    command_id: &'a str,
+    provider: ProviderId,
+    session_id: &'a str,
+    cwd: &'a Path,
+    requested_limit: Option<u64>,
+    cache_hit: bool,
+}
+
+fn log_session_open_cache(event: SessionOpenCacheLog<'_>) {
+    tracing::debug!(
+        event_name = "session_open.cache",
+        source = "service-runtime",
+        command_id = %event.command_id,
+        provider = %event.provider.as_str(),
+        session_id = %event.session_id,
+        cwd = %event.cwd.display(),
+        requested_limit = ?event.requested_limit,
+        cache_hit = event.cache_hit
+    );
 }
 
 impl ServiceRuntime<AppServiceFactory> {
@@ -257,7 +281,7 @@ where
         };
         Ok(ConsumerResponse::success(
             id,
-            to_value(&snapshot)?,
+            to_contract_value("ProviderSnapshot", &snapshot)?,
             snapshot,
         ))
     }
@@ -268,12 +292,9 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let cwd =
-            absolute_normalized_cwd("session/new", path_param("session/new", params, "cwd")?)?;
-        let limit = HistoryLimit::new(
-            "session/new",
-            optional_u64_param("session/new", params, "limit")?,
-        )?;
+        let request = from_params::<SessionNewRequest>("session/new", "SessionNewRequest", params)?;
+        let cwd = absolute_normalized_cwd("session/new", PathBuf::from(request.cwd))?;
+        let limit = HistoryLimit::new("session/new", request.limit)?;
         let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
             let result = provider_port.session_new(cwd.clone())?;
@@ -286,18 +307,17 @@ where
             cwd: cwd.display().to_string(),
         };
         self.loaded_provider_sessions.insert(key.clone());
-        let session_state = session_state_from_provider_result(&session_id, &provider_result);
+        let session_state = session_new_state(&session_id, &provider_result)?;
         self.session_states
             .insert(key.clone(), session_state.clone());
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             let history = self.local_store.open_session(key.clone(), &[], limit)?;
             self.local_store
-                .set_open_session_state(&key, &session_state)?;
+                .set_open_session_state(&key, &serde_json::to_value(&session_state)?)?;
             history
         };
-        let history = to_value(history)?;
-        let result = session_open_or_new_result(&session_state, &history);
+        let result = session_new_result(&session_state, history)?;
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -343,10 +363,8 @@ where
             cwd: cwd.display().to_string(),
         };
         self.loaded_provider_sessions.insert(key.clone());
-        self.session_states.insert(
-            key,
-            session_state_from_provider_result(&session_id, &result),
-        );
+        self.session_states
+            .insert(key, session_open_state(&session_id, &result)?);
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
@@ -356,10 +374,11 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let session_id = string_param("session/open", params, "sessionId")?;
-        let cwd =
-            absolute_normalized_cwd("session/open", path_param("session/open", params, "cwd")?)?;
-        let requested_limit = optional_u64_param("session/open", params, "limit")?;
+        let request =
+            from_params::<SessionOpenRequest>("session/open", "SessionOpenRequest", params)?;
+        let session_id = request.session_id;
+        let cwd = absolute_normalized_cwd("session/open", PathBuf::from(request.cwd))?;
+        let requested_limit = request.limit;
         let limit = HistoryLimit::new("session/open", requested_limit)?;
         let key = OpenSessionKey {
             provider,
@@ -370,51 +389,47 @@ where
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.cached_session(&key, limit)?
         } {
-            tracing::debug!(
-                event_name = "session_open.cache",
-                source = "service-runtime",
-                command_id = %id,
-                provider = %provider.as_str(),
-                session_id = %session_id,
-                cwd = %cwd.display(),
-                requested_limit = ?requested_limit,
-                cache_hit = true
-            );
+            log_session_open_cache(SessionOpenCacheLog {
+                command_id: &id,
+                provider,
+                session_id: &session_id,
+                cwd: &cwd,
+                requested_limit,
+                cache_hit: true,
+            });
             let state = self.resolve_session_open_state(provider, &session_id, &cwd, &key)?;
-            let history = to_value(cached)?;
             return Ok(ConsumerResponse::success_without_snapshot(
                 id,
-                session_open_result(&state, &history),
+                session_open_result(&state, cached)?,
             ));
         }
-        tracing::debug!(
-            event_name = "session_open.cache",
-            source = "service-runtime",
-            command_id = %id,
-            provider = %provider.as_str(),
-            session_id = %session_id,
-            cwd = %cwd.display(),
-            requested_limit = ?requested_limit,
-            cache_hit = false
-        );
+        log_session_open_cache(SessionOpenCacheLog {
+            command_id: &id,
+            provider,
+            session_id: &session_id,
+            cwd: &cwd,
+            requested_limit,
+            cache_hit: false,
+        });
         let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
             let result = provider_port.session_load(session_id.clone(), cwd)?;
             (result, provider_port.snapshot())
         };
         self.loaded_provider_sessions.insert(key.clone());
-        let state = session_state_from_provider_result(&session_id, &provider_result);
+        let state = session_open_state(&session_id, &provider_result)?;
         self.session_states.insert(key.clone(), state.clone());
         let updates = loaded_transcript_snapshot_updates(&snapshot, &session_id);
         let history = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             let history = self.local_store.open_session(key.clone(), updates, limit)?;
-            self.local_store.set_open_session_state(&key, &state)?;
-            to_value(history)?
+            self.local_store
+                .set_open_session_state(&key, &serde_json::to_value(&state)?)?;
+            history
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            session_open_result(&state, &history),
+            session_open_result(&state, history)?,
         ))
     }
 
@@ -424,24 +439,27 @@ where
         provider: ProviderId,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let session_id = string_param("session/set_config_option", params, "sessionId")?;
-        let config_id = string_param("session/set_config_option", params, "configId")?;
-        let value = string_param("session/set_config_option", params, "value")?;
+        let request = from_params::<SessionSetConfigOptionRequest>(
+            "session/set_config_option",
+            "SessionSetConfigOptionRequest",
+            params,
+        )?;
+        let session_id = request.session_id;
         let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
             let result = provider_port.session_set_config_option(
                 session_id.clone(),
-                config_id,
-                value.to_owned(),
+                request.config_id,
+                request.value,
             )?;
             (result, provider_port.snapshot())
         };
         let result = session_set_config_option_result(&session_id, &provider_result)?;
-        let Some(config_options) = result.get("configOptions").cloned() else {
-            return Err(RuntimeError::Provider(
-                "session/set_config_option result missing configOptions".to_owned(),
-            ));
-        };
+        let typed_result =
+            serde_json::from_value::<crate::contracts::SessionSetConfigOptionResult>(
+                result.clone(),
+            )
+            .map_err(|error| RuntimeError::Provider(error.to_string()))?;
         let keys: Vec<OpenSessionKey> = self
             .session_states
             .keys()
@@ -449,36 +467,40 @@ where
             .cloned()
             .collect();
         for key in keys {
-            if let Some(state) = self.session_states.get_mut(&key)
-                && let Some(map) = state.as_object_mut()
-            {
-                map.insert("configOptions".to_owned(), config_options.clone());
+            if let Some(state) = self.session_states.get_mut(&key) {
+                state.config_options = Some(typed_result.config_options.clone());
             }
         }
         Ok(ConsumerResponse::success(id, result, snapshot))
     }
 
     fn session_history(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let open_session_id = string_param("session/history", params, "openSessionId")?;
-        let limit = HistoryLimit::new(
+        let request = from_params::<SessionHistoryRequest>(
             "session/history",
-            optional_u64_param("session/history", params, "limit")?,
+            "SessionHistoryRequest",
+            params,
         )?;
-        let cursor = optional_string_param("session/history", params, "cursor")?;
+        let limit = HistoryLimit::new("session/history", request.limit)?;
         let result = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            to_value(
-                self.local_store
-                    .history_window(&open_session_id, cursor, limit)?,
-            )?
+            self.local_store
+                .history_window(&request.open_session_id, request.cursor, limit)?
         };
-        Ok(ConsumerResponse::success_without_snapshot(id, result))
+        Ok(ConsumerResponse::success_without_snapshot(
+            id,
+            to_contract_value("SessionHistoryWindow", &result)?,
+        ))
     }
 
     fn session_watch(&self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let open_session_id = string_param("session/watch", params, "openSessionId")?;
+        let request =
+            from_params::<SessionWatchRequest>("session/watch", "SessionWatchRequest", params)?;
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        if self.local_store.provider_for(&open_session_id)?.is_none() {
+        if self
+            .local_store
+            .provider_for(&request.open_session_id)?
+            .is_none()
+        {
             return Err(RuntimeError::InvalidParameter {
                 command: "session/watch",
                 parameter: "openSessionId",
@@ -489,7 +511,7 @@ where
             id,
             json!({
                 "subscribed": true,
-                "openSessionId": open_session_id
+                "openSessionId": request.open_session_id
             }),
         ))
     }
@@ -575,7 +597,7 @@ where
         session_id: &str,
         cwd: &Path,
         key: &OpenSessionKey,
-    ) -> Result<Value> {
+    ) -> Result<SessionStateProjection> {
         if let Some(state) = self.session_states.get(key).cloned() {
             return Ok(state);
         }
@@ -583,6 +605,13 @@ where
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.open_session_state(key)?
         } {
+            let state =
+                serde_json::from_value::<SessionStateProjection>(state).map_err(|error| {
+                    RuntimeError::ContractViolation {
+                        contract: "SessionStateProjection",
+                        message: error.to_string(),
+                    }
+                })?;
             self.session_states.insert(key.clone(), state.clone());
             return Ok(state);
         }
@@ -591,10 +620,11 @@ where
             provider_port.session_load(session_id.to_owned(), cwd.to_path_buf())?
         };
         self.loaded_provider_sessions.insert(key.clone());
-        let state = session_state_from_provider_result(session_id, &provider_result);
+        let state = session_open_state(session_id, &provider_result)?;
         self.session_states.insert(key.clone(), state.clone());
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        self.local_store.set_open_session_state(key, &state)?;
+        self.local_store
+            .set_open_session_state(key, &serde_json::to_value(&state)?)?;
         Ok(state)
     }
 
@@ -621,6 +651,13 @@ where
                     self.local_store.open_session_state(key)?
                 }
             {
+                let state =
+                    serde_json::from_value::<SessionStateProjection>(state).map_err(|error| {
+                        RuntimeError::ContractViolation {
+                            contract: "SessionStateProjection",
+                            message: error.to_string(),
+                        }
+                    })?;
                 self.session_states.insert(key.clone(), state);
             }
             return Ok(());
@@ -632,10 +669,11 @@ where
         };
         let result = result?;
         self.loaded_provider_sessions.insert(key.clone());
-        let state = session_state_from_provider_result(&key.session_id, &result);
+        let state = session_open_state(&key.session_id, &result)?;
         self.session_states.insert(key.clone(), state.clone());
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-        self.local_store.set_open_session_state(key, &state)?;
+        self.local_store
+            .set_open_session_state(key, &serde_json::to_value(&state)?)?;
         Ok(())
     }
 }

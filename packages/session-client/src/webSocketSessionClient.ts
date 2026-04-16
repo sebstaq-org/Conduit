@@ -1,4 +1,30 @@
-import { createConsumerCommand } from "@conduit/session-contracts";
+import type {
+  ConsumerCommand,
+  ConsumerResponse,
+  GlobalSettingsUpdateRequest,
+  GlobalSettingsView,
+  ProjectAddRequest,
+  ProjectListView,
+  ProjectRemoveRequest,
+  ProjectSuggestionsQuery,
+  ProjectSuggestionsView,
+  ProjectUpdateRequest,
+  ProviderId,
+  ProvidersConfigSnapshotResult,
+  RuntimeEvent,
+  SessionGroupsQuery,
+  SessionGroupsView,
+  SessionHistoryRequest,
+  SessionHistoryWindow,
+  SessionNewRequest,
+  SessionNewResult,
+  SessionOpenRequest,
+  SessionOpenResult,
+  SessionPromptRequest,
+  SessionSetConfigOptionRequest,
+  SessionSetConfigOptionResult,
+} from "@conduit/app-protocol";
+import { createConsumerCommand } from "./consumerCommand.js";
 import {
   readProvidersConfigSnapshotResponse,
   readSessionHistoryResponse,
@@ -22,32 +48,6 @@ import {
 } from "./timelineEvent.js";
 import { WebSocketTransport } from "./transport/webSocketTransport.js";
 import type {
-  ConsumerCommand,
-  ConsumerResponse,
-  GlobalSettingsUpdateRequest,
-  GlobalSettingsView,
-  ProjectAddRequest,
-  ProjectListView,
-  ProjectRemoveRequest,
-  ProjectSuggestionsQuery,
-  ProjectSuggestionsView,
-  ProjectUpdateRequest,
-  ProvidersConfigSnapshotResult,
-  RuntimeEvent,
-  SessionGroupsQuery,
-  SessionGroupsView,
-  SessionHistoryRequest,
-  SessionHistoryWindow,
-  SessionNewRequest,
-  SessionNewResult,
-  SessionOpenResult,
-  SessionOpenRequest,
-  SessionPromptRequest,
-  SessionSetConfigOptionRequest,
-  SessionSetConfigOptionResult,
-} from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
-import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
 } from "./timelineEvent.js";
@@ -62,118 +62,142 @@ class WebSocketSessionClient implements SessionClientPort {
     handler: (event: SessionsIndexChanged) => void;
   }>();
   private readonly transport: WebSocketTransport;
+
   public constructor(options: SessionClientOptions = {}) {
     this.transport = new WebSocketTransport(options, (event) => {
       this.handleRuntimeEvent(event);
     });
   }
+
   public async listProjects(): Promise<ProjectListView> {
-    const response = await this.dispatch(
-      createConsumerCommand("projects/list", "all"),
+    return readProjectListResponse(
+      await this.dispatch(createConsumerCommand("projects/list", "all", {})),
+      "projects list failed",
     );
-    return readProjectListResponse(response, "projects list failed");
   }
+
   public async addProject(
     request: ProjectAddRequest,
   ): Promise<ProjectListView> {
-    const response = await this.dispatch(
-      createConsumerCommand("projects/add", "all", request),
+    return readProjectListResponse(
+      await this.dispatch(
+        createConsumerCommand("projects/add", "all", request),
+      ),
+      "project add failed",
     );
-    return readProjectListResponse(response, "project add failed");
   }
+
   public async removeProject(
     request: ProjectRemoveRequest,
   ): Promise<ProjectListView> {
-    const response = await this.dispatch(
-      createConsumerCommand("projects/remove", "all", request),
+    return readProjectListResponse(
+      await this.dispatch(
+        createConsumerCommand("projects/remove", "all", request),
+      ),
+      "project remove failed",
     );
-    return readProjectListResponse(response, "project remove failed");
   }
+
   public async getProjectSuggestions(
     query: ProjectSuggestionsQuery = {},
   ): Promise<ProjectSuggestionsView> {
-    const response = await this.dispatch(
-      createConsumerCommand("projects/suggestions", "all", query),
+    return readProjectSuggestionsResponse(
+      await this.dispatch(
+        createConsumerCommand("projects/suggestions", "all", query),
+      ),
     );
-    return readProjectSuggestionsResponse(response);
   }
+
   public async updateProject(
     request: ProjectUpdateRequest,
   ): Promise<ProjectListView> {
-    const response = await this.dispatch(
-      createConsumerCommand("projects/update", "all", request),
+    return readProjectListResponse(
+      await this.dispatch(
+        createConsumerCommand("projects/update", "all", request),
+      ),
+      "project update failed",
     );
-    return readProjectListResponse(response, "project update failed");
   }
+
   public async getSessionGroups(
     query: SessionGroupsQuery = {},
   ): Promise<SessionGroupsView> {
-    const response = await this.dispatch(
-      createConsumerCommand("sessions/grouped", "all", query),
+    return readSessionGroupsResponse(
+      await this.dispatch(
+        createConsumerCommand("sessions/grouped", "all", query),
+      ),
     );
-    return readSessionGroupsResponse(response);
   }
+
   public async getProvidersConfigSnapshot(): Promise<ProvidersConfigSnapshotResult> {
-    const response = await this.dispatch(
-      createConsumerCommand("providers/config_snapshot", "all"),
+    return readProvidersConfigSnapshotResponse(
+      await this.dispatch(
+        createConsumerCommand("providers/config_snapshot", "all", {}),
+      ),
     );
-    const parsed = readProvidersConfigSnapshotResponse(response);
-    if (!parsed.ok || parsed.result === null) {
-      throw new Error(
-        parsed.error?.message ?? "providers config snapshot failed",
-      );
-    }
-    return parsed.result;
   }
+
   public async getSettings(): Promise<GlobalSettingsView> {
-    const response = await this.dispatch(
-      createConsumerCommand("settings/get", "all"),
+    return readGlobalSettingsResponse(
+      await this.dispatch(createConsumerCommand("settings/get", "all", {})),
+      "settings get failed",
     );
-    return readGlobalSettingsResponse(response, "settings get failed");
   }
+
   public async updateSettings(
     request: GlobalSettingsUpdateRequest,
   ): Promise<GlobalSettingsView> {
-    const response = await this.dispatch(
-      createConsumerCommand("settings/update", "all", request),
+    return readGlobalSettingsResponse(
+      await this.dispatch(
+        createConsumerCommand("settings/update", "all", request),
+      ),
+      "settings update failed",
     );
-    return readGlobalSettingsResponse(response, "settings update failed");
   }
+
   public async openSession(
     provider: ProviderId,
     request: SessionOpenRequest,
-  ): Promise<ConsumerResponse<SessionOpenResult | null>> {
-    const response = await this.dispatch(
-      createConsumerCommand("session/open", provider, request),
+  ): Promise<SessionOpenResult> {
+    return readSessionOpenResponse(
+      await this.dispatch(
+        createConsumerCommand("session/open", provider, request),
+      ),
     );
-    return readSessionOpenResponse(response);
   }
+
   public async newSession(
     provider: ProviderId,
     request: SessionNewRequest,
-  ): Promise<ConsumerResponse<SessionNewResult | null>> {
-    const response = await this.dispatch(
-      createConsumerCommand("session/new", provider, request),
+  ): Promise<SessionNewResult> {
+    return readSessionNewResponse(
+      await this.dispatch(
+        createConsumerCommand("session/new", provider, request),
+      ),
     );
-    return readSessionNewResponse(response);
   }
+
   public async readSessionHistory(
     request: SessionHistoryRequest,
-  ): Promise<ConsumerResponse<SessionHistoryWindow | null>> {
-    const response = await this.dispatch(
-      createConsumerCommand("session/history", "all", request),
+  ): Promise<SessionHistoryWindow> {
+    return readSessionHistoryResponse(
+      await this.dispatch(
+        createConsumerCommand("session/history", "all", request),
+      ),
     );
-    return readSessionHistoryResponse(response);
   }
+
   public async setSessionConfigOption(
     provider: ProviderId,
     request: SessionSetConfigOptionRequest,
-  ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>> {
-    const response = await this.dispatch(
-      createConsumerCommand("session/set_config_option", provider, request),
+  ): Promise<SessionSetConfigOptionResult> {
+    return readSessionSetConfigOptionResponse(
+      await this.dispatch(
+        createConsumerCommand("session/set_config_option", provider, request),
+      ),
     );
-    return readSessionSetConfigOptionResponse(response);
   }
+
   public async promptSession(request: SessionPromptRequest): Promise<void> {
     const response = await this.dispatch(
       createConsumerCommand("session/prompt", "all", request),
@@ -182,6 +206,7 @@ class WebSocketSessionClient implements SessionClientPort {
       throw new Error(response.error?.message ?? "session prompt failed");
     }
   }
+
   public async subscribeTimelineChanges(
     openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,
@@ -199,13 +224,14 @@ class WebSocketSessionClient implements SessionClientPort {
       this.timelineSubscriptions.delete(subscription);
     };
   }
+
   public async subscribeSessionIndexChanges(
     handler: (event: SessionsIndexChanged) => void,
   ): Promise<() => void> {
     const subscription = { handler };
     this.sessionIndexSubscriptions.add(subscription);
     const response = await this.dispatch(
-      createConsumerCommand("sessions/watch", "all"),
+      createConsumerCommand("sessions/watch", "all", {}),
     );
     if (!response.ok) {
       this.sessionIndexSubscriptions.delete(subscription);
@@ -215,14 +241,17 @@ class WebSocketSessionClient implements SessionClientPort {
       this.sessionIndexSubscriptions.delete(subscription);
     };
   }
+
   private async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
     const response = await this.transport.dispatch(command);
     return response;
   }
+
   private handleRuntimeEvent(event: RuntimeEvent): void {
     this.handleTimelineEvent(event);
     this.handleSessionsIndexEvent(event);
   }
+
   private handleTimelineEvent(eventFrame: RuntimeEvent): void {
     const event = readSessionTimelineChanged(eventFrame);
     if (event) {
@@ -233,6 +262,7 @@ class WebSocketSessionClient implements SessionClientPort {
       }
     }
   }
+
   private handleSessionsIndexEvent(eventFrame: RuntimeEvent): void {
     const event = readSessionsIndexChanged(eventFrame);
     if (event) {
@@ -242,4 +272,5 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
+
 export { WebSocketSessionClient };

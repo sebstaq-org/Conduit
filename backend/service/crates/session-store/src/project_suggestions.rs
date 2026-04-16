@@ -3,10 +3,11 @@
 use crate::{LocalStore, Result, project_id_for_cwd};
 use acp_discovery::ProviderId;
 use rusqlite::{Transaction, params};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// One addable cwd suggestion for the session browser.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSuggestion {
     /// Stable render identity for the suggestion.

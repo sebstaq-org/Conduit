@@ -4,7 +4,7 @@ import {
   failOlderPageLoad,
   mergeOlderPage,
 } from "./session-timeline-cache";
-import type { SessionHistoryWindow } from "@conduit/session-client";
+import type { SessionHistoryWindow } from "./models";
 import type { SessionTimelineMutations } from "./api-session-timeline-handlers";
 import type { SessionTimelineData } from "./session-timeline-cache";
 

@@ -1,5 +1,5 @@
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
-import type { ActiveSession } from "@/app-state";
+import type { ProviderId, SessionConfigOption } from "@/app-state/models";
+import type { ActiveSession } from "@/app-state/session-selection";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { SessionComposerActionRow } from "./session-composer-action-row";

@@ -2,6 +2,8 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
+use agent_client_protocol_schema::ContentBlock;
+use schemars as _;
 use serde as _;
 use serde_json::{Value, json};
 use session_store::{
@@ -17,6 +19,12 @@ use thiserror as _;
 use tracing as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
+
+fn text_block(text: &str) -> TestResult<ContentBlock> {
+    Ok(serde_json::from_value(
+        json!({ "type": "text", "text": text }),
+    )?)
+}
 
 #[test]
 fn open_session_persists_and_pages_retryable_history_windows() -> TestResult<()> {
@@ -89,10 +97,10 @@ fn unsupported_schema_version_fails_hard() -> TestResult<()> {
 }
 
 #[test]
-fn legacy_schema_version_five_fails_hard() -> TestResult<()> {
+fn legacy_schema_version_six_fails_hard() -> TestResult<()> {
     let path = test_db_path()?;
     let connection = rusqlite::Connection::open(&path)?;
-    connection.pragma_update(None, "user_version", 5)?;
+    connection.pragma_update(None, "user_version", 6)?;
     drop(connection);
 
     let response = LocalStore::open_path(&path);
@@ -336,19 +344,15 @@ fn prompt_turn_replace_preserves_surrounding_timeline_items() -> TestResult<()> 
     let mut store = LocalStore::open_path(&path)?;
     let key = key("session-1");
     let opened = store.open_session(key, &updates("loaded agent"), limit(10)?)?;
-    let first_turn = store.begin_prompt_turn(
-        &opened.open_session_id,
-        &[json!({ "type": "text", "text": "first prompt" })],
-    )?;
-    let second_turn = store.begin_prompt_turn(
-        &opened.open_session_id,
-        &[json!({ "type": "text", "text": "second prompt" })],
-    )?;
+    let first_turn =
+        store.begin_prompt_turn(&opened.open_session_id, &[text_block("first prompt")?])?;
+    let second_turn =
+        store.begin_prompt_turn(&opened.open_session_id, &[text_block("second prompt")?])?;
 
     let mutation = store.replace_prompt_turn_updates(PromptTurnReplace {
         open_session_id: &opened.open_session_id,
         turn_id: &first_turn.turn_id,
-        prompt: &[json!({ "type": "text", "text": "first prompt" })],
+        prompt: &[text_block("first prompt")?],
         updates: &[
             transcript_update(10, "agent_message_chunk", "first streamed"),
             transcript_update(11, "agent_message_chunk", " answer"),
@@ -392,7 +396,7 @@ fn prompt_turn_replace_rejects_missing_turn_without_append_fallback() -> TestRes
     let response = store.replace_prompt_turn_updates(PromptTurnReplace {
         open_session_id: &opened.open_session_id,
         turn_id: "missing-turn",
-        prompt: &[json!({ "type": "text", "text": "prompt" })],
+        prompt: &[text_block("prompt")?],
         updates: &[transcript_update(10, "agent_message_chunk", "agent")],
         status: TranscriptItemStatus::Streaming,
         stop_reason: None,
@@ -428,7 +432,10 @@ fn history_texts(items: &[session_store::TranscriptItem]) -> TestResult<Vec<Stri
             texts.push(
                 content
                     .iter()
-                    .filter_map(|block| block.get("text").and_then(Value::as_str))
+                    .filter_map(|block| serde_json::to_value(block).ok())
+                    .filter_map(|block| {
+                        block.get("text").and_then(Value::as_str).map(str::to_owned)
+                    })
                     .collect::<Vec<_>>()
                     .join(""),
             );

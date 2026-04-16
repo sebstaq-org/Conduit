@@ -6,8 +6,11 @@ use acp_discovery::ProviderId;
 use app_api as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+use jsonschema as _;
+use schemars as _;
 use serde as _;
 use serde_json::{Value, json};
+use serde_with as _;
 use std::sync::{Arc, Mutex};
 use support::{FakeState, TestResult, assert_ok, command, runtime};
 use thiserror as _;

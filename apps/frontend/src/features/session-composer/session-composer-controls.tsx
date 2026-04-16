@@ -1,4 +1,4 @@
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "@/app-state/models";
 import { Box } from "@/theme";
 import { DropdownMenuRoot, DropdownMenuTrigger } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";

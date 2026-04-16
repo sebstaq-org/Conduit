@@ -1,17 +1,12 @@
 import { useSelector } from "react-redux";
 import { selectActiveSession } from "@/app-state";
-import { ProjectsToolbar } from "@/features/projects-toolbar";
+import type { useOpenSessionMutation } from "@/app-state/api-hooks";
+import type { ActiveSession } from "@/app-state/session-selection";
 import { SessionGroupHeader } from "@/features/session-list/session-group-header";
 import { SessionRowItem } from "@/features/session-list/session-row-item";
-import type { ActiveSession, useOpenSessionMutation } from "@/app-state";
-import { Box, Text } from "@/theme";
-import { Row, Section } from "@/ui";
-import {
-  navigationPanelHeadingMarginBottom,
-  navigationPanelHeadingVariant,
-} from "./navigation-panel.styles";
-import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
+import { Row } from "@/ui";
 import type { NavigationPanelScrollRow } from "./navigation-panel-scroll-rows";
+import { renderStaticNavigationPanelRow } from "./navigation-panel-static-row";
 
 interface NavigationPanelScrollRowItemProps {
   onSessionSelected?: (() => void) | undefined;
@@ -41,35 +36,6 @@ function isSessionNavigationPanelRow(
     row.kind === "groupEmpty" ||
     row.kind === "session"
   );
-}
-
-function renderStaticNavigationPanelRow(
-  row: NavigationPanelScrollRow,
-): React.JSX.Element | null {
-  if (row.kind === "heading") {
-    return (
-      <Text
-        mb={navigationPanelHeadingMarginBottom}
-        variant={navigationPanelHeadingVariant}
-      >
-        Conduit
-      </Text>
-    );
-  }
-  if (row.kind === "projectRows") {
-    return <NavigationPanelProjectRows />;
-  }
-  if (row.kind === "threadsHeader") {
-    return (
-      <Section actions={<ProjectsToolbar />} title="Threads">
-        <Box />
-      </Section>
-    );
-  }
-  if (row.kind === "status") {
-    return <Row label={row.label} meta={row.meta} muted />;
-  }
-  return null;
 }
 
 function renderSessionNavigationPanelRow({

@@ -2,13 +2,13 @@ import {
   GlobalSettingsViewSchema,
   ProjectListViewSchema,
   ProjectSuggestionsViewSchema,
-} from "@conduit/session-model";
+} from "@conduit/app-protocol";
 import type {
   ConsumerResponse,
   GlobalSettingsView,
   ProjectListView,
   ProjectSuggestionsView,
-} from "@conduit/session-contracts";
+} from "@conduit/app-protocol";
 
 function readProjectListResponse(
   response: ConsumerResponse,

@@ -1,6 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
+import type { ProviderId, SessionConfigOption } from "./models";
 import type { RootState } from "./store";
 
 interface OpenActiveSession {

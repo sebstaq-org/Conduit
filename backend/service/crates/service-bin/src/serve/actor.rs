@@ -384,12 +384,15 @@ fn handle_provider_config_snapshot_request(
             snapshot: None,
         }
     } else {
-        ConsumerResponse {
-            id: command_id.clone(),
-            ok: true,
-            result: provider_config_snapshots.snapshot_value(),
-            error: None,
-            snapshot: None,
+        match provider_config_snapshots.snapshot_value() {
+            Ok(result) => ConsumerResponse {
+                id: command_id.clone(),
+                ok: true,
+                result,
+                error: None,
+                snapshot: None,
+            },
+            Err(error) => failure(command_id.clone(), "contract_violation", &error.to_string()),
         }
     };
     let response_status = request.respond_to.send(response);

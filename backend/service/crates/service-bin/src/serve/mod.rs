@@ -15,7 +15,8 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use session_store::LocalStore;
+use service_runtime::contracts::RuntimeEvent as ProductEvent;
+use session_store::{LocalStore, TranscriptItem};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -24,7 +25,7 @@ use std::time::Instant;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::cors::CorsLayer;
-use wire::{ClientCommandFrame, ServerEventFrame, ServerResponseFrame};
+use wire::{ClientCommandFrame, server_event_frame, server_response_frame};
 
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -387,7 +388,7 @@ async fn send_response(
     id: String,
     response: service_runtime::ConsumerResponse,
 ) -> std::result::Result<(), ()> {
-    let frame = ServerResponseFrame::new(id, response);
+    let frame = server_response_frame(id, response).map_err(|_error| ())?;
     let text = serde_json::to_string(&frame).map_err(|_error| ())?;
     sender
         .send(Message::Text(text.into()))
@@ -399,7 +400,7 @@ async fn send_event(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     event: ProductEvent,
 ) -> std::result::Result<(), ()> {
-    let frame = ServerEventFrame::new(event);
+    let frame = server_event_frame(event);
     let text = serde_json::to_string(&frame).map_err(|_error| ())?;
     sender
         .send(Message::Text(text.into()))
@@ -447,7 +448,13 @@ impl WatchState {
                     return None;
                 }
                 let revision = event.payload.get("revision")?.as_i64()?;
-                let items = event.payload.get("items").cloned();
+                let items = event
+                    .payload
+                    .get("items")
+                    .cloned()
+                    .map(serde_json::from_value::<Vec<TranscriptItem>>)
+                    .transpose()
+                    .ok()?;
                 Some(ProductEvent::SessionTimelineChanged {
                     open_session_id: open_session_id.to_owned(),
                     revision,
@@ -457,21 +464,6 @@ impl WatchState {
             _ => None,
         }
     }
-}
-
-#[derive(Debug, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum ProductEvent {
-    SessionsIndexChanged {
-        revision: i64,
-    },
-    SessionTimelineChanged {
-        #[serde(rename = "openSessionId")]
-        open_session_id: String,
-        revision: i64,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        items: Option<serde_json::Value>,
-    },
 }
 
 #[cfg(test)]

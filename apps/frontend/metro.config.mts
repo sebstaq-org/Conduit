@@ -1,5 +1,5 @@
 import { getDefaultConfig } from "expo/metro-config.js";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { getBundleModeMetroConfig } from "react-native-worklets/bundleMode/index.js";
@@ -20,6 +20,41 @@ const defaultResolveRequest = config.resolver.resolveRequest;
 const metroConfig = getBundleModeMetroConfig(config);
 const bundleModeResolveRequest = metroConfig.resolver.resolveRequest;
 
+function resolveTypescriptSourceImport(
+  context: {
+    originModulePath?: string;
+    resolveRequest: typeof bundleModeResolveRequest;
+  },
+  moduleName: string,
+  platform: string | null,
+): unknown {
+  if (
+    !moduleName.startsWith(".") ||
+    !moduleName.endsWith(".js") ||
+    context.originModulePath === undefined
+  ) {
+    return undefined;
+  }
+
+  const originDirectory = path.dirname(context.originModulePath);
+  const withoutExtension = moduleName.slice(0, -".js".length);
+  for (const extension of [".ts", ".tsx"]) {
+    const candidate = path.resolve(
+      originDirectory,
+      `${withoutExtension}${extension}`,
+    );
+    if (existsSync(candidate) === true) {
+      return context.resolveRequest(
+        context,
+        `${withoutExtension}${extension}`,
+        platform,
+      );
+    }
+  }
+
+  return undefined;
+}
+
 metroConfig.resolver.resolveRequest = (
   context,
   moduleName,
@@ -29,6 +64,15 @@ metroConfig.resolver.resolveRequest = (
 
   if (requestName.startsWith(workletsModulePath)) {
     return bundleModeResolveRequest(context, moduleName, platform);
+  }
+
+  const sourceImport = resolveTypescriptSourceImport(
+    context,
+    requestName,
+    platform,
+  );
+  if (sourceImport !== undefined) {
+    return sourceImport;
   }
 
   if (defaultResolveRequest) {

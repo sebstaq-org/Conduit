@@ -1,7 +1,6 @@
 import { createProofSurfaceCopy } from "@conduit/design-system-tokens";
 import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
-import { createSessionClient } from "@conduit/session-client";
-import { PROVIDERS } from "@conduit/session-model";
+import { PROVIDERS, createSessionClient } from "@conduit/session-client";
 
 const supportedSessionClientMethods = ["getSessionGroups"] as const;
 

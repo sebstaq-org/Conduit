@@ -196,16 +196,14 @@ impl ImportCheck<'_> {
         file: &Path,
         specifier: &str,
     ) -> bool {
-        let message = js_runtime::violation_message(&unit.name, specifier);
+        let relative_file = relative_path(self.repo_root, file);
+        let message = js_runtime::violation_message(&unit.name, &relative_file, specifier);
         let Some(message) = message else {
             return false;
         };
 
-        self.failures.push(format!(
-            "{} {message} via {}.",
-            relative_path(self.repo_root, file),
-            specifier
-        ));
+        self.failures
+            .push(format!("{relative_file} {message} via {specifier}."));
         true
     }
 }

@@ -2,17 +2,21 @@
 
 use crate::RuntimeError;
 use crate::command::ConsumerResponse;
-use crate::error::{optional_string_param, optional_u64_param, path_param, string_param};
+use crate::contracts::{
+    GlobalSettingsUpdateRequest, ProjectAddRequest, ProjectListView, ProjectRemoveRequest,
+    ProjectSuggestionsQuery, ProjectSuggestionsView, ProjectUpdateRequest, SessionGroupsQuery,
+    from_params, to_contract_value,
+};
 use crate::event::RuntimeEventKind;
 use crate::manager::ServiceRuntime;
 use crate::manager_helpers::{absolute_normalized_cwd, current_epoch, paginated_index_entries};
 use crate::manager_response::store_lock_error;
-use crate::session_groups::{SessionGroupsQuery, grouped_view, providers_from_target};
+use crate::session_groups::{grouped_view, providers_from_target};
 use crate::{ProviderFactory, Result};
 use acp_discovery::ProviderId;
-use serde_json::{Value, json, to_value};
-use session_store::{ProjectRow, ProjectSuggestion};
+use serde_json::{Value, json};
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 const SESSION_INDEX_REFRESH_INTERVAL_SECONDS: u64 = 30;
 const DEFAULT_PROJECT_SUGGESTIONS_LIMIT: usize = 20;
@@ -20,25 +24,9 @@ const MAX_PROJECT_SUGGESTIONS_LIMIT: usize = 100;
 const MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 1;
 const MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS: u64 = 365;
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProjectListView {
-    projects: Vec<ProjectRow>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ProjectSuggestionsView {
-    suggestions: Vec<ProjectSuggestion>,
-}
-
-struct ProjectSuggestionsQuery {
+struct NormalizedProjectSuggestionsQuery {
     query: Option<String>,
     limit: usize,
-}
-
-struct GlobalSettingsUpdateRequest {
-    session_groups_updated_within_days: Option<u64>,
 }
 
 impl<F> ServiceRuntime<F>
@@ -79,7 +67,7 @@ where
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(settings)?,
+            to_contract_value("GlobalSettingsView", &settings)?,
         ))
     }
 
@@ -96,7 +84,7 @@ where
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(settings)?,
+            to_contract_value("GlobalSettingsView", &settings)?,
         ))
     }
 
@@ -107,7 +95,7 @@ where
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectListView { projects })?,
+            to_contract_value("ProjectListView", &ProjectListView { projects })?,
         ))
     }
 
@@ -124,13 +112,17 @@ where
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectSuggestionsView { suggestions })?,
+            to_contract_value(
+                "ProjectSuggestionsView",
+                &ProjectSuggestionsView { suggestions },
+            )?,
         ))
     }
 
     pub(crate) fn projects_add(&mut self, id: String, params: &Value) -> Result<ConsumerResponse> {
-        let cwd =
-            absolute_normalized_cwd("projects/add", path_param("projects/add", params, "cwd")?)?;
+        let request =
+            from_params::<ProjectAddRequest>("projects/add", "ProjectAddRequest", params)?;
+        let cwd = absolute_normalized_cwd("projects/add", PathBuf::from(request.cwd))?;
         let projects = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.add_project(&cwd.display().to_string())?;
@@ -139,7 +131,7 @@ where
         self.session_index_refreshes.clear();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectListView { projects })?,
+            to_contract_value("ProjectListView", &ProjectListView { projects })?,
         ))
     }
 
@@ -148,16 +140,17 @@ where
         id: String,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let project_id = string_param("projects/remove", params, "projectId")?;
+        let request =
+            from_params::<ProjectRemoveRequest>("projects/remove", "ProjectRemoveRequest", params)?;
         let projects = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
-            self.local_store.remove_project(&project_id)?;
+            self.local_store.remove_project(&request.project_id)?;
             self.local_store.projects()?
         };
         self.session_index_refreshes.clear();
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectListView { projects })?,
+            to_contract_value("ProjectListView", &ProjectListView { projects })?,
         ))
     }
 
@@ -166,17 +159,17 @@ where
         id: String,
         params: &Value,
     ) -> Result<ConsumerResponse> {
-        let project_id = string_param("projects/update", params, "projectId")?;
-        let display_name = string_param("projects/update", params, "displayName")?;
+        let request =
+            from_params::<ProjectUpdateRequest>("projects/update", "ProjectUpdateRequest", params)?;
         let projects = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store
-                .update_project_display_name(&project_id, &display_name)?;
+                .update_project_display_name(&request.project_id, &request.display_name)?;
             self.local_store.projects()?
         };
         Ok(ConsumerResponse::success_without_snapshot(
             id,
-            to_value(ProjectListView { projects })?,
+            to_contract_value("ProjectListView", &ProjectListView { projects })?,
         ))
     }
 
@@ -274,58 +267,46 @@ where
 }
 
 impl ProjectSuggestionsQuery {
-    fn from_params(params: &Value) -> Result<Self> {
-        let query = optional_string_param("projects/suggestions", params, "query")?
+    fn from_params(params: &Value) -> Result<NormalizedProjectSuggestionsQuery> {
+        let request =
+            from_params::<Self>("projects/suggestions", "ProjectSuggestionsQuery", params)?;
+        let query = request
+            .query
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
-        let limit = match optional_u64_param("projects/suggestions", params, "limit")? {
+        let limit = match request.limit {
             Some(value) => usize::try_from(value)
                 .unwrap_or(MAX_PROJECT_SUGGESTIONS_LIMIT)
                 .clamp(1, MAX_PROJECT_SUGGESTIONS_LIMIT),
             None => DEFAULT_PROJECT_SUGGESTIONS_LIMIT,
         };
-        Ok(Self { query, limit })
+        Ok(NormalizedProjectSuggestionsQuery { query, limit })
     }
 }
 
 impl GlobalSettingsUpdateRequest {
     fn from_params(params: &Value) -> Result<Self> {
-        let value =
-            params
-                .get("sessionGroupsUpdatedWithinDays")
-                .ok_or(RuntimeError::MissingParameter {
-                    command: "settings/update",
-                    parameter: "sessionGroupsUpdatedWithinDays",
-                })?;
-        let session_groups_updated_within_days = parse_settings_lookback(value)?;
-        Ok(Self {
-            session_groups_updated_within_days,
-        })
+        let request =
+            from_params::<Self>("settings/update", "GlobalSettingsUpdateRequest", params)?;
+        parse_settings_lookback(request.session_groups_updated_within_days)?;
+        Ok(request)
     }
 }
 
-fn parse_settings_lookback(value: &Value) -> Result<Option<u64>> {
+fn parse_settings_lookback(value: Option<u64>) -> Result<Option<u64>> {
     match value {
-        Value::Null => Ok(None),
-        Value::Number(days) => {
-            let days = days.as_u64().ok_or(RuntimeError::InvalidStringParameter {
-                command: "settings/update",
-                parameter: "sessionGroupsUpdatedWithinDays",
-            })?;
-            if (MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS..=MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS)
-                .contains(&days)
-            {
-                return Ok(Some(days));
-            }
-            Err(RuntimeError::InvalidParameter {
-                command: "settings/update",
-                parameter: "sessionGroupsUpdatedWithinDays",
-                message: "value must be between 1 and 365 or null",
-            })
+        None => Ok(None),
+        Some(days)
+            if (MIN_SESSION_GROUPS_UPDATED_WITHIN_DAYS
+                ..=MAX_SESSION_GROUPS_UPDATED_WITHIN_DAYS)
+                .contains(&days) =>
+        {
+            Ok(Some(days))
         }
-        _ => Err(RuntimeError::InvalidStringParameter {
+        Some(_) => Err(RuntimeError::InvalidParameter {
             command: "settings/update",
             parameter: "sessionGroupsUpdatedWithinDays",
+            message: "value must be between 1 and 365 or null",
         }),
     }
 }

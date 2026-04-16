@@ -4,5 +4,5 @@ This directory is reserved for Electron shell and desktop integration only.
 
 - Do not add shared feature logic here.
 - Do not add shared UI primitives here.
-- Future shared session capability behavior belongs in `@conduit/session-client`, `@conduit/session-contracts`, or `@conduit/session-model`.
+- Use `@conduit/session-client` or `@conduit/app-client` as the desktop-facing boundaries; do not import `@conduit/app-protocol` directly from shell code.
 - Raw desktop primitives and Electron integration belong here only when shell work actually requires them.

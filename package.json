@@ -26,6 +26,8 @@
   "scripts": {
     "bootstrap": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
     "build": "tsc -b tsconfig.json",
+    "contracts:generate": "cargo run --quiet --manifest-path backend/service/Cargo.toml -p service-bin -- export-contracts --out packages/app-protocol/generated/consumer-contracts.schema.json && pnpm exec tsx scripts/generate-app-protocol.ts",
+    "contracts:check": "pnpm run contracts:generate && git diff --exit-code -- packages/app-protocol/generated/consumer-contracts.schema.json packages/app-protocol/src/generated.ts scripts/contract-guardrails.test.ts",
     "clean": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- clean",
     "desktop:build": "pnpm --filter @conduit/desktop run build",
     "desktop:dev": "pnpm --filter @conduit/desktop run dev",
@@ -35,7 +37,7 @@
     "format": "prettier . --write && cargo fmt --manifest-path backend/service/Cargo.toml --all",
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
     "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p acp-contracts --test protocol_captures && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test golden_testdata",
-    "docs:check": "vitest run scripts/docs-guardrails.test.ts",
+    "docs:check": "vitest run scripts/docs-guardrails.test.ts scripts/contract-guardrails.test.ts",
     "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "frontend:android": "pnpm --filter @conduit/frontend run android",
     "frontend:doctor": "pnpm --filter @conduit/frontend run doctor",
@@ -60,17 +62,19 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run fixtures:check && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run contracts:check && pnpm run fixtures:check && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "25.6.0",
+    "json-schema-to-typescript": "15.0.4",
     "oxlint": "1.59.0",
     "oxlint-tsgolint": "0.20.0",
     "prettier": "3.8.2",
+    "tsx": "4.20.6",
     "typescript": "6.0.2",
     "vitest": "4.1.4"
   },
-  "description": "Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime. The frontend workspace has one Expo/React Native app under `apps/frontend`; Electron hosts that app web target instead of owning a separate UI. `packages/session-client` and `packages/session-contracts` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-tokens` keep shared non-UI package boundaries.",
+  "description": "Conduit contains the Phase 1.5 official-ACP-only consumer API baseline on top of the Phase 0.5 bootstrap. The backend pins the official ACP contract bundle, discovers only official adapter binaries, exposes the locked session subset through `service-runtime`, serves the normal product boundary over `service-bin serve` WebSocket, and keeps manual proof artifacts isolated from normal runtime. The frontend workspace has one Expo/React Native app under `apps/frontend`; Electron hosts that app web target instead of owning a separate UI. `packages/session-client` and `packages/app-protocol` own the normal consumer boundary; `packages/app-client`, `packages/app-core`, and `packages/design-system-tokens` keep shared non-UI package boundaries.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

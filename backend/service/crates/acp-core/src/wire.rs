@@ -1,10 +1,11 @@
 //! Raw wire capture types for ACP transport ownership.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The stream that produced a captured wire event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WireStream {
     /// A message sent from Conduit to the provider.
@@ -16,7 +17,7 @@ pub enum WireStream {
 }
 
 /// The coarse JSON-RPC shape of a wire event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WireKind {
     /// JSON-RPC request.
@@ -30,7 +31,7 @@ pub enum WireKind {
 }
 
 /// One raw line captured from the ACP transport.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct RawWireEvent {
     /// Monotonic sequence number within a single host connection.
     pub sequence: u64,

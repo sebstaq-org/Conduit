@@ -1,4 +1,4 @@
-import type { SessionGroupsView } from "@conduit/session-client";
+import type { SessionGroupsView } from "@/app-state/models";
 
 type SessionGroup = SessionGroupsView["groups"][number];
 type SessionRow = SessionGroup["sessions"][number];

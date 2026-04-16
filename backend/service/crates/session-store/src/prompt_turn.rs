@@ -1,18 +1,19 @@
 //! Prompt-turn projection helpers for stored timelines.
 
 use acp_core::TranscriptUpdateSnapshot;
-use serde_json::Value;
+use agent_client_protocol_schema::ContentBlock;
 
+use crate::Result;
 use crate::transcript::project_prompt_turn_items;
 use crate::transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
 pub(crate) fn prompt_turn_items(
     turn_id: &str,
-    prompt: &[Value],
+    prompt: &[ContentBlock],
     updates: &[TranscriptUpdateSnapshot],
     status: TranscriptItemStatus,
     stop_reason: Option<&str>,
-) -> Vec<TranscriptItem> {
+) -> Result<Vec<TranscriptItem>> {
     let mut items = vec![TranscriptItem::Message {
         id: format!("{turn_id}-user"),
         turn_id: Some(turn_id.to_owned()),
@@ -21,7 +22,7 @@ pub(crate) fn prompt_turn_items(
         role: MessageRole::User,
         content: prompt.to_owned(),
     }];
-    let prompt_update_items = project_prompt_turn_items(turn_id, updates, status, stop_reason);
+    let prompt_update_items = project_prompt_turn_items(turn_id, updates, status, stop_reason)?;
     let has_agent_message = prompt_update_items.iter().any(|item| {
         matches!(
             item,
@@ -47,5 +48,5 @@ pub(crate) fn prompt_turn_items(
             content: Vec::new(),
         });
     }
-    items
+    Ok(items)
 }

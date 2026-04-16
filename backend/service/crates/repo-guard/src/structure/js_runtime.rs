@@ -1,6 +1,21 @@
 //! Frontend runtime import boundary checks.
 
-pub(super) fn violation_message(unit_name: &str, specifier: &str) -> Option<&'static str> {
+pub(super) fn violation_message(
+    unit_name: &str,
+    relative_file: &str,
+    specifier: &str,
+) -> Option<&'static str> {
+    if specifier == "@conduit/app-protocol" {
+        let allowed = match unit_name {
+            "@conduit/app-client" | "@conduit/session-client" => true,
+            "@conduit/frontend" => relative_file.starts_with("apps/frontend/src/app-state/"),
+            _ => false,
+        };
+        if !allowed {
+            return Some("imports protocol boundary outside an approved adaptation layer");
+        }
+    }
+
     match unit_name {
         "@conduit/app-client" | "@conduit/app-core" | "@conduit/design-system-tokens" => {
             is_frontend_runtime(specifier).then_some("imports forbidden framework or shell runtime")

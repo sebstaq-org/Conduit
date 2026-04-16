@@ -14,10 +14,7 @@ import {
   historyUserBubbleBackgroundColor,
   historyUserRowAlignItems,
 } from "./session-history.styles";
-import type {
-  SessionHistoryWindow,
-  TranscriptItem,
-} from "@conduit/session-client";
+import type { SessionHistoryWindow, TranscriptItem } from "@/app-state/models";
 
 interface SessionHistoryListProps {
   history: SessionHistoryWindow;
@@ -117,7 +114,7 @@ function sessionHistoryRows(
   if (history.items.length === 0) {
     return [{ kind: "status", key: "status:empty", label: "No messages yet" }];
   }
-  return history.items.map((item) => ({
+  return history.items.map((item: TranscriptItem) => ({
     item,
     kind: "transcript",
     key: `item:${item.id}`,

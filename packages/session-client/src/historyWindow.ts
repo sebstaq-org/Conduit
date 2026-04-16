@@ -4,7 +4,7 @@ import {
   SessionNewResultSchema,
   SessionOpenResultSchema,
   SessionSetConfigOptionResultSchema,
-} from "@conduit/session-model";
+} from "@conduit/app-protocol";
 import type {
   ConsumerResponse,
   ProvidersConfigSnapshotResult,
@@ -12,101 +12,69 @@ import type {
   SessionNewResult,
   SessionOpenResult,
   SessionSetConfigOptionResult,
-} from "@conduit/session-contracts";
+} from "@conduit/app-protocol";
+
+interface ResultSchema<Result> {
+  parse(value: unknown): Result;
+}
+
+function readConsumerResult<Result>(args: {
+  fallbackMessage: string;
+  response: ConsumerResponse;
+  schema: ResultSchema<Result>;
+}): Result {
+  if (!args.response.ok) {
+    throw new Error(args.response.error?.message ?? args.fallbackMessage);
+  }
+  return args.schema.parse(args.response.result);
+}
 
 function readSessionHistoryResponse(
   response: ConsumerResponse,
-): ConsumerResponse<SessionHistoryWindow | null> {
-  if (!response.ok) {
-    return {
-      id: response.id,
-      ok: response.ok,
-      result: null,
-      error: response.error,
-    };
-  }
-  return {
-    id: response.id,
-    ok: response.ok,
-    result: SessionHistoryWindowSchema.parse(response.result),
-    error: response.error,
-  };
+): SessionHistoryWindow {
+  return readConsumerResult({
+    fallbackMessage: "session history failed",
+    response,
+    schema: SessionHistoryWindowSchema,
+  });
 }
 
-function readSessionNewResponse(
-  response: ConsumerResponse,
-): ConsumerResponse<SessionNewResult | null> {
-  if (!response.ok) {
-    return {
-      id: response.id,
-      ok: response.ok,
-      result: null,
-      error: response.error,
-    };
-  }
-  return {
-    id: response.id,
-    ok: response.ok,
-    result: SessionNewResultSchema.parse(response.result),
-    error: response.error,
-  };
+function readSessionNewResponse(response: ConsumerResponse): SessionNewResult {
+  return readConsumerResult({
+    fallbackMessage: "session new failed",
+    response,
+    schema: SessionNewResultSchema,
+  });
 }
 
 function readSessionOpenResponse(
   response: ConsumerResponse,
-): ConsumerResponse<SessionOpenResult | null> {
-  if (!response.ok) {
-    return {
-      id: response.id,
-      ok: response.ok,
-      result: null,
-      error: response.error,
-    };
-  }
-  return {
-    id: response.id,
-    ok: response.ok,
-    result: SessionOpenResultSchema.parse(response.result),
-    error: response.error,
-  };
+): SessionOpenResult {
+  return readConsumerResult({
+    fallbackMessage: "session open failed",
+    response,
+    schema: SessionOpenResultSchema,
+  });
 }
 
 function readSessionSetConfigOptionResponse(
   response: ConsumerResponse,
-): ConsumerResponse<SessionSetConfigOptionResult | null> {
-  if (!response.ok) {
-    return {
-      id: response.id,
-      ok: response.ok,
-      result: null,
-      error: response.error,
-    };
-  }
-  return {
-    id: response.id,
-    ok: response.ok,
-    result: SessionSetConfigOptionResultSchema.parse(response.result),
-    error: response.error,
-  };
+): SessionSetConfigOptionResult {
+  return readConsumerResult({
+    fallbackMessage: "session set_config_option failed",
+    response,
+    schema: SessionSetConfigOptionResultSchema,
+  });
 }
 
 function readProvidersConfigSnapshotResponse(
   response: ConsumerResponse,
-): ConsumerResponse<ProvidersConfigSnapshotResult | null> {
-  if (!response.ok) {
-    return {
-      id: response.id,
-      ok: response.ok,
-      result: null,
-      error: response.error,
-    };
-  }
-  return {
-    id: response.id,
-    ok: response.ok,
-    result: ProvidersConfigSnapshotResultSchema.parse(response.result),
-    error: response.error,
-  };
+): ProvidersConfigSnapshotResult {
+  return readConsumerResult({
+    fallbackMessage: "providers config snapshot failed",
+    response,
+    schema: ProvidersConfigSnapshotResultSchema,
+  });
 }
 
 export {

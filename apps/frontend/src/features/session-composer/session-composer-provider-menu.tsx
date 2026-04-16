@@ -1,9 +1,8 @@
-import { PROVIDERS } from "@conduit/session-client";
-import type { ProviderId } from "@conduit/session-client";
+import { PROVIDERS } from "@/app-state/models";
 import { DropdownMenuContent, DropdownMenuItem } from "@/ui";
 
 interface SessionComposerProviderMenuProps {
-  onProviderSelect: (provider: ProviderId) => void;
+  onProviderSelect: (provider: (typeof PROVIDERS)[number]) => void;
 }
 
 function SessionComposerProviderMenu({

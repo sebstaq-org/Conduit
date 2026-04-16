@@ -4,7 +4,6 @@ use crate::error::RuntimeError;
 use crate::session_groups::{entries_from_session_list, next_cursor, normalize_cwd};
 use crate::{ProviderPort, Result};
 use acp_discovery::ProviderId;
-use serde_json::Value;
 use session_store::TranscriptItemStatus;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -69,24 +68,6 @@ pub(crate) fn loaded_transcript_snapshot_updates<'a>(
         .find(|transcript| transcript.identity.acp_session_id == session_id)
         .map(|transcript| transcript.updates.as_slice())
         .unwrap_or_default()
-}
-
-pub(crate) fn content_blocks_param(
-    command: &'static str,
-    params: &Value,
-    parameter: &'static str,
-) -> Result<Vec<Value>> {
-    let Some(value) = params.get(parameter) else {
-        return Err(RuntimeError::MissingParameter { command, parameter });
-    };
-    value
-        .as_array()
-        .cloned()
-        .ok_or(RuntimeError::InvalidParameter {
-            command,
-            parameter,
-            message: "must be a ContentBlock array",
-        })
 }
 
 pub(crate) fn prompt_lifecycle<'a>(

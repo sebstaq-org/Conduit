@@ -1,4 +1,8 @@
-import type { SessionConfigOption } from "@conduit/session-client";
+import type {
+  SessionConfigOption,
+  SessionConfigOptionEntry,
+  SessionConfigOptionValue,
+} from "@/app-state/models";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -7,81 +11,33 @@ import {
 } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
 
-interface SessionConfigOptionValue {
-  name: string;
-  value: string;
-}
-
 interface SessionComposerConfigOptionMenuProps {
   disabled: boolean;
   onSelect: (configId: string, value: string) => void;
   option: SessionConfigOption;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function toOptionValue(value: unknown): SessionConfigOptionValue | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  if (typeof value.name !== "string") {
-    return null;
-  }
-  if (typeof value.value !== "string") {
-    return null;
-  }
-  return { name: value.name, value: value.value };
-}
-
-function optionGroupEntries(value: unknown): unknown[] {
-  if (
-    !isRecord(value) ||
-    !("group" in value) ||
-    !Array.isArray(value.options)
-  ) {
-    return [];
-  }
-  return value.options;
-}
-
-function collectGroupedOptionValues(
-  value: unknown,
+function flattenOptionEntry(
+  entry: SessionConfigOptionEntry,
 ): SessionConfigOptionValue[] {
-  const entries = optionGroupEntries(value);
-  const grouped: SessionConfigOptionValue[] = [];
-  for (const entry of entries) {
-    const optionValue = toOptionValue(entry);
-    if (optionValue !== null) {
-      grouped.push(optionValue);
-    }
+  if (entry.kind === "group") {
+    return entry.options;
   }
-  return grouped;
+  return [entry];
 }
 
 function flattenOptionValues(
   option: SessionConfigOption,
 ): SessionConfigOptionValue[] {
-  const values: SessionConfigOptionValue[] = [];
-  for (const entry of option.options) {
-    const groupedValues = collectGroupedOptionValues(entry);
-    if (groupedValues.length > 0) {
-      for (const groupedValue of groupedValues) {
-        values.push(groupedValue);
-      }
-    } else {
-      const optionValue = toOptionValue(entry);
-      if (optionValue !== null) {
-        values.push(optionValue);
-      }
-    }
-  }
-  return values;
+  return option.options.flatMap((entry) => flattenOptionEntry(entry));
+}
+
+function optionCurrentValueLabel(value: string): string {
+  return value;
 }
 
 function optionControlLabel(option: SessionConfigOption): string {
-  return `${option.name}: ${option.currentValue}`;
+  return `${option.name}: ${optionCurrentValueLabel(option.currentValue)}`;
 }
 
 function SessionComposerConfigOptionMenu({

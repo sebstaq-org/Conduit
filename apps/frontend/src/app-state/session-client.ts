@@ -1,8 +1,5 @@
 import { createSessionClient } from "@conduit/session-client";
-import type {
-  SessionClientPort,
-  SessionClientTelemetryEvent,
-} from "@conduit/session-client";
+import type { SessionClientPort } from "@conduit/session-client";
 import { logDebug, logError, logInfo, logWarn } from "./frontend-logger";
 
 function configuredSessionClientUrl(): string {
@@ -39,7 +36,15 @@ function configuredSessionHealthUrl(): string {
   return wsUrl.toString();
 }
 
-function logSessionClientTelemetry(event: SessionClientTelemetryEvent): void {
+interface AppSessionClientTelemetryEvent {
+  event_name: string;
+  fields?: Record<string, unknown>;
+  level: "debug" | "info" | "warn" | "error";
+}
+
+function logSessionClientTelemetry(
+  event: AppSessionClientTelemetryEvent,
+): void {
   if (event.level === "debug") {
     logDebug(event.event_name, event.fields ?? {});
     return;

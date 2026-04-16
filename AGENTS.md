@@ -19,7 +19,9 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
 - `apps/frontend` owns the React Native and React Native Web UI app.
 - `apps/desktop` is the Electron host only; it must not own product UI components.
-- Shared backend-facing frontend behavior belongs in `packages/app-client` or `packages/app-core`, not directly in app feature code.
+- Generated protocol types belong in `packages/app-protocol`.
+- Only client or adaptation layers may depend on `packages/app-protocol` directly.
+- Frontend feature code must depend on app-facing models and services, not wire contracts.
 - Apps may depend on packages, but they must not import each other or reach into backend internals directly.
 - Do not create placeholder UI, starter components, starter themes, fake tokens, or speculative feature stubs.
 - Do not implement fallbacks, backward-compatibility shims, or silent degradation paths in product code; this greenfield project must fail fast with explicit errors when required state or configuration is missing.
@@ -28,33 +30,18 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 
 - Repo-authored frontend code must not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect`.
 - Feature code must not import raw DOM or React Native primitives directly. That boundary is reserved for `apps/frontend/src/ui` primitives and shell code.
-- Future backend contract usage belongs behind `packages/app-client`, not in app or feature code.
+- Frontend feature and screen code must consume backend-facing behavior through `apps/frontend/src/app-state`.
 - Product UI should be defined once in `apps/frontend` and hosted by platform shells.
 - `apps/frontend/src/screens/navigation-panel` is composition-only: it may arrange panel sections and temporary local fixtures, but feature behavior and state must move to narrow feature modules when introduced.
-- When a UI or app task is finished, start the relevant app and open it for the
-  user so they can test it immediately. "Started" means the whole relevant local
-  stack is usable: if the UI flow depends on service WebSocket/API data, start
-  that service too and manually verify the target flow is not stuck in an
-  unavailable/offline state before handing it over.
+- When a UI or app task is finished, start the relevant app and open it for the user so they can test it immediately. "Started" means the whole relevant local stack is usable: if the UI flow depends on service WebSocket/API data, start that service too and manually verify the target flow is not stuck in an unavailable/offline state before handing it over.
 
 ## Session View Rules
 
-The session view is expected to grow into a large product surface: transcript
-rows, thoughts, tool calls, events, composer, active run state, approvals,
-interactions, pagination, and live sync all belong there over time. Do not hide
-that complexity by creating one broad `session-detail` feature, component, or
-state slice that owns the whole surface.
+The session view is expected to grow into a large product surface: transcript rows, thoughts, tool calls, events, composer, active run state, approvals, interactions, pagination, and live sync all belong there over time. Do not hide that complexity by creating one broad `session-detail` feature, component, or state slice that owns the whole surface.
 
-Model the backend-facing session data as a stable projection behind
-`packages/app-client` / `packages/app-core`, then render it through narrow
-frontend features. Good initial boundaries are transcript/timeline rendering,
-composer, tool-call rendering, thought/event rendering, active-run state,
-approval or interaction handling, and live/pagination sync.
+Model the backend-facing session data as a stable projection behind `apps/frontend/src/app-state`, then render it through narrow frontend features. Good initial boundaries are transcript/timeline rendering, composer, tool-call rendering, thought/event rendering, active-run state, approval or interaction handling, and live/pagination sync.
 
-`apps/frontend/src/screens/session` should compose those pieces. It may hold
-screen layout and temporary empty or loading states, but feature behavior,
-transport, parsing, and long-lived state must move into narrower modules as soon
-as they exist.
+`apps/frontend/src/screens/session` should compose those pieces. It may hold screen layout and temporary empty or loading states, but feature behavior, transport, parsing, and long-lived state must move into narrower modules as soon as they exist.
 
 ## Current Intent
 
@@ -62,15 +49,11 @@ Official ACP only is product policy. The frontend and backend boundaries in this
 
 ## ACP Contract Policy
 
-Conduit must stay strongly aligned with the official ACP contract at
-https://agentclientprotocol.com/protocol/overview, and vi treat ACP as the
-source of truth for provider-facing behavior.
+Conduit must stay strongly aligned with the official ACP contract at https://agentclientprotocol.com/protocol/overview, and vi treat ACP as the source of truth for provider-facing behavior.
 
-Vi are expected to support progressively more of ACP over time, so partial
-feature work must not bypass or rewrite ACP semantics in local ad-hoc flows.
+Vi are expected to support progressively more of ACP over time, so partial feature work must not bypass or rewrite ACP semantics in local ad-hoc flows.
 
-If product-specific UI/state data is needed, keep ACP wire contract data intact
-and layer local metadata beside it or as explicit, documented extensions.
+If product-specific UI/state data is needed, keep ACP wire contract data intact and layer local metadata beside it or as explicit, documented extensions.
 
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 

@@ -5,9 +5,5 @@
     "outDir": "dist",
     "tsBuildInfoFile": "tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../session-contracts" },
-    { "path": "../session-model" }
-  ]
+  "include": ["src/**/*.ts"]
 }

@@ -1,17 +1,27 @@
 import type {
   GlobalSettingsUpdateRequest,
-  GlobalSettingsView,
-  ProvidersConfigSnapshotResult,
   ProjectAddRequest,
-  ProjectListView,
   ProjectRemoveRequest,
   ProjectSuggestionsQuery,
-  ProjectSuggestionsView,
   ProjectUpdateRequest,
   SessionGroupsQuery,
+} from "@conduit/app-protocol";
+import type {
+  GlobalSettingsView,
+  ProjectListView,
+  ProjectSuggestionsView,
+  ProvidersConfigSnapshotResult,
   SessionGroupsView,
   SessionSetConfigOptionResult,
-} from "@conduit/session-client";
+} from "./models";
+import {
+  mapGlobalSettingsView,
+  mapProjectListView,
+  mapProjectSuggestionsView,
+  mapProvidersConfigSnapshotResult,
+  mapSessionGroupsView,
+  mapSessionSetConfigOptionResult,
+} from "./protocol-adapters";
 import { toQueryError } from "./session-api-query-utils";
 import type { QueryResult } from "./session-api-query-utils";
 import {
@@ -27,8 +37,9 @@ async function getSessionGroupsQuery(
   query: SessionGroupsQuery | undefined,
 ): QueryResult<SessionGroupsView> {
   try {
-    const data = await sessionClient.getSessionGroups(query);
-    return { data };
+    return {
+      data: mapSessionGroupsView(await sessionClient.getSessionGroups(query)),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
@@ -41,8 +52,11 @@ async function getSessionGroupsQuery(
 
 async function getProvidersConfigSnapshotQuery(): QueryResult<ProvidersConfigSnapshotResult> {
   try {
-    const data = await sessionClient.getProvidersConfigSnapshot();
-    return { data };
+    return {
+      data: mapProvidersConfigSnapshotResult(
+        await sessionClient.getProvidersConfigSnapshot(),
+      ),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
@@ -54,8 +68,7 @@ async function getProvidersConfigSnapshotQuery(): QueryResult<ProvidersConfigSna
 
 async function getSettingsQuery(): QueryResult<GlobalSettingsView> {
   try {
-    const data = await sessionClient.getSettings();
-    return { data };
+    return { data: mapGlobalSettingsView(await sessionClient.getSettings()) };
   } catch (error) {
     return {
       error: toQueryError(error, {
@@ -69,12 +82,13 @@ async function updateSettingsQuery(
   request: GlobalSettingsUpdateRequest,
 ): QueryResult<GlobalSettingsView> {
   try {
-    const data = await sessionClient.updateSettings(request);
-    return { data };
+    return {
+      data: mapGlobalSettingsView(await sessionClient.updateSettings(request)),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
-        query_args: request,
+        query_args: { request },
         query_name: "updateSettingsQuery",
       }),
     };
@@ -83,8 +97,7 @@ async function updateSettingsQuery(
 
 async function listProjectsQuery(): QueryResult<ProjectListView> {
   try {
-    const data = await sessionClient.listProjects();
-    return { data };
+    return { data: mapProjectListView(await sessionClient.listProjects()) };
   } catch (error) {
     return {
       error: toQueryError(error, {
@@ -98,12 +111,13 @@ async function addProjectQuery(
   request: ProjectAddRequest,
 ): QueryResult<ProjectListView> {
   try {
-    const data = await sessionClient.addProject(request);
-    return { data };
+    return {
+      data: mapProjectListView(await sessionClient.addProject(request)),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
-        query_args: request,
+        query_args: { request },
         query_name: "addProjectQuery",
       }),
     };
@@ -114,12 +128,13 @@ async function removeProjectQuery(
   request: ProjectRemoveRequest,
 ): QueryResult<ProjectListView> {
   try {
-    const data = await sessionClient.removeProject(request);
-    return { data };
+    return {
+      data: mapProjectListView(await sessionClient.removeProject(request)),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
-        query_args: request,
+        query_args: { request },
         query_name: "removeProjectQuery",
       }),
     };
@@ -130,12 +145,13 @@ async function updateProjectQuery(
   request: ProjectUpdateRequest,
 ): QueryResult<ProjectListView> {
   try {
-    const data = await sessionClient.updateProject(request);
-    return { data };
+    return {
+      data: mapProjectListView(await sessionClient.updateProject(request)),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
-        query_args: request,
+        query_args: { request },
         query_name: "updateProjectQuery",
       }),
     };
@@ -146,8 +162,11 @@ async function getProjectSuggestionsQuery(
   query: ProjectSuggestionsQuery | undefined,
 ): QueryResult<ProjectSuggestionsView> {
   try {
-    const data = await sessionClient.getProjectSuggestions(query);
-    return { data };
+    return {
+      data: mapProjectSuggestionsView(
+        await sessionClient.getProjectSuggestions(query),
+      ),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {
@@ -165,20 +184,15 @@ async function setSessionConfigOptionQuery({
   value,
 }: SetSessionConfigOptionMutationArg): QueryResult<SessionSetConfigOptionResult> {
   try {
-    const response = await sessionClient.setSessionConfigOption(provider, {
-      sessionId,
-      configId,
-      value,
-    });
-    if (!response.ok) {
-      return {
-        error: response.error?.message ?? "session set_config_option failed",
-      };
-    }
-    if (response.result === null) {
-      return { error: "session set_config_option returned no result" };
-    }
-    return { data: response.result };
+    return {
+      data: mapSessionSetConfigOptionResult(
+        await sessionClient.setSessionConfigOption(provider, {
+          sessionId,
+          configId,
+          value,
+        }),
+      ),
+    };
   } catch (error) {
     return {
       error: toQueryError(error, {

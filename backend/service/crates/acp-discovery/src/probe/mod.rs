@@ -17,12 +17,13 @@ use agent_client_protocol_schema::{
 use process::{
     build_diagnostics, read_initialize_response, send_initialize_request, spawn_provider_process,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, to_value};
 use std::sync::Arc;
 
 /// The initialize probe result returned by discovery.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct InitializeProbe {
     /// The raw initialize response envelope.
     pub response: Value,
@@ -37,7 +38,7 @@ pub struct InitializeProbe {
 }
 
 /// The discovery output for a provider.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ProviderDiscovery {
     /// The provider identifier.
     pub provider: ProviderId,
@@ -58,7 +59,7 @@ pub struct ProviderDiscovery {
 }
 
 /// The discovery output for all three providers.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct DiscoveryCatalog {
     /// The discovery rows keyed by provider order.
     pub providers: Vec<ProviderDiscovery>,

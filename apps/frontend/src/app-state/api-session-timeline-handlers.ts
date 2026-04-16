@@ -1,14 +1,12 @@
-import type {
-  SessionGroupsQuery,
-  SessionHistoryWindow,
-  SessionOpenResult,
-} from "@conduit/session-client";
+import type { SessionGroupsQuery } from "@conduit/app-protocol";
+import type { SessionHistoryWindow, SessionOpenResult } from "./models";
 import { createUninitializedSessionTimelineMutations } from "./api-session-timeline-mutations";
 import { subscribeSessionIndexInvalidation } from "./session-index-subscription";
 import { readSessionHistoryQuery, sessionClient } from "./session-api-queries";
 import { activeSessionOpened } from "./session-selection";
 import { createSessionTimelineData } from "./session-timeline-cache";
 import { logFailure, logInfo } from "./frontend-logger";
+import { mapTranscriptItem } from "./transcript-protocol-adapters";
 import type {
   CacheLifecycleApi,
   LoadOlderSessionTimelineArg,
@@ -62,7 +60,7 @@ async function handleSessionTimelineCacheEntryAdded(
         }
         if (event.items !== undefined) {
           mutations.updateSessionTimelineItems(dispatch, {
-            items: event.items,
+            items: event.items.map((item) => mapTranscriptItem(item)),
             openSessionId,
             revision: event.revision,
           });

@@ -67,6 +67,18 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
 }
 
 #[test]
+fn export_contracts_requires_output_path() -> TestResult<()> {
+    let args = strings(&["export-contracts", "--out", "/tmp/contracts.json"]);
+    let Command::ExportContracts { out } = parse_command(&args)? else {
+        return Err("expected export-contracts command".into());
+    };
+    if out != std::path::Path::new("/tmp/contracts.json") {
+        return Err(format!("unexpected output path {}", out.display()).into());
+    }
+    Ok(())
+}
+
+#[test]
 fn replay_is_not_a_product_command() -> TestResult<()> {
     let args = strings(&["replay", "curate"]);
     let error = parse_command(&args)

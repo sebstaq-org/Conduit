@@ -16,8 +16,6 @@
     "@conduit/app-core": "workspace:*",
     "@conduit/design-system-tokens": "workspace:*",
     "@conduit/session-client": "workspace:*",
-    "@conduit/session-contracts": "workspace:*",
-    "@conduit/session-model": "workspace:*",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },

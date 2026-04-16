@@ -6,9 +6,12 @@ use acp_core::TranscriptUpdateSnapshot;
 use app_api as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+use jsonschema as _;
+use schemars as _;
 use serde as _;
 use serde_json::Value;
 use serde_json::json;
+use serde_with as _;
 use service_runtime::ServiceRuntime;
 use std::sync::{Arc, Mutex};
 use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
@@ -43,7 +46,7 @@ fn seeded_config_option_update() -> TranscriptUpdateSnapshot {
             "configOptions": [{
                 "id": "model",
                 "name": "Model",
-                "type": "string",
+                "type": "select",
                 "currentValue": "gpt-5.4",
                 "options": [{
                     "value": "gpt-5.4",

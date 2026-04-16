@@ -1,16 +1,14 @@
-import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
+import {
+  ClientCommandFrameSchema,
+  type ConsumerCommand,
+  type ConsumerResponse,
+  type RuntimeEvent,
+  type ServerFrame,
+} from "@conduit/app-protocol";
 import { createDeferred } from "./deferred.js";
 import { parseServerFrame } from "./wireFrame.js";
 import type { SessionClientTelemetryEvent } from "./sessionClientTelemetryEvent.js";
 import { requireWebSocketUrl } from "./webSocketUrl.js";
-import type {
-  ConsumerCommand,
-  ConsumerResponse,
-  RuntimeEvent,
-  ServerFrame,
-} from "@conduit/session-contracts";
-
-const transportVersionField = "v";
 
 interface WebSocketTransportOptions {
   url?: string;
@@ -111,14 +109,13 @@ class WebSocketTransport {
     const socket = await this.openSocket();
     const responseDeferred = this.trackResponse(command.id);
     try {
-      socket.send(
-        JSON.stringify({
-          [transportVersionField]: CONDUIT_TRANSPORT_VERSION,
-          type: "command",
-          id: command.id,
-          command,
-        }),
-      );
+      const frame = ClientCommandFrameSchema.parse({
+        v: 1,
+        type: "command",
+        id: command.id,
+        command,
+      });
+      socket.send(JSON.stringify(frame));
       return responseDeferred;
     } catch (error) {
       this.pending.delete(command.id);
@@ -182,9 +179,7 @@ class WebSocketTransport {
       this.connecting = null;
       this.emitTelemetry({
         event_name: "session_client.transport.socket.connect.finish",
-        fields: {
-          ok: true,
-        },
+        fields: { ok: true },
         level: "info",
       });
       deferred.resolve(socket);
@@ -251,9 +246,7 @@ class WebSocketTransport {
     this.pending.clear();
     this.emitTelemetry({
       event_name: "session_client.transport.socket.closed",
-      fields: {
-        pending_count: pendingCount,
-      },
+      fields: { pending_count: pendingCount },
       level: "warn",
     });
   }

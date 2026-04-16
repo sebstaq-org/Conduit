@@ -54,6 +54,22 @@ pub enum RuntimeError {
         /// Human-readable invalidity detail.
         message: &'static str,
     },
+    /// The request body failed the generated contract.
+    #[error("{command} params do not match generated contract: {message}")]
+    InvalidContractInput {
+        /// Command being handled.
+        command: &'static str,
+        /// Human-readable contract mismatch detail.
+        message: String,
+    },
+    /// A backend payload violated its generated contract.
+    #[error("{contract} contract validation failed: {message}")]
+    ContractViolation {
+        /// Contract name being validated.
+        contract: &'static str,
+        /// Human-readable contract mismatch detail.
+        message: String,
+    },
     /// The provider operation failed.
     #[error("{0}")]
     Provider(String),
@@ -70,7 +86,9 @@ impl RuntimeError {
             Self::MissingParameter { .. }
             | Self::InvalidStringParameter { .. }
             | Self::InvalidPathParameter { .. }
-            | Self::InvalidParameter { .. } => "invalid_params",
+            | Self::InvalidParameter { .. }
+            | Self::InvalidContractInput { .. } => "invalid_params",
+            Self::ContractViolation { .. } => "contract_error",
             Self::Provider(_) => "provider_error",
             Self::LocalStore(session_store::Error::InvalidParameter { .. }) => "invalid_params",
             Self::LocalStore(_) => "local_store_error",
@@ -104,38 +122,4 @@ pub(crate) fn path_param(
     parameter: &'static str,
 ) -> Result<PathBuf> {
     Ok(PathBuf::from(string_param(command, params, parameter)?))
-}
-
-pub(crate) fn optional_u64_param(
-    command: &'static str,
-    params: &serde_json::Value,
-    parameter: &'static str,
-) -> Result<Option<u64>> {
-    let Some(value) = params.get(parameter) else {
-        return Ok(None);
-    };
-    if value.is_null() {
-        return Ok(None);
-    }
-    value
-        .as_u64()
-        .map(Some)
-        .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
-}
-
-pub(crate) fn optional_string_param(
-    command: &'static str,
-    params: &serde_json::Value,
-    parameter: &'static str,
-) -> Result<Option<String>> {
-    let Some(value) = params.get(parameter) else {
-        return Ok(None);
-    };
-    if value.is_null() {
-        return Ok(None);
-    }
-    value
-        .as_str()
-        .map(|value| Some(value.to_owned()))
-        .ok_or(RuntimeError::InvalidStringParameter { command, parameter })
 }

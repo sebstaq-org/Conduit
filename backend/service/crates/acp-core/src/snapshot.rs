@@ -1,11 +1,12 @@
 //! Normalized Conduit snapshots layered over raw ACP truth.
 
 use acp_discovery::{ProviderDiscovery, ProviderId};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The current host connection state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionState {
     /// The provider process has not been started.
@@ -15,7 +16,7 @@ pub enum ConnectionState {
 }
 
 /// The exact live session identity rule for Conduit.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct LiveSessionIdentity {
     /// The provider owning this session.
     pub provider: ProviderId,
@@ -24,7 +25,7 @@ pub struct LiveSessionIdentity {
 }
 
 /// A normalized live session snapshot anchored to ACP truth.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct LiveSessionSnapshot {
     /// The exact live identity.
     pub identity: LiveSessionIdentity,
@@ -37,7 +38,7 @@ pub struct LiveSessionSnapshot {
 }
 
 /// The normalized prompt lifecycle state for a single session turn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptLifecycleState {
     /// No active prompt turn is being tracked.
@@ -51,7 +52,7 @@ pub enum PromptLifecycleState {
 }
 
 /// A normalized prompt lifecycle snapshot backed by raw ACP updates.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct PromptLifecycleSnapshot {
     /// The session the prompt belongs to.
     pub identity: LiveSessionIdentity,
@@ -70,7 +71,7 @@ pub struct PromptLifecycleSnapshot {
 }
 
 /// One replayed `session/update` captured during `session/load`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TranscriptUpdateSnapshot {
     /// Zero-based replay order within the loaded transcript.
     pub index: usize,
@@ -81,7 +82,7 @@ pub struct TranscriptUpdateSnapshot {
 }
 
 /// Read-side transcript replay captured while loading a session.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LoadedTranscriptSnapshot {
     /// The loaded session identity.
     pub identity: LiveSessionIdentity,
@@ -93,7 +94,7 @@ pub struct LoadedTranscriptSnapshot {
 }
 
 /// The current provider snapshot exposed to apps and proof tooling.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ProviderSnapshot {
     /// The provider identifier.
     pub provider: ProviderId,

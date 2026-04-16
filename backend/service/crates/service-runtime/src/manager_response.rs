@@ -1,10 +1,16 @@
 //! Shared manager response helpers.
 
 use crate::Result;
+use crate::contracts::{
+    SessionNewResult, SessionOpenResult, SessionSetConfigOptionResult, SessionStateProjection,
+    session_state_from_load_result, session_state_from_new_result, to_contract_value,
+};
 use crate::error::RuntimeError;
 use crate::manager_helpers::prompt_lifecycle;
 use acp_core::{ProviderSnapshot, TranscriptUpdateSnapshot};
-use serde_json::{Value, json};
+use agent_client_protocol_schema::{NewSessionResponse, SetSessionConfigOptionResponse};
+use serde_json::Value;
+use session_store::SessionHistoryWindow;
 
 pub(crate) fn append_snapshot_updates_if_missing(
     observed_updates: &mut Vec<TranscriptUpdateSnapshot>,
@@ -19,62 +25,72 @@ pub(crate) fn append_snapshot_updates_if_missing(
 }
 
 pub(crate) fn session_new_result_id(result: &Value) -> Result<String> {
-    result
-        .get("sessionId")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-        .ok_or(RuntimeError::Provider(
-            "session/new result missing sessionId".to_owned(),
-        ))
+    serde_json::from_value::<NewSessionResponse>(result.clone())
+        .map(|response| response.session_id.to_string())
+        .map_err(|error| RuntimeError::Provider(error.to_string()))
 }
 
 pub(crate) fn store_lock_error<T>(error: std::sync::PoisonError<T>) -> RuntimeError {
     RuntimeError::Provider(format!("local store lock poisoned: {error}"))
 }
 
-pub(crate) fn session_state_from_provider_result(session_id: &str, result: &Value) -> Value {
-    json!({
-        "sessionId": session_id,
-        "configOptions": result.get("configOptions").cloned(),
-        "modes": result.get("modes").cloned(),
-        "models": result.get("models").cloned(),
-        "currentModeId": result.get("currentModeId").cloned(),
-    })
+pub(crate) fn session_new_state(
+    session_id: &str,
+    result: &Value,
+) -> Result<SessionStateProjection> {
+    session_state_from_new_result(session_id, result)
 }
 
-pub(crate) fn session_open_or_new_result(state: &Value, history: &Value) -> Value {
-    json!({
-        "sessionId": state.get("sessionId").cloned().unwrap_or(Value::Null),
-        "configOptions": state.get("configOptions").cloned().unwrap_or(Value::Null),
-        "modes": state.get("modes").cloned().unwrap_or(Value::Null),
-        "models": state.get("models").cloned().unwrap_or(Value::Null),
-        "currentModeId": state.get("currentModeId").cloned().unwrap_or(Value::Null),
-        "history": history,
-    })
+pub(crate) fn session_open_state(
+    session_id: &str,
+    result: &Value,
+) -> Result<SessionStateProjection> {
+    session_state_from_load_result(session_id, result)
 }
 
-pub(crate) fn session_open_result(state: &Value, history: &Value) -> Value {
-    json!({
-        "sessionId": state.get("sessionId").cloned().unwrap_or(Value::Null),
-        "configOptions": state.get("configOptions").cloned().unwrap_or(Value::Null),
-        "modes": state.get("modes").cloned().unwrap_or(Value::Null),
-        "models": state.get("models").cloned().unwrap_or(Value::Null),
-        "currentModeId": state.get("currentModeId").cloned().unwrap_or(Value::Null),
-        "openSessionId": history.get("openSessionId").cloned().unwrap_or(Value::Null),
-        "revision": history.get("revision").cloned().unwrap_or(Value::Null),
-        "items": history.get("items").cloned().unwrap_or(Value::Null),
-        "nextCursor": history.get("nextCursor").cloned().unwrap_or(Value::Null),
-    })
+pub(crate) fn session_new_result(
+    state: &SessionStateProjection,
+    history: SessionHistoryWindow,
+) -> Result<Value> {
+    to_contract_value(
+        "SessionNewResult",
+        &SessionNewResult {
+            session_id: state.session_id.clone(),
+            modes: state.modes.clone(),
+            models: state.models.clone(),
+            config_options: state.config_options.clone(),
+            history,
+        },
+    )
+}
+
+pub(crate) fn session_open_result(
+    state: &SessionStateProjection,
+    history: SessionHistoryWindow,
+) -> Result<Value> {
+    to_contract_value(
+        "SessionOpenResult",
+        &SessionOpenResult {
+            session_id: state.session_id.clone(),
+            modes: state.modes.clone(),
+            models: state.models.clone(),
+            config_options: state.config_options.clone(),
+            open_session_id: history.open_session_id,
+            revision: history.revision,
+            items: history.items,
+            next_cursor: history.next_cursor,
+        },
+    )
 }
 
 pub(crate) fn session_set_config_option_result(session_id: &str, result: &Value) -> Result<Value> {
-    let Some(config_options) = result.get("configOptions").cloned() else {
-        return Err(RuntimeError::Provider(
-            "session/set_config_option result missing configOptions".to_owned(),
-        ));
-    };
-    Ok(json!({
-        "sessionId": session_id,
-        "configOptions": config_options
-    }))
+    let response = serde_json::from_value::<SetSessionConfigOptionResponse>(result.clone())
+        .map_err(|error| RuntimeError::Provider(error.to_string()))?;
+    to_contract_value(
+        "SessionSetConfigOptionResult",
+        &SessionSetConfigOptionResult {
+            session_id: session_id.to_owned(),
+            config_options: response.config_options,
+        },
+    )
 }
