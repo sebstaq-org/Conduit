@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 
 type PromptLaneOwnerRoutes = Arc<Mutex<PromptLaneOwners>>;
+type OwnerBindResult = std::result::Result<(), String>;
 
 #[derive(Default)]
 struct PromptLaneOwners {
@@ -48,8 +49,24 @@ where
         let lane = self
             .owner_for_open_session(open_session_id)
             .unwrap_or_else(|| self.lane(open_session_id));
-        self.register_open_session_owner(open_session_id, &lane);
-        self.register_provider_session_owner_for_open_session(open_session_id, &lane);
+        if let Err(message) = self.register_open_session_owner(open_session_id, &lane) {
+            let id = request.command.id;
+            let _response_status =
+                request
+                    .respond_to
+                    .send(failure(id, "session_lane_conflict", &message));
+            return;
+        }
+        if let Err(message) =
+            self.register_provider_session_owner_for_open_session(open_session_id, &lane)
+        {
+            let id = request.command.id;
+            let _response_status =
+                request
+                    .respond_to
+                    .send(failure(id, "session_lane_conflict", &message));
+            return;
+        }
         lane.dispatch(request);
     }
 
@@ -87,34 +104,41 @@ where
         self.owners.lock().ok()?.provider_sessions.get(key).cloned()
     }
 
-    fn register_open_session_owner(&self, open_session_id: &str, lane: &PromptLane) {
-        if let Ok(mut owners) = self.owners.lock() {
-            owners
-                .open_sessions
-                .insert(open_session_id.to_owned(), lane.clone());
-        }
+    fn register_open_session_owner(
+        &self,
+        open_session_id: &str,
+        lane: &PromptLane,
+    ) -> OwnerBindResult {
+        let mut owners = self
+            .owners
+            .lock()
+            .map_err(|error| format!("prompt lane owner map is unavailable: {error}"))?;
+        bind_open_session_owner(&mut owners, open_session_id, lane)
     }
 
     fn register_provider_session_owner_for_open_session(
         &self,
         open_session_id: &str,
         lane: &PromptLane,
-    ) {
+    ) -> OwnerBindResult {
         let Ok(_store_lock) = self.store_lock.lock() else {
-            return;
+            return Ok(());
         };
         let Ok(local_store) = (self.store)() else {
-            return;
+            return Ok(());
         };
         let Ok(key) = local_store.open_session_key("session/prompt", open_session_id) else {
-            return;
+            return Ok(());
         };
-        if let Ok(mut owners) = self.owners.lock() {
-            owners.provider_sessions.insert(
-                (key.provider.as_str().to_owned(), key.session_id),
-                lane.clone(),
-            );
-        }
+        let mut owners = self
+            .owners
+            .lock()
+            .map_err(|error| format!("prompt lane owner map is unavailable: {error}"))?;
+        bind_provider_session_owner(
+            &mut owners,
+            &(key.provider.as_str().to_owned(), key.session_id),
+            lane,
+        )
     }
 }
 
@@ -158,7 +182,7 @@ impl PromptLane {
         clippy::cognitive_complexity,
         reason = "Prompt-lane dispatch must handle active-lane and channel-failure branches inline."
     )]
-    fn dispatch(&self, request: ActorRequest) {
+    pub(super) fn dispatch(&self, request: ActorRequest) {
         if self.active.swap(true, Ordering::AcqRel) {
             let id = request.command.id;
             let response_status = request.respond_to.send(failure(
@@ -213,6 +237,10 @@ impl PromptLane {
         }
         self.dispatch(request);
     }
+
+    fn same_lane(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.active, &other.active)
+    }
 }
 
 struct PromptLaneContext<F> {
@@ -260,8 +288,8 @@ where
     tracing::info!(event_name = "prompt_lane.started", source = "service-bin");
     while let Some(request) = receiver.recv().await {
         let command = request.command.clone();
-        let response = runtime.dispatch(request.command);
-        register_prompt_lane_owner_from_response(&owners, &owner_lane, &command, &response);
+        let mut response = runtime.dispatch(request.command);
+        register_prompt_lane_owner_from_response(&owners, &owner_lane, &command, &mut response);
         let response_status = request.respond_to.send(response);
         if response_status.is_err() {
             tracing::warn!(
@@ -320,11 +348,23 @@ pub(super) fn cancel_provider_session(command: &ConsumerCommand) -> Option<(Stri
     Some((command.provider.clone(), session_id))
 }
 
+pub(super) fn set_config_provider_session(command: &ConsumerCommand) -> Option<(String, String)> {
+    if command.command != "session/set_config_option" {
+        return None;
+    }
+    let session_id = command
+        .params
+        .get("sessionId")
+        .and_then(serde_json::Value::as_str)?
+        .to_owned();
+    Some((command.provider.clone(), session_id))
+}
+
 fn register_prompt_lane_owner_from_response(
     owners: &PromptLaneOwnerRoutes,
     lane: &PromptLane,
     command: &ConsumerCommand,
-    response: &ConsumerResponse,
+    response: &mut ConsumerResponse,
 ) {
     if command.command != "session/new" || !response.ok {
         return;
@@ -346,10 +386,53 @@ fn register_prompt_lane_owner_from_response(
     else {
         return;
     };
-    if let Ok(mut owners) = owners.lock() {
-        owners.open_sessions.insert(open_session_id, lane.clone());
-        owners
-            .provider_sessions
-            .insert((command.provider.clone(), session_id), lane.clone());
+    let Ok(mut owners) = owners.lock() else {
+        return;
+    };
+    if let Err(message) = bind_open_session_owner(&mut owners, &open_session_id, lane) {
+        *response = failure(command.id.clone(), "session_lane_conflict", &message);
+        return;
+    }
+    if let Err(message) =
+        bind_provider_session_owner(&mut owners, &(command.provider.clone(), session_id), lane)
+    {
+        *response = failure(command.id.clone(), "session_lane_conflict", &message);
+    }
+}
+
+fn bind_open_session_owner(
+    owners: &mut PromptLaneOwners,
+    open_session_id: &str,
+    lane: &PromptLane,
+) -> OwnerBindResult {
+    match owners.open_sessions.get(open_session_id) {
+        Some(existing) if !existing.same_lane(lane) => Err(format!(
+            "open session owner conflict for {open_session_id}: existing lane differs"
+        )),
+        _ => {
+            owners
+                .open_sessions
+                .insert(open_session_id.to_owned(), lane.clone());
+            Ok(())
+        }
+    }
+}
+
+fn bind_provider_session_owner(
+    owners: &mut PromptLaneOwners,
+    provider_session: &(String, String),
+    lane: &PromptLane,
+) -> OwnerBindResult {
+    match owners.provider_sessions.get(provider_session) {
+        Some(existing) if !existing.same_lane(lane) => Err(format!(
+            "provider session owner conflict for {}/{}: existing lane differs",
+            provider_session.0, provider_session.1
+        )),
+        _ => {
+            owners
+                .provider_sessions
+                .insert(provider_session.clone(), lane.clone());
+            Ok(())
+        }
     }
 }

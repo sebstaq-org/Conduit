@@ -99,6 +99,15 @@ function parseEnvVars(source: string): string[] {
   );
 }
 
+function parseFrontendEnvValues(source: string): string[] {
+  return sortedUnique(
+    Array.from(
+      source.matchAll(/frontendEnvValue\("([A-Z0-9_]+)"\)/g),
+      (match) => match[1] ?? "",
+    ),
+  );
+}
+
 function findMarkdownLinks(source: string): string[] {
   return Array.from(
     source.matchAll(/\[[^\]]+\]\(([^)]+)\)/g),
@@ -227,7 +236,10 @@ describe("docs guardrails", () => {
     const sessionClientSource = readText(
       "apps/frontend/src/app-state/session-client.ts",
     );
-    const envVars = parseEnvVars(sessionClientSource);
+    const envVars = sortedUnique([
+      ...parseEnvVars(sessionClientSource),
+      ...parseFrontendEnvValues(sessionClientSource),
+    ]);
 
     expect(envVars).toStrictEqual(["EXPO_PUBLIC_CONDUIT_SESSION_WS_URL"]);
     expect(readText("apps/frontend/src/app-state/README.md")).toContain(

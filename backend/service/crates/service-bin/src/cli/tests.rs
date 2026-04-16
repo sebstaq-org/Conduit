@@ -39,6 +39,43 @@ fn runtime_session_new_does_not_require_artifact_root() -> TestResult<()> {
 }
 
 #[test]
+fn runtime_session_respond_interaction_accepts_response_json() -> TestResult<()> {
+    let args = strings(&[
+        "runtime",
+        "session/respond_interaction",
+        "--provider",
+        "all",
+        "--open-session-id",
+        "open-session-1",
+        "--interaction-id",
+        "interaction-1",
+        "--response-json",
+        "{\"kind\":\"selected\",\"optionId\":\"answer-0\"}",
+        "--json",
+    ]);
+    let Command::Runtime { command } = parse_command(&args)? else {
+        return Err("expected runtime command".into());
+    };
+
+    if command.command != "session/respond_interaction" {
+        return Err(format!("unexpected command {}", command.command).into());
+    }
+    if command.provider != "all" {
+        return Err(format!("unexpected provider {}", command.provider).into());
+    }
+    if command
+        .params
+        .get("response")
+        .and_then(|value| value.get("optionId"))
+        .and_then(serde_json::Value::as_str)
+        != Some("answer-0")
+    {
+        return Err(format!("unexpected params {}", command.params).into());
+    }
+    Ok(())
+}
+
+#[test]
 fn consumer_proof_is_not_a_product_command() -> TestResult<()> {
     let args = strings(&["consumer-proof", "--provider", "codex"]);
     let error = parse_command(&args)

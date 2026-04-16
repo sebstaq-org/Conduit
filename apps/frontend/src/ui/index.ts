@@ -48,6 +48,7 @@ export type {
   ScrollAreaMetrics,
 } from "./scroll-area";
 export { Section } from "./section";
+export { TextButton } from "./text-button";
 export { TextField } from "./text-field";
 export { VirtualList } from "./flash-list";
 export type { VirtualListProps } from "./flash-list";

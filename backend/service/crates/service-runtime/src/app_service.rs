@@ -1,7 +1,7 @@
 //! `app-api` backed provider runtime adapter.
 
 use crate::{ProviderFactory, ProviderPort, Result, RuntimeError};
-use acp_core::{ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+use acp_core::{InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use app_api::AppService;
 use serde::Serialize;
@@ -91,12 +91,48 @@ impl ProviderPort for AppServicePort {
                 .set_session_config_option(&session_id, &config_id, &value),
         )
     }
+
+    fn session_respond_interaction(
+        &mut self,
+        session_id: String,
+        interaction_id: String,
+        response: InteractionResponse,
+    ) -> Result<Value> {
+        self.service
+            .respond_interaction(&session_id, &interaction_id, response)
+            .map_err(map_acp_error)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "interactionId": interaction_id
+        }))
+    }
 }
 
 fn serialize<T>(result: acp_core::Result<T>) -> Result<Value>
 where
     T: Serialize,
 {
-    let value = result.map_err(|error| RuntimeError::Provider(error.to_string()))?;
+    let value = result.map_err(map_acp_error)?;
     to_value(value).map_err(|error| RuntimeError::Provider(error.to_string()))
+}
+
+fn map_acp_error(error: acp_core::AcpError) -> RuntimeError {
+    match error {
+        acp_core::AcpError::UnknownInteraction { .. } => RuntimeError::InvalidParameter {
+            command: "session/respond_interaction",
+            parameter: "interactionId",
+            message: "interaction_unknown",
+        },
+        acp_core::AcpError::ResolvedInteraction { .. } => RuntimeError::InvalidParameter {
+            command: "session/respond_interaction",
+            parameter: "interactionId",
+            message: "interaction_resolved",
+        },
+        acp_core::AcpError::InvalidInteractionResponse { .. } => RuntimeError::InvalidParameter {
+            command: "session/respond_interaction",
+            parameter: "response",
+            message: "invalid_interaction_response",
+        },
+        error => RuntimeError::Provider(error.to_string()),
+    }
 }

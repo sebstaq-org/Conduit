@@ -19,7 +19,10 @@ import {
   usePromptSessionMutation,
   useSetSessionConfigOptionMutation,
 } from "@/app-state";
-import type { ActiveSession } from "@/app-state";
+import type {
+  ActiveSession,
+  SessionComposerPlanInteractionController,
+} from "@/app-state";
 import type { Theme } from "@/theme";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
@@ -59,6 +62,10 @@ interface SessionComposerRuntime {
   >[0];
   setSessionConfigOptionError: boolean;
   setSessionConfigOptionLoading: boolean;
+}
+
+interface SessionComposerProps {
+  planInteraction: SessionComposerPlanInteractionController;
 }
 
 function createDraftCommitCallback(args: {
@@ -267,7 +274,9 @@ function useSessionComposerController(): SessionComposerController {
   });
 }
 
-function SessionComposer(): React.JSX.Element {
+function SessionComposer({
+  planInteraction,
+}: SessionComposerProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const controller = useSessionComposerController();
   return (
@@ -281,10 +290,11 @@ function SessionComposer(): React.JSX.Element {
       onProviderSelect={controller.handleProviderSelect}
       onSend={controller.handleSend}
       isConfigUpdating={controller.isConfigUpdating}
+      planInteractionActions={planInteraction.actions}
+      planInteractionView={planInteraction.view}
       setDraft={controller.setDraft}
       theme={theme}
     />
   );
 }
-
 export { SessionComposer };

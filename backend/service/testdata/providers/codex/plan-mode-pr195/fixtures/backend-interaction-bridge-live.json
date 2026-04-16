@@ -1,0 +1,66 @@
+{
+  "scope": "pr-b-backend-interaction-bridge-live-delta",
+  "source_runs": ["codex-prb-backend-interaction-20260416T123111Z"],
+  "verified": {
+    "patched_adapter_identity": {
+      "real_executable": "vendor/codex-acp-pr195/target/release/codex-acp",
+      "wrapper_path": "conduit-codex-proxy-pr195/codex-acp (PATH override)"
+    },
+    "session_new_config_surface": {
+      "collaboration_mode_option_present": true,
+      "values": ["plan", "default"]
+    },
+    "session_set_config_option_plan": {
+      "command": "session/set_config_option",
+      "config_id": "collaboration_mode",
+      "value": "plan",
+      "success_count": 4,
+      "current_values_after_call": ["plan"]
+    },
+    "structured_question_carrier": {
+      "method": "session/request_permission",
+      "request_permission_count": 5,
+      "request_type": "request_user_input"
+    },
+    "question_sequence": {
+      "selected_flow_request_ids": [0, 1],
+      "selected_flow_response_ids": [0, 1],
+      "correlation_rule": "response JSON-RPC id equals request JSON-RPC id",
+      "multi_question_single_turn_observed": true
+    },
+    "response_mapping": {
+      "selected_outcome": {
+        "outcome": "selected",
+        "optionId": "answer-0"
+      },
+      "answer_other_outcome": {
+        "outcome": "selected",
+        "optionId": "answer-other",
+        "_meta": "request_user_input_response.answers.<questionId>.answers[]"
+      },
+      "cancel_outcome": {
+        "outcome": "cancelled"
+      },
+      "invalid_option_outcome": {
+        "outcome": "selected",
+        "optionId": "answer-invalid"
+      },
+      "answer_other_meta_present": true,
+      "cancel_prompt_stop_reason": "cancelled",
+      "invalid_option_prompt_stop_reason": "cancelled"
+    },
+    "unknown_interaction_error": {
+      "command": "session/respond_interaction",
+      "error": {
+        "code": "invalid_params",
+        "message": "session/respond_interaction parameter interactionId is invalid: interaction_unknown"
+      }
+    },
+    "normalized_runtime_events": {
+      "interaction_request_event_count": 27,
+      "interaction_resolution_statuses": ["cancelled", "resolved"],
+      "tool_call_update_statuses": ["completed", "failed"]
+    }
+  },
+  "decision": "Conduit live runtime now deterministically verifies the backend interaction bridge chain end-to-end for Codex plan collaboration prompts."
+}
