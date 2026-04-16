@@ -18,6 +18,12 @@ import type {
   SessionSetConfigOptionResult,
 } from "@conduit/session-client";
 import { sessionClient } from "./session-client";
+import {
+  logDebug,
+  logFailure,
+  logInfo,
+  logWarn,
+} from "./frontend-logger";
 
 interface OpenSessionMutationArg {
   provider: ProviderId;
@@ -55,7 +61,13 @@ type QueryResult<ResponseData> = Promise<
   { data: ResponseData } | { error: string }
 >;
 
-function toQueryError(error: unknown): string {
+interface QueryErrorContext extends Record<string, unknown> {
+  query_name: string;
+  query_args?: Record<string, unknown>;
+}
+
+function toQueryError(error: unknown, context: QueryErrorContext): string {
+  logFailure("frontend.api.query.exception", error, context);
   if (error instanceof Error) {
     return error.message;
   }
@@ -69,7 +81,12 @@ async function getSessionGroupsQuery(
     const data = await sessionClient.getSessionGroups(query);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { query: query ?? null },
+        query_name: "getSessionGroupsQuery",
+      }),
+    };
   }
 }
 
@@ -78,7 +95,11 @@ async function getProvidersConfigSnapshotQuery(): QueryResult<ProvidersConfigSna
     const data = await sessionClient.getProvidersConfigSnapshot();
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_name: "getProvidersConfigSnapshotQuery",
+      }),
+    };
   }
 }
 
@@ -87,7 +108,11 @@ async function getSettingsQuery(): QueryResult<GlobalSettingsView> {
     const data = await sessionClient.getSettings();
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_name: "getSettingsQuery",
+      }),
+    };
   }
 }
 
@@ -98,7 +123,12 @@ async function updateSettingsQuery(
     const data = await sessionClient.updateSettings(request);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: request,
+        query_name: "updateSettingsQuery",
+      }),
+    };
   }
 }
 
@@ -107,7 +137,11 @@ async function listProjectsQuery(): QueryResult<ProjectListView> {
     const data = await sessionClient.listProjects();
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_name: "listProjectsQuery",
+      }),
+    };
   }
 }
 
@@ -118,7 +152,12 @@ async function addProjectQuery(
     const data = await sessionClient.addProject(request);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: request,
+        query_name: "addProjectQuery",
+      }),
+    };
   }
 }
 
@@ -129,7 +168,12 @@ async function removeProjectQuery(
     const data = await sessionClient.removeProject(request);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: request,
+        query_name: "removeProjectQuery",
+      }),
+    };
   }
 }
 
@@ -140,7 +184,12 @@ async function updateProjectQuery(
     const data = await sessionClient.updateProject(request);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: request,
+        query_name: "updateProjectQuery",
+      }),
+    };
   }
 }
 
@@ -151,7 +200,12 @@ async function getProjectSuggestionsQuery(
     const data = await sessionClient.getProjectSuggestions(query);
     return { data };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { query: query ?? null },
+        query_name: "getProjectSuggestionsQuery",
+      }),
+    };
   }
 }
 
@@ -160,20 +214,56 @@ async function newSessionQuery({
   limit,
   provider,
 }: NewSessionMutationArg): QueryResult<SessionNewResult> {
+  logDebug("frontend.session.new.query.start", {
+    cwd,
+    limit,
+    provider,
+  });
   try {
     const response = await sessionClient.newSession(provider, {
       cwd,
       limit,
     });
+    logInfo("frontend.session.new.query.transport", {
+      cwd,
+      provider,
+      response_error_code: response.error?.code ?? null,
+      response_error_message: response.error?.message ?? null,
+      response_id: response.id,
+      response_ok: response.ok,
+      response_result_present: response.result !== null,
+    });
     if (!response.ok) {
+      logWarn("frontend.session.new.query.rejected", {
+        cwd,
+        provider,
+        rejection_code: "response_not_ok",
+        rejection_message: response.error?.message ?? "session new failed",
+      });
       return { error: response.error?.message ?? "session new failed" };
     }
     if (response.result === null) {
+      logWarn("frontend.session.new.query.rejected", {
+        cwd,
+        provider,
+        rejection_code: "response_result_missing",
+      });
       return { error: "session new returned no session" };
     }
+    logInfo("frontend.session.new.query.success", {
+      cwd,
+      open_session_id: response.result.history.openSessionId,
+      provider,
+      session_id: response.result.sessionId,
+    });
     return { data: response.result };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { cwd, limit, provider },
+        query_name: "newSessionQuery",
+      }),
+    };
   }
 }
 
@@ -183,21 +273,52 @@ async function openSessionQuery({
   provider,
   sessionId,
 }: OpenSessionMutationArg): QueryResult<SessionOpenResult> {
+  const queryArgs = { cwd, limit, provider, session_id: sessionId };
+  logDebug("frontend.session.open.query.start", queryArgs);
   try {
     const response = await sessionClient.openSession(provider, {
       cwd,
       limit,
       sessionId,
     });
+    logInfo("frontend.session.open.query.transport", {
+      ...queryArgs,
+      response_error_code: response.error?.code ?? null,
+      response_error_message: response.error?.message ?? null,
+      response_id: response.id,
+      response_ok: response.ok,
+      response_result_present: response.result !== null,
+    });
     if (!response.ok) {
-      return { error: response.error?.message ?? "session open failed" };
+      const message = response.error?.message ?? "session open failed";
+      logWarn("frontend.session.open.query.rejected", {
+        ...queryArgs,
+        rejection_code: "response_not_ok",
+        rejection_message: message,
+      });
+      return { error: message };
     }
     if (response.result === null) {
+      logWarn("frontend.session.open.query.rejected", {
+        ...queryArgs,
+        rejection_code: "response_result_missing",
+      });
       return { error: "session open returned no history" };
     }
+    logInfo("frontend.session.open.query.success", {
+      ...queryArgs,
+      open_session_id: response.result.openSessionId,
+      response_revision: response.result.revision,
+      result_session_id: response.result.sessionId,
+    });
     return { data: response.result };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: queryArgs,
+        query_name: "openSessionQuery",
+      }),
+    };
   }
 }
 
@@ -220,7 +341,12 @@ async function readSessionHistoryQuery({
     }
     return { data: response.result };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { cursor: cursor ?? null, limit, openSessionId },
+        query_name: "readSessionHistoryQuery",
+      }),
+    };
   }
 }
 
@@ -232,7 +358,12 @@ async function promptSessionQuery({
     await sessionClient.promptSession({ openSessionId, prompt });
     return { data: null };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { openSessionId },
+        query_name: "promptSessionQuery",
+      }),
+    };
   }
 }
 
@@ -258,7 +389,12 @@ async function setSessionConfigOptionQuery({
     }
     return { data: response.result };
   } catch (error) {
-    return { error: toQueryError(error) };
+    return {
+      error: toQueryError(error, {
+        query_args: { configId, provider, sessionId, value },
+        query_name: "setSessionConfigOptionQuery",
+      }),
+    };
   }
 }
 
