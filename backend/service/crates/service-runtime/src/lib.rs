@@ -26,6 +26,8 @@ mod session_groups;
 use agent_client_protocol_schema as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+#[cfg(test)]
+use tracing_subscriber as _;
 
 pub use app_service::AppServiceFactory;
 pub use command::{ConsumerCommand, ConsumerError, ConsumerResponse};

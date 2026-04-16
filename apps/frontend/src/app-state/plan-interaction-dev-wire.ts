@@ -112,8 +112,4 @@ function interactionResolutionItem(args: {
   };
 }
 
-export {
-  interactionRequestItem,
-  interactionResolutionItem,
-  transcriptMessage,
-};
+export { interactionRequestItem, interactionResolutionItem, transcriptMessage };

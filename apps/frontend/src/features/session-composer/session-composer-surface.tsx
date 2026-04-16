@@ -6,9 +6,7 @@ import type {
 } from "@/app-state";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
-import {
-  SessionComposerPlanInteractionSurface,
-} from "./session-composer-plan-interaction";
+import { SessionComposerPlanInteractionSurface } from "./session-composer-plan-interaction";
 import { SessionComposerActionRow } from "./session-composer-action-row";
 import { SessionComposerInput } from "./session-composer-input";
 import {

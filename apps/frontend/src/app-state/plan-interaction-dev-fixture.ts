@@ -189,7 +189,10 @@ function appendResolution(args: {
       interactionResolutionItem({
         interactionId: card.interactionId,
         items: args.state.historyItems,
-        rawOutput: { request_type: "request_user_input", response: args.request.response },
+        rawOutput: {
+          request_type: "request_user_input",
+          response: args.request.response,
+        },
         status: "resolved",
       }),
     ],

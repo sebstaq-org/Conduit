@@ -14,6 +14,7 @@ use std::error::Error;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use toml as _;
+use tracing as _;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 

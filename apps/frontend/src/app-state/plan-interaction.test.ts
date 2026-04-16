@@ -4,9 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { TranscriptItem } from "@conduit/session-client";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  IMPLEMENT_PLAN_USER_MESSAGE,
-} from "./plan-interaction-types";
+import { IMPLEMENT_PLAN_USER_MESSAGE } from "./plan-interaction-types";
 import {
   activePlanInteractionCard,
   interactionRequestData,

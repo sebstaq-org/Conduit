@@ -29,6 +29,7 @@ import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
 } from "./timelineEvent.js";
+import type { SessionClientTelemetryEvent } from "./transport/sessionClientTelemetryEvent.js";
 
 interface SessionClientPort {
   readonly policy: "official-acp-only";
@@ -74,6 +75,11 @@ interface SessionClientPort {
 interface SessionClientOptions {
   url?: string;
   WebSocketImpl?: typeof WebSocket;
+  onTelemetryEvent?: (event: SessionClientTelemetryEvent) => void;
 }
 
-export type { SessionClientOptions, SessionClientPort };
+export type {
+  SessionClientOptions,
+  SessionClientPort,
+  SessionClientTelemetryEvent,
+};

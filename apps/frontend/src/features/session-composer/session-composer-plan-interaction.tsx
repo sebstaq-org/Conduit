@@ -51,14 +51,6 @@ function resolveSubmitHandler(args: {
   return args.actions.submitInteraction;
 }
 
-function createChoiceSubmitHandler(args: {
-  actions: SessionComposerPlanInteractionActions;
-}): (optionId: string) => void {
-  return (optionId: string): void => {
-    args.actions.submitChoice(optionId);
-  };
-}
-
 function renderQuestionOptionRows(args: {
   card: PlanInteractionCard;
   onSelectOption: (optionId: string) => void;
@@ -94,7 +86,10 @@ function renderTerminalOtherOptionRow(args: {
 }): React.JSX.Element {
   return (
     <Box style={createPlanInteractionTerminalOtherRowStyle(args.theme)}>
-      <Text style={createPlanInteractionTerminalPrefixStyle()} variant="rowLabel">
+      <Text
+        style={createPlanInteractionTerminalPrefixStyle()}
+        variant="rowLabel"
+      >
         {args.index + 1}.
       </Text>
       <Box style={createPlanInteractionTerminalOtherInputStyle()}>
@@ -124,7 +119,10 @@ function renderTerminalOptionRows(args: {
   return (
     <Box gap="xs">
       {args.card.options.map((option, index) => {
-        if (option.kind === "other" && option.optionId === args.selectedOptionId) {
+        if (
+          option.kind === "other" &&
+          option.optionId === args.selectedOptionId
+        ) {
           return (
             <Box key={option.optionId}>
               {renderTerminalOtherOptionRow({
@@ -257,7 +255,6 @@ function SessionComposerPlanInteractionSurface({
   const handleDismissInteraction = actions.dismissInteraction;
   const handleSubmit = resolveSubmitHandler({ actions, canSubmit });
   const hasOtherSelection = isOtherSelection(card, selectedOptionId);
-  const handleSubmitChoice = createChoiceSubmitHandler({ actions });
 
   return (
     <Box gap="sm">
@@ -272,7 +269,7 @@ function SessionComposerPlanInteractionSurface({
         handleOtherTextChange: actions.setOtherText,
         handleSubmit,
         onSelectOption: actions.selectOption,
-        onSubmitChoice: handleSubmitChoice,
+        onSubmitChoice: actions.submitChoice,
         otherText,
         selectedOptionId,
         theme,

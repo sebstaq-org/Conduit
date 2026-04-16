@@ -25,9 +25,17 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
         interactionId: "fixture-clarify-1",
         kind: "question",
         options: [
-          { kind: "choice", label: "Vardag (Recommended)", optionId: "theme-everyday" },
+          {
+            kind: "choice",
+            label: "Vardag (Recommended)",
+            optionId: "theme-everyday",
+          },
           { kind: "choice", label: "Arbete", optionId: "theme-work" },
-          { kind: "other", label: "No, and tell Codex what to do differently", optionId: "answer-other" },
+          {
+            kind: "other",
+            label: "No, and tell Codex what to do differently",
+            optionId: "answer-other",
+          },
         ],
         prompt: "Vilket tema ska den lilla planen ha?",
         questionId: "question-theme",
@@ -42,9 +50,21 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
         interactionId: "fixture-clarify-2",
         kind: "question",
         options: [
-          { kind: "choice", label: "3 konkreta steg", optionId: "scope-three-steps" },
-          { kind: "choice", label: "Kort checklista", optionId: "scope-checklist" },
-          { kind: "other", label: "No, and tell Codex what to do differently", optionId: "answer-other" },
+          {
+            kind: "choice",
+            label: "3 konkreta steg",
+            optionId: "scope-three-steps",
+          },
+          {
+            kind: "choice",
+            label: "Kort checklista",
+            optionId: "scope-checklist",
+          },
+          {
+            kind: "other",
+            label: "No, and tell Codex what to do differently",
+            optionId: "answer-other",
+          },
         ],
         prompt: "Hur detaljerad ska planen vara?",
         questionId: "question-detail-level",
@@ -71,8 +91,16 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
         kind: "question",
         options: [
           { kind: "choice", label: "Keep it narrow", optionId: "scope-narrow" },
-          { kind: "choice", label: "Make it more detailed", optionId: "scope-detailed" },
-          { kind: "other", label: "No, and tell Codex what to do differently", optionId: "answer-other" },
+          {
+            kind: "choice",
+            label: "Make it more detailed",
+            optionId: "scope-detailed",
+          },
+          {
+            kind: "other",
+            label: "No, and tell Codex what to do differently",
+            optionId: "answer-other",
+          },
         ],
         prompt: "Vad ska ändras innan planen är redo?",
         questionId: "question-followup",
@@ -109,7 +137,4 @@ export {
   PRODUCT_FLOW_PLAN_MODE_FIXTURE,
   resolvePlanInteractionFixtureScenario,
 };
-export type {
-  PlanInteractionFixtureScenario,
-  PlanInteractionFixtureStep,
-};
+export type { PlanInteractionFixtureScenario, PlanInteractionFixtureStep };

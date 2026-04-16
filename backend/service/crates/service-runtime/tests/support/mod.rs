@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing as _;
+use tracing_subscriber as _;
 
 pub(crate) type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 pub(crate) type SessionListKey = (ProviderId, Option<String>, Option<String>);
@@ -393,6 +395,10 @@ pub(crate) fn command(id: &str, command: &str, provider: &str, params: Value) ->
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "Shared integration-test helper imported selectively across test crates."
+)]
 pub(crate) fn assert_ok(response: &ConsumerResponse) -> TestResult<()> {
     if !response.ok {
         return Err(format!("command failed: {:?}", response.error).into());

@@ -177,7 +177,9 @@ function latestUnansweredProposedPlan(
   return null;
 }
 
-function terminalPlanCardFor(items: TranscriptItem[]): PlanInteractionCard | null {
+function terminalPlanCardFor(
+  items: TranscriptItem[],
+): PlanInteractionCard | null {
   const planItem = latestUnansweredProposedPlan(items);
   if (planItem === null) {
     return null;
@@ -209,8 +211,7 @@ function activePlanInteractionCard(args: {
   items: TranscriptItem[];
 }): PlanInteractionCard | null {
   return (
-    latestPendingQuestionCard(args.items) ??
-    terminalPlanCardFor(args.items)
+    latestPendingQuestionCard(args.items) ?? terminalPlanCardFor(args.items)
   );
 }
 

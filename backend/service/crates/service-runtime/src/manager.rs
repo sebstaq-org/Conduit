@@ -1,7 +1,10 @@
 //! Provider manager and command dispatcher.
 
+mod interaction_response;
+mod logging;
 mod prompt_flow;
 
+use self::interaction_response::parse_interaction_response;
 use crate::command::ConsumerCommand;
 use crate::command::ConsumerResponse;
 use crate::error::{
@@ -17,13 +20,14 @@ use crate::manager_response::{
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
-use acp_core::{ConnectionState, InteractionResponse};
+use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// Consumer API runtime manager keyed by provider.
 pub struct ServiceRuntime<F = AppServiceFactory> {
@@ -107,11 +111,35 @@ where
 
     /// Dispatches one command and converts errors into stable envelopes.
     pub fn dispatch(&mut self, command: ConsumerCommand) -> ConsumerResponse {
-        let id = command.id.clone();
-        match self.dispatch_result(command) {
+        let command_id = command.id.clone();
+        let command_name = command.command.clone();
+        let provider = command.provider.clone();
+        let params = command.params.clone();
+        let started_at = Instant::now();
+
+        tracing::debug!(
+            event_name = "command.start",
+            source = "service-runtime",
+            command_id = %command_id,
+            command = %command_name,
+            provider = %provider,
+            params = ?params
+        );
+
+        let response = match self.dispatch_result(command) {
             Ok(response) => response,
-            Err(error) => ConsumerResponse::failure(id, error.code(), error.to_string()),
-        }
+            Err(error) => {
+                ConsumerResponse::failure(command_id.clone(), error.code(), error.to_string())
+            }
+        };
+        logging::log_command_response(
+            &command_id,
+            &command_name,
+            &provider,
+            &response,
+            started_at.elapsed().as_millis(),
+        );
+        response
     }
 
     /// Refreshes read models after a fast response has already been sent.
@@ -337,10 +365,8 @@ where
         let session_id = string_param("session/open", params, "sessionId")?;
         let cwd =
             absolute_normalized_cwd("session/open", path_param("session/open", params, "cwd")?)?;
-        let limit = HistoryLimit::new(
-            "session/open",
-            optional_u64_param("session/open", params, "limit")?,
-        )?;
+        let requested_limit = optional_u64_param("session/open", params, "limit")?;
+        let limit = HistoryLimit::new("session/open", requested_limit)?;
         let key = OpenSessionKey {
             provider,
             session_id: session_id.clone(),
@@ -350,6 +376,16 @@ where
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store.cached_session(&key, limit)?
         } {
+            tracing::debug!(
+                event_name = "session_open.cache",
+                source = "service-runtime",
+                command_id = %id,
+                provider = %provider.as_str(),
+                session_id = %session_id,
+                cwd = %cwd.display(),
+                requested_limit = ?requested_limit,
+                cache_hit = true
+            );
             let state = self.resolve_session_open_state(provider, &session_id, &cwd, &key)?;
             let history = to_value(cached)?;
             return Ok(ConsumerResponse::success_without_snapshot(
@@ -357,6 +393,16 @@ where
                 session_open_result(&state, &history),
             ));
         }
+        tracing::debug!(
+            event_name = "session_open.cache",
+            source = "service-runtime",
+            command_id = %id,
+            provider = %provider.as_str(),
+            session_id = %session_id,
+            cwd = %cwd.display(),
+            requested_limit = ?requested_limit,
+            cache_hit = false
+        );
         let (provider_result, snapshot) = {
             let provider_port = self.provider(provider)?;
             let result = provider_port.session_load(session_id.clone(), cwd)?;
@@ -629,67 +675,5 @@ where
         let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
         self.local_store.set_open_session_state(key, &state)?;
         Ok(())
-    }
-}
-
-fn parse_interaction_response(params: &Value) -> Result<InteractionResponse> {
-    let command = "session/respond_interaction";
-    let Some(response) = params.get("response") else {
-        return Err(RuntimeError::MissingParameter {
-            command,
-            parameter: "response",
-        });
-    };
-    let Some(kind) = response.get("kind").and_then(Value::as_str) else {
-        return Err(RuntimeError::InvalidParameter {
-            command,
-            parameter: "response.kind",
-            message: "must be selected, answer_other, or cancel",
-        });
-    };
-    match kind {
-        "selected" => {
-            let option_id = response.get("optionId").and_then(Value::as_str).ok_or(
-                RuntimeError::InvalidParameter {
-                    command,
-                    parameter: "response.optionId",
-                    message: "selected response requires optionId",
-                },
-            )?;
-            Ok(InteractionResponse::Selected {
-                option_id: option_id.to_owned(),
-            })
-        }
-        "answer_other" => {
-            let question_id = response.get("questionId").and_then(Value::as_str).ok_or(
-                RuntimeError::InvalidParameter {
-                    command,
-                    parameter: "response.questionId",
-                    message: "answer_other response requires questionId",
-                },
-            )?;
-            let text = response.get("text").and_then(Value::as_str).ok_or(
-                RuntimeError::InvalidParameter {
-                    command,
-                    parameter: "response.text",
-                    message: "answer_other response requires text",
-                },
-            )?;
-            let option_id = response
-                .get("optionId")
-                .and_then(Value::as_str)
-                .unwrap_or("answer-other");
-            Ok(InteractionResponse::AnswerOther {
-                option_id: option_id.to_owned(),
-                question_id: question_id.to_owned(),
-                text: text.to_owned(),
-            })
-        }
-        "cancel" => Ok(InteractionResponse::Cancelled),
-        _ => Err(RuntimeError::InvalidParameter {
-            command,
-            parameter: "response.kind",
-            message: "must be selected, answer_other, or cancel",
-        }),
     }
 }

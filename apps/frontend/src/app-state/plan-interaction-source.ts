@@ -166,7 +166,9 @@ function usePlanInteractionFixturePort(): PlanInteractionRuntimePort {
 interface LivePortCommands {
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   respondInteraction: ReturnType<typeof useRespondInteractionMutation>[0];
-  setSessionConfigOption: ReturnType<typeof useSetSessionConfigOptionMutation>[0];
+  setSessionConfigOption: ReturnType<
+    typeof useSetSessionConfigOptionMutation
+  >[0];
 }
 
 function useLivePortCommands(): LivePortCommands {

@@ -178,36 +178,61 @@ impl PromptLane {
         lane
     }
 
+    #[allow(
+        clippy::cognitive_complexity,
+        reason = "Prompt-lane dispatch must handle active-lane and channel-failure branches inline."
+    )]
     pub(super) fn dispatch(&self, request: ActorRequest) {
         if self.active.swap(true, Ordering::AcqRel) {
             let id = request.command.id;
-            let _response_status = request.respond_to.send(failure(
+            let response_status = request.respond_to.send(failure(
                 id,
                 "session_prompt_active",
                 "session already has an active prompt turn",
             ));
+            if response_status.is_err() {
+                tracing::warn!(
+                    event_name = "prompt_lane.response_channel_closed",
+                    source = "service-bin",
+                    command = "session/prompt"
+                );
+            }
             return;
         }
         if let Err(error) = self.requests.send(request) {
             self.active.store(false, Ordering::Release);
             let request = error.0;
             let id = request.command.id;
-            let _response_status = request.respond_to.send(failure(
+            let response_status = request.respond_to.send(failure(
                 id,
                 "runtime_unavailable",
                 "prompt lane is unavailable",
             ));
+            if response_status.is_err() {
+                tracing::warn!(
+                    event_name = "prompt_lane.response_channel_closed",
+                    source = "service-bin",
+                    command = "session/prompt"
+                );
+            }
         }
     }
 
     pub(super) fn dispatch_cancel(&self, request: ActorRequest) {
         if self.active.load(Ordering::Acquire) {
             let id = request.command.id;
-            let _response_status = request.respond_to.send(failure(
+            let response_status = request.respond_to.send(failure(
                 id,
                 "session_cancel_active_unavailable",
                 "active prompt cancellation is unavailable for this local provider owner",
             ));
+            if response_status.is_err() {
+                tracing::warn!(
+                    event_name = "prompt_lane.response_channel_closed",
+                    source = "service-bin",
+                    command = "session/cancel"
+                );
+            }
             return;
         }
         self.dispatch(request);
@@ -229,6 +254,10 @@ struct PromptLaneContext<F> {
     owner_lane: PromptLane,
 }
 
+#[allow(
+    clippy::cognitive_complexity,
+    reason = "Lane loop coordinates runtime dispatch, ownership updates, and response-channel handling."
+)]
 async fn run_prompt_lane<F>(context: PromptLaneContext<F>)
 where
     F: ProviderFactory,
@@ -244,6 +273,10 @@ where
         owner_lane,
     } = context;
     let Ok(local_store) = store() else {
+        tracing::error!(
+            event_name = "prompt_lane.store_unavailable",
+            source = "service-bin"
+        );
         fail_prompt_lane_requests(receiver, active).await;
         return;
     };
@@ -252,13 +285,22 @@ where
     runtime.set_event_sink(Box::new(move |event| {
         let _subscriber_count = live_events.send(event);
     }));
+    tracing::info!(event_name = "prompt_lane.started", source = "service-bin");
     while let Some(request) = receiver.recv().await {
         let command = request.command.clone();
         let mut response = runtime.dispatch(request.command);
         register_prompt_lane_owner_from_response(&owners, &owner_lane, &command, &mut response);
-        let _response_status = request.respond_to.send(response);
+        let response_status = request.respond_to.send(response);
+        if response_status.is_err() {
+            tracing::warn!(
+                event_name = "prompt_lane.response_channel_closed",
+                source = "service-bin",
+                command = %command.command
+            );
+        }
         active.store(false, Ordering::Release);
     }
+    tracing::warn!(event_name = "prompt_lane.stopped", source = "service-bin");
 }
 
 async fn fail_prompt_lane_requests(
@@ -267,11 +309,18 @@ async fn fail_prompt_lane_requests(
 ) {
     while let Some(request) = receiver.recv().await {
         let id = request.command.id;
-        let _response_status = request.respond_to.send(failure(
+        let response_status = request.respond_to.send(failure(
             id,
             "runtime_unavailable",
             "prompt lane store is unavailable",
         ));
+        if response_status.is_err() {
+            tracing::warn!(
+                event_name = "prompt_lane.response_channel_closed",
+                source = "service-bin",
+                command = "session/prompt"
+            );
+        }
         active.store(false, Ordering::Release);
     }
 }

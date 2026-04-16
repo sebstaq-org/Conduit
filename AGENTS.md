@@ -15,6 +15,7 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Curated fixtures must be normalized and minimal. Prefer stable testdata over
   raw proof dumps, and document the capture source without exposing private
   machine details.
+- Commit work at stable checkpoints without waiting for an explicit reminder.
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
 - `apps/frontend` owns the React Native and React Native Web UI app.
 - `apps/desktop` is the Electron host only; it must not own product UI components.
@@ -74,6 +75,8 @@ and layer local metadata beside it or as explicit, documented extensions.
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 
 Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, broad lint suppressions are forbidden, and crate-edge violations fail structure checks. The repo guardrail crate under `backend/service/crates/repo-guard` is fully bound by the same Rust rules and gets no policy carve-outs.
+
+Rust logging must use `tracing` only. `service-bin` and `repo-guard` own subscriber initialization through `tracing-subscriber` JSON output; new Rust runtime features must emit command/worker events through the shared tracing contract instead of ad hoc logging patterns.
 
 ## Repo-Local Skills
 

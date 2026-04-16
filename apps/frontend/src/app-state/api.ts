@@ -87,9 +87,7 @@ const conduitApi = createApi({
     promptSession: builder.mutation(
       sessionTimelineEndpoints.promptSessionEndpoint,
     ),
-    respondInteraction: builder.mutation(
-      respondInteractionEndpoint,
-    ),
+    respondInteraction: builder.mutation(respondInteractionEndpoint),
     readSessionTimeline: builder.query(
       sessionTimelineEndpoints.readSessionTimelineEndpoint,
     ),

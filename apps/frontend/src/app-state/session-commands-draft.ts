@@ -5,6 +5,7 @@ import type {
   useSetSessionConfigOptionMutation,
 } from "./api-hooks";
 import type { ActiveSession } from "./session-selection";
+import { logFailure, logInfo } from "./frontend-logger";
 
 const NEW_SESSION_HISTORY_LIMIT = 100;
 
@@ -104,6 +105,11 @@ async function reopenDraftSession(args: {
   openSessionId: string;
 }> {
   const provider = requireDraftProvider(args.activeSession);
+  logInfo("frontend.session.draft_sync.reopen.start", {
+    provider,
+    request_cwd: args.activeSession.cwd,
+    session_id: args.sessionId,
+  });
   const reopened = await args
     .openSession({
       cwd: args.activeSession.cwd,
@@ -113,6 +119,11 @@ async function reopenDraftSession(args: {
       title: null,
     } satisfies OpenSessionMutationArg)
     .unwrap();
+  logInfo("frontend.session.draft_sync.reopen.finish", {
+    open_session_id: reopened.openSessionId,
+    provider,
+    session_id: reopened.sessionId,
+  });
   return {
     configOptions: reopened.configOptions ?? null,
     openSessionId: reopened.openSessionId,
@@ -160,6 +171,12 @@ async function syncDraftConfigAfterPrompt(args: {
       openSessionId: reopened.openSessionId,
     };
   } catch (error) {
+    logFailure("frontend.session.draft_sync.failed", error, {
+      config_entry_count: entries.length,
+      provider: args.activeSession.provider,
+      request_cwd: args.activeSession.cwd,
+      session_id: args.sessionId,
+    });
     return syncErrorState(args.state, error);
   }
 }

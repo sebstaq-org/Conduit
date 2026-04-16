@@ -41,4 +41,5 @@ export type {
 export type {
   SessionClientOptions,
   SessionClientPort,
+  SessionClientTelemetryEvent,
 } from "./sessionClientPort.js";

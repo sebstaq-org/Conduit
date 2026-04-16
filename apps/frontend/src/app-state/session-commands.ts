@@ -15,6 +15,7 @@ import {
   initialDraftConfigSyncState,
   syncDraftConfigAfterPrompt,
 } from "./session-commands-draft";
+import { logFailure, logInfo } from "./frontend-logger";
 
 const NEW_SESSION_HISTORY_LIMIT = 100;
 
@@ -114,9 +115,20 @@ async function openSessionRow({
 }: OpenSessionRowArgs): Promise<void> {
   try {
     await openSession(request).unwrap();
+    logInfo("frontend.session.open.intent.succeeded", {
+      cwd: request.cwd,
+      provider: request.provider,
+      session_id: request.sessionId,
+    });
     onSessionSelected?.();
-  } catch {
-    // The mutation state renders the failure row.
+  } catch (error) {
+    logFailure("frontend.session.open.intent.failed", error, {
+      cwd: request.cwd,
+      provider: request.provider,
+      request_limit: request.limit ?? null,
+      session_id: request.sessionId,
+      title: request.title,
+    });
   }
 }
 

@@ -160,6 +160,8 @@ def start_backend(
         return False, f"missing backend binary: {binary}"
     env = os.environ.copy()
     env["XDG_DATA_HOME"] = str(data_root)
+    env["CONDUIT_LOG_PROFILE"] = "stage"
+    env["CONDUIT_FRONTEND_LOG_PATH"] = str(service.log_file.with_name("frontend.log"))
     with service.log_file.open("a", encoding="utf-8") as log_stream:
         process = subprocess.Popen(
             [str(binary), "serve", "--host", host, "--port", str(port)],
