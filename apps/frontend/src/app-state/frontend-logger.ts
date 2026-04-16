@@ -9,10 +9,9 @@ interface FrontendLogRecord {
   timestamp: string;
   [field: string]: unknown;
 }
+const LOG_PROFILE_ENV = "EXPO_PUBLIC_CONDUIT_LOG_PROFILE";
 const WS_URL_ENV = "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL";
-const ENV_LOG_PROFILE = process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE;
-const ENV_WS_URL = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
-const ENV_CLIENT_LOG_URL = process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL;
+const CLIENT_LOG_URL_ENV = "EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL";
 const MAX_BATCH_SIZE = 64;
 const MAX_QUEUE_SIZE = 4096;
 const FLUSH_INTERVAL_MS = 1000;
@@ -40,8 +39,13 @@ function normalizeProfile(raw: string | undefined): FrontendLogProfile {
   }
   return "prod";
 }
+
+function configuredLogProfile(): string | undefined {
+  return process.env[LOG_PROFILE_ENV];
+}
+
 function parseWsUrl(): URL {
-  const configuredWsUrl = ENV_WS_URL;
+  const configuredWsUrl = process.env[WS_URL_ENV];
   if (configuredWsUrl === undefined) {
     throw new Error(`${WS_URL_ENV} is required when frontend logging is enabled.`);
   }
@@ -52,7 +56,7 @@ function parseWsUrl(): URL {
   return new URL(wsUrl);
 }
 function resolveClientLogOverride(): string | null {
-  const configuredOverride = ENV_CLIENT_LOG_URL;
+  const configuredOverride = process.env[CLIENT_LOG_URL_ENV];
   if (configuredOverride === undefined) {
     return null;
   }
@@ -237,7 +241,7 @@ function initializeFrontendLogging(): void {
     return;
   }
   initialized = true;
-  profile = normalizeProfile(ENV_LOG_PROFILE);
+  profile = normalizeProfile(configuredLogProfile());
   if (!isEnabledProfile(profile)) {
     return;
   }
