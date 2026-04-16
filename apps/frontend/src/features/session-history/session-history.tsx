@@ -9,7 +9,7 @@ import type { ViewStyle } from "react-native";
 type HistoryRenderState = "loading" | "ready" | "unavailable";
 
 interface SessionHistoryProps {
-  mockHistory?: SessionHistoryWindow | null | undefined;
+  historyOverride?: SessionHistoryWindow | null | undefined;
 }
 
 const historyStatusVariant = "rowLabelMuted" as const;
@@ -126,20 +126,20 @@ function selectedOpenSessionId(
   return activeSession.openSessionId;
 }
 
-function renderMockHistory(
-  mockHistory: SessionHistoryWindow | null,
+function renderHistoryOverride(
+  historyOverride: SessionHistoryWindow | null,
 ): React.JSX.Element | null {
-  if (mockHistory === null) {
+  if (historyOverride === null) {
     return null;
   }
   return renderReadyHistory(
     {
-      history: mockHistory,
+      history: historyOverride,
       isFetchingOlder: false,
       isOlderError: false,
       loadOlderIfNeeded: noopLoadOlder,
     },
-    mockHistory.openSessionId,
+    historyOverride.openSessionId,
   );
 }
 
@@ -159,15 +159,15 @@ function renderSessionHistory(args: {
 }
 
 function SessionHistory({
-  mockHistory = null,
+  historyOverride = null,
 }: SessionHistoryProps): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
-  const mockElement = renderMockHistory(mockHistory);
+  const overrideElement = renderHistoryOverride(historyOverride);
 
-  if (mockElement !== null) {
-    return mockElement;
+  if (overrideElement !== null) {
+    return overrideElement;
   }
   return renderSessionHistory({ activeSession, openSessionId, timeline });
 }

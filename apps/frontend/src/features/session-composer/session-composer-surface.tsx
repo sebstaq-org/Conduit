@@ -1,14 +1,14 @@
 import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
-import type { ActiveSession } from "@/app-state";
+import type {
+  ActiveSession,
+  SessionComposerPlanInteractionActions,
+  SessionComposerPlanInteractionView,
+} from "@/app-state";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import {
   SessionComposerPlanInteractionSurface,
 } from "./session-composer-plan-interaction";
-import type {
-  SessionComposerPlanInteractionActions,
-  SessionComposerPlanInteractionView,
-} from "./session-composer-plan-interaction-mock";
 import { SessionComposerActionRow } from "./session-composer-action-row";
 import { SessionComposerInput } from "./session-composer-input";
 import {

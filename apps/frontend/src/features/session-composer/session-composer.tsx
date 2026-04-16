@@ -19,9 +19,11 @@ import {
   usePromptSessionMutation,
   useSetSessionConfigOptionMutation,
 } from "@/app-state";
-import type { ActiveSession } from "@/app-state";
+import type {
+  ActiveSession,
+  SessionComposerPlanInteractionController,
+} from "@/app-state";
 import type { Theme } from "@/theme";
-import type { SessionComposerPlanInteractionController } from "./session-composer-plan-interaction-mock";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
   resolveDraftProviderReady,
@@ -295,5 +297,4 @@ function SessionComposer({
     />
   );
 }
-
 export { SessionComposer };

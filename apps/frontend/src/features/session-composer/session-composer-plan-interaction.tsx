@@ -3,10 +3,10 @@ import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { TextButton, TextField } from "@/ui";
 import type {
-  PlanInteractionMockCard,
-  PlanInteractionMockOption,
+  PlanInteractionCard,
+  PlanInteractionOption,
   SessionComposerPlanInteractionActions,
-} from "./session-composer-plan-interaction-mock";
+} from "@/app-state";
 import {
   createPlanInteractionEscStyle,
   createPlanInteractionFooterStyle,
@@ -19,20 +19,20 @@ import {
 
 interface SessionComposerPlanInteractionSurfaceProps {
   actions: SessionComposerPlanInteractionActions;
-  card: PlanInteractionMockCard;
+  card: PlanInteractionCard;
   canSubmit: boolean;
   otherText: string;
   selectedOptionId: string | null;
 }
 
-function optionLabel(index: number, option: PlanInteractionMockOption): string {
+function optionLabel(index: number, option: PlanInteractionOption): string {
   return `${index + 1}. ${option.label}`;
 }
 
 function selectedOption(
-  card: PlanInteractionMockCard,
+  card: PlanInteractionCard,
   selectedOptionId: string | null,
-): PlanInteractionMockOption | null {
+): PlanInteractionOption | null {
   if (selectedOptionId === null) {
     return null;
   }
@@ -60,7 +60,7 @@ function createChoiceSubmitHandler(args: {
 }
 
 function renderQuestionOptionRows(args: {
-  card: PlanInteractionMockCard;
+  card: PlanInteractionCard;
   onSelectOption: (optionId: string) => void;
   onSubmitChoice: (optionId: string) => void;
   selectedOptionId: string | null;
@@ -112,7 +112,7 @@ function renderTerminalOtherOptionRow(args: {
 }
 
 function renderTerminalOptionRows(args: {
-  card: PlanInteractionMockCard;
+  card: PlanInteractionCard;
   handleOtherTextChange: (value: string) => void;
   handleSubmit: (() => void) | undefined;
   onSelectOption: (optionId: string) => void;
@@ -157,7 +157,7 @@ function renderTerminalOptionRows(args: {
 }
 
 function renderOptionRows(args: {
-  card: PlanInteractionMockCard;
+  card: PlanInteractionCard;
   handleOtherTextChange: (value: string) => void;
   handleSubmit: (() => void) | undefined;
   onSelectOption: (optionId: string) => void;
@@ -215,7 +215,7 @@ function renderActionRows(args: {
 }
 
 function renderOtherInput(args: {
-  card: PlanInteractionMockCard;
+  card: PlanInteractionCard;
   handleOtherTextChange: (value: string) => void;
   otherText: string;
   selectedOptionId: string | null;
@@ -239,7 +239,7 @@ function renderOtherInput(args: {
 }
 
 function isOtherSelection(
-  card: PlanInteractionMockCard,
+  card: PlanInteractionCard,
   selectedOptionId: string | null,
 ): boolean {
   const option = selectedOption(card, selectedOptionId);

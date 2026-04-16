@@ -14,6 +14,10 @@ interface TextFieldProps {
   value: string;
 }
 
+function nativeInputId(accessibilityLabel: string): string {
+  return accessibilityLabel.toLowerCase().replaceAll(/\s+/g, "-");
+}
+
 function TextField({
   accessibilityLabel,
   appearance = "default",
@@ -29,6 +33,7 @@ function TextField({
     <TextInput
       accessibilityLabel={accessibilityLabel}
       editable={!disabled}
+      nativeID={nativeInputId(accessibilityLabel)}
       onChangeText={onChangeText}
       onSubmitEditing={onSubmit}
       placeholder={placeholder}

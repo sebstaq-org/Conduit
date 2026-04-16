@@ -4,17 +4,15 @@ import {
   CANCEL_OPTION_ID,
   IMPLEMENT_PLAN_OPTION_ID,
   PROPOSED_PLAN_TAG,
-} from "./session-composer-plan-interaction-backend-shape";
+} from "./plan-interaction-types";
 import type {
   BackendInteractionOption,
   BackendInteractionRequestData,
   BackendInteractionResolutionData,
   CollaborationMode,
-} from "./session-composer-plan-interaction-backend-shape";
-import type {
-  PlanInteractionMockCard,
-  PlanInteractionMockOption,
-} from "./session-composer-plan-interaction-mock-scenarios";
+  PlanInteractionCard,
+  PlanInteractionOption,
+} from "./plan-interaction-types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -82,11 +80,11 @@ function resolvedInteractionIds(items: TranscriptItem[]): Set<string> {
 
 function optionFromBackend(
   option: BackendInteractionOption,
-): PlanInteractionMockOption | null {
+): PlanInteractionOption | null {
   if (option.optionId === CANCEL_OPTION_ID) {
     return null;
   }
-  let kind: PlanInteractionMockOption["kind"] = "choice";
+  let kind: PlanInteractionOption["kind"] = "choice";
   if (option.optionId === ANSWER_OTHER_OPTION_ID) {
     kind = "other";
   }
@@ -99,7 +97,7 @@ function optionFromBackend(
 
 function cardFromRequest(
   request: BackendInteractionRequestData,
-): PlanInteractionMockCard {
+): PlanInteractionCard {
   return {
     interactionId: request.interactionId,
     kind: "question",
@@ -120,7 +118,7 @@ function cardFromRequest(
 
 function latestPendingQuestionCard(
   items: TranscriptItem[],
-): PlanInteractionMockCard | null {
+): PlanInteractionCard | null {
   const resolvedIds = resolvedInteractionIds(items);
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const request = interactionRequestData(items[index]);
@@ -167,7 +165,7 @@ function latestUnansweredProposedPlan(
 function terminalPlanCardFor(
   items: TranscriptItem[],
   collaborationMode: CollaborationMode,
-): PlanInteractionMockCard | null {
+): PlanInteractionCard | null {
   if (collaborationMode !== "plan") {
     return null;
   }
@@ -201,17 +199,17 @@ function terminalPlanCardFor(
 function activePlanInteractionCard(args: {
   collaborationMode: CollaborationMode;
   items: TranscriptItem[];
-}): PlanInteractionMockCard | null {
+}): PlanInteractionCard | null {
   return (
     latestPendingQuestionCard(args.items) ??
     terminalPlanCardFor(args.items, args.collaborationMode)
   );
 }
 
-function selectedOption(args: {
-  card: PlanInteractionMockCard | null;
+function selectedPlanInteractionOption(args: {
+  card: PlanInteractionCard | null;
   selectedOptionId: string | null;
-}): PlanInteractionMockOption | null {
+}): PlanInteractionOption | null {
   if (args.card === null || args.selectedOptionId === null) {
     return null;
   }
@@ -223,11 +221,11 @@ function selectedOption(args: {
 }
 
 function canSubmitPlanInteraction(args: {
-  card: PlanInteractionMockCard | null;
+  card: PlanInteractionCard | null;
   otherText: string;
   selectedOptionId: string | null;
 }): boolean {
-  const option = selectedOption({
+  const option = selectedPlanInteractionOption({
     card: args.card,
     selectedOptionId: args.selectedOptionId,
   });
@@ -245,5 +243,5 @@ export {
   canSubmitPlanInteraction,
   interactionRequestData,
   interactionResolutionData,
-  selectedOption,
+  selectedPlanInteractionOption,
 };

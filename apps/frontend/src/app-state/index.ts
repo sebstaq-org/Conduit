@@ -51,6 +51,17 @@ export {
 } from "./session-selection";
 export type { ActiveSession } from "./session-selection";
 export { useSessionTimeline } from "./session-timeline";
+export {
+  usePlanInteractionSource,
+  readPlanInteractionFixtureFlag,
+} from "./plan-interaction-source";
 export { ConduitStoreProvider } from "./provider";
 export { store } from "./store";
 export type { AppDispatch, RootState } from "./store";
+export type {
+  PlanInteractionCard,
+  PlanInteractionOption,
+  SessionComposerPlanInteractionActions,
+  SessionComposerPlanInteractionController,
+  SessionComposerPlanInteractionView,
+} from "./plan-interaction-types";
