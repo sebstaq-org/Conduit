@@ -5,7 +5,9 @@ mod provider_config_snapshot;
 mod startup_hydration;
 mod suggestion_refresh;
 
-use self::prompt_lanes::{PromptLanes, cancel_provider_session, prompt_open_session_id};
+use self::prompt_lanes::{
+    PromptLanes, cancel_provider_session, prompt_open_session_id, set_config_provider_session,
+};
 use self::provider_config_snapshot::{
     ProviderConfigSnapshots, spawn_provider_config_snapshot_worker,
 };
@@ -295,6 +297,12 @@ fn handle_request<F>(
     }
     if let Some(open_session_id) = prompt_open_session_id(&request.command) {
         prompt_lanes.dispatch(&open_session_id, request);
+        return;
+    }
+    if let Some(provider_session) = set_config_provider_session(&request.command)
+        && let Some(lane) = prompt_lanes.owner_for_provider_session(&provider_session)
+    {
+        lane.dispatch(request);
         return;
     }
     if let Some(provider_session) = cancel_provider_session(&request.command)

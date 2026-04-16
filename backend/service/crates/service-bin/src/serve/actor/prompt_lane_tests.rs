@@ -9,6 +9,7 @@ use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolV
 use serde_json::{Value, json};
 use service_runtime::{ConsumerCommand, ProviderFactory, ProviderPort, Result, RuntimeError};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
@@ -26,6 +27,14 @@ struct BlockingPromptProvider {
     provider: ProviderId,
     release: Arc<(Mutex<bool>, Condvar)>,
     started: mpsc::Sender<String>,
+}
+
+#[derive(Clone, Default)]
+struct LaneAffinityFactory;
+
+struct LaneAffinityProvider {
+    provider: ProviderId,
+    sessions: HashSet<String>,
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -202,12 +211,92 @@ async fn prompt_lanes_run_different_open_sessions_in_parallel() -> TestResult<()
     ensure_ok(&second_prompt)
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn session_set_config_option_uses_prompt_lane_owner_runtime() -> TestResult<()> {
+    let path = test_db_path()?;
+    let refresh_path = path.clone();
+    let actor = RuntimeActor::start_with_store_opener(
+        LaneAffinityFactory,
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+
+    let session_new = actor
+        .dispatch(command(
+            "1",
+            "session/new",
+            "codex",
+            json!({ "cwd": "/repo", "limit": 8 }),
+        ))
+        .await;
+    ensure_ok(&session_new)?;
+    let session_id = session_new
+        .result
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .ok_or("session/new missing sessionId")?;
+
+    let set_config = actor
+        .dispatch(command(
+            "2",
+            "session/set_config_option",
+            "codex",
+            json!({
+                "sessionId": session_id,
+                "configId": "collaboration_mode",
+                "value": "plan"
+            }),
+        ))
+        .await;
+    ensure_ok(&set_config)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn session_new_rejects_provider_session_owner_rebind() -> TestResult<()> {
+    let path = test_db_path()?;
+    let refresh_path = path.clone();
+    let actor = RuntimeActor::start_with_store_opener(
+        LaneAffinityFactory,
+        LocalStore::open_path(&path)?,
+        Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
+    );
+
+    let first = actor
+        .dispatch(command(
+            "1",
+            "session/new",
+            "codex",
+            json!({ "cwd": "/repo", "limit": 8 }),
+        ))
+        .await;
+    ensure_ok(&first)?;
+
+    let second = actor
+        .dispatch(command(
+            "2",
+            "session/new",
+            "codex",
+            json!({ "cwd": "/repo", "limit": 8 }),
+        ))
+        .await;
+    ensure_error_code(&second, "session_lane_conflict")
+}
+
 impl ProviderFactory for BlockingPromptFactory {
     fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
         Ok(Box::new(BlockingPromptProvider {
             provider,
             release: Arc::clone(&self.release),
             started: self.started.clone(),
+        }))
+    }
+}
+
+impl ProviderFactory for LaneAffinityFactory {
+    fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
+        Ok(Box::new(LaneAffinityProvider {
+            provider,
+            sessions: HashSet::new(),
         }))
     }
 }
@@ -310,6 +399,86 @@ impl ProviderPort for BlockingPromptProvider {
             "sessionId": session_id,
             "interactionId": interaction_id,
             "response": format!("{response:?}")
+        }))
+    }
+}
+
+impl ProviderPort for LaneAffinityProvider {
+    fn snapshot(&self) -> ProviderSnapshot {
+        ProviderSnapshot {
+            provider: self.provider,
+            connection_state: ConnectionState::Ready,
+            discovery: fake_discovery(self.provider),
+            capabilities: json!({}),
+            auth_methods: Vec::new(),
+            live_sessions: Vec::new(),
+            last_prompt: None,
+            loaded_transcripts: Vec::new(),
+        }
+    }
+
+    fn raw_events(&self) -> Vec<RawWireEvent> {
+        Vec::new()
+    }
+
+    fn disconnect(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
+        let session_id = "session-1".to_owned();
+        self.sessions.insert(session_id.clone());
+        Ok(json!({ "sessionId": session_id }))
+    }
+
+    fn session_list(&mut self, _cwd: Option<PathBuf>, _cursor: Option<String>) -> Result<Value> {
+        Ok(json!({ "sessions": [] }))
+    }
+
+    fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {
+        self.sessions.insert(session_id.clone());
+        Ok(json!({ "sessionId": session_id }))
+    }
+
+    fn session_prompt(
+        &mut self,
+        session_id: String,
+        _prompt: Vec<Value>,
+        _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
+        Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
+    }
+
+    fn session_cancel(&mut self, session_id: String) -> Result<Value> {
+        Ok(json!({ "sessionId": session_id }))
+    }
+
+    fn session_set_config_option(
+        &mut self,
+        session_id: String,
+        _config_id: String,
+        _value: String,
+    ) -> Result<Value> {
+        if !self.sessions.contains(&session_id) {
+            return Err(RuntimeError::Provider(format!(
+                "unknown session in runtime lane: {session_id}"
+            )));
+        }
+        Ok(json!({
+            "sessionId": session_id,
+            "configOptions": []
+        }))
+    }
+
+    fn session_respond_interaction(
+        &mut self,
+        session_id: String,
+        interaction_id: String,
+        _response: acp_core::InteractionResponse,
+    ) -> Result<Value> {
+        Ok(json!({
+            "sessionId": session_id,
+            "interactionId": interaction_id
         }))
     }
 }
