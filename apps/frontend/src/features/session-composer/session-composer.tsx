@@ -21,7 +21,7 @@ import {
 } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import type { Theme } from "@/theme";
-import { useSessionComposerPlanInteractionMock } from "./session-composer-plan-interaction-mock";
+import type { SessionComposerPlanInteractionMockController } from "./session-composer-plan-interaction-mock";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
   resolveDraftProviderReady,
@@ -60,6 +60,10 @@ interface SessionComposerRuntime {
   >[0];
   setSessionConfigOptionError: boolean;
   setSessionConfigOptionLoading: boolean;
+}
+
+interface SessionComposerProps {
+  planInteractionMock: SessionComposerPlanInteractionMockController;
 }
 
 function createDraftCommitCallback(args: {
@@ -268,10 +272,11 @@ function useSessionComposerController(): SessionComposerController {
   });
 }
 
-function SessionComposer(): React.JSX.Element {
+function SessionComposer({
+  planInteractionMock,
+}: SessionComposerProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const controller = useSessionComposerController();
-  const planInteractionMock = useSessionComposerPlanInteractionMock();
   return (
     <SessionComposerSurface
       activeSession={controller.activeSession}

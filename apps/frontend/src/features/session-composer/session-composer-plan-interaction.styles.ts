@@ -1,4 +1,4 @@
-import type { ViewStyle } from "react-native";
+import type { TextStyle, ViewStyle } from "react-native";
 import type { Theme } from "@/theme";
 
 function createPlanInteractionHeaderStyle(): ViewStyle {
@@ -41,9 +41,40 @@ function createPlanInteractionInlineInputStyle(theme: Theme): ViewStyle {
   };
 }
 
+function createPlanInteractionTerminalOtherInputStyle(): ViewStyle {
+  return {
+    flex: 1,
+    minWidth: 0,
+  };
+}
+
+function createPlanInteractionTerminalPrefixStyle(): TextStyle {
+  return {
+    flex: 0,
+    flexGrow: 0,
+    flexShrink: 0,
+    width: 20,
+  };
+}
+
+function createPlanInteractionTerminalOtherRowStyle(theme: Theme): ViewStyle {
+  return {
+    alignItems: "center",
+    alignSelf: "stretch",
+    flexDirection: "row",
+    gap: theme.spacing.sm,
+    minHeight: theme.panel.rowHeight,
+    paddingHorizontal: theme.spacing.sm,
+    width: "100%",
+  };
+}
+
 export {
   createPlanInteractionEscStyle,
   createPlanInteractionFooterStyle,
   createPlanInteractionHeaderStyle,
   createPlanInteractionInlineInputStyle,
+  createPlanInteractionTerminalOtherInputStyle,
+  createPlanInteractionTerminalOtherRowStyle,
+  createPlanInteractionTerminalPrefixStyle,
 };

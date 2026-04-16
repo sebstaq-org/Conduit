@@ -12,6 +12,9 @@ import {
   createPlanInteractionFooterStyle,
   createPlanInteractionHeaderStyle,
   createPlanInteractionInlineInputStyle,
+  createPlanInteractionTerminalOtherInputStyle,
+  createPlanInteractionTerminalOtherRowStyle,
+  createPlanInteractionTerminalPrefixStyle,
 } from "./session-composer-plan-interaction.styles";
 
 interface SessionComposerPlanInteractionSurfaceProps {
@@ -48,7 +51,7 @@ function resolveSubmitHandler(args: {
   return args.actions.submitInteraction;
 }
 
-function renderOptionRows(args: {
+function renderQuestionOptionRows(args: {
   card: PlanInteractionMockCard;
   onSelectOption: (optionId: string) => void;
   selectedOptionId: string | null;
@@ -67,6 +70,87 @@ function renderOptionRows(args: {
       ))}
     </Box>
   );
+}
+
+function renderTerminalOtherOptionRow(args: {
+  handleOtherTextChange: (value: string) => void;
+  handleSubmit: (() => void) | undefined;
+  index: number;
+  otherText: string;
+  theme: Theme;
+}): React.JSX.Element {
+  return (
+    <Box style={createPlanInteractionTerminalOtherRowStyle(args.theme)}>
+      <Text style={createPlanInteractionTerminalPrefixStyle()} variant="rowLabel">
+        {args.index + 1}.
+      </Text>
+      <Box style={createPlanInteractionTerminalOtherInputStyle()}>
+        <TextField
+          accessibilityLabel="Tell Codex what to do differently"
+          appearance="plain"
+          onChangeText={args.handleOtherTextChange}
+          onSubmit={args.handleSubmit}
+          placeholder="Tell Codex what to do differently"
+          value={args.otherText}
+        />
+      </Box>
+    </Box>
+  );
+}
+
+function renderTerminalOptionRows(args: {
+  card: PlanInteractionMockCard;
+  handleOtherTextChange: (value: string) => void;
+  handleSubmit: (() => void) | undefined;
+  onSelectOption: (optionId: string) => void;
+  otherText: string;
+  selectedOptionId: string | null;
+  theme: Theme;
+}): React.JSX.Element {
+  return (
+    <Box gap="xs">
+      {args.card.options.map((option, index) => {
+        if (option.kind === "other" && option.optionId === args.selectedOptionId) {
+          return (
+            <Box key={option.optionId}>
+              {renderTerminalOtherOptionRow({
+                handleOtherTextChange: args.handleOtherTextChange,
+                handleSubmit: args.handleSubmit,
+                index,
+                otherText: args.otherText,
+                theme: args.theme,
+              })}
+            </Box>
+          );
+        }
+        return (
+          <TextButton
+            key={option.optionId}
+            label={optionLabel(index, option)}
+            onPress={() => {
+              args.onSelectOption(option.optionId);
+            }}
+            selected={option.optionId === args.selectedOptionId}
+          />
+        );
+      })}
+    </Box>
+  );
+}
+
+function renderOptionRows(args: {
+  card: PlanInteractionMockCard;
+  handleOtherTextChange: (value: string) => void;
+  handleSubmit: (() => void) | undefined;
+  onSelectOption: (optionId: string) => void;
+  otherText: string;
+  selectedOptionId: string | null;
+  theme: Theme;
+}): React.JSX.Element {
+  if (args.card.kind === "terminal_decision") {
+    return renderTerminalOptionRows(args);
+  }
+  return renderQuestionOptionRows(args);
 }
 
 function renderActionRows(args: {
@@ -104,7 +188,7 @@ function renderOtherInput(args: {
   theme: Theme;
 }): React.JSX.Element | null {
   const option = selectedOption(args.card, args.selectedOptionId);
-  if (option?.kind !== "other") {
+  if (args.card.kind !== "question" || option?.kind !== "other") {
     return null;
   }
   return (
@@ -141,8 +225,12 @@ function SessionComposerPlanInteractionSurface({
       </Box>
       {renderOptionRows({
         card,
+        handleOtherTextChange: actions.setOtherText,
+        handleSubmit,
         onSelectOption: actions.selectOption,
+        otherText,
         selectedOptionId,
+        theme,
       })}
       {renderOtherInput({
         card,

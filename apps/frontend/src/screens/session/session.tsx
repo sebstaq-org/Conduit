@@ -1,4 +1,7 @@
-import { SessionComposer } from "@/features/session-composer";
+import {
+  SessionComposer,
+  useSessionComposerPlanInteractionMock,
+} from "@/features/session-composer";
 import { SessionHistory } from "@/features/session-history";
 import { Box } from "@/theme";
 import { IconButton, KeyboardLift } from "@/ui";
@@ -22,6 +25,7 @@ const sessionScreenStyle: ViewStyle = { minHeight: 0 };
 function SessionScreen({
   onOpenNavigationPanel,
 }: SessionScreenProps): React.JSX.Element {
+  const planInteractionMock = useSessionComposerPlanInteractionMock();
   return (
     <KeyboardLift>
       <Box
@@ -39,8 +43,8 @@ function SessionScreen({
             onPress={onOpenNavigationPanel}
           />
         )}
-        <SessionHistory />
-        <SessionComposer />
+        <SessionHistory mockHistory={planInteractionMock.history} />
+        <SessionComposer planInteractionMock={planInteractionMock} />
       </Box>
     </KeyboardLift>
   );

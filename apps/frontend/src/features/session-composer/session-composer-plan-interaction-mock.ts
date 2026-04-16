@@ -1,20 +1,24 @@
 import { useState } from "react";
 import {
-  buildSessionComposerPlanInteractionMockView,
-  createSessionComposerPlanInteractionMockState,
-  dismissPlanInteractionMock,
   isPlanModeUiMockEnabled,
   planModeUiMockScenarioId,
+} from "./session-composer-plan-interaction-mock-env";
+import { buildSessionComposerPlanInteractionMockHistory } from "./session-composer-plan-interaction-mock-history";
+import {
+  createSessionComposerPlanInteractionMockState,
+  dismissPlanInteractionMock,
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
   startPlanInteractionMockScenario,
   submitPlanInteractionMock,
 } from "./session-composer-plan-interaction-mock-state";
-import type { SessionComposerPlanInteractionMockView } from "./session-composer-plan-interaction-mock-state";
+import { buildSessionComposerPlanInteractionMockView } from "./session-composer-plan-interaction-mock-view";
+import type { SessionComposerPlanInteractionMockView } from "./session-composer-plan-interaction-mock-model";
 import type {
   PlanInteractionMockCard,
   PlanInteractionMockOption,
 } from "./session-composer-plan-interaction-mock-scenarios";
+import type { SessionHistoryWindow } from "@conduit/session-client";
 
 interface SessionComposerPlanInteractionMockActions {
   dismissInteraction: () => void;
@@ -26,6 +30,7 @@ interface SessionComposerPlanInteractionMockActions {
 
 interface SessionComposerPlanInteractionMockController {
   actions: SessionComposerPlanInteractionMockActions;
+  history: SessionHistoryWindow | null;
   view: SessionComposerPlanInteractionMockView;
 }
 
@@ -96,6 +101,7 @@ function useSessionComposerPlanInteractionMock(): SessionComposerPlanInteraction
 
   return {
     actions,
+    history: buildSessionComposerPlanInteractionMockHistory({ enabled, state }),
     view: buildSessionComposerPlanInteractionMockView({ enabled, state }),
   };
 }

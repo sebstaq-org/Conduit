@@ -3,9 +3,14 @@ import { selectActiveSession, useSessionTimeline } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { SessionHistoryList } from "./session-history-list";
+import type { SessionHistoryWindow } from "@conduit/session-client";
 import type { ViewStyle } from "react-native";
 
 type HistoryRenderState = "loading" | "ready" | "unavailable";
+
+interface SessionHistoryProps {
+  mockHistory?: SessionHistoryWindow | null | undefined;
+}
 
 const historyStatusVariant = "rowLabelMuted" as const;
 const historyRootStyle: ViewStyle = { minHeight: 0, position: "relative" };
@@ -17,6 +22,7 @@ const historyOverlayStyle: ViewStyle = {
   top: 8,
   zIndex: 1,
 };
+const noopLoadOlder = (): void => undefined;
 
 function renderNoActiveSession(): React.JSX.Element {
   return (
@@ -120,20 +126,50 @@ function selectedOpenSessionId(
   return activeSession.openSessionId;
 }
 
-function SessionHistory(): React.JSX.Element {
+function renderMockHistory(
+  mockHistory: SessionHistoryWindow | null,
+): React.JSX.Element | null {
+  if (mockHistory === null) {
+    return null;
+  }
+  return renderReadyHistory(
+    {
+      history: mockHistory,
+      isFetchingOlder: false,
+      isOlderError: false,
+      loadOlderIfNeeded: noopLoadOlder,
+    },
+    mockHistory.openSessionId,
+  );
+}
+
+function renderSessionHistory(args: {
+  activeSession: ActiveSession | null;
+  openSessionId: string | null;
+  timeline: ReturnType<typeof useSessionTimeline>;
+}): React.JSX.Element {
+  if (args.activeSession === null || args.openSessionId === null) {
+    return renderNoActiveSession();
+  }
+  const state = historyRenderState(args.timeline);
+  if (state !== "ready" || args.timeline.history === undefined) {
+    return renderHistoryByState(state);
+  }
+  return renderReadyHistory(args.timeline, args.openSessionId);
+}
+
+function SessionHistory({
+  mockHistory = null,
+}: SessionHistoryProps): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
+  const mockElement = renderMockHistory(mockHistory);
 
-  if (activeSession === null || openSessionId === null) {
-    return renderNoActiveSession();
+  if (mockElement !== null) {
+    return mockElement;
   }
-
-  const state = historyRenderState(timeline);
-  if (state !== "ready" || timeline.history === undefined) {
-    return renderHistoryByState(state);
-  }
-  return renderReadyHistory(timeline, openSessionId);
+  return renderSessionHistory({ activeSession, openSessionId, timeline });
 }
 
 export { SessionHistory };

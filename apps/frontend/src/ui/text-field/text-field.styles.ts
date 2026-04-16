@@ -31,6 +31,7 @@ function createPlainTextFieldStyle(theme: Theme): TextStyle {
     paddingLeft: theme.spacing.none,
     paddingRight: theme.spacing.none,
     paddingTop: theme.spacing.xs,
+    width: "100%",
   };
 }
 

@@ -1,40 +1,31 @@
 import type {
   PlanInteractionMockCard,
-  PlanInteractionMockOption,
+  PlanInteractionMockScenario,
+  PlanInteractionMockStep,
 } from "./session-composer-plan-interaction-mock-scenarios";
+import { resolvePlanInteractionMockScenario } from "./session-composer-plan-interaction-mock-scenarios";
+import { appendMockTranscriptMessage } from "./session-composer-plan-interaction-mock-history";
 import {
-  PLAN_INTERACTION_MOCK_SCENARIOS,
-  resolvePlanInteractionMockScenario,
-} from "./session-composer-plan-interaction-mock-scenarios";
-
-interface SessionComposerPlanInteractionMockState {
-  activeCardIndex: number;
-  activeScenarioId: string | null;
-  lastResolution: string | null;
-  mode: "interaction" | "message";
-  otherText: string;
-  selectedOptionId: string | null;
-}
-
-interface SessionComposerPlanInteractionMockView {
-  activeCard: PlanInteractionMockCard | null;
-  canSubmit: boolean;
-  enabled: boolean;
-  lastResolution: string | null;
-  otherText: string;
-  scenarios: typeof PLAN_INTERACTION_MOCK_SCENARIOS;
-  selectedOptionId: string | null;
-}
-
-const PLAN_MODE_UI_MOCK_ENV = "EXPO_PUBLIC_CONDUIT_PLAN_MODE_UI_MOCK";
-const PLAN_MODE_UI_MOCK_SCENARIO_ENV =
-  "EXPO_PUBLIC_CONDUIT_PLAN_MODE_UI_MOCK_SCENARIO";
+  IMPLEMENT_PLAN_USER_MESSAGE,
+} from "./session-composer-plan-interaction-mock-model";
+import type {
+  SessionComposerPlanInteractionMockState,
+} from "./session-composer-plan-interaction-mock-model";
+import {
+  canSubmitPlanInteractionMock,
+  firstSelectableOptionId,
+  resolveActivePlanInteractionMockCard,
+  resolveActivePlanInteractionMockStep,
+  resolvePlanInteractionMockScenarioForState,
+  selectedOption,
+} from "./session-composer-plan-interaction-mock-queries";
 
 function createSessionComposerPlanInteractionMockState(
 ): SessionComposerPlanInteractionMockState {
   return {
-    activeCardIndex: 0,
+    activeStepIndex: 0,
     activeScenarioId: null,
+    historyItems: [],
     lastResolution: null,
     mode: "message",
     otherText: "",
@@ -42,52 +33,94 @@ function createSessionComposerPlanInteractionMockState(
   };
 }
 
-function resolveActivePlanInteractionMockCard(
+function completedPlanInteractionMock(
   state: SessionComposerPlanInteractionMockState,
-): PlanInteractionMockCard | null {
-  if (state.mode !== "interaction") {
-    return null;
+  lastResolution: string,
+): SessionComposerPlanInteractionMockState {
+  return {
+    activeScenarioId: null,
+    activeStepIndex: 0,
+    historyItems: state.historyItems,
+    lastResolution,
+    mode: "message",
+    otherText: "",
+    selectedOptionId: null,
+  };
+}
+
+function activatePlanInteractionCard(
+  state: SessionComposerPlanInteractionMockState,
+  card: PlanInteractionMockCard,
+): SessionComposerPlanInteractionMockState {
+  return {
+    activeScenarioId: state.activeScenarioId,
+    activeStepIndex: state.activeStepIndex,
+    historyItems: state.historyItems,
+    lastResolution: state.lastResolution,
+    mode: "interaction",
+    otherText: "",
+    selectedOptionId: firstSelectableOptionId(card),
+  };
+}
+
+function nextAgentPlanStep(args: {
+  scenario: PlanInteractionMockScenario;
+  state: SessionComposerPlanInteractionMockState;
+}): PlanInteractionMockStep | null {
+  return args.scenario.steps[args.state.activeStepIndex] ?? null;
+}
+
+function appendAgentPlanStep(
+  state: SessionComposerPlanInteractionMockState,
+): SessionComposerPlanInteractionMockState {
+  const step = resolveActivePlanInteractionMockStep(state);
+  if (step?.kind !== "agent_plan") {
+    return state;
   }
-  const scenario = resolvePlanInteractionMockScenario(state.activeScenarioId);
+  const nextState = appendMockTranscriptMessage(state, "agent", step.markdown);
+  return {
+    activeScenarioId: nextState.activeScenarioId,
+    activeStepIndex: state.activeStepIndex + 1,
+    historyItems: nextState.historyItems,
+    lastResolution: nextState.lastResolution,
+    mode: nextState.mode,
+    otherText: nextState.otherText,
+    selectedOptionId: nextState.selectedOptionId,
+  };
+}
+
+function advancePastAgentPlans(args: {
+  scenario: PlanInteractionMockScenario;
+  state: SessionComposerPlanInteractionMockState;
+}): SessionComposerPlanInteractionMockState {
+  let nextState: SessionComposerPlanInteractionMockState = args.state;
+  let step: PlanInteractionMockStep | null = nextAgentPlanStep({
+    scenario: args.scenario,
+    state: nextState,
+  });
+  while (step?.kind === "agent_plan") {
+    nextState = appendAgentPlanStep(nextState);
+    step = nextAgentPlanStep({ scenario: args.scenario, state: nextState });
+  }
+  return nextState;
+}
+
+function advanceToNextPlanInteraction(
+  state: SessionComposerPlanInteractionMockState,
+): SessionComposerPlanInteractionMockState {
+  const scenario = resolvePlanInteractionMockScenarioForState(state);
   if (scenario === null) {
-    return null;
+    return completedPlanInteractionMock(state, "Mock interaction completed.");
   }
-  return scenario.cards[state.activeCardIndex] ?? null;
-}
-
-function firstSelectableOptionId(
-  card: PlanInteractionMockCard | null,
-): string | null {
-  if (card === null) {
-    return null;
+  const nextState = advancePastAgentPlans({ scenario, state });
+  const step = nextAgentPlanStep({ scenario, state: nextState });
+  if (step?.kind === "interaction") {
+    return activatePlanInteractionCard(nextState, step.card);
   }
-  return card.options[0]?.optionId ?? null;
-}
-
-function selectedOption(
-  card: PlanInteractionMockCard | null,
-  selectedOptionId: string | null,
-): PlanInteractionMockOption | null {
-  if (card === null || selectedOptionId === null) {
-    return null;
-  }
-  return (
-    card.options.find((option) => option.optionId === selectedOptionId) ?? null
+  return completedPlanInteractionMock(
+    nextState,
+    `Mock completed: ${scenario.label}`,
   );
-}
-
-function canSubmitPlanInteractionMock(
-  state: SessionComposerPlanInteractionMockState,
-): boolean {
-  const card = resolveActivePlanInteractionMockCard(state);
-  const option = selectedOption(card, state.selectedOptionId);
-  if (option === null) {
-    return false;
-  }
-  if (option.kind !== "other") {
-    return true;
-  }
-  return state.otherText.trim().length > 0;
 }
 
 function startPlanInteractionMockScenario(
@@ -98,14 +131,15 @@ function startPlanInteractionMockScenario(
   if (scenario === null) {
     return state;
   }
-  return {
-    activeCardIndex: 0,
+  return advanceToNextPlanInteraction({
+    activeStepIndex: 0,
     activeScenarioId: scenario.id,
+    historyItems: [],
     lastResolution: null,
     mode: "interaction",
     otherText: "",
-    selectedOptionId: firstSelectableOptionId(scenario.cards[0] ?? null),
-  };
+    selectedOptionId: null,
+  });
 }
 
 function dismissPlanInteractionMock(
@@ -120,8 +154,9 @@ function dismissPlanInteractionMock(
     lastResolution = `Mock dismissed: ${scenario.label}`;
   }
   return {
-    activeCardIndex: 0,
     activeScenarioId: null,
+    activeStepIndex: 0,
+    historyItems: state.historyItems,
     lastResolution,
     mode: "message",
     otherText: "",
@@ -143,8 +178,9 @@ function selectPlanInteractionMockOption(
     otherText = state.otherText;
   }
   return {
-    activeCardIndex: state.activeCardIndex,
+    activeStepIndex: state.activeStepIndex,
     activeScenarioId: state.activeScenarioId,
+    historyItems: state.historyItems,
     lastResolution: state.lastResolution,
     mode: state.mode,
     otherText,
@@ -157,13 +193,73 @@ function setPlanInteractionMockOtherText(
   text: string,
 ): SessionComposerPlanInteractionMockState {
   return {
-    activeCardIndex: state.activeCardIndex,
+    activeStepIndex: state.activeStepIndex,
     activeScenarioId: state.activeScenarioId,
+    historyItems: state.historyItems,
     lastResolution: state.lastResolution,
     mode: state.mode,
     otherText: text,
     selectedOptionId: state.selectedOptionId,
   };
+}
+
+function nextStepState(
+  state: SessionComposerPlanInteractionMockState,
+): SessionComposerPlanInteractionMockState {
+  return {
+    activeScenarioId: state.activeScenarioId,
+    activeStepIndex: state.activeStepIndex + 1,
+    historyItems: state.historyItems,
+    lastResolution: state.lastResolution,
+    mode: state.mode,
+    otherText: "",
+    selectedOptionId: null,
+  };
+}
+
+function submitImplementPlanMock(
+  state: SessionComposerPlanInteractionMockState,
+  scenario: PlanInteractionMockScenario | null,
+): SessionComposerPlanInteractionMockState {
+  const nextState = appendMockTranscriptMessage(
+    state,
+    "user",
+    IMPLEMENT_PLAN_USER_MESSAGE,
+  );
+  return completedPlanInteractionMock(
+    nextState,
+    `Mock completed: ${scenario?.label ?? "Plan interaction"}`,
+  );
+}
+
+function continuePlanModeMock(
+  state: SessionComposerPlanInteractionMockState,
+  shouldAppendUserText: boolean,
+): SessionComposerPlanInteractionMockState {
+  let nextState = state;
+  if (shouldAppendUserText) {
+    nextState = appendMockTranscriptMessage(
+      state,
+      "user",
+      state.otherText.trim(),
+    );
+  }
+  return advanceToNextPlanInteraction(nextStepState(nextState));
+}
+
+function submitTerminalPlanInteractionMock(
+  state: SessionComposerPlanInteractionMockState,
+  card: PlanInteractionMockCard,
+): SessionComposerPlanInteractionMockState {
+  const scenario = resolvePlanInteractionMockScenarioForState(state);
+  const option = selectedOption(card, state.selectedOptionId);
+  if (option === null) {
+    return state;
+  }
+  if (option.optionId === "implement-now") {
+    return submitImplementPlanMock(state, scenario);
+  }
+  return continuePlanModeMock(state, option.kind === "other");
 }
 
 function submitPlanInteractionMock(
@@ -172,86 +268,20 @@ function submitPlanInteractionMock(
   if (!canSubmitPlanInteractionMock(state)) {
     return state;
   }
-  const scenario = resolvePlanInteractionMockScenario(state.activeScenarioId);
-  if (scenario === null) {
-    return dismissPlanInteractionMock(state);
+  const card = resolveActivePlanInteractionMockCard(state);
+  if (card === null) {
+    return completedPlanInteractionMock(state, "Mock interaction completed.");
   }
-  const nextCard = scenario.cards[state.activeCardIndex + 1] ?? null;
-  if (nextCard !== null) {
-    return {
-      activeCardIndex: state.activeCardIndex + 1,
-      activeScenarioId: state.activeScenarioId,
-      lastResolution: state.lastResolution,
-      mode: state.mode,
-      otherText: "",
-      selectedOptionId: firstSelectableOptionId(nextCard),
-    };
+  if (card.kind === "terminal_decision") {
+    return submitTerminalPlanInteractionMock(state, card);
   }
-  return {
-    activeCardIndex: 0,
-    activeScenarioId: null,
-    lastResolution: `Mock completed: ${scenario.label}`,
-    mode: "message",
-    otherText: "",
-    selectedOptionId: null,
-  };
-}
-
-function readPlanModeUiMockFlag(rawValue?: string): boolean {
-  if (rawValue === undefined) {
-    return false;
-  }
-  const normalized = rawValue.trim().toLowerCase();
-  return normalized === "1" || normalized === "true";
-}
-
-function isPlanModeUiMockEnabled(): boolean {
-  return readPlanModeUiMockFlag(process.env[PLAN_MODE_UI_MOCK_ENV]);
-}
-
-function planModeUiMockScenarioId(): string {
-  const scenarioId = process.env[PLAN_MODE_UI_MOCK_SCENARIO_ENV];
-  if (scenarioId === undefined || scenarioId.trim().length === 0) {
-    return "two-questions";
-  }
-  return scenarioId;
-}
-
-function buildSessionComposerPlanInteractionMockView(args: {
-  enabled: boolean;
-  state: SessionComposerPlanInteractionMockState;
-}): SessionComposerPlanInteractionMockView {
-  if (!args.enabled) {
-    return {
-      activeCard: null,
-      canSubmit: false,
-      enabled: false,
-      lastResolution: null,
-      otherText: "",
-      scenarios: PLAN_INTERACTION_MOCK_SCENARIOS,
-      selectedOptionId: null,
-    };
-  }
-  return {
-    activeCard: resolveActivePlanInteractionMockCard(args.state),
-    canSubmit: canSubmitPlanInteractionMock(args.state),
-    enabled: true,
-    lastResolution: args.state.lastResolution,
-    otherText: args.state.otherText,
-    scenarios: PLAN_INTERACTION_MOCK_SCENARIOS,
-    selectedOptionId: args.state.selectedOptionId,
-  };
+  return advanceToNextPlanInteraction(nextStepState(state));
 }
 
 export {
-  PLAN_INTERACTION_MOCK_SCENARIOS,
-  buildSessionComposerPlanInteractionMockView,
   canSubmitPlanInteractionMock,
   createSessionComposerPlanInteractionMockState,
   dismissPlanInteractionMock,
-  isPlanModeUiMockEnabled,
-  planModeUiMockScenarioId,
-  readPlanModeUiMockFlag,
   resolveActivePlanInteractionMockCard,
   selectPlanInteractionMockOption,
   setPlanInteractionMockOtherText,
@@ -260,5 +290,4 @@ export {
 };
 export type {
   SessionComposerPlanInteractionMockState,
-  SessionComposerPlanInteractionMockView,
 };
