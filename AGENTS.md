@@ -15,6 +15,7 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 - Curated fixtures must be normalized and minimal. Prefer stable testdata over
   raw proof dumps, and document the capture source without exposing private
   machine details.
+- Commit work at stable checkpoints without waiting for an explicit reminder.
 - Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
 - `apps/frontend` owns the React Native and React Native Web UI app.
 - `apps/desktop` is the Electron host only; it must not own product UI components.
