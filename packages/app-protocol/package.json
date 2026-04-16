@@ -1,0 +1,17 @@
+{
+  "name": "@conduit/app-protocol",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "4.3.6"
+  }
+}

@@ -97,6 +97,7 @@ impl ImportCheck<'_> {
         if self.record_relative_escape(unit, file, specifier)
             || self.record_repo_path(file, specifier)
             || self.record_frontend_runtime_violation(unit, file, specifier)
+            || self.record_app_protocol_violation(unit, file, specifier)
         {
             return;
         }
@@ -208,6 +209,24 @@ impl ImportCheck<'_> {
         ));
         true
     }
+
+    fn record_app_protocol_violation(&mut self, unit: &Unit, file: &Path, specifier: &str) -> bool {
+        if workspace_package(specifier).as_deref() != Some("@conduit/app-protocol") {
+            return false;
+        }
+        if unit.name == "@conduit/app-protocol"
+            || unit.name == "@conduit/session-client"
+            || is_frontend_app_state_file(self.repo_root, unit, file)
+        {
+            return false;
+        }
+
+        self.failures.push(format!(
+            "{} imports @conduit/app-protocol outside the client/adaptation boundary.",
+            relative_path(self.repo_root, file),
+        ));
+        true
+    }
 }
 
 fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {
@@ -271,4 +290,11 @@ fn is_repo_path(specifier: &str) -> bool {
         || specifier.starts_with("backend/")
         || specifier.starts_with("vendor/")
         || specifier.starts_with("artifacts/")
+}
+
+fn is_frontend_app_state_file(repo_root: &Path, unit: &Unit, file: &Path) -> bool {
+    if unit.name != "@conduit/frontend" {
+        return false;
+    }
+    relative_path(repo_root, file).starts_with("apps/frontend/src/app-state/")
 }
