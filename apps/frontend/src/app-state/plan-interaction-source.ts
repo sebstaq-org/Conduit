@@ -34,6 +34,13 @@ const PLAN_INTERACTION_DEV_FIXTURE_ENV =
 const PLAN_INTERACTION_DEV_FIXTURE_SCENARIO_ENV =
   "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO";
 
+declare const process: {
+  readonly env: {
+    readonly EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE?: string;
+    readonly EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO?: string;
+  };
+};
+
 function readPlanInteractionFixtureFlag(rawValue?: string): boolean {
   if (rawValue === undefined) {
     return false;
@@ -44,12 +51,13 @@ function readPlanInteractionFixtureFlag(rawValue?: string): boolean {
 
 function isPlanInteractionDevFixtureEnabled(): boolean {
   return readPlanInteractionFixtureFlag(
-    process.env[PLAN_INTERACTION_DEV_FIXTURE_ENV],
+    process.env.EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE,
   );
 }
 
 function planInteractionDevFixtureScenarioId(): string {
-  const scenarioId = process.env[PLAN_INTERACTION_DEV_FIXTURE_SCENARIO_ENV];
+  const scenarioId =
+    process.env.EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO;
   if (scenarioId === undefined || scenarioId.trim().length === 0) {
     return "product-flow";
   }

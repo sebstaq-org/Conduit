@@ -1,3 +1,4 @@
+import { frontendEnvValue } from "./frontend-env";
 import { postRecords, shouldRetryIngest } from "./frontend-logger-ingest";
 import { sanitizeUnknown } from "./frontend-logger-serialize";
 import type {
@@ -23,10 +24,6 @@ let profile: FrontendLogProfile = "prod";
 let sinkUrl: string | null = null;
 let triggerFlush: (() => void) | null = null;
 
-function isEnabledProfile(value: FrontendLogProfile): boolean {
-  return value === "dev" || value === "stage";
-}
-
 function normalizeProfile(raw: string | undefined): FrontendLogProfile {
   if (raw !== undefined) {
     const normalized = raw.trim().toLowerCase();
@@ -38,18 +35,20 @@ function normalizeProfile(raw: string | undefined): FrontendLogProfile {
       return normalized;
     }
   }
-  if (process.env.NODE_ENV === "development") {
+  if (frontendEnvValue("NODE_ENV") === "development") {
     return "dev";
   }
   return "prod";
 }
 
 function configuredLogProfile(): string | undefined {
-  return process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE;
+  return frontendEnvValue("EXPO_PUBLIC_CONDUIT_LOG_PROFILE");
 }
 
 function parseWsUrl(): URL {
-  const configuredWsUrl = process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
+  const configuredWsUrl = frontendEnvValue(
+    "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL",
+  );
   if (configuredWsUrl === undefined) {
     throw new Error(
       `${WS_URL_ENV} is required when frontend logging is enabled.`,
@@ -65,7 +64,9 @@ function parseWsUrl(): URL {
 }
 
 function resolveClientLogOverride(): string | null {
-  const configuredOverride = process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL;
+  const configuredOverride = frontendEnvValue(
+    "EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL",
+  );
   if (configuredOverride === undefined) {
     return null;
   }
@@ -232,7 +233,7 @@ function initializeFrontendLogging(): void {
   }
   initialized = true;
   profile = normalizeProfile(configuredLogProfile());
-  if (!isEnabledProfile(profile)) {
+  if (profile !== "dev" && profile !== "stage") {
     return;
   }
   sinkUrl = configuredClientLogUrl();
