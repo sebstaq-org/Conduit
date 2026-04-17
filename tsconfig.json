@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/app-protocol" },
     { "path": "./packages/app-client" },
     { "path": "./packages/app-core" },
     { "path": "./packages/design-system-tokens" },

@@ -7,11 +7,14 @@ use std::fs::{create_dir_all, write};
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-const APPROVED_CRATES: [&str; 11] = [
+type LocalDeps = (&'static str, Vec<&'static str>);
+
+const APPROVED_CRATES: [&str; 12] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
+    "app-protocol-export",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
@@ -91,6 +94,7 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "docs",
         "packages/app-client/src",
         "packages/app-core/src",
+        "packages/app-protocol/src",
         "packages/design-system-tokens/src",
         "packages/session-client/src",
         "packages/session-contracts/src",
@@ -160,12 +164,13 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 8] {
+fn workspace_packages() -> [(&'static str, &'static str); 9] {
     [
         ("@conduit/desktop", "apps/desktop"),
         ("@conduit/frontend", "apps/frontend"),
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
+        ("@conduit/app-protocol", "packages/app-protocol"),
         (
             "@conduit/design-system-tokens",
             "packages/design-system-tokens",
@@ -183,34 +188,7 @@ fn crate_manifest(crate_name: &str) -> String {
 }
 
 fn metadata(repo_root: &Path) -> Metadata {
-    let local_deps = [
-        ("acp-contracts", Vec::<&str>::new()),
-        ("acp-core", Vec::<&str>::new()),
-        ("acp-discovery", Vec::<&str>::new()),
-        ("app-api", vec!["acp-contracts", "acp-core"]),
-        ("provider-claude", Vec::<&str>::new()),
-        ("provider-codex", Vec::<&str>::new()),
-        ("provider-copilot", Vec::<&str>::new()),
-        ("repo-guard", vec!["tracing", "tracing-subscriber"]),
-        (
-            "service-bin",
-            vec![
-                "acp-discovery",
-                "app-api",
-                "provider-claude",
-                "provider-codex",
-                "provider-copilot",
-                "session-store",
-                "tracing",
-                "tracing-subscriber",
-            ],
-        ),
-        (
-            "service-runtime",
-            vec!["acp-core", "acp-discovery", "app-api", "session-store"],
-        ),
-        ("session-store", vec!["acp-core", "acp-discovery"]),
-    ];
+    let local_deps = local_deps();
 
     Metadata {
         packages: local_deps
@@ -244,4 +222,36 @@ fn metadata(repo_root: &Path) -> Metadata {
             .map(|name| (*name).to_owned())
             .collect(),
     }
+}
+
+fn local_deps() -> [LocalDeps; 12] {
+    [
+        ("acp-contracts", Vec::<&str>::new()),
+        ("acp-core", Vec::<&str>::new()),
+        ("acp-discovery", Vec::<&str>::new()),
+        ("app-api", vec!["acp-contracts", "acp-core"]),
+        ("app-protocol-export", Vec::<&str>::new()),
+        ("provider-claude", Vec::<&str>::new()),
+        ("provider-codex", Vec::<&str>::new()),
+        ("provider-copilot", Vec::<&str>::new()),
+        ("repo-guard", vec!["tracing", "tracing-subscriber"]),
+        (
+            "service-bin",
+            vec![
+                "acp-discovery",
+                "app-api",
+                "provider-claude",
+                "provider-codex",
+                "provider-copilot",
+                "session-store",
+                "tracing",
+                "tracing-subscriber",
+            ],
+        ),
+        (
+            "service-runtime",
+            vec!["acp-core", "acp-discovery", "app-api", "session-store"],
+        ),
+        ("session-store", vec!["acp-core", "acp-discovery"]),
+    ]
 }
