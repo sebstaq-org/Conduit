@@ -14,6 +14,7 @@
 mod error;
 mod host;
 mod snapshot;
+mod ui_event_data;
 mod wire;
 
 pub use error::{AcpError, Result};
@@ -21,5 +22,9 @@ pub use host::{AcpHost, InteractionResponse};
 pub use snapshot::{
     ConnectionState, LiveSessionIdentity, LiveSessionSnapshot, LoadedTranscriptSnapshot,
     PromptLifecycleSnapshot, PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,
+};
+pub use ui_event_data::{
+    ConduitInteractionOption, ConduitInteractionRequestData, ConduitInteractionRequestInput,
+    ConduitInteractionResolutionData, ConduitInteractionResolutionStatus, ConduitTerminalPlanData,
 };
 pub use wire::{RawWireEvent, WireKind, WireStream};

@@ -248,20 +248,23 @@ type SessionRespondInteractionRequest = z.infer<
 >;
 const SessionConfigOptionValueSchema = z
   .object({
+    _meta: z.record(z.string(), z.unknown()).nullable().optional(),
     value: z.string(),
     name: z.string(),
     description: z.string().nullable().optional(),
   })
-  .loose();
+  .strict();
 const SessionConfigOptionGroupSchema = z
   .object({
+    _meta: z.record(z.string(), z.unknown()).nullable().optional(),
     group: z.string(),
     name: z.string(),
     options: z.array(SessionConfigOptionValueSchema),
   })
-  .loose();
-const SessionConfigOptionSchema = z
+  .strict();
+const RawSessionConfigOptionSchema = z
   .object({
+    _meta: z.record(z.string(), z.unknown()).nullable().optional(),
     id: z.string(),
     name: z.string(),
     description: z.string().nullable().optional(),
@@ -273,7 +276,29 @@ const SessionConfigOptionSchema = z
       z.array(SessionConfigOptionGroupSchema),
     ]),
   })
-  .loose();
+  .strict();
+function flattenedSessionConfigValues(
+  options: z.infer<typeof RawSessionConfigOptionSchema>["options"],
+): z.infer<typeof SessionConfigOptionValueSchema>[] {
+  return options.flatMap((entry) => {
+    if ("group" in entry) {
+      return entry.options;
+    }
+    return [entry];
+  });
+}
+
+const SessionConfigOptionSchema = RawSessionConfigOptionSchema.transform(
+  (option) => ({
+    id: option.id,
+    name: option.name,
+    description: option.description,
+    category: option.category,
+    type: option.type,
+    currentValue: option.currentValue,
+    values: flattenedSessionConfigValues(option.options),
+  }),
+);
 type SessionConfigOption = z.infer<typeof SessionConfigOptionSchema>;
 const SessionSetConfigOptionRequestSchema = z
   .object({

@@ -5,6 +5,7 @@ use acp_core as _;
 use acp_discovery as _;
 use agent_client_protocol as _;
 use async_trait as _;
+use schemars as _;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;

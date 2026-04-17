@@ -4,92 +4,20 @@ import {
   CANCEL_OPTION_ID,
   IMPLEMENT_PLAN_OPTION_ID,
 } from "./plan-interaction-types";
+import {
+  interactionRequestData,
+  interactionResolutionData,
+  terminalPlanData,
+} from "./protocol/plan-interaction-data";
 import type {
-  BackendInteractionOption,
-  BackendInteractionRequestData,
-  BackendInteractionResolutionData,
-  BackendTerminalPlanData,
   PlanInteractionCard,
   PlanInteractionOption,
 } from "./plan-interaction-types";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isInteractionRequestData(
-  value: unknown,
-): value is BackendInteractionRequestData {
-  return (
-    isRecord(value) &&
-    value.sessionUpdate === "interaction_request" &&
-    typeof value.interactionId === "string" &&
-    typeof value.toolCallId === "string" &&
-    typeof value.questionId === "string" &&
-    typeof value.question === "string" &&
-    Array.isArray(value.options)
-  );
-}
-
-function isInteractionResolutionData(
-  value: unknown,
-): value is BackendInteractionResolutionData {
-  return (
-    isRecord(value) &&
-    value.sessionUpdate === "interaction_resolution" &&
-    typeof value.interactionId === "string" &&
-    typeof value.status === "string"
-  );
-}
-
-function isTerminalPlanData(value: unknown): value is BackendTerminalPlanData {
-  return (
-    isRecord(value) &&
-    value.sessionUpdate === "terminal_plan" &&
-    typeof value.interactionId === "string" &&
-    typeof value.itemId === "string" &&
-    typeof value.planText === "string" &&
-    typeof value.providerSource === "string" &&
-    value.source === "codex.terminalPlan" &&
-    value.status === "pending"
-  );
-}
-
-function interactionRequestData(
-  item: TranscriptItem,
-): BackendInteractionRequestData | null {
-  if (item.kind !== "event" || item.variant !== "interaction_request") {
-    return null;
-  }
-  if (!isInteractionRequestData(item.data)) {
-    return null;
-  }
-  return item.data;
-}
-
-function interactionResolutionData(
-  item: TranscriptItem,
-): BackendInteractionResolutionData | null {
-  if (item.kind !== "event" || item.variant !== "interaction_resolution") {
-    return null;
-  }
-  if (!isInteractionResolutionData(item.data)) {
-    return null;
-  }
-  return item.data;
-}
-
-function terminalPlanData(
-  item: TranscriptItem,
-): BackendTerminalPlanData | null {
-  if (item.kind !== "event" || item.variant !== "terminal_plan") {
-    return null;
-  }
-  if (!isTerminalPlanData(item.data)) {
-    return null;
-  }
-  return item.data;
-}
+import type {
+  BackendInteractionOption,
+  BackendInteractionRequestData,
+  BackendTerminalPlanData,
+} from "./protocol/plan-interaction-data";
 
 function resolvedInteractionIds(items: TranscriptItem[]): Set<string> {
   const ids = new Set<string>();

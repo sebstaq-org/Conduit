@@ -10,6 +10,10 @@ use crate::snapshot::{
     ConnectionState, LiveSessionSnapshot, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
     PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,
 };
+use crate::{
+    ConduitInteractionOption, ConduitInteractionRequestData, ConduitInteractionRequestInput,
+    ConduitInteractionResolutionData, ConduitInteractionResolutionStatus,
+};
 use acp_discovery::{LauncherCommand, ProcessEnvironment, ProviderDiscovery, ProviderId};
 use agent_client_protocol::{self as acp, Agent as _};
 use internals::{

@@ -1,8 +1,8 @@
 //! Transcript projection primitives for Conduit history windows.
 
-use acp_core::TranscriptUpdateSnapshot;
+use acp_core::{ConduitTerminalPlanData, TranscriptUpdateSnapshot};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 /// One projected transcript item for UI consumption.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -252,42 +252,24 @@ fn terminal_plan_data(update: &TranscriptUpdateSnapshot) -> Option<Value> {
     {
         return None;
     }
-    let mut data = Map::new();
-    data.insert(
-        "sessionUpdate".to_owned(),
-        Value::String("terminal_plan".to_owned()),
+    let data = ConduitTerminalPlanData::new(
+        item_id.to_owned(),
+        plan_text.to_owned(),
+        provider_source.to_owned(),
+        plan.get("turnId")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
+        plan.get("threadId")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
     );
-    data.insert(
-        "interactionId".to_owned(),
-        Value::String(format!("terminal-plan:{item_id}")),
-    );
-    data.insert(
-        "source".to_owned(),
-        Value::String("codex.terminalPlan".to_owned()),
-    );
-    data.insert(
-        "providerSource".to_owned(),
-        Value::String(provider_source.to_owned()),
-    );
-    data.insert("itemId".to_owned(), Value::String(item_id.to_owned()));
-    data.insert("planText".to_owned(), Value::String(plan_text.to_owned()));
-    data.insert("status".to_owned(), Value::String("pending".to_owned()));
-    if let Some(codex_turn_id) = plan.get("turnId").and_then(Value::as_str) {
-        data.insert(
-            "codexTurnId".to_owned(),
-            Value::String(codex_turn_id.to_owned()),
-        );
-    }
-    if let Some(thread_id) = plan.get("threadId").and_then(Value::as_str) {
-        data.insert("threadId".to_owned(), Value::String(thread_id.to_owned()));
-    }
-    Some(Value::Object(data))
+    serde_json::to_value(data).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{MessageRole, TranscriptItem, TranscriptItemStatus, project_prompt_turn_items};
-    use acp_core::TranscriptUpdateSnapshot;
+    use acp_core::{ConduitTerminalPlanData, TranscriptUpdateSnapshot};
     use serde_json::{Value, json};
     use std::error::Error;
 
@@ -438,6 +420,7 @@ mod tests {
         ensure_str(data, "planText", "# Plan\n")?;
         ensure_str(data, "codexTurnId", "codex-turn")?;
         ensure_str(data, "threadId", "codex-thread")?;
+        serde_json::from_value::<ConduitTerminalPlanData>(data.clone())?;
         Ok(())
     }
 
