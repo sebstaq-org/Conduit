@@ -5,7 +5,7 @@ mod client_logs;
 mod wire;
 
 use crate::error::Result;
-use crate::local_store::open_product_store;
+use crate::local_store::open_store;
 use actor::RuntimeActor;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
@@ -15,8 +15,8 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use service_runtime::ProviderFactory;
 use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
+use service_runtime::{AppServiceFactory, ProviderFactory};
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -66,9 +66,15 @@ const CATALOG_COMMANDS: [&str; 20] = [
 ///
 /// Returns an error when the TCP listener cannot bind or the server exits with
 /// an I/O failure.
-pub(crate) async fn run(host: &str, port: u16, provider_fixtures: Option<PathBuf>) -> Result<()> {
+pub(crate) async fn run(
+    host: &str,
+    port: u16,
+    provider_fixtures: Option<PathBuf>,
+    store_path: Option<PathBuf>,
+) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
-    let local_store = open_product_store()?;
+    let local_store = open_store(store_path.clone())?;
+    let store_opener = store_opener(store_path);
     if let Some(root) = provider_fixtures {
         let factory = provider_fixture::FixtureProviderFactory::load(&root).map_err(|source| {
             crate::error::ServiceError::InvalidFlagValue {
@@ -77,9 +83,13 @@ pub(crate) async fn run(host: &str, port: u16, provider_fixtures: Option<PathBuf
                 message: source.to_string(),
             }
         })?;
-        return serve_router(listener, router_with_factory(factory, local_store)).await;
+        return serve_router(
+            listener,
+            router_with_factory(factory, local_store, store_opener),
+        )
+        .await;
     }
-    serve_router(listener, router(local_store)).await
+    serve_router(listener, router(local_store, store_opener)).await
 }
 
 async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
@@ -91,15 +101,31 @@ async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
     Ok(())
 }
 
-fn router(local_store: LocalStore) -> Router {
-    router_with_actor(RuntimeActor::start(local_store))
+fn store_opener(path: Option<PathBuf>) -> actor::StoreOpener {
+    Arc::new(move || open_store(path.clone()))
 }
 
-fn router_with_factory<F>(factory: F, local_store: LocalStore) -> Router
+fn router(local_store: LocalStore, store_opener: actor::StoreOpener) -> Router {
+    router_with_actor(RuntimeActor::start_with_store_opener(
+        AppServiceFactory::default(),
+        local_store,
+        store_opener,
+    ))
+}
+
+fn router_with_factory<F>(
+    factory: F,
+    local_store: LocalStore,
+    store_opener: actor::StoreOpener,
+) -> Router
 where
     F: Clone + ProviderFactory + 'static,
 {
-    router_with_actor(RuntimeActor::start_with_factory(factory, local_store))
+    router_with_actor(RuntimeActor::start_with_store_opener(
+        factory,
+        local_store,
+        store_opener,
+    ))
 }
 
 fn router_with_actor(actor: RuntimeActor) -> Router {

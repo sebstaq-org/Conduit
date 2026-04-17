@@ -37,7 +37,8 @@ async fn main() -> Result<()> {
             host,
             port,
             provider_fixtures,
-        } => serve::run(&host, port, provider_fixtures).await,
+            store_path,
+        } => serve::run(&host, port, provider_fixtures, store_path).await,
         cli::Command::Runtime { command } => runtime::run(command),
     }
 }

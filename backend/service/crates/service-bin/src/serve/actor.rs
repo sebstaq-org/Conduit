@@ -14,8 +14,7 @@ use self::provider_config_snapshot::{
 use self::startup_hydration::spawn_startup_hydration_worker;
 use self::suggestion_refresh::spawn_suggestion_refresh_worker;
 use service_runtime::{
-    AppServiceFactory, ConsumerCommand, ConsumerResponse, ProviderFactory, RuntimeEvent,
-    ServiceRuntime,
+    ConsumerCommand, ConsumerResponse, ProviderFactory, RuntimeEvent, ServiceRuntime,
 };
 use session_store::LocalStore;
 use std::collections::HashSet;
@@ -38,25 +37,6 @@ pub(crate) struct RuntimeActor {
 }
 
 impl RuntimeActor {
-    /// Starts one actor that exclusively owns `ServiceRuntime`.
-    #[must_use]
-    pub(crate) fn start(local_store: LocalStore) -> Self {
-        Self::start_with_factory(AppServiceFactory::default(), local_store)
-    }
-
-    /// Starts one actor with an explicit provider factory.
-    #[must_use]
-    pub(crate) fn start_with_factory<F>(factory: F, local_store: LocalStore) -> Self
-    where
-        F: Clone + ProviderFactory + 'static,
-    {
-        Self::start_with_store_opener(
-            factory,
-            local_store,
-            Arc::new(crate::local_store::open_product_store),
-        )
-    }
-
     pub(super) fn start_with_store_opener<F>(
         factory: F,
         local_store: LocalStore,
@@ -123,7 +103,7 @@ impl RuntimeActor {
     }
 }
 
-type StoreOpener = Arc<dyn Fn() -> crate::error::Result<LocalStore> + Send + Sync>;
+pub(super) type StoreOpener = Arc<dyn Fn() -> crate::error::Result<LocalStore> + Send + Sync>;
 type StoreLock = Arc<Mutex<()>>;
 
 #[derive(Clone)]

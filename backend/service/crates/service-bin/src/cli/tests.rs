@@ -95,6 +95,7 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
         host,
         port,
         provider_fixtures,
+        store_path,
     } = parse_command(&args)?
     else {
         return Err("expected serve command".into());
@@ -107,6 +108,9 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     }
     if provider_fixtures.is_some() {
         return Err("unexpected provider fixtures".into());
+    }
+    if store_path.is_some() {
+        return Err("unexpected store path".into());
     }
     Ok(())
 }
@@ -121,11 +125,14 @@ fn serve_accepts_provider_fixtures_root() -> TestResult<()> {
         "9000",
         "--provider-fixtures",
         "/fixtures",
+        "--store-path",
+        "/tmp/conduit-e2e.sqlite3",
     ]);
     let Command::Serve {
         host,
         port,
         provider_fixtures,
+        store_path,
     } = parse_command(&args)?
     else {
         return Err("expected serve command".into());
@@ -138,6 +145,9 @@ fn serve_accepts_provider_fixtures_root() -> TestResult<()> {
     }
     if provider_fixtures.as_deref() != Some(std::path::Path::new("/fixtures")) {
         return Err(format!("unexpected provider fixtures {provider_fixtures:?}").into());
+    }
+    if store_path.as_deref() != Some(std::path::Path::new("/tmp/conduit-e2e.sqlite3")) {
+        return Err(format!("unexpected store path {store_path:?}").into());
     }
     Ok(())
 }
