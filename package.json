@@ -54,6 +54,7 @@
     "stage:start": "bash scripts/stage/conduit-stage.sh start",
     "stage:stop": "bash scripts/stage/conduit-stage.sh stop",
     "stage:status": "bash scripts/stage/conduit-stage.sh status",
+    "stage:verify": "bash scripts/stage/conduit-stage.sh verify",
     "stage:open": "bash scripts/stage/conduit-stage.sh open",
     "stage:logs": "bash scripts/stage/conduit-stage.sh logs",
     "stage:install-desktop-entry": "bash scripts/stage/conduit-stage.sh install-desktop-entry",

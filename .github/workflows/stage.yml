@@ -7,12 +7,17 @@ on:
       - "feature/**"
       - main
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch, tag, or commit to build and deploy"
+        required: true
+        default: main
 
 permissions:
   contents: read
 
 concurrency:
-  group: conduit-stage-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  group: conduit-stage-${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -20,10 +25,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       artifact_name: ${{ steps.stage.outputs.artifact_name }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.ref }}
+
+      - name: Resolve source commit
+        id: source
+        run: echo "source_sha=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -48,7 +60,7 @@ jobs:
       - name: Build stage artifact
         id: stage
         env:
-          CONDUIT_STAGE_BUILD_REF: HEAD
+          CONDUIT_STAGE_BUILD_REF: ${{ steps.source.outputs.source_sha }}
           CONDUIT_STAGE_ROOT: ${{ runner.temp }}/conduit-stage
         run: pnpm run stage:build
 
@@ -60,13 +72,20 @@ jobs:
           retention-days: 14
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: [self-hosted, linux, x64]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.source_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
 
       - name: Download stage artifact
         uses: actions/download-artifact@v5
@@ -81,3 +100,6 @@ jobs:
         run: |
           bash scripts/stage/conduit-stage.sh stop
           bash scripts/stage/conduit-stage.sh start
+
+      - name: Verify deployed stage
+        run: bash scripts/stage/conduit-stage.sh verify "${{ needs.build.outputs.source_sha }}"

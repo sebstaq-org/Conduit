@@ -17,9 +17,19 @@ a Forge-packaged Electron app, exported web assets, and the release-built Rust
   server; fail if readiness checks do not pass.
 - `stop`: stop Electron stage and its child backend process.
 - `status`: print release and process status.
+- `verify COMMIT`: fail unless the installed manifest, running runtime status,
+  Electron process, backend process, and health checks all match `COMMIT`.
 - `open`: start stage.
 - `logs [backend|frontend|electron|web]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`.
+
+## GitHub Actions Stage Promotion
+
+The Stage workflow builds artifacts on pull request and push, but deploys only
+from a manual `workflow_dispatch` run. Use the `source_ref` input to select the
+branch, tag, or commit to promote; the workflow builds that exact ref, installs
+the uploaded artifact on a self-hosted runner, restarts stage, and runs
+`verify` against the resolved source commit before reporting success.
 
 ## Default Runtime Config
 

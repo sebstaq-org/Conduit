@@ -91,6 +91,25 @@ wait_for_runtime_ready() {
   return 1
 }
 
+json_field() {
+  local file_path="$1"
+  local expression="$2"
+  node - "$file_path" "$expression" <<'EOF'
+const fs = require("node:fs");
+
+const data = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const value = process.argv[3]
+  .split(".")
+  .reduce((current, key) => current?.[key], data);
+
+if (value === undefined || value === null) {
+  process.exit(2);
+}
+
+process.stdout.write(String(value));
+EOF
+}
+
 write_stage_runner() {
   cat >"$RUNNER_PATH" <<EOF
 #!/usr/bin/env bash
@@ -389,6 +408,72 @@ status_stage() {
   fi
 }
 
+verify_stage() {
+  local expected_commit="${1:-}"
+  if [[ -z "$expected_commit" ]]; then
+    printf "verify requires the expected source commit\n" >&2
+    exit 1
+  fi
+
+  local current_release
+  current_release="$(release_dir)" || {
+    printf "No stage release found\n" >&2
+    exit 1
+  }
+  validate_release_dir "$current_release"
+
+  local manifest_path="$current_release/manifest.json"
+  local manifest_commit
+  manifest_commit="$(json_field "$manifest_path" commit)"
+  if [[ "$manifest_commit" != "$expected_commit" ]]; then
+    printf "Stage manifest commit mismatch: expected %s, got %s\n" "$expected_commit" "$manifest_commit" >&2
+    exit 1
+  fi
+
+  if ! pid_running "$ELECTRON_PID_FILE"; then
+    printf "Electron is not running\n" >&2
+    exit 1
+  fi
+
+  if ! pid_running "$BACKEND_PID_FILE"; then
+    printf "Backend is not running\n" >&2
+    exit 1
+  fi
+
+  if ! wait_for_runtime_ready; then
+    printf "Stage readiness checks failed\n" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$RUNTIME_STATUS_FILE" ]]; then
+    printf "Runtime status file is missing: %s\n" "$RUNTIME_STATUS_FILE" >&2
+    exit 1
+  fi
+
+  local runtime_commit
+  runtime_commit="$(json_field "$RUNTIME_STATUS_FILE" build)"
+  if [[ "$runtime_commit" != "$expected_commit" ]]; then
+    printf "Stage runtime commit mismatch: expected %s, got %s\n" "$expected_commit" "$runtime_commit" >&2
+    exit 1
+  fi
+
+  local backend_healthy
+  backend_healthy="$(json_field "$RUNTIME_STATUS_FILE" backend.healthy)"
+  if [[ "$backend_healthy" != "true" ]]; then
+    printf "Backend runtime status is not healthy\n" >&2
+    exit 1
+  fi
+
+  local web_healthy
+  web_healthy="$(json_field "$RUNTIME_STATUS_FILE" web.healthy)"
+  if [[ "$web_healthy" != "true" ]]; then
+    printf "Web runtime status is not healthy\n" >&2
+    exit 1
+  fi
+
+  printf "Stage verified: %s\n" "$expected_commit"
+}
+
 install_desktop_entry() {
   local applications_dir
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
@@ -440,6 +525,7 @@ Commands:
   start                  Start packaged Electron stage and wait for readiness
   stop                   Stop packaged Electron stage and child backend process
   status                 Show current release and process status
+  verify COMMIT          Verify current stage is running the expected commit
   open                   Start stage if needed
   logs [backend|frontend|electron|web] Show recent log output
   install-desktop-entry  Install a desktop launcher for stage open
@@ -465,6 +551,13 @@ case "$command" in
     ;;
   status)
     status_stage
+    ;;
+  verify)
+    if [[ "${2:-}" == "--" ]]; then
+      verify_stage "${3:-}"
+    else
+      verify_stage "${2:-}"
+    fi
     ;;
   logs)
     show_logs "${2:-all}"
