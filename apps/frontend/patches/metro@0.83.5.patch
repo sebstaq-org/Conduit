@@ -5,7 +5,6 @@ index 342bbce6374a9cfdf338ba72ca3d2afad4b50dd4..07c032b7d3fe163ab76bbac8057d5a0c
 @@ -187,6 +187,14 @@ class DependencyGraph extends _events.default {
    }
    async getOrComputeSha1(mixedPath) {
-     const result = await this._fileSystem.getOrComputeSha1(mixedPath);
 +    if (mixedPath.includes("react-native-worklets/.worklets/")) {
 +      const createHash = require("crypto").createHash;
 +      return {
@@ -14,6 +13,7 @@ index 342bbce6374a9cfdf338ba72ca3d2afad4b50dd4..07c032b7d3fe163ab76bbac8057d5a0c
 +          .digest("hex"),
 +      };
 +    }
+     const result = await this._fileSystem.getOrComputeSha1(mixedPath);
      if (!result || !result.sha1) {
        throw new Error(`Failed to get the SHA-1 for: ${mixedPath}.
        Potential causes:

@@ -127,41 +127,6 @@ EOF
   chmod +x "$RUNNER_PATH"
 }
 
-seed_worklets_cache() {
-  local source_root="$1"
-  local target_root="$2"
-  local source_pkg
-  local target_pkg
-  source_pkg="$(find "$source_root/node_modules/.pnpm" -maxdepth 1 -type d -name "react-native-worklets@*" | head -n 1)"
-  target_pkg="$(find "$target_root/node_modules/.pnpm" -maxdepth 1 -type d -name "react-native-worklets@*" | head -n 1)"
-
-  if [[ -z "$source_pkg" || -z "$target_pkg" ]]; then
-    return
-  fi
-
-  local source_worklets="$source_pkg/node_modules/react-native-worklets/.worklets"
-  local target_worklets="$target_pkg/node_modules/react-native-worklets/.worklets"
-  if [[ ! -d "$source_worklets" || ! -d "$target_worklets" ]]; then
-    return
-  fi
-
-  local source_resolved
-  local target_resolved
-  source_resolved="$(readlink -f "$source_worklets")"
-  target_resolved="$(readlink -f "$target_worklets")"
-  if [[ "$source_resolved" == "$target_resolved" ]]; then
-    return
-  fi
-
-  (
-    cd "$source_worklets"
-    tar -cf - .
-  ) | (
-    cd "$target_worklets"
-    tar -xf -
-  )
-}
-
 write_github_output() {
   local name="$1"
   local value="$2"
@@ -205,8 +170,7 @@ build_artifact() {
     run pnpm install --frozen-lockfile
     run pnpm run build
     run pnpm --filter @conduit/desktop run build
-    seed_worklets_cache "$REPO_ROOT" "$source_dir"
-    run pnpm --filter @conduit/frontend exec expo export --platform web --output-dir "$resources_dir/web"
+    run pnpm --filter @conduit/frontend exec expo export --clear --platform web --output-dir "$resources_dir/web"
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
     run cp backend/service/target/release/service-bin "$resources_dir/bin/service-bin"
     chmod +x "$resources_dir/bin/service-bin"
