@@ -1,11 +1,11 @@
 //! Provider capture implementation.
 
-use crate::cli::CaptureRequest;
+use crate::cli::{CaptureOperation, CaptureRequest};
 use crate::error::{CliError, Result};
 use acp_discovery::ProviderId;
 use app_api::AppService;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::fs::{File, create_dir, create_dir_all};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,8 @@ struct CaptureManifest {
     operation: &'static str,
     output_path: String,
     provider: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
     timestamp: String,
 }
 
@@ -51,14 +53,19 @@ struct LedgerEvent {
 /// # Errors
 ///
 /// Returns an error when Codex cannot be reached, the capture output cannot be
-/// written, or the provider response is not a valid v1 `session/list` capture.
+/// written, or the provider response is not a valid v1 provider capture.
 pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
+    let CaptureRequest {
+        operation,
+        cwd,
+        output,
+    } = request;
     let timestamp = timestamp()?;
-    let output = output_path(request.output, &timestamp);
+    let output = output_path(output, &operation, &timestamp);
     create_output_dir(&output)?;
-    let mut ledger = Ledger::new(&request.cwd, &output);
+    let mut ledger = Ledger::new(&cwd, &output, operation_name(&operation));
     ledger.push("capture.start", true)?;
-    write_manifest(&request.cwd, &output, &timestamp)?;
+    write_manifest(&operation, &cwd, &output, &timestamp)?;
 
     ledger.push("provider.connect.start", true)?;
     let mut service = match AppService::connect_provider(ProviderId::Codex) {
@@ -73,24 +80,20 @@ pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
         }
     };
 
-    ledger.push("provider.session_list.start", true)?;
-    let raw = match service.list_sessions_filtered(Some(request.cwd.clone()), None) {
-        Ok(response) => {
-            ledger.push("provider.session_list.finish", true)?;
-            serde_json::to_value(response)?
-        }
+    let raw = match capture_provider(&mut service, &operation, &cwd, &mut ledger) {
+        Ok(raw) => raw,
         Err(error) => {
-            ledger.push("provider.session_list.finish", false)?;
             service.disconnect_provider();
             ledger.push("provider.disconnect.finish", true)?;
+            ledger.push("capture.finish", false)?;
             ledger.write(&output)?;
-            return Err(error.into());
+            return Err(error);
         }
     };
 
     service.disconnect_provider();
     ledger.push("provider.disconnect.finish", true)?;
-    if let Err(error) = validate_session_list(&raw) {
+    if let Err(error) = validate_capture(&operation, &raw) {
         ledger.push("capture.finish", false)?;
         ledger.write(&output)?;
         return Err(error);
@@ -102,11 +105,87 @@ pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
     Ok(CaptureResult { output })
 }
 
-fn output_path(configured: Option<PathBuf>, timestamp: &str) -> PathBuf {
+fn capture_provider(
+    service: &mut AppService,
+    operation: &CaptureOperation,
+    cwd: &Path,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    match operation {
+        CaptureOperation::SessionList => capture_session_list(service, cwd, ledger),
+        CaptureOperation::SessionLoad { session_id } => {
+            capture_session_load(service, session_id, cwd, ledger)
+        }
+    }
+}
+
+fn capture_session_list(
+    service: &mut AppService,
+    cwd: &Path,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    ledger.push("provider.session_list.start", true)?;
+    match service.list_sessions_filtered(Some(cwd.to_path_buf()), None) {
+        Ok(response) => {
+            ledger.push("provider.session_list.finish", true)?;
+            Ok(serde_json::to_value(response)?)
+        }
+        Err(error) => {
+            ledger.push("provider.session_list.finish", false)?;
+            Err(error.into())
+        }
+    }
+}
+
+fn capture_session_load(
+    service: &mut AppService,
+    session_id: &str,
+    cwd: &Path,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    ledger.push("provider.session_load.start", true)?;
+    match service.load_session(session_id.to_owned(), cwd.to_path_buf()) {
+        Ok(response) => {
+            ledger.push("provider.session_load.finish", true)?;
+            let snapshot = service.get_provider_snapshot();
+            let loaded_transcript = loaded_transcript_value(&snapshot, session_id)?;
+            Ok(json!({
+                "response": response,
+                "loadedTranscript": loaded_transcript,
+            }))
+        }
+        Err(error) => {
+            ledger.push("provider.session_load.finish", false)?;
+            Err(error.into())
+        }
+    }
+}
+
+fn loaded_transcript_value(
+    snapshot: &acp_core::ProviderSnapshot,
+    session_id: &str,
+) -> Result<Value> {
+    let transcript = snapshot
+        .loaded_transcripts
+        .iter()
+        .find(|transcript| transcript.identity.acp_session_id == session_id)
+        .ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/load response did not produce a loaded transcript snapshot",
+            )
+        })?;
+    Ok(serde_json::to_value(transcript)?)
+}
+
+fn output_path(
+    configured: Option<PathBuf>,
+    operation: &CaptureOperation,
+    timestamp: &str,
+) -> PathBuf {
     configured.unwrap_or_else(|| {
         PathBuf::from(DEFAULT_CAPTURE_ROOT)
             .join("codex")
-            .join("session-list")
+            .join(operation_slug(operation))
             .join(timestamp.replace(':', ""))
     })
 }
@@ -119,18 +198,31 @@ fn create_output_dir(output: &Path) -> Result<()> {
     create_dir(output).map_err(|source| CliError::io(Some(output.to_path_buf()), source))
 }
 
-fn write_manifest(cwd: &Path, output: &Path, timestamp: &str) -> Result<()> {
+fn write_manifest(
+    operation: &CaptureOperation,
+    cwd: &Path,
+    output: &Path,
+    timestamp: &str,
+) -> Result<()> {
     let manifest = CaptureManifest {
         capture_kind: "provider",
         contract_boundary: "provider-acp",
         cwd: cwd.display().to_string(),
         manual_capture: true,
-        operation: "session/list",
+        operation: operation_name(operation),
         output_path: output.display().to_string(),
         provider: "codex",
+        session_id: session_id(operation),
         timestamp: timestamp.to_owned(),
     };
     write_json(&output.join("manifest.json"), &manifest)
+}
+
+fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
+    match operation {
+        CaptureOperation::SessionList => validate_session_list(value),
+        CaptureOperation::SessionLoad { .. } => validate_session_load(value),
+    }
 }
 
 fn validate_session_list(value: &Value) -> Result<()> {
@@ -140,6 +232,45 @@ fn validate_session_list(value: &Value) -> Result<()> {
     Err(CliError::invalid_capture(
         "provider session/list response must contain a sessions array",
     ))
+}
+
+fn validate_session_load(value: &Value) -> Result<()> {
+    if value.get("response").is_none() {
+        return Err(CliError::invalid_capture(
+            "provider session/load capture must contain a response field",
+        ));
+    }
+    if value
+        .pointer("/loadedTranscript/updates")
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err(CliError::invalid_capture(
+        "provider session/load capture must contain loadedTranscript.updates array",
+    ))
+}
+
+fn operation_name(operation: &CaptureOperation) -> &'static str {
+    match operation {
+        CaptureOperation::SessionList => "session/list",
+        CaptureOperation::SessionLoad { .. } => "session/load",
+    }
+}
+
+fn operation_slug(operation: &CaptureOperation) -> &'static str {
+    match operation {
+        CaptureOperation::SessionList => "session-list",
+        CaptureOperation::SessionLoad { .. } => "session-load",
+    }
+}
+
+fn session_id(operation: &CaptureOperation) -> Option<String> {
+    match operation {
+        CaptureOperation::SessionList => None,
+        CaptureOperation::SessionLoad { session_id } => Some(session_id.clone()),
+    }
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
@@ -156,14 +287,16 @@ fn timestamp() -> Result<String> {
 struct Ledger {
     cwd: String,
     events: Vec<LedgerEvent>,
+    operation: &'static str,
     output_path: String,
 }
 
 impl Ledger {
-    fn new(cwd: &Path, output: &Path) -> Self {
+    fn new(cwd: &Path, output: &Path, operation: &'static str) -> Self {
         Self {
             cwd: cwd.display().to_string(),
             events: Vec::new(),
+            operation,
             output_path: output.display().to_string(),
         }
     }
@@ -173,7 +306,7 @@ impl Ledger {
             cwd: self.cwd.clone(),
             event_name,
             ok,
-            operation: "session/list",
+            operation: self.operation,
             output_path: self.output_path.clone(),
             provider: "codex",
             timestamp: timestamp()?,
@@ -196,7 +329,7 @@ impl Ledger {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_output_dir, validate_session_list, write_json};
+    use super::{create_output_dir, validate_session_list, validate_session_load, write_json};
     use serde_json::json;
     use std::fs::{create_dir, read_to_string};
     use tempfile::TempDir;
@@ -213,6 +346,40 @@ mod tests {
             .map(|error| error.to_string())
             .unwrap_or_default();
         assert!(error.contains("sessions array"));
+    }
+
+    #[test]
+    fn accepts_session_load_with_response_and_loaded_transcript_updates() {
+        assert!(
+            validate_session_load(&json!({
+                "response": {},
+                "loadedTranscript": { "updates": [] }
+            }))
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_session_load_without_response() {
+        let error = validate_session_load(&json!({
+            "loadedTranscript": { "updates": [] }
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("response field"));
+    }
+
+    #[test]
+    fn rejects_session_load_without_loaded_transcript_updates() {
+        let error = validate_session_load(&json!({
+            "response": {},
+            "loadedTranscript": {}
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("loadedTranscript.updates array"));
     }
 
     #[test]
