@@ -20,23 +20,41 @@ const defaultResolveRequest = config.resolver.resolveRequest;
 const metroConfig = getBundleModeMetroConfig(config);
 const bundleModeResolveRequest = metroConfig.resolver.resolveRequest;
 
+const resolveTypeScriptSourceRequest = (
+  originModulePath: string,
+  requestName: string,
+): unknown => {
+  if (!requestName.startsWith(".") || !requestName.endsWith(".js")) {
+    return undefined;
+  }
+
+  const sourceRequestPath = path.resolve(
+    path.dirname(originModulePath),
+    requestName.slice(0, -".js".length),
+  );
+  const sourceFilePath = `${sourceRequestPath}.ts`;
+  const sourceFileExists: boolean = existsSync(sourceFilePath);
+
+  if (!sourceFileExists) {
+    return undefined;
+  }
+
+  return { type: "sourceFile", filePath: sourceFilePath };
+};
+
 metroConfig.resolver.resolveRequest = (
   context,
   moduleName,
   platform,
 ): unknown => {
   const requestName = String(moduleName);
+  const sourceRequest = resolveTypeScriptSourceRequest(
+    String(context.originModulePath),
+    requestName,
+  );
 
-  if (requestName.startsWith(".") && requestName.endsWith(".js")) {
-    const sourceRequestPath = path.resolve(
-      path.dirname(String(context.originModulePath)),
-      requestName.slice(0, -".js".length),
-    );
-    const sourceFilePath = `${sourceRequestPath}.ts`;
-
-    if (existsSync(sourceFilePath)) {
-      return { type: "sourceFile", filePath: sourceFilePath };
-    }
+  if (sourceRequest !== undefined) {
+    return sourceRequest;
   }
 
   if (requestName.startsWith(workletsModulePath)) {
