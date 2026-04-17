@@ -1,10 +1,12 @@
 import { expect, it } from "vitest";
 import { parseServerFrame } from "./wireFrame.js";
 
+const protocolVersionField = "v";
+
 it("parses generated response frames and drops transport-only snapshots", () => {
   const frame = parseServerFrame(
     JSON.stringify({
-      v: 1,
+      [protocolVersionField]: 1,
       type: "response",
       id: "cmd-1",
       response: {
@@ -33,7 +35,7 @@ it("rejects unsupported versions and malformed runtime events", () => {
   expect(
     parseServerFrame(
       JSON.stringify({
-        v: 2,
+        [protocolVersionField]: 2,
         type: "response",
         id: "cmd-1",
         response: { id: "cmd-1", ok: true, result: null, error: null },
@@ -44,7 +46,7 @@ it("rejects unsupported versions and malformed runtime events", () => {
   expect(
     parseServerFrame(
       JSON.stringify({
-        v: 1,
+        [protocolVersionField]: 1,
         type: "event",
         event: {
           kind: "session_timeline_changed",
@@ -57,10 +59,26 @@ it("rejects unsupported versions and malformed runtime events", () => {
   ).toBeNull();
 });
 
+it("rejects server frames with extra wire fields", () => {
+  expect(
+    parseServerFrame(
+      JSON.stringify({
+        [protocolVersionField]: 1,
+        type: "event",
+        event: {
+          kind: "sessions_index_changed",
+          revision: 4,
+        },
+        unexpected: true,
+      }),
+    ),
+  ).toBeNull();
+});
+
 it("parses generated runtime event frames", () => {
   const frame = parseServerFrame(
     JSON.stringify({
-      v: 1,
+      [protocolVersionField]: 1,
       type: "event",
       event: {
         kind: "session_timeline_changed",

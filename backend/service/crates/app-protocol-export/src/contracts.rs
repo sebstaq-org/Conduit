@@ -384,6 +384,8 @@ impl TypeScriptEmitter {
             object.push_str(".catchall(");
             object.push_str(&catchall);
             object.push(')');
+        } else {
+            object.push_str(".strict()");
         }
         Ok(object)
     }
