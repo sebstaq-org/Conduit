@@ -8,19 +8,20 @@ const newSessionPrompt =
 const newSessionSentinel = "CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 
-let harness: E2eHarness;
+let harness: E2eHarness | null = null;
 
 test.beforeAll(async () => {
   harness = await startE2eHarness();
 });
 
 test.afterAll(async () => {
-  await harness.stop();
+  await harness?.stop();
 });
 
 test("session list opens fixture transcript", async ({ page }) => {
-  await harness.addProject(fixtureCwd);
-  await page.goto(harness.frontendUrl);
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await page.goto(activeHarness.frontendUrl);
 
   const sessionRow = page.getByRole("button", { name: fixtureSessionTitle });
   await expect(sessionRow).toBeVisible();
@@ -30,8 +31,9 @@ test("session list opens fixture transcript", async ({ page }) => {
 });
 
 test("draft prompt creates fixture session", async ({ page }) => {
-  await harness.addProject(fixtureCwd);
-  await page.goto(harness.frontendUrl);
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await page.goto(activeHarness.frontendUrl);
 
   await page.getByLabel(`New session in ${fixtureCwd}`).click();
   await page.getByLabel("Select provider for new session").click();
@@ -47,3 +49,10 @@ test("draft prompt creates fixture session", async ({ page }) => {
     page.getByText(newSessionSentinel, { exact: true }),
   ).toBeVisible();
 });
+
+function requireHarness(): E2eHarness {
+  if (harness === null) {
+    throw new Error("E2E harness did not start");
+  }
+  return harness;
+}

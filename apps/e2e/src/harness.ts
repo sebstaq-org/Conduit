@@ -86,6 +86,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
         {
           BROWSER: "none",
           CI: "1",
+          EXPO_UNSTABLE_HEADLESS: "1",
           EXPO_NO_TELEMETRY: "1",
           EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
         },
