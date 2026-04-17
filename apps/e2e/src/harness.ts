@@ -38,6 +38,7 @@ const serviceBin = join(
   "service-bin",
 );
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
+const frontendReadyTimeoutMs = 180_000;
 
 async function startE2eHarness(): Promise<E2eHarness> {
   const runRoot = await mkdtemp(join(tmpdir(), "conduit-e2e-"));
@@ -87,12 +88,13 @@ async function startE2eHarness(): Promise<E2eHarness> {
           BROWSER: "none",
           CI: "1",
           EXPO_UNSTABLE_HEADLESS: "1",
+          EXPO_NO_WEB_SETUP: "0",
           EXPO_NO_TELEMETRY: "1",
           EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
         },
       ),
     );
-    await waitForHttp(frontendUrl, processes, 60_000);
+    await waitForHttp(frontendUrl, processes, frontendReadyTimeoutMs);
 
     return {
       addProject: async (cwd: string) => {
