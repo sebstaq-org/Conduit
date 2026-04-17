@@ -87,6 +87,7 @@ pub(super) fn ensure_any(
 fn create_roots(repo_root: &Path) -> Result<()> {
     for relative in [
         "apps/desktop/src",
+        "apps/e2e/src",
         "apps/frontend/src",
         "artifacts/automated",
         "artifacts/manual",
@@ -167,9 +168,10 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 9] {
+fn workspace_packages() -> [(&'static str, &'static str); 10] {
     [
         ("@conduit/desktop", "apps/desktop"),
+        ("@conduit/e2e", "apps/e2e"),
         ("@conduit/frontend", "apps/frontend"),
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
