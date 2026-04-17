@@ -140,7 +140,9 @@ version = "0.5.0"
 dependencies = [
  "agent-client-protocol-schema",
  "schemars",
+ "serde",
  "serde_json",
+ "service-runtime",
 ]
 
 [[package]]
@@ -2242,6 +2244,7 @@ dependencies = [
  "agent-client-protocol-schema",
  "app-api",
  "criterion",
+ "schemars",
  "serde",
  "serde_json",
  "session-store",

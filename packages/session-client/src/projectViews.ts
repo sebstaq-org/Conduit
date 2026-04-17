@@ -1,4 +1,9 @@
 import {
+  ConduitGlobalSettingsViewSchema,
+  ConduitProjectListViewSchema,
+  ConduitProjectSuggestionsViewSchema,
+} from "@conduit/app-protocol";
+import {
   GlobalSettingsViewSchema,
   ProjectListViewSchema,
   ProjectSuggestionsViewSchema,
@@ -17,7 +22,9 @@ function readProjectListResponse(
   if (!response.ok) {
     throw new Error(response.error?.message ?? fallbackMessage);
   }
-  return ProjectListViewSchema.parse(response.result);
+  return ProjectListViewSchema.parse(
+    ConduitProjectListViewSchema.parse(response.result),
+  );
 }
 
 function readProjectSuggestionsResponse(
@@ -26,7 +33,9 @@ function readProjectSuggestionsResponse(
   if (!response.ok) {
     throw new Error(response.error?.message ?? "project suggestions failed");
   }
-  return ProjectSuggestionsViewSchema.parse(response.result);
+  return ProjectSuggestionsViewSchema.parse(
+    ConduitProjectSuggestionsViewSchema.parse(response.result),
+  );
 }
 
 function readGlobalSettingsResponse(
@@ -36,7 +45,9 @@ function readGlobalSettingsResponse(
   if (!response.ok) {
     throw new Error(response.error?.message ?? fallbackMessage);
   }
-  return GlobalSettingsViewSchema.parse(response.result);
+  return GlobalSettingsViewSchema.parse(
+    ConduitGlobalSettingsViewSchema.parse(response.result),
+  );
 }
 
 export {

@@ -230,7 +230,7 @@ fn local_deps() -> [LocalDeps; 12] {
         ("acp-core", Vec::<&str>::new()),
         ("acp-discovery", Vec::<&str>::new()),
         ("app-api", vec!["acp-contracts", "acp-core"]),
-        ("app-protocol-export", Vec::<&str>::new()),
+        ("app-protocol-export", vec!["service-runtime"]),
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
