@@ -43,7 +43,11 @@ function resolveTypeScriptSourceImport(
   const withoutExtension = requestName.slice(0, -".js".length);
   for (const extension of [".ts", ".tsx"] as const) {
     try {
-      return resolveDefault(context, `${withoutExtension}${extension}`, platform);
+      return resolveDefault(
+        context,
+        `${withoutExtension}${extension}`,
+        platform,
+      );
     } catch {
       // Try the next TypeScript source extension.
     }

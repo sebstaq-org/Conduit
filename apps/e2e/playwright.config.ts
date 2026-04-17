@@ -4,7 +4,8 @@ import { defineConfig, devices } from "@playwright/test";
 const systemChromium = existsSync("/snap/bin/chromium")
   ? "/snap/bin/chromium"
   : undefined;
-const chromiumExecutablePath = process.env.CONDUIT_CHROMIUM_BIN ?? systemChromium;
+const chromiumExecutablePath =
+  process.env.CONDUIT_CHROMIUM_BIN ?? systemChromium;
 
 export default defineConfig({
   expect: { timeout: 15_000 },

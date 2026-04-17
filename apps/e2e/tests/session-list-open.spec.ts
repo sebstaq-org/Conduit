@@ -43,5 +43,7 @@ test("draft prompt creates fixture session", async ({ page }) => {
   await sendButton.click();
 
   await expect(page.getByLabel("Session message")).toHaveValue("");
-  await expect(page.getByText(newSessionSentinel, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(newSessionSentinel, { exact: true }),
+  ).toBeVisible();
 });

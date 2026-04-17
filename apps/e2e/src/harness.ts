@@ -130,7 +130,10 @@ function spawnManaged(
   child.stdout.on("data", (chunk) => appendLogs(logs, chunk));
   child.stderr.on("data", (chunk) => appendLogs(logs, chunk));
   child.on("exit", (code, signal) => {
-    appendLogs(logs, `${name} exited code=${code ?? "null"} signal=${signal ?? "null"}`);
+    appendLogs(
+      logs,
+      `${name} exited code=${code ?? "null"} signal=${signal ?? "null"}`,
+    );
   });
   return { child, logs, name };
 }
@@ -184,12 +187,16 @@ function assertProcessesRunning(processes: ManagedProcess[]): void {
   if (stopped === undefined) {
     return;
   }
-  throw new Error(`${stopped.name} exited before readiness\n${processLogs(processes)}`);
+  throw new Error(
+    `${stopped.name} exited before readiness\n${processLogs(processes)}`,
+  );
 }
 
 function processLogs(processes: ManagedProcess[]): string {
   return processes
-    .map((process) => [`[${process.name}]`, ...process.logs.slice(-30)].join("\n"))
+    .map((process) =>
+      [`[${process.name}]`, ...process.logs.slice(-30)].join("\n"),
+    )
     .join("\n");
 }
 
@@ -200,7 +207,12 @@ async function sendRuntimeCommand(
   params: unknown,
 ): Promise<unknown> {
   const id = `e2e-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const response = await sendCommandFrame(wsUrl, { command, id, params, provider });
+  const response = await sendCommandFrame(wsUrl, {
+    command,
+    id,
+    params,
+    provider,
+  });
   if (!response.ok) {
     throw new Error(response.error?.message ?? `${command} failed`);
   }
@@ -215,15 +227,22 @@ async function waitForIndexedSessions(
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15_000) {
     assertProcessesRunning(processes);
-    const result = await sendRuntimeCommand(wsUrl, "sessions/grouped", "codex", {
-      updatedWithinDays: null,
-    });
+    const result = await sendRuntimeCommand(
+      wsUrl,
+      "sessions/grouped",
+      "codex",
+      {
+        updatedWithinDays: null,
+      },
+    );
     if (containsSessionForCwd(result, cwd)) {
       return;
     }
     await delay(250);
   }
-  throw new Error(`timed out waiting for indexed sessions in ${cwd}\n${processLogs(processes)}`);
+  throw new Error(
+    `timed out waiting for indexed sessions in ${cwd}\n${processLogs(processes)}`,
+  );
 }
 
 function containsSessionForCwd(value: unknown, cwd: string): boolean {
