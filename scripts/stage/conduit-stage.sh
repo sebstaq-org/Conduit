@@ -326,7 +326,8 @@ start_stage() {
     local executable
     executable="$(stage_executable_for_release "$current_release")"
     rm -f "$RUNTIME_STATUS_FILE"
-    CONDUIT_STAGE_RUNTIME="1" \
+    RUNNER_TRACKING_ID="" \
+      CONDUIT_STAGE_RUNTIME="1" \
       CONDUIT_STAGE_DATA_ROOT="$DATA_ROOT" \
       CONDUIT_STAGE_LOG_DIR="$LOG_DIR" \
       CONDUIT_STAGE_PID_DIR="$PID_DIR" \
