@@ -19,6 +19,7 @@ PID_DIR="$STAGE_ROOT/pids"
 LOG_DIR="$STAGE_ROOT/logs"
 RUNNER_PATH="$STAGE_ROOT/conduit-stage"
 SUPERVISOR_PID_FILE="$PID_DIR/supervisor.pid"
+ELECTRON_PID_FILE="$PID_DIR/electron.pid"
 RUNTIME_STATUS_FILE="$PID_DIR/runtime-status.json"
 
 run() {
@@ -72,6 +73,19 @@ wait_for_runtime_ready() {
     index=$((index + 1))
   done
   return 1
+}
+
+wait_for_pid_exit() {
+  local pid="$1"
+  local attempts=30
+  local index=0
+  while [[ "$index" -lt "$attempts" ]]; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.1
+    index=$((index + 1))
+  done
 }
 
 write_stage_runner() {
@@ -132,7 +146,7 @@ install_desktop_entry() {
 [Desktop Entry]
 Type=Application
 Name=Conduit Stage
-Comment=Run isolated Conduit stage build
+Comment=Run isolated Conduit Electron stage build
 Exec=${RUNNER_PATH} open
 Terminal=false
 Icon=utilities-terminal
@@ -160,6 +174,7 @@ refresh_stage() {
   run rm -rf "$scratch_dir"
   run mkdir -p "$source_dir"
   run mkdir -p "$release_dir/bin"
+  run mkdir -p "$release_dir/desktop"
   run mkdir -p "$release_dir/meta"
 
   run git -C "$REPO_ROOT" archive --format=tar "$commit" | tar -x -f - -C "$source_dir"
@@ -170,6 +185,7 @@ refresh_stage() {
     export EXPO_PUBLIC_CONDUIT_LOG_PROFILE="stage"
     run pnpm install --frozen-lockfile
     run pnpm run build
+    run pnpm --filter @conduit/desktop run build
     seed_worklets_cache "$REPO_ROOT" "$source_dir"
     run pnpm --filter @conduit/frontend exec expo export --platform web --output-dir "$release_dir/web"
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
@@ -177,6 +193,21 @@ refresh_stage() {
 
   run cp "$source_dir/backend/service/target/release/service-bin" "$release_dir/bin/service-bin"
   chmod +x "$release_dir/bin/service-bin"
+  (
+    cd "$source_dir/apps/desktop"
+    tar -cf - out
+  ) | (
+    cd "$release_dir/desktop"
+    tar -xf -
+  )
+  cat >"$release_dir/desktop/package.json" <<EOF
+{
+  "name": "conduit-stage-desktop",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js"
+}
+EOF
   cat >"$release_dir/meta/build.json" <<EOF
 {
   "commit": "$commit",
@@ -192,7 +223,7 @@ EOF
 
   ln -sfn "$release_dir" "$CURRENT_LINK"
   write_stage_runner
-  if pid_running "$SUPERVISOR_PID_FILE" || pid_running "$PID_DIR/backend.pid" || pid_running "$PID_DIR/web.pid"; then
+  if pid_running "$ELECTRON_PID_FILE" || pid_running "$SUPERVISOR_PID_FILE" || pid_running "$PID_DIR/backend.pid" || pid_running "$PID_DIR/web.pid"; then
     stop_stage
     start_stage
   fi
@@ -207,23 +238,22 @@ start_stage() {
     exit 1
   }
 
-  if ! pid_running "$SUPERVISOR_PID_FILE"; then
-    setsid python3 "$SCRIPT_DIR/watchdog.py" \
-      --backend-host "$BACKEND_HOST" \
-      --backend-port "$BACKEND_PORT" \
-      --current-link "$CURRENT_LINK" \
-      --data-root "$DATA_ROOT" \
-      --log-dir "$LOG_DIR" \
-      --pid-dir "$PID_DIR" \
-      --poll-interval 5 \
-      --status-file "$RUNTIME_STATUS_FILE" \
-      --static-server "$SCRIPT_DIR/static_server.py" \
-      --web-host "$WEB_HOST" \
-      --web-port "$WEB_PORT" >"$LOG_DIR/supervisor.log" 2>&1 < /dev/null &
-    printf "%s" "$!" >"$SUPERVISOR_PID_FILE"
+  if ! pid_running "$ELECTRON_PID_FILE"; then
+    rm -f "$RUNTIME_STATUS_FILE"
+    CONDUIT_STAGE_RELEASE_DIR="$current_release" \
+      CONDUIT_STAGE_DATA_ROOT="$DATA_ROOT" \
+      CONDUIT_STAGE_LOG_DIR="$LOG_DIR" \
+      CONDUIT_STAGE_PID_DIR="$PID_DIR" \
+      CONDUIT_STAGE_STATUS_FILE="$RUNTIME_STATUS_FILE" \
+      CONDUIT_STAGE_BACKEND_HOST="$BACKEND_HOST" \
+      CONDUIT_STAGE_BACKEND_PORT="$BACKEND_PORT" \
+      CONDUIT_STAGE_WEB_HOST="$WEB_HOST" \
+      CONDUIT_STAGE_WEB_PORT="$WEB_PORT" \
+      setsid pnpm --dir "$REPO_ROOT/apps/desktop" exec electron --no-sandbox "$current_release/desktop" >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
+    printf "%s" "$!" >"$ELECTRON_PID_FILE"
     sleep 0.2
-    if ! pid_running "$SUPERVISOR_PID_FILE"; then
-      printf "Supervisor failed to start. See %s/supervisor.log\n" "$LOG_DIR" >&2
+    if ! pid_running "$ELECTRON_PID_FILE"; then
+      printf "Electron failed to start. See %s/electron.log\n" "$LOG_DIR" >&2
       exit 1
     fi
   fi
@@ -239,11 +269,12 @@ start_stage() {
 
 stop_stage() {
   local pid_file
-  for pid_file in "$SUPERVISOR_PID_FILE" "$PID_DIR/backend.pid" "$PID_DIR/web.pid"; do
+  for pid_file in "$ELECTRON_PID_FILE" "$SUPERVISOR_PID_FILE" "$PID_DIR/backend.pid" "$PID_DIR/web.pid"; do
     if pid_running "$pid_file"; then
       local pid
       pid="$(cat "$pid_file")"
       kill "$pid" >/dev/null 2>&1 || true
+      wait_for_pid_exit "$pid"
     fi
     rm -f "$pid_file"
   done
@@ -257,10 +288,14 @@ status_stage() {
     printf "Release: none\n"
   fi
 
-  if pid_running "$SUPERVISOR_PID_FILE"; then
-    printf "Supervisor: running (pid %s)\n" "$(cat "$SUPERVISOR_PID_FILE")"
+  if pid_running "$ELECTRON_PID_FILE"; then
+    printf "Electron: running (pid %s)\n" "$(cat "$ELECTRON_PID_FILE")"
   else
-    printf "Supervisor: stopped\n"
+    printf "Electron: stopped\n"
+  fi
+
+  if pid_running "$SUPERVISOR_PID_FILE"; then
+    printf "Legacy supervisor: running (pid %s)\n" "$(cat "$SUPERVISOR_PID_FILE")"
   fi
 
   if pid_running "$PID_DIR/backend.pid"; then
@@ -269,11 +304,7 @@ status_stage() {
     printf "Backend: stopped\n"
   fi
 
-  if pid_running "$PID_DIR/web.pid"; then
-    printf "Web: running (pid %s)\n" "$(cat "$PID_DIR/web.pid")"
-  else
-    printf "Web: stopped\n"
-  fi
+  printf "Web: Electron-owned http://%s:%s\n" "$WEB_HOST" "$WEB_PORT"
 
   if [[ -f "$RUNTIME_STATUS_FILE" ]]; then
     printf "Runtime status: %s\n" "$RUNTIME_STATUS_FILE"
@@ -285,16 +316,6 @@ status_stage() {
 
 open_stage() {
   start_stage
-  local url="http://${WEB_HOST}:${WEB_PORT}/?v=$(date +%s)"
-  if command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$url" >/dev/null 2>&1 &
-    return
-  fi
-  if command -v open >/dev/null 2>&1; then
-    open "$url" >/dev/null 2>&1 &
-    return
-  fi
-  printf "Open this URL: %s\n" "$url"
 }
 
 show_logs() {
@@ -307,16 +328,18 @@ show_logs() {
       tail -n 200 "$LOG_DIR/frontend.log"
       ;;
     web)
-      tail -n 200 "$LOG_DIR/web.log"
+      tail -n 200 "$LOG_DIR/electron.log"
       ;;
     supervisor)
-      tail -n 200 "$LOG_DIR/supervisor.log"
+      tail -n 200 "$LOG_DIR/electron.log"
+      ;;
+    electron)
+      tail -n 200 "$LOG_DIR/electron.log"
       ;;
     all)
       printf "Backend log: %s/backend.log\n" "$LOG_DIR"
+      printf "Electron log: %s/electron.log\n" "$LOG_DIR"
       printf "Frontend log: %s/frontend.log\n" "$LOG_DIR"
-      printf "Web log: %s/web.log\n" "$LOG_DIR"
-      printf "Supervisor log: %s/supervisor.log\n" "$LOG_DIR"
       ;;
     *)
       printf "Unknown log stream: %s\n" "$stream" >&2
@@ -331,11 +354,11 @@ Usage: $0 <command>
 
 Commands:
   refresh               Build selected ref (default: origin/main) into stage release
-  start                 Start stage supervisor and wait for runtime readiness
-  stop                  Stop stage supervisor, backend, and web server
+  start                 Start Electron stage and wait for runtime readiness
+  stop                  Stop Electron stage and child backend process
   status                Show current release and process status
-  open                  Start stage if needed and open browser
-  logs [backend|frontend|web|supervisor] Show recent log output
+  open                  Start stage if needed
+  logs [backend|frontend|electron|web|supervisor] Show recent log output
   install-desktop-entry Install a desktop launcher for stage open
 EOF
 }

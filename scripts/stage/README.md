@@ -1,19 +1,21 @@
 # Stage Operations
 
-Use `scripts/stage/conduit-stage.sh` to build and run an isolated browser stage
-environment outside the repo workspace.
+Use `scripts/stage/conduit-stage.sh` to build and run an isolated local stage
+environment outside the repo workspace. This is a fast single-user stage build:
+Electron hosts the exported web app and owns the bundled Rust `service-bin`
+process lifecycle.
 
 ## Commands
 
 - `refresh`: build tagged release from `origin/main` into
   `/srv/devops/repos/conduit-stage/releases` and repoint `current`. If stage is
   already running, `refresh` restarts it onto the new release automatically.
-- `start`: start stage supervisor, backend, and web; fail if readiness checks do
-  not pass.
-- `stop`: stop stage supervisor and child processes.
+- `start`: start Electron stage, backend, and Electron-owned web server; fail if
+  readiness checks do not pass.
+- `stop`: stop Electron stage and its child backend process.
 - `status`: print release and process status.
-- `open`: start stage and open browser URL with a cache-busting query string.
-- `logs [backend|frontend|web|supervisor]`: print stage logs.
+- `open`: start stage.
+- `logs [backend|frontend|electron|web|supervisor]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`.
 
 ## Default Runtime Config
@@ -25,9 +27,8 @@ environment outside the repo workspace.
 - backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
 - stage static server disables browser caching and returns `204` for
   `/favicon.ico` to avoid benign 404 noise.
-- supervisor health polling: every 5 seconds for backend `/health` and web `/`
-- restart policy: fast backoff `1s/2s/4s`, budget `3 restarts / 60s`, then
-  degraded with slow retry every `30s`
+- Electron waits for backend `/health` and web `/` before reporting readiness.
+- Closing Electron sends `SIGTERM` to the child backend process.
 
 ## Environment Overrides
 
