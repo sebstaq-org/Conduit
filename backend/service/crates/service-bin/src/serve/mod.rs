@@ -15,7 +15,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use service_runtime::consumer_protocol::ConduitRuntimeEvent;
+use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -25,7 +25,7 @@ use std::time::Instant;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::cors::CorsLayer;
-use wire::{ClientCommandFrame, ServerEventFrame, ServerResponseFrame};
+use wire::{ClientCommandFrame, server_event_frame_text, server_response_frame_text};
 
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -356,20 +356,33 @@ async fn forward_live_events(
         let product_event = {
             let watches = watches.lock().await;
             if !watches.has_watches() {
-                None
+                Ok(None)
             } else {
                 watches.product_event(&event)
             }
         };
-        if let Some(event) = product_event
-            && outbound.send(OutboundFrame::Event(event)).is_err()
-        {
-            tracing::warn!(
-                event_name = "session_socket.events.send_failed",
-                source = "service-bin",
-                connection_id
-            );
-            return;
+        match product_event {
+            Ok(Some(event)) => {
+                if outbound.send(OutboundFrame::Event(event)).is_err() {
+                    tracing::warn!(
+                        event_name = "session_socket.events.send_failed",
+                        source = "service-bin",
+                        connection_id
+                    );
+                    return;
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(
+                    event_name = "session_socket.events.contract_violation",
+                    source = "service-bin",
+                    connection_id,
+                    event_kind = ?event.kind,
+                    error = %error
+                );
+                return;
+            }
         }
     }
 }
@@ -389,8 +402,7 @@ async fn send_response(
     id: String,
     response: service_runtime::ConsumerResponse,
 ) -> std::result::Result<(), ()> {
-    let frame = ServerResponseFrame::new(id, response);
-    let text = serde_json::to_string(&frame).map_err(|_error| ())?;
+    let text = server_response_frame_text(id, response).map_err(|_error| ())?;
     sender
         .send(Message::Text(text.into()))
         .await
@@ -401,8 +413,7 @@ async fn send_event(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     event: ConduitRuntimeEvent,
 ) -> std::result::Result<(), ()> {
-    let frame = ServerEventFrame::new(event);
-    let text = serde_json::to_string(&frame).map_err(|_error| ())?;
+    let text = server_event_frame_text(event).map_err(|_error| ())?;
     sender
         .send(Message::Text(text.into()))
         .await
@@ -437,32 +448,28 @@ impl WatchState {
         }
     }
 
-    fn product_event(&self, event: &service_runtime::RuntimeEvent) -> Option<ConduitRuntimeEvent> {
+    fn product_event(
+        &self,
+        event: &service_runtime::RuntimeEvent,
+    ) -> std::result::Result<Option<ConduitRuntimeEvent>, ConduitProtocolError> {
         match event.kind {
             service_runtime::RuntimeEventKind::SessionsIndexChanged if self.sessions => {
-                let revision = event.payload.get("revision")?.as_i64()?;
-                Some(ConduitRuntimeEvent::SessionsIndexChanged { revision })
+                ConduitRuntimeEvent::from_runtime_event(event).map(Some)
             }
             service_runtime::RuntimeEventKind::SessionTimelineChanged => {
-                let open_session_id = event.payload.get("openSessionId")?.as_str()?;
-                if !self.timelines.contains(open_session_id) {
-                    return None;
-                }
-                let revision = event.payload.get("revision")?.as_i64()?;
-                let items = event
+                let open_session_id = event
                     .payload
-                    .get("items")
-                    .cloned()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .ok()?;
-                Some(ConduitRuntimeEvent::SessionTimelineChanged {
-                    open_session_id: open_session_id.to_owned(),
-                    revision,
-                    items,
-                })
+                    .get("openSessionId")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or(ConduitProtocolError::InvalidField {
+                        field: "openSessionId",
+                    })?;
+                if !self.timelines.contains(open_session_id) {
+                    return Ok(None);
+                }
+                ConduitRuntimeEvent::from_runtime_event(event).map(Some)
             }
-            _ => None,
+            _ => Ok(None),
         }
     }
 }

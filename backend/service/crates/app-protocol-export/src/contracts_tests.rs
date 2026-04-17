@@ -5,8 +5,10 @@ use agent_client_protocol_schema as acp;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use service_runtime::ConsumerResponse;
 use service_runtime::consumer_protocol::{
-    ConduitProvidersConfigSnapshotResult, ConduitServerFrame, ConduitSessionOpenResult,
+    ConduitProvidersConfigSnapshotResult, ConduitRuntimeEvent, ConduitServerEventFrame,
+    ConduitServerFrame, ConduitServerResponseFrame, ConduitSessionOpenResult,
 };
 use std::error::Error;
 use std::fs;
@@ -59,33 +61,8 @@ fn generated_contracts_keep_structured_ui_fields() -> Result<(), Box<dyn Error>>
 #[test]
 fn conduit_consumer_contract_fixtures_roundtrip_through_backend_serde() -> Result<(), Box<dyn Error>>
 {
-    roundtrip::<ConduitServerFrame>(serde_json::json!({
-        "v": 1,
-        "type": "event",
-        "event": {
-            "kind": "session_timeline_changed",
-            "openSessionId": "open-1",
-            "revision": 7,
-            "items": [{
-                "kind": "message",
-                "id": "item-1",
-                "role": "agent",
-                "content": [{ "type": "text", "text": "hello" }]
-            }]
-        }
-    }))?;
-    roundtrip::<ConduitServerFrame>(serde_json::json!({
-        "v": 1,
-        "type": "response",
-        "id": "cmd-1",
-        "response": {
-            "id": "cmd-1",
-            "ok": true,
-            "result": { "subscribed": true },
-            "error": null,
-            "snapshot": null
-        }
-    }))?;
+    event_frame_constructor_matches_wire_fixture()?;
+    response_frame_constructor_matches_wire_fixture()?;
     roundtrip::<ConduitSessionOpenResult>(serde_json::json!({
         "sessionId": "session-1",
         "configOptions": null,
@@ -109,6 +86,64 @@ fn conduit_consumer_contract_fixtures_roundtrip_through_backend_serde() -> Resul
         }]
     }))?;
     Ok(())
+}
+
+fn event_frame_constructor_matches_wire_fixture() -> Result<(), Box<dyn Error>> {
+    let event: ConduitRuntimeEvent = serde_json::from_value(event_payload_fixture())?;
+    ensure_equal(
+        &serde_json::to_value(ConduitServerFrame::Event(ConduitServerEventFrame::new(
+            event,
+        )))?,
+        &serde_json::json!({
+            "v": 1,
+            "type": "event",
+            "event": event_payload_fixture()
+        }),
+        "Conduit event frame constructor should match the wire fixture",
+    )
+}
+
+fn response_frame_constructor_matches_wire_fixture() -> Result<(), Box<dyn Error>> {
+    let response_frame = ConduitServerResponseFrame::from_runtime_response(
+        "cmd-1".to_owned(),
+        ConsumerResponse {
+            id: "cmd-1".to_owned(),
+            ok: true,
+            result: serde_json::json!({ "subscribed": true }),
+            error: None,
+            snapshot: None,
+        },
+    )?;
+    ensure_equal(
+        &serde_json::to_value(ConduitServerFrame::Response(response_frame))?,
+        &serde_json::json!({
+            "v": 1,
+            "type": "response",
+            "id": "cmd-1",
+            "response": {
+                "id": "cmd-1",
+                "ok": true,
+                "result": { "subscribed": true },
+                "error": null,
+                "snapshot": null
+            }
+        }),
+        "Conduit response frame constructor should match the wire fixture",
+    )
+}
+
+fn event_payload_fixture() -> Value {
+    serde_json::json!({
+        "kind": "session_timeline_changed",
+        "openSessionId": "open-1",
+        "revision": 7,
+        "items": [{
+            "kind": "message",
+            "id": "item-1",
+            "role": "agent",
+            "content": [{ "type": "text", "text": "hello" }]
+        }]
+    })
 }
 
 #[test]

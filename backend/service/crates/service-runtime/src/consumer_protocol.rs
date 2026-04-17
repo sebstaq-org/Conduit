@@ -5,6 +5,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::{ConsumerResponse, RuntimeEvent};
+
 /// Transport protocol version for Conduit's consumer WebSocket frames.
 pub const CONDUIT_TRANSPORT_VERSION: u8 = 1;
 
@@ -35,6 +37,25 @@ pub struct ConduitServerResponseFrame {
     pub response: ConduitConsumerResponse,
 }
 
+impl ConduitServerResponseFrame {
+    /// Creates one response frame from a runtime response.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the optional runtime snapshot cannot be serialized.
+    pub fn from_runtime_response(
+        id: String,
+        response: ConsumerResponse,
+    ) -> serde_json::Result<Self> {
+        Ok(Self {
+            version: CONDUIT_TRANSPORT_VERSION,
+            frame_type: "response".to_owned(),
+            id,
+            response: ConduitConsumerResponse::from_runtime_response(response)?,
+        })
+    }
+}
+
 /// One server event frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ConduitServerEventFrame {
@@ -48,6 +69,18 @@ pub struct ConduitServerEventFrame {
     pub frame_type: String,
     /// Product runtime event payload.
     pub event: ConduitRuntimeEvent,
+}
+
+impl ConduitServerEventFrame {
+    /// Creates one event frame.
+    #[must_use]
+    pub fn new(event: ConduitRuntimeEvent) -> Self {
+        Self {
+            version: CONDUIT_TRANSPORT_VERSION,
+            frame_type: "event".to_owned(),
+            event,
+        }
+    }
 }
 
 /// One stable consumer response envelope.
@@ -65,6 +98,23 @@ pub struct ConduitConsumerResponse {
     pub snapshot: Option<Value>,
 }
 
+impl ConduitConsumerResponse {
+    /// Creates one exported consumer response from the runtime response envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the optional runtime snapshot cannot be serialized.
+    pub fn from_runtime_response(response: ConsumerResponse) -> serde_json::Result<Self> {
+        Ok(Self {
+            id: response.id,
+            ok: response.ok,
+            result: response.result,
+            error: response.error.map(ConduitConsumerError::from),
+            snapshot: response.snapshot.map(serde_json::to_value).transpose()?,
+        })
+    }
+}
+
 /// Stable consumer error envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ConduitConsumerError {
@@ -72,6 +122,15 @@ pub struct ConduitConsumerError {
     pub code: String,
     /// Human-readable error details.
     pub message: String,
+}
+
+impl From<crate::ConsumerError> for ConduitConsumerError {
+    fn from(error: crate::ConsumerError) -> Self {
+        Self {
+            code: error.code,
+            message: error.message,
+        }
+    }
 }
 
 /// Consumer-visible product event forwarded over the WebSocket transport.
@@ -97,6 +156,70 @@ pub enum ConduitRuntimeEvent {
         #[serde(skip_serializing_if = "Option::is_none")]
         items: Option<Vec<ConduitTranscriptItem>>,
     },
+}
+
+impl ConduitRuntimeEvent {
+    /// Projects one watched runtime event into the consumer product protocol.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the runtime payload does not match the consumer event contract.
+    pub fn from_runtime_event(event: &RuntimeEvent) -> Result<Self, ConduitProtocolError> {
+        match event.kind {
+            crate::RuntimeEventKind::SessionsIndexChanged => Ok(Self::SessionsIndexChanged {
+                revision: required_i64(&event.payload, "revision")?,
+            }),
+            crate::RuntimeEventKind::SessionTimelineChanged => Ok(Self::SessionTimelineChanged {
+                open_session_id: required_string(&event.payload, "openSessionId")?,
+                revision: required_i64(&event.payload, "revision")?,
+                items: optional_transcript_items(&event.payload)?,
+            }),
+        }
+    }
+}
+
+/// Consumer protocol projection error.
+#[derive(Debug, thiserror::Error)]
+pub enum ConduitProtocolError {
+    /// A required field was missing or had the wrong type.
+    #[error("runtime event payload field {field} is invalid")]
+    InvalidField {
+        /// Invalid field name.
+        field: &'static str,
+    },
+    /// Transcript items failed the consumer protocol contract.
+    #[error("runtime event payload field items is invalid: {source}")]
+    InvalidItems {
+        /// Underlying deserialization error.
+        #[from]
+        source: serde_json::Error,
+    },
+}
+
+fn required_i64(payload: &Value, field: &'static str) -> Result<i64, ConduitProtocolError> {
+    payload
+        .get(field)
+        .and_then(Value::as_i64)
+        .ok_or(ConduitProtocolError::InvalidField { field })
+}
+
+fn required_string(payload: &Value, field: &'static str) -> Result<String, ConduitProtocolError> {
+    payload
+        .get(field)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or(ConduitProtocolError::InvalidField { field })
+}
+
+fn optional_transcript_items(
+    payload: &Value,
+) -> Result<Option<Vec<ConduitTranscriptItem>>, ConduitProtocolError> {
+    payload
+        .get("items")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|source| ConduitProtocolError::InvalidItems { source })
 }
 
 /// One projected transcript item returned to UI consumers.
