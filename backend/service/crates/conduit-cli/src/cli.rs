@@ -27,6 +27,8 @@ pub(crate) struct CaptureRequest {
 /// Supported provider capture operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CaptureOperation {
+    /// Official ACP `initialize`.
+    Initialize,
     /// Official ACP `session/new`.
     New,
     /// Official ACP `session/list`.
@@ -49,6 +51,11 @@ pub(crate) enum CaptureOperation {
 pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
     match args {
         [capture, provider, operation, rest @ ..]
+            if capture == "capture" && provider == "codex" && operation == "initialize" =>
+        {
+            Ok(Command::Capture(parse_initialize_capture(rest)?))
+        }
+        [capture, provider, operation, rest @ ..]
             if capture == "capture" && provider == "codex" && operation == "session/list" =>
         {
             Ok(Command::Capture(parse_session_list_capture(rest)?))
@@ -69,15 +76,44 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
             Ok(Command::Capture(parse_session_prompt_capture(rest)?))
         }
         [capture, ..] if capture == "capture" => Err(CliError::invalid_command(
-            "unsupported capture command; expected: conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
         )),
         [] => Err(CliError::invalid_command(
-            "missing command; expected: conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
         )),
         [command, ..] => Err(CliError::invalid_command(format!(
-            "unsupported command {command}; expected: conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt"
+            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt"
         ))),
     }
+}
+
+fn parse_initialize_capture(args: &[String]) -> Result<CaptureRequest> {
+    let mut cwd = None;
+    let mut output = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = &args[index];
+        let Some(value) = args.get(index + 1) else {
+            return Err(CliError::invalid_command(format!(
+                "missing value for {flag}"
+            )));
+        };
+        match flag.as_str() {
+            "--cwd" => cwd = Some(PathBuf::from(value)),
+            "--out" => output = Some(PathBuf::from(value)),
+            _ => {
+                return Err(CliError::invalid_command(format!(
+                    "unsupported flag {flag}"
+                )));
+            }
+        }
+        index += 2;
+    }
+    Ok(CaptureRequest {
+        operation: CaptureOperation::Initialize,
+        cwd: provider_workspace_cwd(cwd)?,
+        output,
+    })
 }
 
 fn parse_session_new_capture(args: &[String]) -> Result<CaptureRequest> {
@@ -281,6 +317,47 @@ mod tests {
     }
 
     #[test]
+    fn parses_codex_initialize_capture_with_default_workspace()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let parsed = parse_command(&args(&["capture", "codex", "initialize"]))?;
+        let super::Command::Capture(request) = parsed;
+        if request.operation != super::CaptureOperation::Initialize {
+            return Err("operation did not parse".into());
+        }
+        if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
+            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parses_codex_initialize_capture_with_relative_workspace_child()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let parsed = parse_command(&args(&[
+            "capture",
+            "codex",
+            "initialize",
+            "--cwd",
+            "init-smoke",
+            "--out",
+            "/captures/one",
+        ]))?;
+        let super::Command::Capture(request) = parsed;
+        if request.operation != super::CaptureOperation::Initialize {
+            return Err("operation did not parse".into());
+        }
+        if request.cwd.as_path()
+            != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("init-smoke")
+        {
+            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+        }
+        if request.output.as_deref() != Some(Path::new("/captures/one")) {
+            return Err("output did not parse".into());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn parses_codex_session_load_capture() -> Result<(), Box<dyn std::error::Error>> {
         let parsed = parse_command(&args(&[
             "capture",
@@ -454,6 +531,21 @@ mod tests {
             "capture",
             "codex",
             "session/new",
+            "--cwd",
+            "../outside",
+        ]))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("must stay under"));
+    }
+
+    #[test]
+    fn rejects_initialize_workspace_escape() {
+        let error = parse_command(&args(&[
+            "capture",
+            "codex",
+            "initialize",
             "--cwd",
             "../outside",
         ]))

@@ -2,6 +2,7 @@
 
 use crate::cli::{CaptureOperation, CaptureRequest};
 use crate::error::{CliError, Result};
+use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
 use app_api::AppService;
 use serde::Serialize;
@@ -82,6 +83,16 @@ pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
         }
     };
 
+    if !matches!(operation, CaptureOperation::Initialize)
+        && let Err(error) = capture_initialize(&mut service, &mut ledger)
+    {
+        service.disconnect_provider();
+        ledger.push("provider.disconnect.finish", true)?;
+        ledger.push("capture.finish", false)?;
+        ledger.write(&output)?;
+        return Err(error);
+    }
+
     let raw = match capture_provider(&mut service, &operation, &cwd, &mut ledger) {
         Ok(raw) => raw,
         Err(error) => {
@@ -115,6 +126,7 @@ fn capture_provider(
     ledger: &mut Ledger,
 ) -> Result<Value> {
     match operation {
+        CaptureOperation::Initialize => capture_initialize(service, ledger),
         CaptureOperation::New => capture_session_new(service, cwd, ledger),
         CaptureOperation::List => capture_session_list(service, cwd, ledger),
         CaptureOperation::Load { session_id } => {
@@ -124,6 +136,20 @@ fn capture_provider(
             session_id,
             prompt_path,
         } => capture_session_prompt(service, session_id.as_deref(), prompt_path, cwd, ledger),
+    }
+}
+
+fn capture_initialize(service: &mut AppService, ledger: &mut Ledger) -> Result<Value> {
+    ledger.push("provider.initialize.start", true)?;
+    match service.initialize_provider(ProviderInitializeRequest::conduit_default()) {
+        Ok(response) => {
+            ledger.push("provider.initialize.finish", true)?;
+            Ok(serde_json::to_value(response)?)
+        }
+        Err(error) => {
+            ledger.push("provider.initialize.finish", false)?;
+            Err(error.into())
+        }
     }
 }
 
@@ -295,7 +321,7 @@ fn create_output_dir(output: &Path) -> Result<()> {
 fn create_capture_cwd(operation: &CaptureOperation, cwd: &Path) -> Result<()> {
     if matches!(
         operation,
-        CaptureOperation::New | CaptureOperation::Prompt { .. }
+        CaptureOperation::Initialize | CaptureOperation::New | CaptureOperation::Prompt { .. }
     ) {
         create_dir_all(cwd).map_err(|source| CliError::io(Some(cwd.to_path_buf()), source))?;
     }
@@ -324,11 +350,49 @@ fn write_manifest(
 
 fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
     match operation {
+        CaptureOperation::Initialize => validate_initialize(value),
         CaptureOperation::New => validate_session_new(value),
         CaptureOperation::List => validate_session_list(value),
         CaptureOperation::Load { .. } => validate_session_load(value),
         CaptureOperation::Prompt { .. } => validate_session_prompt(value),
     }
+}
+
+fn validate_initialize(value: &Value) -> Result<()> {
+    if value.pointer("/request/method").and_then(Value::as_str) != Some("initialize") {
+        return Err(CliError::invalid_capture(
+            "provider initialize capture must contain request.method initialize",
+        ));
+    }
+    if value.pointer("/request/protocolVersion").is_none() {
+        return Err(CliError::invalid_capture(
+            "provider initialize capture must contain request.protocolVersion",
+        ));
+    }
+    if value.pointer("/response/protocolVersion").is_none() {
+        return Err(CliError::invalid_capture(
+            "provider initialize capture must contain response.protocolVersion",
+        ));
+    }
+    if value
+        .pointer("/response/agentCapabilities")
+        .and_then(Value::as_object)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider initialize capture must contain response.agentCapabilities object",
+        ));
+    }
+    if value
+        .pointer("/response/authMethods")
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err(CliError::invalid_capture(
+        "provider initialize capture must contain response.authMethods array",
+    ))
 }
 
 fn validate_session_new(value: &Value) -> Result<()> {
@@ -419,9 +483,10 @@ fn validate_session_prompt(value: &Value) -> Result<()> {
 fn normalize_capture(operation: &CaptureOperation, value: &Value) -> Result<Value> {
     match operation {
         CaptureOperation::Prompt { .. } => normalize_session_prompt(value),
-        CaptureOperation::New | CaptureOperation::List | CaptureOperation::Load { .. } => {
-            Ok(value.clone())
-        }
+        CaptureOperation::Initialize
+        | CaptureOperation::New
+        | CaptureOperation::List
+        | CaptureOperation::Load { .. } => Ok(value.clone()),
     }
 }
 
@@ -475,6 +540,7 @@ fn normalize_session_prompt(value: &Value) -> Result<Value> {
 
 fn operation_name(operation: &CaptureOperation) -> &'static str {
     match operation {
+        CaptureOperation::Initialize => "initialize",
         CaptureOperation::New => "session/new",
         CaptureOperation::List => "session/list",
         CaptureOperation::Load { .. } => "session/load",
@@ -484,6 +550,7 @@ fn operation_name(operation: &CaptureOperation) -> &'static str {
 
 fn operation_slug(operation: &CaptureOperation) -> &'static str {
     match operation {
+        CaptureOperation::Initialize => "initialize",
         CaptureOperation::New => "session-new",
         CaptureOperation::List => "session-list",
         CaptureOperation::Load { .. } => "session-load",
@@ -493,7 +560,7 @@ fn operation_slug(operation: &CaptureOperation) -> &'static str {
 
 fn session_id(operation: &CaptureOperation) -> Option<String> {
     match operation {
-        CaptureOperation::New | CaptureOperation::List => None,
+        CaptureOperation::Initialize | CaptureOperation::New | CaptureOperation::List => None,
         CaptureOperation::Load { session_id } => Some(session_id.clone()),
         CaptureOperation::Prompt { session_id, .. } => session_id.clone(),
     }

@@ -1,6 +1,7 @@
 use super::{
-    create_output_dir, normalize_capture, read_prompt_blocks, validate_session_list,
-    validate_session_load, validate_session_new, validate_session_prompt, write_json,
+    create_output_dir, normalize_capture, read_prompt_blocks, validate_initialize,
+    validate_session_list, validate_session_load, validate_session_new, validate_session_prompt,
+    write_json,
 };
 use crate::cli::CaptureOperation;
 use serde_json::json;
@@ -15,6 +16,43 @@ fn accepts_session_list_with_sessions_array() {
 #[test]
 fn accepts_session_new_with_session_id() {
     assert!(validate_session_new(&json!({ "sessionId": "session-1" })).is_ok());
+}
+
+#[test]
+fn accepts_initialize_with_request_and_response() {
+    assert!(
+        validate_initialize(&json!({
+            "request": {
+                "method": "initialize",
+                "protocolVersion": "1",
+                "clientCapabilities": {},
+                "clientInfo": { "name": "conduit", "version": "0.1.0" }
+            },
+            "response": {
+                "protocolVersion": "1",
+                "agentCapabilities": {},
+                "agentInfo": { "name": "codex", "version": "0.1.0" },
+                "authMethods": []
+            }
+        }))
+        .is_ok()
+    );
+}
+
+#[test]
+fn rejects_initialize_without_initialize_method() {
+    let error = validate_initialize(&json!({
+        "request": { "method": "session/list", "protocolVersion": "1" },
+        "response": {
+            "protocolVersion": "1",
+            "agentCapabilities": {},
+            "authMethods": []
+        }
+    }))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("request.method initialize"));
 }
 
 #[test]

@@ -215,7 +215,7 @@ async function waitForIndexedSessions(
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15_000) {
     assertProcessesRunning(processes);
-    const result = await sendRuntimeCommand(wsUrl, "sessions/grouped", "all", {
+    const result = await sendRuntimeCommand(wsUrl, "sessions/grouped", "codex", {
       updatedWithinDays: null,
     });
     if (containsSessionForCwd(result, cwd)) {
