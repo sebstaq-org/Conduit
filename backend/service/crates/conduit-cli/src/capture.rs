@@ -136,6 +136,11 @@ fn capture_provider(
             session_id,
             prompt_path,
         } => capture_session_prompt(service, session_id.as_deref(), prompt_path, cwd, ledger),
+        CaptureOperation::SetConfigOption {
+            session_id,
+            config_id,
+            value,
+        } => capture_session_set_config_option(service, session_id, config_id, value, ledger),
     }
 }
 
@@ -250,6 +255,33 @@ fn capture_session_prompt(
     }
 }
 
+fn capture_session_set_config_option(
+    service: &mut AppService,
+    session_id: &str,
+    config_id: &str,
+    value: &str,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    ledger.push("provider.session_set_config_option.start", true)?;
+    match service.set_session_config_option(session_id, config_id, value) {
+        Ok(response) => {
+            ledger.push("provider.session_set_config_option.finish", true)?;
+            Ok(json!({
+                "configRequest": {
+                    "sessionId": session_id,
+                    "configId": config_id,
+                    "value": value,
+                },
+                "configResponse": response,
+            }))
+        }
+        Err(error) => {
+            ledger.push("provider.session_set_config_option.finish", false)?;
+            Err(error.into())
+        }
+    }
+}
+
 fn read_prompt_blocks(path: &Path) -> Result<Vec<Value>> {
     let body =
         read_to_string(path).map_err(|source| CliError::io(Some(path.to_path_buf()), source))?;
@@ -355,6 +387,7 @@ fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
         CaptureOperation::List => validate_session_list(value),
         CaptureOperation::Load { .. } => validate_session_load(value),
         CaptureOperation::Prompt { .. } => validate_session_prompt(value),
+        CaptureOperation::SetConfigOption { .. } => validate_session_set_config_option(value),
     }
 }
 
@@ -480,13 +513,59 @@ fn validate_session_prompt(value: &Value) -> Result<()> {
     ))
 }
 
+fn validate_session_set_config_option(value: &Value) -> Result<()> {
+    let Some(config_id) = value
+        .pointer("/configRequest/configId")
+        .and_then(Value::as_str)
+    else {
+        return Err(CliError::invalid_capture(
+            "provider session/set_config_option capture must contain configRequest.configId string",
+        ));
+    };
+    let Some(config_value) = value
+        .pointer("/configRequest/value")
+        .and_then(Value::as_str)
+    else {
+        return Err(CliError::invalid_capture(
+            "provider session/set_config_option capture must contain configRequest.value string",
+        ));
+    };
+    if value
+        .pointer("/configRequest/sessionId")
+        .and_then(Value::as_str)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider session/set_config_option capture must contain configRequest.sessionId string",
+        ));
+    }
+    let Some(config_options) = value
+        .pointer("/configResponse/configOptions")
+        .and_then(Value::as_array)
+    else {
+        return Err(CliError::invalid_capture(
+            "provider session/set_config_option capture must contain configResponse.configOptions array",
+        ));
+    };
+    if config_options.iter().any(|option| {
+        option.get("id").and_then(Value::as_str) == Some(config_id)
+            && option.get("currentValue").and_then(Value::as_str) == Some(config_value)
+    }) {
+        return Ok(());
+    }
+    Err(CliError::invalid_capture(
+        "provider session/set_config_option response must include selected config currentValue",
+    ))
+}
+
 fn normalize_capture(operation: &CaptureOperation, value: &Value) -> Result<Value> {
     match operation {
         CaptureOperation::Prompt { .. } => normalize_session_prompt(value),
         CaptureOperation::Initialize
         | CaptureOperation::New
         | CaptureOperation::List
-        | CaptureOperation::Load { .. } => Ok(value.clone()),
+        | CaptureOperation::Load { .. }
+        | CaptureOperation::SetConfigOption { .. } => Ok(value.clone()),
     }
 }
 
@@ -545,6 +624,7 @@ fn operation_name(operation: &CaptureOperation) -> &'static str {
         CaptureOperation::List => "session/list",
         CaptureOperation::Load { .. } => "session/load",
         CaptureOperation::Prompt { .. } => "session/prompt",
+        CaptureOperation::SetConfigOption { .. } => "session/set_config_option",
     }
 }
 
@@ -555,6 +635,7 @@ fn operation_slug(operation: &CaptureOperation) -> &'static str {
         CaptureOperation::List => "session-list",
         CaptureOperation::Load { .. } => "session-load",
         CaptureOperation::Prompt { .. } => "session-prompt",
+        CaptureOperation::SetConfigOption { .. } => "session-set-config-option",
     }
 }
 
@@ -563,6 +644,7 @@ fn session_id(operation: &CaptureOperation) -> Option<String> {
         CaptureOperation::Initialize | CaptureOperation::New | CaptureOperation::List => None,
         CaptureOperation::Load { session_id } => Some(session_id.clone()),
         CaptureOperation::Prompt { session_id, .. } => session_id.clone(),
+        CaptureOperation::SetConfigOption { session_id, .. } => Some(session_id.clone()),
     }
 }
 

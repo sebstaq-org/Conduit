@@ -45,6 +45,15 @@ pub(crate) enum CaptureOperation {
         /// JSON file containing the top-level ACP `ContentBlock[]` payload.
         prompt_path: PathBuf,
     },
+    /// Official ACP `session/set_config_option`.
+    SetConfigOption {
+        /// ACP session id returned by the provider.
+        session_id: String,
+        /// ACP config option id to set.
+        config_id: String,
+        /// ACP config option value to set.
+        value: String,
+    },
 }
 
 /// Parses top-level CLI arguments.
@@ -75,14 +84,23 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         {
             Ok(Command::Capture(parse_session_prompt_capture(rest)?))
         }
+        [capture, provider, operation, rest @ ..]
+            if capture == "capture"
+                && provider == "codex"
+                && operation == "session/set_config_option" =>
+        {
+            Ok(Command::Capture(parse_session_set_config_option_capture(
+                rest,
+            )?))
+        }
         [capture, ..] if capture == "capture" => Err(CliError::invalid_command(
-            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
         )),
         [] => Err(CliError::invalid_command(
-            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
         )),
         [command, ..] => Err(CliError::invalid_command(format!(
-            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt"
+            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option"
         ))),
     }
 }
@@ -244,6 +262,60 @@ fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
         operation: CaptureOperation::Prompt {
             session_id,
             prompt_path,
+        },
+        cwd: provider_workspace_cwd(cwd)?,
+        output,
+    })
+}
+
+fn parse_session_set_config_option_capture(args: &[String]) -> Result<CaptureRequest> {
+    let mut config_id = None;
+    let mut cwd = None;
+    let mut output = None;
+    let mut session_id = None;
+    let mut value = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = &args[index];
+        let Some(flag_value) = args.get(index + 1) else {
+            return Err(CliError::invalid_command(format!(
+                "missing value for {flag}"
+            )));
+        };
+        match flag.as_str() {
+            "--config" => config_id = Some(flag_value.to_owned()),
+            "--cwd" => cwd = Some(PathBuf::from(flag_value)),
+            "--out" => output = Some(PathBuf::from(flag_value)),
+            "--session" => session_id = Some(flag_value.to_owned()),
+            "--value" => value = Some(flag_value.to_owned()),
+            _ => {
+                return Err(CliError::invalid_command(format!(
+                    "unsupported flag {flag}"
+                )));
+            }
+        }
+        index += 2;
+    }
+    let session_id = session_id.ok_or_else(|| {
+        CliError::invalid_command(
+            "missing required --session for codex session/set_config_option capture",
+        )
+    })?;
+    let config_id = config_id.ok_or_else(|| {
+        CliError::invalid_command(
+            "missing required --config for codex session/set_config_option capture",
+        )
+    })?;
+    let value = value.ok_or_else(|| {
+        CliError::invalid_command(
+            "missing required --value for codex session/set_config_option capture",
+        )
+    })?;
+    Ok(CaptureRequest {
+        operation: CaptureOperation::SetConfigOption {
+            session_id,
+            config_id,
+            value,
         },
         cwd: provider_workspace_cwd(cwd)?,
         output,
@@ -449,6 +521,44 @@ mod tests {
     }
 
     #[test]
+    fn parses_codex_session_set_config_option_capture() -> Result<(), Box<dyn std::error::Error>> {
+        let parsed = parse_command(&args(&[
+            "capture",
+            "codex",
+            "session/set_config_option",
+            "--session",
+            "session-1",
+            "--config",
+            "reasoning_effort",
+            "--value",
+            "medium",
+            "--cwd",
+            "config-smoke",
+            "--out",
+            "/captures/one",
+        ]))?;
+        let super::Command::Capture(request) = parsed;
+        if request.operation
+            != (super::CaptureOperation::SetConfigOption {
+                session_id: "session-1".to_owned(),
+                config_id: "reasoning_effort".to_owned(),
+                value: "medium".to_owned(),
+            })
+        {
+            return Err("operation did not parse".into());
+        }
+        if request.cwd.as_path()
+            != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("config-smoke")
+        {
+            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+        }
+        if request.output.as_deref() != Some(Path::new("/captures/one")) {
+            return Err("output did not parse".into());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn parses_codex_session_new_capture_with_default_workspace()
     -> Result<(), Box<dyn std::error::Error>> {
         let parsed = parse_command(&args(&["capture", "codex", "session/new"]))?;
@@ -627,6 +737,57 @@ mod tests {
     }
 
     #[test]
+    fn rejects_session_set_config_option_without_session_id() {
+        let error = parse_command(&args(&[
+            "capture",
+            "codex",
+            "session/set_config_option",
+            "--config",
+            "reasoning_effort",
+            "--value",
+            "medium",
+        ]))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("missing required --session"));
+    }
+
+    #[test]
+    fn rejects_session_set_config_option_without_config_id() {
+        let error = parse_command(&args(&[
+            "capture",
+            "codex",
+            "session/set_config_option",
+            "--session",
+            "session-1",
+            "--value",
+            "medium",
+        ]))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("missing required --config"));
+    }
+
+    #[test]
+    fn rejects_session_set_config_option_without_value() {
+        let error = parse_command(&args(&[
+            "capture",
+            "codex",
+            "session/set_config_option",
+            "--session",
+            "session-1",
+            "--config",
+            "reasoning_effort",
+        ]))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("missing required --value"));
+    }
+
+    #[test]
     fn rejects_unknown_flag() {
         let error = parse_command(&args(&[
             "capture",
@@ -668,6 +829,27 @@ mod tests {
             "session/prompt",
             "--prompt",
             "/tmp/prompt.json",
+            "--provider",
+            "codex",
+        ]))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("unsupported flag --provider"));
+    }
+
+    #[test]
+    fn rejects_unknown_session_set_config_option_flag() {
+        let error = parse_command(&args(&[
+            "capture",
+            "codex",
+            "session/set_config_option",
+            "--session",
+            "session-1",
+            "--config",
+            "reasoning_effort",
+            "--value",
+            "medium",
             "--provider",
             "codex",
         ]))

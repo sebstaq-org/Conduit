@@ -1,7 +1,7 @@
 use super::{
     create_output_dir, normalize_capture, read_prompt_blocks, validate_initialize,
     validate_session_list, validate_session_load, validate_session_new, validate_session_prompt,
-    write_json,
+    validate_session_set_config_option, write_json,
 };
 use crate::cli::CaptureOperation;
 use serde_json::json;
@@ -139,6 +139,66 @@ fn accepts_session_prompt_with_prompt_request_response_and_updates() {
         }))
         .is_ok()
     );
+}
+
+#[test]
+fn accepts_session_set_config_option_with_selected_current_value() {
+    assert!(
+        validate_session_set_config_option(&json!({
+            "configRequest": {
+                "sessionId": "session-1",
+                "configId": "reasoning_effort",
+                "value": "medium"
+            },
+            "configResponse": {
+                "configOptions": [
+                    {
+                        "id": "reasoning_effort",
+                        "currentValue": "medium",
+                        "type": "select",
+                        "options": []
+                    }
+                ]
+            }
+        }))
+        .is_ok()
+    );
+}
+
+#[test]
+fn rejects_session_set_config_option_without_config_options() {
+    let error = validate_session_set_config_option(&json!({
+        "configRequest": {
+            "sessionId": "session-1",
+            "configId": "reasoning_effort",
+            "value": "medium"
+        },
+        "configResponse": {}
+    }))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("configResponse.configOptions array"));
+}
+
+#[test]
+fn rejects_session_set_config_option_without_selected_current_value() {
+    let error = validate_session_set_config_option(&json!({
+        "configRequest": {
+            "sessionId": "session-1",
+            "configId": "reasoning_effort",
+            "value": "medium"
+        },
+        "configResponse": {
+            "configOptions": [
+                { "id": "reasoning_effort", "currentValue": "high" }
+            ]
+        }
+    }))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("selected config currentValue"));
 }
 
 #[test]
