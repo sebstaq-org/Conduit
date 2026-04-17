@@ -49,6 +49,7 @@ jobs:
         id: stage
         env:
           CONDUIT_STAGE_BUILD_REF: HEAD
+          CONDUIT_STAGE_ROOT: ${{ runner.temp }}/conduit-stage
         run: pnpm run stage:build
 
       - name: Upload stage artifact
