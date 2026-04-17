@@ -12,6 +12,7 @@ members = [
   "crates/repo-guard",
   "crates/service-bin",
   "crates/service-runtime",
+  "crates/session-projection",
   "crates/session-store"
 ]
 resolver = "3"

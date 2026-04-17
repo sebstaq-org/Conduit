@@ -6,6 +6,7 @@ use acp_discovery::ProviderId;
 use app_api::AppService;
 use serde::Serialize;
 use serde_json::{Value, json};
+use session_projection::TranscriptItemStatus;
 use std::fs::{File, create_dir, create_dir_all, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -99,8 +100,9 @@ pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
         ledger.write(&output)?;
         return Err(error);
     }
+    let normalized = normalize_capture(&operation, &raw)?;
     write_json(&output.join("provider.raw.json"), &raw)?;
-    write_json(&output.join("provider.normalized.json"), &raw)?;
+    write_json(&output.join("provider.normalized.json"), &normalized)?;
     ledger.push("capture.finish", true)?;
     ledger.write(&output)?;
     Ok(CaptureResult { output })
@@ -414,6 +416,63 @@ fn validate_session_prompt(value: &Value) -> Result<()> {
     ))
 }
 
+fn normalize_capture(operation: &CaptureOperation, value: &Value) -> Result<Value> {
+    match operation {
+        CaptureOperation::Prompt { .. } => normalize_session_prompt(value),
+        CaptureOperation::New | CaptureOperation::List | CaptureOperation::Load { .. } => {
+            Ok(value.clone())
+        }
+    }
+}
+
+fn normalize_session_prompt(value: &Value) -> Result<Value> {
+    let session_id = value
+        .pointer("/promptRequest/sessionId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/prompt capture must contain promptRequest.sessionId string",
+            )
+        })?;
+    let prompt = value
+        .pointer("/promptRequest/prompt")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/prompt capture must contain promptRequest.prompt array",
+            )
+        })?
+        .to_vec();
+    let stop_reason = value
+        .pointer("/promptResponse/stopReason")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/prompt capture must contain promptResponse.stopReason string",
+            )
+        })?;
+    let updates: Vec<acp_core::TranscriptUpdateSnapshot> =
+        serde_json::from_value(value.get("promptUpdates").cloned().ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/prompt capture must contain promptUpdates array",
+            )
+        })?)?;
+    let items = session_projection::prompt_turn_items(
+        "capture-turn",
+        &prompt,
+        &updates,
+        TranscriptItemStatus::Complete,
+        Some(stop_reason),
+    );
+    Ok(json!({
+        "operation": "session/prompt",
+        "sessionId": session_id,
+        "prompt": prompt,
+        "stopReason": stop_reason,
+        "items": items,
+    }))
+}
+
 fn operation_name(operation: &CaptureOperation) -> &'static str {
     match operation {
         CaptureOperation::New => "session/new",
@@ -495,201 +554,5 @@ impl Ledger {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        create_output_dir, read_prompt_blocks, validate_session_list, validate_session_load,
-        validate_session_new, validate_session_prompt, write_json,
-    };
-    use serde_json::json;
-    use std::fs::{create_dir, read_to_string, write};
-    use tempfile::TempDir;
-
-    #[test]
-    fn accepts_session_list_with_sessions_array() {
-        assert!(validate_session_list(&json!({ "sessions": [] })).is_ok());
-    }
-
-    #[test]
-    fn accepts_session_new_with_session_id() {
-        assert!(validate_session_new(&json!({ "sessionId": "session-1" })).is_ok());
-    }
-
-    #[test]
-    fn rejects_session_new_without_session_id() {
-        let error = validate_session_new(&json!({ "models": {} }))
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("sessionId string"));
-    }
-
-    #[test]
-    fn rejects_session_list_without_sessions_array() {
-        let error = validate_session_list(&json!({ "nextCursor": null }))
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("sessions array"));
-    }
-
-    #[test]
-    fn accepts_session_load_with_response_and_loaded_transcript_updates() {
-        assert!(
-            validate_session_load(&json!({
-                "response": {},
-                "loadedTranscript": {
-                    "rawUpdateCount": 0,
-                    "updates": []
-                }
-            }))
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn rejects_session_load_without_response() {
-        let error = validate_session_load(&json!({
-            "loadedTranscript": {
-                "rawUpdateCount": 0,
-                "updates": []
-            }
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("response field"));
-    }
-
-    #[test]
-    fn rejects_session_load_without_loaded_transcript_update_count() {
-        let error = validate_session_load(&json!({
-            "response": {},
-            "loadedTranscript": { "updates": [] }
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("rawUpdateCount number"));
-    }
-
-    #[test]
-    fn rejects_session_load_without_loaded_transcript_updates() {
-        let error = validate_session_load(&json!({
-            "response": {},
-            "loadedTranscript": { "rawUpdateCount": 0 }
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("loadedTranscript.updates array"));
-    }
-
-    #[test]
-    fn accepts_session_prompt_with_prompt_request_response_and_updates() {
-        assert!(
-            validate_session_prompt(&json!({
-                "sessionNew": null,
-                "promptRequest": {
-                    "sessionId": "session-1",
-                    "prompt": [{ "type": "text", "text": "hello" }]
-                },
-                "promptResponse": { "stopReason": "end_turn" },
-                "promptUpdates": []
-            }))
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn rejects_session_prompt_without_prompt_request_session_id() {
-        let error = validate_session_prompt(&json!({
-            "promptRequest": { "prompt": [] },
-            "promptResponse": { "stopReason": "end_turn" },
-            "promptUpdates": []
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("promptRequest.sessionId string"));
-    }
-
-    #[test]
-    fn rejects_session_prompt_without_prompt_response_stop_reason() {
-        let error = validate_session_prompt(&json!({
-            "promptRequest": { "sessionId": "session-1", "prompt": [] },
-            "promptResponse": {},
-            "promptUpdates": []
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("promptResponse.stopReason string"));
-    }
-
-    #[test]
-    fn rejects_session_prompt_without_updates() {
-        let error = validate_session_prompt(&json!({
-            "promptRequest": { "sessionId": "session-1", "prompt": [] },
-            "promptResponse": { "stopReason": "end_turn" }
-        }))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("promptUpdates array"));
-    }
-
-    #[test]
-    fn reads_prompt_content_block_array() -> Result<(), Box<dyn std::error::Error>> {
-        let tempdir = TempDir::new()?;
-        let path = tempdir.path().join("prompt.json");
-        write(&path, r#"[{"type":"text","text":"hello"}]"#)?;
-        let blocks = read_prompt_blocks(&path)?;
-        if blocks != vec![json!({ "type": "text", "text": "hello" })] {
-            return Err("prompt blocks did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_prompt_file_that_is_not_content_block_array()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let tempdir = TempDir::new()?;
-        let path = tempdir.path().join("prompt.json");
-        write(&path, r#"{"type":"text","text":"hello"}"#)?;
-        let error = read_prompt_blocks(&path)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        if !error.contains("ContentBlock array") {
-            return Err("expected ContentBlock array error".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn writer_refuses_existing_output_directory() -> Result<(), Box<dyn std::error::Error>> {
-        let tempdir = TempDir::new()?;
-        let output = tempdir.path().join("capture");
-        create_dir(&output)?;
-        let error = create_output_dir(&output)
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        if !error.contains("capture") {
-            return Err("expected existing output directory error".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn writes_pretty_json_file() -> Result<(), Box<dyn std::error::Error>> {
-        let tempdir = TempDir::new()?;
-        let path = tempdir.path().join("provider.raw.json");
-        write_json(&path, &json!({ "sessions": [] }))?;
-        let body = read_to_string(path)?;
-        if !body.contains("\"sessions\"") {
-            return Err("expected sessions field in JSON body".into());
-        }
-        Ok(())
-    }
-}
+#[path = "capture_tests.rs"]
+mod tests;

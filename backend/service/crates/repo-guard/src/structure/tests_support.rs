@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 13] = [
+const APPROVED_CRATES: [&str; 14] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -22,6 +22,7 @@ const APPROVED_CRATES: [&str; 13] = [
     "repo-guard",
     "service-bin",
     "service-runtime",
+    "session-projection",
     "session-store",
 ];
 
@@ -225,14 +226,17 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 13] {
+fn local_deps() -> [LocalDeps; 14] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
         ("acp-discovery", Vec::<&str>::new()),
         ("app-api", vec!["acp-contracts", "acp-core"]),
         ("app-protocol-export", vec!["service-runtime"]),
-        ("conduit-cli", vec!["acp-core", "acp-discovery", "app-api"]),
+        (
+            "conduit-cli",
+            vec!["acp-core", "acp-discovery", "app-api", "session-projection"],
+        ),
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
@@ -254,6 +258,10 @@ fn local_deps() -> [LocalDeps; 13] {
             "service-runtime",
             vec!["acp-core", "acp-discovery", "app-api", "session-store"],
         ),
-        ("session-store", vec!["acp-core", "acp-discovery"]),
+        ("session-projection", vec!["acp-core"]),
+        (
+            "session-store",
+            vec!["acp-core", "acp-discovery", "session-projection"],
+        ),
     ]
 }

@@ -31,7 +31,7 @@ const APPROVED_PACKAGES: [&str; 7] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 13] = [
+const APPROVED_CRATES: [&str; 14] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -44,6 +44,7 @@ const APPROVED_CRATES: [&str; 13] = [
     "repo-guard",
     "service-bin",
     "service-runtime",
+    "session-projection",
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
