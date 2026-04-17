@@ -10,6 +10,8 @@ use serde_json::Value;
 pub enum ConnectionState {
     /// The provider process has not been started.
     Disconnected,
+    /// The provider process is live but ACP `initialize` has not completed.
+    Connected,
     /// The provider process is live and initialized.
     Ready,
 }

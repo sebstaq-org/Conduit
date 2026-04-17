@@ -13,7 +13,8 @@
 
 use acp_contracts::LOCKED_ACP_METHODS;
 use acp_core::{
-    AcpHost, InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
+    AcpHost, InteractionResponse, ProviderInitializeRequest, ProviderInitializeResult,
+    ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
 };
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use agent_client_protocol_schema::{
@@ -42,12 +43,12 @@ pub struct AppOperationSnapshot {
 }
 
 impl AppService {
-    /// Connects one provider and runs live `initialize`.
+    /// Connects one provider process without running ACP `initialize`.
     ///
     /// # Errors
     ///
     /// Returns an error when discovery fails, the provider process cannot be
-    /// spawned, or the live `initialize` exchange fails ACP validation.
+    /// spawned.
     pub fn connect_provider(provider: ProviderId) -> Result<Self> {
         tracing::info!(
             event_name = "app_api.connect_provider.start",
@@ -59,8 +60,7 @@ impl AppService {
         })
     }
 
-    /// Connects one provider with explicit launcher environment overrides and
-    /// runs live `initialize`.
+    /// Connects one provider with explicit launcher environment overrides.
     ///
     /// # Errors
     ///
@@ -79,6 +79,29 @@ impl AppService {
         Ok(Self {
             host: AcpHost::connect_with_environment(provider, environment)?,
         })
+    }
+
+    /// Runs ACP `initialize` on the connected provider.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the underlying live ACP host cannot complete
+    /// `initialize`.
+    pub fn initialize_provider(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        self.host.initialize(request)
+    }
+
+    /// Returns the completed ACP `initialize` exchange when available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the underlying live ACP host cannot answer the
+    /// request.
+    pub fn provider_initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        self.host.initialize_result()
     }
 
     /// Disconnects the active provider.

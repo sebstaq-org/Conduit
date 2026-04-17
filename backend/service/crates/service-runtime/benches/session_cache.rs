@@ -1,11 +1,14 @@
 //! Benchmark suite for session-open cache behavior and startup hydration cost.
 
 use acp_core::{
-    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
+    ConnectionState, LiveSessionIdentity, LoadedTranscriptSnapshot, ProviderInitializeRequest,
+    ProviderInitializeResponse, ProviderInitializeResult, ProviderSnapshot, RawWireEvent,
     TranscriptUpdateSnapshot, WireKind, WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
-use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+use agent_client_protocol_schema::{
+    AgentCapabilities, Implementation, InitializeResponse, ProtocolVersion,
+};
 use app_api as _;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, black_box};
 use schemars as _;
@@ -116,6 +119,19 @@ struct FakeProvider {
 }
 
 impl ProviderPort for FakeProvider {
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> service_runtime::Result<ProviderInitializeResult> {
+        Ok(bench_initialize_result(request))
+    }
+
+    fn initialize_result(&self) -> service_runtime::Result<Option<ProviderInitializeResult>> {
+        Ok(Some(bench_initialize_result(
+            ProviderInitializeRequest::conduit_default(),
+        )))
+    }
+
     fn snapshot(&self) -> ProviderSnapshot {
         let loaded_transcripts = self
             .state
@@ -246,6 +262,18 @@ impl ProviderPort for FakeProvider {
 
     fn session_cancel(&mut self, session_id: String) -> service_runtime::Result<Value> {
         Ok(json!({ "sessionId": session_id }))
+    }
+}
+
+fn bench_initialize_result(request: ProviderInitializeRequest) -> ProviderInitializeResult {
+    ProviderInitializeResult {
+        request,
+        response: ProviderInitializeResponse {
+            protocol_version: ProtocolVersion::V1,
+            agent_capabilities: AgentCapabilities::default(),
+            agent_info: Some(Implementation::new("bench-agent", "0.5.0")),
+            auth_methods: Vec::new(),
+        },
     }
 }
 
