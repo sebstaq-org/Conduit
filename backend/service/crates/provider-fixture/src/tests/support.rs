@@ -1,4 +1,3 @@
-use super::super::FixtureProviderFactory;
 use acp_core::{ProviderInitializeRequest, ProviderInitializeResponse, ProviderInitializeResult};
 use acp_discovery::ProviderId;
 use agent_client_protocol_schema::{AgentCapabilities, Implementation, ProtocolVersion};
