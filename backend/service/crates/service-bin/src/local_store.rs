@@ -12,7 +12,19 @@ use std::path::PathBuf;
 /// Returns an error when the OS app-data directory cannot be resolved or the
 /// SQLite store cannot be opened.
 pub(crate) fn open_product_store() -> Result<LocalStore> {
-    Ok(LocalStore::open_path(product_store_path()?)?)
+    open_store(None)
+}
+
+/// Opens either the product store or an explicitly configured SQLite store.
+///
+/// # Errors
+///
+/// Returns an error when the OS app-data directory cannot be resolved, the
+/// configured path cannot be opened, or the SQLite store cannot be initialized.
+pub(crate) fn open_store(path: Option<PathBuf>) -> Result<LocalStore> {
+    Ok(LocalStore::open_path(
+        path.unwrap_or(product_store_path()?),
+    )?)
 }
 
 fn product_store_path() -> Result<PathBuf> {

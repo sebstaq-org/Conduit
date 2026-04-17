@@ -1,0 +1,11 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Sanitized from manual Codex capture; session id and cwd replaced with deterministic E2E values.",
+  "cwd": "/tmp/conduit-e2e-fixture-project",
+  "manualCapture": false,
+  "operation": "session/new",
+  "provider": "codex",
+  "sourceCapture": "conduit-artifacts/manual/captures/codex/session-new/smoke-20260417T150804Z",
+  "timestamp": "2026-01-01T00:00:00Z"
+}

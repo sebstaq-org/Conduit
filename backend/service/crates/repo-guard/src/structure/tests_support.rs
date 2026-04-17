@@ -9,18 +9,21 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 12] = [
+const APPROVED_CRATES: [&str; 15] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
+    "conduit-cli",
+    "provider-fixture",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
     "repo-guard",
     "service-bin",
     "service-runtime",
+    "session-projection",
     "session-store",
 ];
 
@@ -84,6 +87,7 @@ pub(super) fn ensure_any(
 fn create_roots(repo_root: &Path) -> Result<()> {
     for relative in [
         "apps/desktop/src",
+        "apps/e2e/src",
         "apps/frontend/src",
         "artifacts/automated",
         "artifacts/manual",
@@ -131,7 +135,7 @@ fn write_workspace_packages(repo_root: &Path) -> Result<()> {
 fn write_crates(repo_root: &Path) -> Result<()> {
     for crate_name in APPROVED_CRATES {
         let crate_root = repo_root.join("backend/service/crates").join(crate_name);
-        let entry = if crate_name == "service-bin" {
+        let entry = if matches!(crate_name, "conduit-cli" | "service-bin") {
             "main.rs"
         } else {
             "lib.rs"
@@ -164,9 +168,10 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 9] {
+fn workspace_packages() -> [(&'static str, &'static str); 10] {
     [
         ("@conduit/desktop", "apps/desktop"),
+        ("@conduit/e2e", "apps/e2e"),
         ("@conduit/frontend", "apps/frontend"),
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
@@ -224,13 +229,21 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 12] {
+fn local_deps() -> [LocalDeps; 15] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
         ("acp-discovery", Vec::<&str>::new()),
         ("app-api", vec!["acp-contracts", "acp-core"]),
         ("app-protocol-export", vec!["service-runtime"]),
+        (
+            "conduit-cli",
+            vec!["acp-core", "acp-discovery", "app-api", "session-projection"],
+        ),
+        (
+            "provider-fixture",
+            vec!["acp-core", "acp-discovery", "service-runtime"],
+        ),
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
@@ -243,6 +256,7 @@ fn local_deps() -> [LocalDeps; 12] {
                 "provider-claude",
                 "provider-codex",
                 "provider-copilot",
+                "provider-fixture",
                 "session-store",
                 "tracing",
                 "tracing-subscriber",
@@ -252,6 +266,10 @@ fn local_deps() -> [LocalDeps; 12] {
             "service-runtime",
             vec!["acp-core", "acp-discovery", "app-api", "session-store"],
         ),
-        ("session-store", vec!["acp-core", "acp-discovery"]),
+        ("session-projection", vec!["acp-core"]),
+        (
+            "session-store",
+            vec!["acp-core", "acp-discovery", "session-projection"],
+        ),
     ]
 }

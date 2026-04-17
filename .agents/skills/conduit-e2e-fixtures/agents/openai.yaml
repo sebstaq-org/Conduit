@@ -1,0 +1,4 @@
+interface:
+  display_name: "Conduit E2E Fixtures"
+  short_description: "Add Conduit capture fixtures, mock provider endpoints, and E2E tests"
+  default_prompt: "Use $conduit-e2e-fixtures to add or update capture CLI support, provider-fixture mock endpoints, or Playwright E2E tests against fixture-backed ACP providers."

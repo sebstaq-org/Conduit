@@ -3,6 +3,7 @@
 use crate::error::{Result, ServiceError};
 use serde_json::{Value, json};
 use service_runtime::ConsumerCommand;
+use std::path::PathBuf;
 
 /// The supported service commands.
 pub(crate) enum Command {
@@ -12,6 +13,10 @@ pub(crate) enum Command {
         host: String,
         /// TCP port to bind.
         port: u16,
+        /// Fixture provider root for deterministic provider responses.
+        provider_fixtures: Option<PathBuf>,
+        /// Explicit SQLite local-store path for isolated service runs.
+        store_path: Option<PathBuf>,
     },
     /// Runs one normal runtime consumer command and writes JSON to stdout.
     Runtime {
@@ -29,6 +34,8 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         "serve" => Ok(Command::Serve {
             host: optional_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_owned()),
             port: optional_u16(args, "--port")?.unwrap_or(4174),
+            provider_fixtures: optional_value(args, "--provider-fixtures").map(PathBuf::from),
+            store_path: optional_value(args, "--store-path").map(PathBuf::from),
         }),
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,

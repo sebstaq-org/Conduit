@@ -21,7 +21,7 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
     "vendor",
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
-const APPROVED_APPS: [&str; 2] = ["desktop", "frontend"];
+const APPROVED_APPS: [&str; 3] = ["desktop", "e2e", "frontend"];
 const APPROVED_PACKAGES: [&str; 7] = [
     "app-client",
     "app-core",
@@ -31,18 +31,21 @@ const APPROVED_PACKAGES: [&str; 7] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 12] = [
+const APPROVED_CRATES: [&str; 15] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
+    "conduit-cli",
+    "provider-fixture",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
     "repo-guard",
     "service-bin",
     "service-runtime",
+    "session-projection",
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];

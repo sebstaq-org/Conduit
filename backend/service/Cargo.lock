@@ -430,6 +430,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "conduit-cli"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "app-api",
+ "serde",
+ "serde_json",
+ "session-projection",
+ "tempfile",
+ "time",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1708,6 +1722,19 @@ name = "provider-copilot"
 version = "0.5.0"
 
 [[package]]
+name = "provider-fixture"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "agent-client-protocol-schema",
+ "serde_json",
+ "service-runtime",
+ "session-store",
+ "tempfile",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2225,6 +2252,7 @@ dependencies = [
  "axum",
  "directories",
  "futures-util",
+ "provider-fixture",
  "serde",
  "serde_json",
  "service-runtime",
@@ -2256,6 +2284,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "session-projection"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "session-store"
 version = "0.5.0"
 dependencies = [
@@ -2264,6 +2301,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "session-projection",
  "sha2",
  "thiserror 2.0.18",
  "tracing",
@@ -2471,10 +2509,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c"
 dependencies = [
  "deranged",
+ "itoa",
  "num-conv",
  "powerfmt",
  "serde_core",
  "time-core",
+ "time-macros",
 ]
 
 [[package]]
@@ -2482,6 +2522,16 @@ name = "time-core"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca"
+
+[[package]]
+name = "time-macros"
+version = "0.2.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
+dependencies = [
+ "num-conv",
+ "time-core",
+]
 
 [[package]]
 name = "tinystr"

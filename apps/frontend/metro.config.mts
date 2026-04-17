@@ -19,22 +19,41 @@ config.watchFolders.push(workletsOutputPath);
 const defaultResolveRequest = config.resolver.resolveRequest;
 const metroConfig = getBundleModeMetroConfig(config);
 const bundleModeResolveRequest = metroConfig.resolver.resolveRequest;
-type ResolveRequest = NonNullable<typeof metroConfig.resolver.resolveRequest>;
 
-const isRelativeJavaScriptRequest = (requestName: string): boolean =>
-  requestName.startsWith(".") && requestName.endsWith(".js");
-
-const resolveWithDefaultFallback: ResolveRequest = (
-  context,
-  moduleName,
-  platform,
-) => {
+function resolveDefault(
+  context: Parameters<NonNullable<typeof defaultResolveRequest>>[0],
+  moduleName: string,
+  platform: string | null,
+): unknown {
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform);
   }
 
   return context.resolveRequest(context, moduleName, platform);
-};
+}
+
+function resolveTypeScriptSourceImport(
+  context: Parameters<NonNullable<typeof defaultResolveRequest>>[0],
+  requestName: string,
+  platform: string | null,
+): unknown {
+  if (!requestName.startsWith(".") || !requestName.endsWith(".js")) {
+    return null;
+  }
+  const withoutExtension = requestName.slice(0, -".js".length);
+  for (const extension of [".ts", ".tsx"] as const) {
+    try {
+      return resolveDefault(
+        context,
+        `${withoutExtension}${extension}`,
+        platform,
+      );
+    } catch {
+      // Try the next TypeScript source extension.
+    }
+  }
+  return null;
+}
 
 metroConfig.resolver.resolveRequest = (
   context,
@@ -48,17 +67,17 @@ metroConfig.resolver.resolveRequest = (
   }
 
   try {
-    return resolveWithDefaultFallback(context, moduleName, platform);
+    return resolveDefault(context, requestName, platform);
   } catch (error) {
-    if (!isRelativeJavaScriptRequest(requestName)) {
-      throw error;
-    }
-
-    return resolveWithDefaultFallback(
+    const sourceImport = resolveTypeScriptSourceImport(
       context,
-      requestName.replace(/\.js$/u, ".ts"),
+      requestName,
       platform,
     );
+    if (sourceImport !== null) {
+      return sourceImport;
+    }
+    throw error;
   }
 };
 
