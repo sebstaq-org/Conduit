@@ -1,7 +1,6 @@
 name: Stage
 
 on:
-  pull_request:
   push:
     branches:
       - "feature/**"
@@ -17,12 +16,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: conduit-stage-${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  group: conduit-stage-${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
     outputs:
       artifact_name: ${{ steps.stage.outputs.artifact_name }}
       source_sha: ${{ steps.source.outputs.source_sha }}
@@ -74,7 +76,10 @@ jobs:
   deploy:
     if: github.event_name == 'workflow_dispatch'
     needs: build
-    runs-on: self-hosted
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
 
     steps:
       - name: Checkout
