@@ -12,15 +12,19 @@
 )]
 
 use acp_core::{
-    ConnectionState, InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
+    ConnectionState, InteractionResponse, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
+    TranscriptUpdateSnapshot,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+use load::{SessionLoadFixture, read_session_load_fixtures};
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
+
+mod load;
 
 const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
 
@@ -28,6 +32,7 @@ const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, Pro
 #[derive(Debug, Clone)]
 pub struct FixtureProviderFactory {
     session_lists: HashMap<ProviderId, Value>,
+    session_loads: HashMap<(ProviderId, String), SessionLoadFixture>,
 }
 
 impl FixtureProviderFactory {
@@ -46,15 +51,19 @@ impl FixtureProviderFactory {
             )));
         }
         let mut session_lists = HashMap::new();
+        let mut session_loads = HashMap::new();
         for provider in PROVIDERS {
             let path = session_list_path(root, provider);
-            if !path.exists() {
-                continue;
+            if path.exists() {
+                let value = read_session_list_fixture(&path)?;
+                session_lists.insert(provider, value);
             }
-            let value = read_session_list_fixture(&path)?;
-            session_lists.insert(provider, value);
+            read_session_load_fixtures(root, provider, &mut session_loads)?;
         }
-        Ok(Self { session_lists })
+        Ok(Self {
+            session_lists,
+            session_loads,
+        })
     }
 }
 
@@ -67,6 +76,13 @@ impl ProviderFactory for FixtureProviderFactory {
                 .get(&provider)
                 .cloned()
                 .unwrap_or_else(empty_session_list),
+            session_loads: self
+                .session_loads
+                .iter()
+                .filter(|((fixture_provider, _), _)| *fixture_provider == provider)
+                .map(|((_, session_id), fixture)| (session_id.clone(), fixture.clone()))
+                .collect(),
+            loaded_transcripts: HashMap::new(),
         }))
     }
 }
@@ -74,6 +90,8 @@ impl ProviderFactory for FixtureProviderFactory {
 struct FixtureProviderPort {
     provider: ProviderId,
     session_list: Value,
+    session_loads: HashMap<String, SessionLoadFixture>,
+    loaded_transcripts: HashMap<String, LoadedTranscriptSnapshot>,
 }
 
 impl ProviderPort for FixtureProviderPort {
@@ -86,7 +104,7 @@ impl ProviderPort for FixtureProviderPort {
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
             last_prompt: None,
-            loaded_transcripts: Vec::new(),
+            loaded_transcripts: self.loaded_transcripts.values().cloned().collect(),
         }
     }
 
@@ -109,8 +127,20 @@ impl ProviderPort for FixtureProviderPort {
         Ok(self.session_list.clone())
     }
 
-    fn session_load(&mut self, _session_id: String, _cwd: PathBuf) -> Result<Value> {
-        unsupported("session/load")
+    fn session_load(&mut self, session_id: String, _cwd: PathBuf) -> Result<Value> {
+        let fixture = self
+            .session_loads
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeError::Provider(format!(
+                    "missing session/load fixture for {} session {session_id}",
+                    self.provider.as_str()
+                ))
+            })?;
+        self.loaded_transcripts
+            .insert(session_id, fixture.loaded_transcript);
+        Ok(fixture.response)
     }
 
     fn session_prompt(
@@ -146,6 +176,17 @@ impl ProviderPort for FixtureProviderPort {
 }
 
 fn read_session_list_fixture(path: &Path) -> Result<Value> {
+    let value = read_json(path)?;
+    if !value.is_object() {
+        return Err(invalid_fixture(path, "must be a JSON object"));
+    }
+    if value.get("sessions").and_then(Value::as_array).is_none() {
+        return Err(invalid_fixture(path, "must contain a sessions array"));
+    }
+    Ok(value)
+}
+
+pub(crate) fn read_json(path: &Path) -> Result<Value> {
     let body = read_to_string(path).map_err(|source| {
         RuntimeError::Provider(format!(
             "failed to read fixture {}: {source}",
@@ -158,12 +199,6 @@ fn read_session_list_fixture(path: &Path) -> Result<Value> {
             path.display()
         ))
     })?;
-    if !value.is_object() {
-        return Err(invalid_fixture(path, "must be a JSON object"));
-    }
-    if value.get("sessions").and_then(Value::as_array).is_none() {
-        return Err(invalid_fixture(path, "must contain a sessions array"));
-    }
     Ok(value)
 }
 
@@ -181,7 +216,7 @@ fn unsupported(command: &'static str) -> Result<Value> {
     Err(RuntimeError::UnsupportedCommand(command.to_owned()))
 }
 
-fn invalid_fixture(path: &Path, message: &'static str) -> RuntimeError {
+pub(crate) fn invalid_fixture(path: &Path, message: &'static str) -> RuntimeError {
     RuntimeError::Provider(format!("invalid fixture {}: {message}", path.display()))
 }
 
@@ -281,6 +316,130 @@ mod tests {
     }
 
     #[test]
+    fn session_load_indexes_capture_with_manifest_session_id() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_load_capture(
+            root.path(),
+            SessionLoadCapture {
+                capture: "capture-1",
+                session_id: "session-1",
+                manifest_session_id: Some("session-1"),
+                response: json!({ "configOptions": [], "modes": [] }),
+                updates: vec![transcript_update(0, "agent_message_chunk", "loaded")],
+            },
+        )?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+
+        let response = port.session_load("session-1".to_owned(), "/repo".into())?;
+        if response
+            .pointer("/configOptions")
+            .and_then(Value::as_array)
+            .is_none()
+        {
+            return Err(format!("unexpected session/load response {response}").into());
+        }
+        let snapshot = port.snapshot();
+        if snapshot
+            .loaded_transcripts
+            .first()
+            .and_then(|transcript| transcript.updates.first())
+            .map(|update| update.variant.as_str())
+            != Some("agent_message_chunk")
+        {
+            return Err(format!("unexpected snapshot {snapshot:?}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn session_load_indexes_capture_from_loaded_transcript_identity() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_load_capture(
+            root.path(),
+            SessionLoadCapture {
+                capture: "capture-1",
+                session_id: "session-1",
+                manifest_session_id: None,
+                response: json!({ "configOptions": [] }),
+                updates: Vec::new(),
+            },
+        )?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+
+        let response = port.session_load("session-1".to_owned(), "/repo".into())?;
+        if response
+            .pointer("/configOptions")
+            .and_then(Value::as_array)
+            .is_some()
+        {
+            return Ok(());
+        }
+        Err(format!("unexpected session/load response {response}").into())
+    }
+
+    #[test]
+    fn duplicate_session_load_fixture_fails_load() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        for capture in ["capture-1", "capture-2"] {
+            write_session_load_capture(
+                root.path(),
+                SessionLoadCapture {
+                    capture,
+                    session_id: "session-1",
+                    manifest_session_id: Some("session-1"),
+                    response: json!({ "configOptions": [] }),
+                    updates: Vec::new(),
+                },
+            )?;
+        }
+        let error = FixtureProviderFactory::load(root.path())
+            .err()
+            .ok_or("duplicate session/load fixture unexpectedly loaded")?;
+
+        if !error
+            .to_string()
+            .contains("duplicate session/load session id")
+        {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn missing_session_load_fixture_fails_explicitly() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let error = port
+            .session_load("missing-session".to_owned(), "/repo".into())
+            .err()
+            .ok_or("missing session/load unexpectedly succeeded")?;
+
+        if !error.to_string().contains("missing session/load fixture") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_session_load_fixture_fails_load() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        let dir = root.path().join("codex/session-load/capture-1");
+        create_dir_all(&dir)?;
+        write(dir.join("provider.raw.json"), "{}")?;
+        let error = FixtureProviderFactory::load(root.path())
+            .err()
+            .ok_or("malformed session/load fixture unexpectedly loaded")?;
+
+        if !error.to_string().contains("response field") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn fixture_root_must_exist() -> TestResult<()> {
         let root = TempDir::new()?;
         let missing = root.path().join("missing");
@@ -301,10 +460,6 @@ mod tests {
         let mut port = factory.connect(ProviderId::Codex)?;
 
         assert_unsupported(port.session_new("/repo".into()), "session/new")?;
-        assert_unsupported(
-            port.session_load("session-1".to_owned(), "/repo".into()),
-            "session/load",
-        )?;
         assert_unsupported(
             port.session_prompt("session-1".to_owned(), Vec::new(), &mut |_| {}),
             "session/prompt",
@@ -375,6 +530,53 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn runtime_session_open_uses_session_load_fixture_transcript() -> TestResult<()> {
+        let root = fixture_root(json!({
+            "sessions": [{
+                "sessionId": "session-1",
+                "cwd": "/repo",
+                "title": "Fixture session",
+                "updatedAt": "9999-01-01T00:00:00Z"
+            }]
+        }))?;
+        write_session_load_capture(
+            root.path(),
+            SessionLoadCapture {
+                capture: "capture-1",
+                session_id: "session-1",
+                manifest_session_id: Some("session-1"),
+                response: json!({ "configOptions": [], "modes": [] }),
+                updates: vec![transcript_update(0, "agent_message_chunk", "loaded")],
+            },
+        )?;
+        let factory = FixtureProviderFactory::load(root.path())?;
+        let mut store = LocalStore::open_path(root.path().join("store.sqlite3"))?;
+        store.add_project("/repo")?;
+        let mut runtime = ServiceRuntime::with_factory(factory, store);
+
+        let opened = runtime.dispatch(command(
+            "open",
+            "session/open",
+            "codex",
+            json!({
+                "sessionId": "session-1",
+                "cwd": "/repo",
+                "limit": 40
+            }),
+        ));
+        if !opened.ok {
+            return Err(format!("session/open failed: {opened:?}").into());
+        }
+        if opened.result.pointer("/sessionId").and_then(Value::as_str) != Some("session-1") {
+            return Err(format!("unexpected session/open result {}", opened.result).into());
+        }
+        if !value_contains_string(&opened.result, "loaded") {
+            return Err(format!("session/open did not expose transcript {}", opened.result).into());
+        }
+        Ok(())
+    }
+
     fn assert_unsupported(result: service_runtime::Result<Value>, command: &str) -> TestResult<()> {
         let error = result
             .err()
@@ -404,5 +606,74 @@ mod tests {
             serde_json::to_string(&value)?,
         )?;
         Ok(root)
+    }
+
+    struct SessionLoadCapture<'a> {
+        capture: &'a str,
+        session_id: &'a str,
+        manifest_session_id: Option<&'a str>,
+        response: Value,
+        updates: Vec<acp_core::TranscriptUpdateSnapshot>,
+    }
+
+    fn write_session_load_capture(
+        root: &std::path::Path,
+        capture: SessionLoadCapture<'_>,
+    ) -> TestResult<()> {
+        let dir = root.join("codex/session-load").join(capture.capture);
+        create_dir_all(&dir)?;
+        if let Some(manifest_session_id) = capture.manifest_session_id {
+            write(
+                dir.join("manifest.json"),
+                serde_json::to_string(&json!({
+                    "operation": "session/load",
+                    "provider": "codex",
+                    "sessionId": manifest_session_id
+                }))?,
+            )?;
+        }
+        write(
+            dir.join("provider.raw.json"),
+            serde_json::to_string(&json!({
+                "response": capture.response,
+                "loadedTranscript": {
+                    "identity": {
+                        "provider": "codex",
+                        "acpSessionId": capture.session_id
+                    },
+                    "rawUpdateCount": capture.updates.len(),
+                    "updates": capture.updates
+                }
+            }))?,
+        )?;
+        Ok(())
+    }
+
+    fn transcript_update(
+        index: usize,
+        variant: &str,
+        text: &str,
+    ) -> acp_core::TranscriptUpdateSnapshot {
+        acp_core::TranscriptUpdateSnapshot {
+            index,
+            variant: variant.to_owned(),
+            update: json!({
+                "sessionUpdate": variant,
+                "content": { "type": "text", "text": text }
+            }),
+        }
+    }
+
+    fn value_contains_string(value: &Value, expected: &str) -> bool {
+        match value {
+            Value::String(value) => value.contains(expected),
+            Value::Array(values) => values
+                .iter()
+                .any(|value| value_contains_string(value, expected)),
+            Value::Object(values) => values
+                .values()
+                .any(|value| value_contains_string(value, expected)),
+            Value::Null | Value::Bool(_) | Value::Number(_) => false,
+        }
     }
 }
