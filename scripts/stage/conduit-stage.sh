@@ -147,6 +147,7 @@ build_artifact() {
   local scratch_dir="$BUILD_DIR/$release_name"
   local source_dir="$scratch_dir/source"
   local resources_dir="$scratch_dir/stage-resources"
+  local stage_vendor_dir="$resources_dir/vendor/agent-client-protocol"
   local forge_out_dir="$scratch_dir/forge"
   local bundle_root="$scratch_dir/bundle"
   local bundle_dir="$bundle_root/$release_name"
@@ -156,6 +157,7 @@ build_artifact() {
   run rm -rf "$scratch_dir"
   run mkdir -p "$source_dir"
   run mkdir -p "$resources_dir/bin"
+  run mkdir -p "$(dirname "$stage_vendor_dir")"
   run mkdir -p "$bundle_dir"
 
   run git -C "$REPO_ROOT" archive --format=tar "$commit" | tar -x -f - -C "$source_dir"
@@ -173,6 +175,7 @@ build_artifact() {
     run pnpm --filter @conduit/frontend exec expo export --clear --platform web --output-dir "$resources_dir/web"
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
     run cp backend/service/target/release/service-bin "$resources_dir/bin/service-bin"
+    run cp -a vendor/agent-client-protocol "$stage_vendor_dir"
     chmod +x "$resources_dir/bin/service-bin"
     write_manifest "$resources_dir/manifest.json" "$commit" "$timestamp"
     run pnpm --filter @conduit/desktop run package:stage
@@ -224,6 +227,10 @@ validate_release_dir() {
   executable="$(stage_executable_for_release "$release_dir")"
   if [[ -z "$executable" || ! -x "$executable" ]]; then
     printf "Stage release is missing executable app/conduit-stage\n" >&2
+    exit 1
+  fi
+  if [[ ! -f "$release_dir/app/resources/stage-resources/vendor/agent-client-protocol/manifest.toml" ]]; then
+    printf "Stage release is missing ACP vendor manifest\n" >&2
     exit 1
   fi
 }
@@ -289,8 +296,10 @@ start_stage() {
   if ! pid_running "$ELECTRON_PID_FILE"; then
     local executable
     executable="$(stage_executable_for_release "$current_release")"
+    local acp_vendor_root="$current_release/app/resources/stage-resources/vendor/agent-client-protocol"
     rm -f "$RUNTIME_STATUS_FILE"
     RUNNER_TRACKING_ID="" \
+      CONDUIT_ACP_VENDOR_ROOT="$acp_vendor_root" \
       CONDUIT_STAGE_RUNTIME="1" \
       CONDUIT_STAGE_DATA_ROOT="$DATA_ROOT" \
       CONDUIT_STAGE_LOG_DIR="$LOG_DIR" \
