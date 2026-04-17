@@ -174,7 +174,14 @@ fn loaded_transcript_value(
                 "provider session/load response did not produce a loaded transcript snapshot",
             )
         })?;
-    Ok(serde_json::to_value(transcript)?)
+    Ok(json!({
+        "identity": {
+            "provider": transcript.identity.provider.as_str(),
+            "acpSessionId": transcript.identity.acp_session_id,
+        },
+        "rawUpdateCount": transcript.raw_update_count,
+        "updates": transcript.updates,
+    }))
 }
 
 fn output_path(
@@ -238,6 +245,15 @@ fn validate_session_load(value: &Value) -> Result<()> {
     if value.get("response").is_none() {
         return Err(CliError::invalid_capture(
             "provider session/load capture must contain a response field",
+        ));
+    }
+    if value
+        .pointer("/loadedTranscript/rawUpdateCount")
+        .and_then(Value::as_u64)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider session/load capture must contain loadedTranscript.rawUpdateCount number",
         ));
     }
     if value
@@ -353,7 +369,10 @@ mod tests {
         assert!(
             validate_session_load(&json!({
                 "response": {},
-                "loadedTranscript": { "updates": [] }
+                "loadedTranscript": {
+                    "rawUpdateCount": 0,
+                    "updates": []
+                }
             }))
             .is_ok()
         );
@@ -362,7 +381,10 @@ mod tests {
     #[test]
     fn rejects_session_load_without_response() {
         let error = validate_session_load(&json!({
-            "loadedTranscript": { "updates": [] }
+            "loadedTranscript": {
+                "rawUpdateCount": 0,
+                "updates": []
+            }
         }))
         .err()
         .map(|error| error.to_string())
@@ -371,10 +393,22 @@ mod tests {
     }
 
     #[test]
+    fn rejects_session_load_without_loaded_transcript_update_count() {
+        let error = validate_session_load(&json!({
+            "response": {},
+            "loadedTranscript": { "updates": [] }
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("rawUpdateCount number"));
+    }
+
+    #[test]
     fn rejects_session_load_without_loaded_transcript_updates() {
         let error = validate_session_load(&json!({
             "response": {},
-            "loadedTranscript": {}
+            "loadedTranscript": { "rawUpdateCount": 0 }
         }))
         .err()
         .map(|error| error.to_string())
