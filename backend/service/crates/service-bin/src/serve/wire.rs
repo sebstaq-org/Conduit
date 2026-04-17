@@ -1,9 +1,11 @@
 //! Versioned WebSocket envelopes for the consumer runtime API.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use service_runtime::consumer_protocol::{
+    CONDUIT_TRANSPORT_VERSION, ConduitRuntimeEvent, ConduitServerEventFrame,
+    ConduitServerResponseFrame,
+};
 use service_runtime::{ConsumerCommand, ConsumerError, ConsumerResponse};
-
-const PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Debug, Deserialize)]
 struct IncomingCommandFrame {
@@ -57,50 +59,22 @@ impl ClientCommandFrame {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct ServerResponseFrame {
-    v: u8,
-    #[serde(rename = "type")]
-    frame_type: &'static str,
+/// Serializes one backend-owned consumer response frame.
+pub(crate) fn server_response_frame_text(
     id: String,
     response: ConsumerResponse,
+) -> serde_json::Result<String> {
+    let frame = ConduitServerResponseFrame::from_runtime_response(id, response)?;
+    serde_json::to_string(&frame)
 }
 
-impl ServerResponseFrame {
-    /// Creates one response frame.
-    #[must_use]
-    pub(crate) fn new(id: String, response: ConsumerResponse) -> Self {
-        Self {
-            v: PROTOCOL_VERSION,
-            frame_type: "response",
-            id,
-            response,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct ServerEventFrame<T> {
-    v: u8,
-    #[serde(rename = "type")]
-    frame_type: &'static str,
-    event: T,
-}
-
-impl<T> ServerEventFrame<T> {
-    /// Creates one event frame.
-    #[must_use]
-    pub(crate) fn new(event: T) -> Self {
-        Self {
-            v: PROTOCOL_VERSION,
-            frame_type: "event",
-            event,
-        }
-    }
+/// Serializes one backend-owned consumer event frame.
+pub(crate) fn server_event_frame_text(event: ConduitRuntimeEvent) -> serde_json::Result<String> {
+    serde_json::to_string(&ConduitServerEventFrame::new(event))
 }
 
 fn validate_frame(frame: IncomingCommandFrame) -> ClientCommandFrame {
-    if frame.v != PROTOCOL_VERSION {
+    if frame.v != CONDUIT_TRANSPORT_VERSION {
         return invalid(&frame.id, "unsupported protocol version");
     }
     if frame.frame_type != "command" {
@@ -149,7 +123,9 @@ fn invalid_command(id: &str) -> ConsumerCommand {
 
 #[cfg(test)]
 mod tests {
-    use super::ClientCommandFrame;
+    use super::{ClientCommandFrame, server_event_frame_text, server_response_frame_text};
+    use service_runtime::ConsumerResponse;
+    use service_runtime::consumer_protocol::{ConduitRuntimeEvent, ConduitServerFrame};
     use std::error::Error;
 
     type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
@@ -202,5 +178,97 @@ mod tests {
             return Err("missing transport rejection".into());
         }
         Ok(())
+    }
+
+    #[test]
+    fn response_frame_text_uses_generated_consumer_frame_contract() -> TestResult<()> {
+        let text = server_response_frame_text(
+            "wire-1".to_owned(),
+            ConsumerResponse {
+                id: "wire-1".to_owned(),
+                ok: true,
+                result: serde_json::json!({ "subscribed": true }),
+                error: None,
+                snapshot: None,
+            },
+        )?;
+        let frame: ConduitServerFrame = serde_json::from_str(&text)?;
+
+        if serde_json::to_value(frame)?
+            == serde_json::json!({
+                "v": 1,
+                "type": "response",
+                "id": "wire-1",
+                "response": {
+                    "id": "wire-1",
+                    "ok": true,
+                    "result": { "subscribed": true },
+                    "error": null,
+                    "snapshot": null
+                }
+            })
+        {
+            return Ok(());
+        }
+        Err("response frame did not match generated consumer contract".into())
+    }
+
+    #[test]
+    fn event_frame_text_uses_generated_consumer_frame_contract() -> TestResult<()> {
+        let text =
+            server_event_frame_text(ConduitRuntimeEvent::SessionsIndexChanged { revision: 4 })?;
+        let frame: ConduitServerFrame = serde_json::from_str(&text)?;
+
+        if serde_json::to_value(frame)?
+            == serde_json::json!({
+                "v": 1,
+                "type": "event",
+                "event": {
+                    "kind": "sessions_index_changed",
+                    "revision": 4
+                }
+            })
+        {
+            return Ok(());
+        }
+        Err("event frame did not match generated consumer contract".into())
+    }
+
+    #[test]
+    fn timeline_event_frame_text_accepts_transcript_items() -> TestResult<()> {
+        let event: ConduitRuntimeEvent = serde_json::from_value(serde_json::json!({
+            "kind": "session_timeline_changed",
+            "openSessionId": "open-session-1",
+            "revision": 5,
+            "items": [{
+                "kind": "message",
+                "id": "item-1",
+                "role": "agent",
+                "content": [{ "type": "text", "text": "hello" }]
+            }]
+        }))?;
+        let text = server_event_frame_text(event)?;
+        let frame: ConduitServerFrame = serde_json::from_str(&text)?;
+
+        if serde_json::to_value(frame)?
+            == serde_json::json!({
+                "v": 1,
+                "type": "event",
+                "event": {
+                    "kind": "session_timeline_changed",
+                    "openSessionId": "open-session-1",
+                    "revision": 5,
+                    "items": [{
+                        "kind": "message",
+                        "id": "item-1",
+                        "role": "agent",
+                        "content": [{ "type": "text", "text": "hello" }]
+                    }]
+                }
+            })
+        {
+            return Ok(());
+        }
+        Err("timeline event frame did not match generated consumer contract".into())
     }
 }
