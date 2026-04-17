@@ -21,7 +21,7 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
     "vendor",
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
-const APPROVED_APPS: [&str; 2] = ["desktop", "frontend"];
+const APPROVED_APPS: [&str; 3] = ["desktop", "e2e", "frontend"];
 const APPROVED_PACKAGES: [&str; 7] = [
     "app-client",
     "app-core",
