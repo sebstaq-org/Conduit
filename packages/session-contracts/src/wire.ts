@@ -41,7 +41,6 @@ import {
   SessionOpenRequestSchema,
   SessionPromptRequestSchema,
   SessionRespondInteractionRequestSchema,
-  TranscriptItemSchema,
 } from "@conduit/session-model";
 
 const CONDUIT_TRANSPORT_VERSION = 1 as const;
@@ -357,34 +356,12 @@ interface ConsumerResponse<Result = unknown> {
   result: Result;
   error: ConsumerError | null;
 }
-type RuntimeEventKind = "session_timeline_changed" | "sessions_index_changed";
-const RuntimeEventSchema = z
-  .object({
-    kind: z.enum(["session_timeline_changed", "sessions_index_changed"]),
-    openSessionId: z.string().optional(),
-    revision: z.number(),
-    items: z.array(TranscriptItemSchema).optional(),
-  })
-  .strict();
-type RuntimeEvent = z.infer<typeof RuntimeEventSchema>;
 interface ClientCommandFrame {
   [transportVersionField]: typeof CONDUIT_TRANSPORT_VERSION;
   type: "command";
   id: string;
   command: ConsumerCommand;
 }
-interface ServerResponseFrame {
-  [transportVersionField]: typeof CONDUIT_TRANSPORT_VERSION;
-  type: "response";
-  id: string;
-  response: ConsumerResponse;
-}
-interface ServerEventFrame {
-  [transportVersionField]: typeof CONDUIT_TRANSPORT_VERSION;
-  type: "event";
-  event: RuntimeEvent;
-}
-type ServerFrame = ServerResponseFrame | ServerEventFrame;
 
 export {
   CONDUIT_COMMANDS,
@@ -392,7 +369,6 @@ export {
   CONSUMER_COMMANDS,
   SESSION_COMMANDS,
   ConsumerCommandSchema,
-  RuntimeEventSchema,
 };
 export type {
   ClientCommandFrame,
@@ -423,11 +399,6 @@ export type {
   ProjectUpdateRequest,
   ProviderConsumerCommand,
   ProviderScopedCommandName,
-  RuntimeEvent,
-  RuntimeEventKind,
-  ServerEventFrame,
-  ServerFrame,
-  ServerResponseFrame,
   SessionCommandName,
   SessionGroupsCommandName,
   SessionGroupsCommandTarget,

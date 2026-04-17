@@ -83,6 +83,7 @@ pub(super) fn check_workspace_imports(
         for file in source_files(unit)? {
             let source =
                 read_to_string(&file).map_err(|error| Error::io(Some(file.clone()), error))?;
+            check.record_session_contract_wire_export(unit, &file, &source);
             for specifier in import_specifiers(&source)? {
                 check.record(unit, &file, &specifier);
             }
@@ -227,7 +228,30 @@ impl ImportCheck<'_> {
         ));
         true
     }
+
+    fn record_session_contract_wire_export(&mut self, unit: &Unit, file: &Path, source: &str) {
+        if unit.name != "@conduit/session-contracts" {
+            return;
+        }
+        for symbol in FORBIDDEN_SESSION_CONTRACT_SYMBOLS {
+            if source.contains(symbol) {
+                self.failures.push(format!(
+                    "{} defines backend-to-frontend wire contract {symbol}; use @conduit/app-protocol in client/adaptation layers instead.",
+                    relative_path(self.repo_root, file),
+                ));
+            }
+        }
+    }
 }
+
+const FORBIDDEN_SESSION_CONTRACT_SYMBOLS: [&str; 6] = [
+    "RuntimeEventSchema",
+    "RuntimeEventKind",
+    "RuntimeEvent",
+    "ServerEventFrame",
+    "ServerFrame",
+    "ServerResponseFrame",
+];
 
 fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {
     [

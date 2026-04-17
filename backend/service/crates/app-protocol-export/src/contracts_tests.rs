@@ -7,8 +7,10 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use service_runtime::ConsumerResponse;
 use service_runtime::consumer_protocol::{
+    ConduitInteractionRequestData, ConduitInteractionResolutionData,
     ConduitProvidersConfigSnapshotResult, ConduitRuntimeEvent, ConduitServerEventFrame,
     ConduitServerFrame, ConduitServerResponseFrame, ConduitSessionOpenResult,
+    ConduitTerminalPlanData,
 };
 use std::error::Error;
 use std::fs;
@@ -49,6 +51,9 @@ fn generated_contracts_keep_structured_ui_fields() -> Result<(), Box<dyn Error>>
     )?;
     ensure_missing(&output, "resource: z.unknown()")?;
     ensure_contains(&output, "const ConduitServerFrameSchema")?;
+    ensure_contains(&output, "const ConduitInteractionRequestDataSchema")?;
+    ensure_contains(&output, "const ConduitInteractionResolutionDataSchema")?;
+    ensure_contains(&output, "const ConduitTerminalPlanDataSchema")?;
     ensure_contains(&output, "v: z.literal(1)")?;
     ensure_contains(&output, "}).strict()")?;
     ensure_contains(&output, "items: z.array(ConduitTranscriptItemSchema)")?;
@@ -85,6 +90,37 @@ fn conduit_consumer_contract_fixtures_roundtrip_through_backend_serde() -> Resul
             "fetchedAt": null,
             "error": null
         }]
+    }))?;
+    roundtrip::<ConduitInteractionRequestData>(serde_json::json!({
+        "sessionUpdate": "interaction_request",
+        "interactionId": "interaction-1",
+        "toolCallId": "tool-call-1",
+        "requestType": "request_user_input",
+        "questionId": "question-1",
+        "questionHeader": "Question",
+        "question": "Proceed?",
+        "isOther": true,
+        "options": [{ "kind": "allow_once", "name": "Yes", "optionId": "yes" }],
+        "status": "pending",
+        "rawInput": null
+    }))?;
+    roundtrip::<ConduitInteractionResolutionData>(serde_json::json!({
+        "sessionUpdate": "interaction_resolution",
+        "interactionId": "interaction-1",
+        "toolCallId": "tool-call-1",
+        "status": "resolved",
+        "rawOutput": null
+    }))?;
+    roundtrip::<ConduitTerminalPlanData>(serde_json::json!({
+        "sessionUpdate": "terminal_plan",
+        "interactionId": "terminal-plan:item-1",
+        "itemId": "item-1",
+        "planText": "# Plan\n",
+        "source": "codex.terminalPlan",
+        "providerSource": "TurnItem::Plan",
+        "status": "pending",
+        "codexTurnId": "turn-1",
+        "threadId": "thread-1"
     }))?;
     Ok(())
 }

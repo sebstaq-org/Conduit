@@ -18,14 +18,9 @@ function readSessionTimelineChanged(
   if (event.kind !== "session_timeline_changed") {
     return null;
   }
-  const openSessionId = event.openSessionId;
-  const revision = event.revision;
-  if (typeof openSessionId !== "string" || typeof revision !== "number") {
-    return null;
-  }
   const changed: SessionTimelineChanged = {
-    openSessionId,
-    revision,
+    openSessionId: event.openSessionId,
+    revision: event.revision,
   };
   if (event.items) {
     changed.items = TranscriptItemSchema.array().parse(event.items);
@@ -39,12 +34,8 @@ function readSessionsIndexChanged(
   if (event.kind !== "sessions_index_changed") {
     return null;
   }
-  const revision = event.revision;
-  if (typeof revision !== "number") {
-    return null;
-  }
   return {
-    revision,
+    revision: event.revision,
   };
 }
 

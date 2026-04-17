@@ -236,6 +236,27 @@ describe("plan interaction projection", () => {
   });
 });
 
+describe("plan interaction validation", () => {
+  it("ignores malformed backend interaction events", () => {
+    expect(
+      activePlanInteractionCard({
+        items: [
+          {
+            data: {
+              interactionId: "interaction-1",
+              sessionUpdate: "interaction_request",
+              status: "pending",
+            },
+            id: "malformed-interaction",
+            kind: "event",
+            variant: "interaction_request",
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("plan interaction fixture decisions", () => {
   it("pauses on proposed plans before follow-up or implementation", () => {
     const state = stateAtFirstPlanDecision();

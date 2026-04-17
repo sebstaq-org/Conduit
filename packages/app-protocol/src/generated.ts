@@ -500,6 +500,63 @@ const ConduitServerFrameSchema = z.union([ConduitServerResponseFrameSchema, Cond
 type ConduitServerFrame = z.infer<typeof ConduitServerFrameSchema>;
 
 // prettier-ignore
+const ConduitInteractionOptionSchema = z.object({
+  kind: z.string(),
+  name: z.string(),
+  optionId: z.string()
+}).strict();
+// prettier-ignore
+type ConduitInteractionOption = z.infer<typeof ConduitInteractionOptionSchema>;
+
+// prettier-ignore
+const ConduitInteractionRequestDataSchema = z.object({
+  interactionId: z.string(),
+  isOther: z.boolean(),
+  options: z.array(ConduitInteractionOptionSchema),
+  question: z.string(),
+  questionHeader: z.union([z.string(), z.null()]).optional(),
+  questionId: z.string(),
+  rawInput: z.unknown(),
+  requestType: z.literal("request_user_input"),
+  sessionUpdate: z.literal("interaction_request"),
+  status: z.literal("pending"),
+  toolCallId: z.string()
+}).strict();
+// prettier-ignore
+type ConduitInteractionRequestData = z.infer<typeof ConduitInteractionRequestDataSchema>;
+
+// prettier-ignore
+const ConduitInteractionResolutionStatusSchema = z.union([z.literal("resolved"), z.literal("cancelled"), z.literal("failed")]);
+// prettier-ignore
+type ConduitInteractionResolutionStatus = z.infer<typeof ConduitInteractionResolutionStatusSchema>;
+
+// prettier-ignore
+const ConduitInteractionResolutionDataSchema = z.object({
+  interactionId: z.string(),
+  rawOutput: z.unknown(),
+  sessionUpdate: z.literal("interaction_resolution"),
+  status: ConduitInteractionResolutionStatusSchema,
+  toolCallId: z.string()
+}).strict();
+// prettier-ignore
+type ConduitInteractionResolutionData = z.infer<typeof ConduitInteractionResolutionDataSchema>;
+
+// prettier-ignore
+const ConduitTerminalPlanDataSchema = z.object({
+  codexTurnId: z.union([z.string(), z.null()]).optional(),
+  interactionId: z.string(),
+  itemId: z.string(),
+  planText: z.string(),
+  providerSource: z.string(),
+  sessionUpdate: z.literal("terminal_plan"),
+  source: z.literal("codex.terminalPlan"),
+  status: z.literal("pending"),
+  threadId: z.union([z.string(), z.null()]).optional()
+}).strict();
+// prettier-ignore
+type ConduitTerminalPlanData = z.infer<typeof ConduitTerminalPlanDataSchema>;
+
+// prettier-ignore
 const ConduitSessionHistoryWindowSchema = z.object({
   items: z.array(ConduitTranscriptItemSchema),
   nextCursor: z.union([z.string(), z.null()]).optional(),
@@ -712,6 +769,11 @@ export {
   ConduitConsumerResponseSchema,
   ConduitServerResponseFrameSchema,
   ConduitServerFrameSchema,
+  ConduitInteractionOptionSchema,
+  ConduitInteractionRequestDataSchema,
+  ConduitInteractionResolutionStatusSchema,
+  ConduitInteractionResolutionDataSchema,
+  ConduitTerminalPlanDataSchema,
   ConduitSessionHistoryWindowSchema,
   ConduitSessionNewResultSchema,
   ConduitSessionOpenResultSchema,
@@ -786,6 +848,11 @@ export type {
   ConduitConsumerResponse,
   ConduitServerResponseFrame,
   ConduitServerFrame,
+  ConduitInteractionOption,
+  ConduitInteractionRequestData,
+  ConduitInteractionResolutionStatus,
+  ConduitInteractionResolutionData,
+  ConduitTerminalPlanData,
   ConduitSessionHistoryWindow,
   ConduitSessionNewResult,
   ConduitSessionOpenResult,

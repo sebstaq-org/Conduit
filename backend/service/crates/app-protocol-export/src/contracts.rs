@@ -1,42 +1,19 @@
 //! Contract schemas emitted into `packages/app-protocol`.
 
-use agent_client_protocol_schema as acp;
+mod roots;
+
+use roots::{ROOT_DEFINITIONS, merge_backend_types};
 use schemars::{
     JsonSchema,
     generate::SchemaSettings,
     transform::{RemoveRefSiblings, ReplaceBoolSchemas},
 };
 use serde_json::{Map, Value};
-use service_runtime::consumer_protocol as conduit;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{self, Display};
 
 const CONTRACT_VERSION: u8 = 1;
-const ROOT_DEFINITIONS: [&str; 22] = [
-    "ContentBlock",
-    "ToolCallUpdate",
-    "Plan",
-    "AvailableCommandsUpdate",
-    "CurrentModeUpdate",
-    "ConfigOptionUpdate",
-    "SessionInfoUpdate",
-    "SessionUpdate",
-    "ConduitServerFrame",
-    "ConduitConsumerResponse",
-    "ConduitRuntimeEvent",
-    "ConduitSessionHistoryWindow",
-    "ConduitSessionNewResult",
-    "ConduitSessionOpenResult",
-    "ConduitSessionSetConfigOptionResult",
-    "ConduitProjectListView",
-    "ConduitProjectSuggestionsView",
-    "ConduitGlobalSettingsView",
-    "ConduitSessionGroupsView",
-    "ConduitProvidersConfigSnapshotResult",
-    "ConduitSessionsWatchResult",
-    "ConduitSessionWatchResult",
-];
 
 /// Generates TypeScript/Zod contracts from backend-owned serde types.
 pub(crate) fn generate_typescript() -> Result<String, ContractError> {
@@ -90,64 +67,7 @@ pub(crate) struct ProtocolSchema {
 impl ProtocolSchema {
     pub(crate) fn from_backend_types() -> Result<Self, ContractError> {
         let mut definitions = BTreeMap::new();
-        merge_schema::<acp::ContentBlock>("ContentBlock", &mut definitions)?;
-        merge_schema::<acp::ToolCallUpdate>("ToolCallUpdate", &mut definitions)?;
-        merge_schema::<acp::Plan>("Plan", &mut definitions)?;
-        merge_schema::<acp::AvailableCommandsUpdate>("AvailableCommandsUpdate", &mut definitions)?;
-        merge_schema::<acp::CurrentModeUpdate>("CurrentModeUpdate", &mut definitions)?;
-        merge_schema::<acp::ConfigOptionUpdate>("ConfigOptionUpdate", &mut definitions)?;
-        merge_schema::<acp::SessionInfoUpdate>("SessionInfoUpdate", &mut definitions)?;
-        merge_schema::<acp::SessionUpdate>("SessionUpdate", &mut definitions)?;
-        merge_schema::<conduit::ConduitServerFrame>("ConduitServerFrame", &mut definitions)?;
-        merge_schema::<conduit::ConduitConsumerResponse>(
-            "ConduitConsumerResponse",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitRuntimeEvent>("ConduitRuntimeEvent", &mut definitions)?;
-        merge_schema::<conduit::ConduitSessionHistoryWindow>(
-            "ConduitSessionHistoryWindow",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionNewResult>(
-            "ConduitSessionNewResult",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionOpenResult>(
-            "ConduitSessionOpenResult",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionSetConfigOptionResult>(
-            "ConduitSessionSetConfigOptionResult",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitProjectListView>(
-            "ConduitProjectListView",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitProjectSuggestionsView>(
-            "ConduitProjectSuggestionsView",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitGlobalSettingsView>(
-            "ConduitGlobalSettingsView",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionGroupsView>(
-            "ConduitSessionGroupsView",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitProvidersConfigSnapshotResult>(
-            "ConduitProvidersConfigSnapshotResult",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionsWatchResult>(
-            "ConduitSessionsWatchResult",
-            &mut definitions,
-        )?;
-        merge_schema::<conduit::ConduitSessionWatchResult>(
-            "ConduitSessionWatchResult",
-            &mut definitions,
-        )?;
+        merge_backend_types(&mut definitions)?;
         Ok(Self { definitions })
     }
 
@@ -162,7 +82,7 @@ impl ProtocolSchema {
     }
 }
 
-fn merge_schema<T: JsonSchema>(
+pub(super) fn merge_schema<T: JsonSchema>(
     root_name: &str,
     definitions: &mut BTreeMap<String, Value>,
 ) -> Result<(), ContractError> {

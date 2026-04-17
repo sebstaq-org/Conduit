@@ -4,53 +4,6 @@ type CollaborationMode = "default" | "plan";
 type InteractionResolutionStatus = "cancelled" | "failed" | "resolved";
 type PlanInteractionCardKind = "question" | "terminal_decision";
 
-interface BackendInteractionOption {
-  kind: string;
-  name: string;
-  optionId: string;
-}
-
-interface BackendInteractionRequestData {
-  interactionId: string;
-  isOther: boolean;
-  options: BackendInteractionOption[];
-  question: string;
-  questionHeader: string | null;
-  questionId: string;
-  rawInput: {
-    question: {
-      header: string | null;
-      id: string;
-      isOther: boolean;
-      question: string;
-    };
-  };
-  requestType: "request_user_input";
-  sessionUpdate: "interaction_request";
-  status: "pending";
-  toolCallId: string;
-}
-
-interface BackendInteractionResolutionData {
-  interactionId: string;
-  rawOutput: Record<string, unknown>;
-  sessionUpdate: "interaction_resolution";
-  status: InteractionResolutionStatus;
-  toolCallId: string;
-}
-
-interface BackendTerminalPlanData {
-  codexTurnId?: string;
-  interactionId: string;
-  itemId: string;
-  planText: string;
-  providerSource: string;
-  sessionUpdate: "terminal_plan";
-  source: "codex.terminalPlan";
-  status: "pending";
-  threadId?: string;
-}
-
 interface PlanInteractionOption {
   kind: "choice" | "other";
   label: string;
@@ -136,10 +89,6 @@ export {
   IMPLEMENT_PLAN_USER_MESSAGE,
 };
 export type {
-  BackendInteractionOption,
-  BackendInteractionRequestData,
-  BackendInteractionResolutionData,
-  BackendTerminalPlanData,
   CollaborationMode,
   InteractionResolutionStatus,
   PlanInteractionCard,

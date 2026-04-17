@@ -105,6 +105,23 @@ fn rejects_app_protocol_imports_from_non_protocol_app_state() -> Result<()> {
 }
 
 #[test]
+fn rejects_backend_wire_contracts_in_session_contracts() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/session-contracts/src/wire.ts"),
+        "export type ServerFrame = { type: 'event' };\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "packages/session-contracts/src/wire.ts defines backend-to-frontend wire contract ServerFrame; use @conduit/app-protocol in client/adaptation layers instead.",
+    )
+}
+
+#[test]
 fn rejects_forbidden_provider_dependencies() -> Result<()> {
     let mut fixture = fixture()?;
     if let Some(resolve) = fixture.metadata.resolve.as_mut()
