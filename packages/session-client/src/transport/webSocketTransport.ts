@@ -1,13 +1,13 @@
 import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
 import { createDeferred } from "./deferred.js";
 import { parseServerFrame } from "./wireFrame.js";
+import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
 import type { SessionClientTelemetryEvent } from "./sessionClientTelemetryEvent.js";
+import type { ParsedServerFrame } from "./wireFrame.js";
 import { requireWebSocketUrl } from "./webSocketUrl.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
-  RuntimeEvent,
-  ServerFrame,
 } from "@conduit/session-contracts";
 
 const transportVersionField = "v";
@@ -19,7 +19,7 @@ interface WebSocketTransportOptions {
 }
 
 class WebSocketTransport {
-  private readonly handleEvent: (event: RuntimeEvent) => void;
+  private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: WebSocketTransportOptions;
   private readonly pending = new Map<
     string,
@@ -30,7 +30,7 @@ class WebSocketTransport {
 
   public constructor(
     options: WebSocketTransportOptions,
-    handleEvent: (event: RuntimeEvent) => void,
+    handleEvent: (event: ConduitRuntimeEvent) => void,
   ) {
     this.options = options;
     this.handleEvent = handleEvent;
@@ -232,7 +232,7 @@ class WebSocketTransport {
     this.handleServerFrame(frame);
   }
 
-  private handleServerFrame(frame: ServerFrame): void {
+  private handleServerFrame(frame: ParsedServerFrame): void {
     if (frame.type === "response") {
       this.pending.get(frame.id)?.resolve(frame.response);
       this.pending.delete(frame.id);

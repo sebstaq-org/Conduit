@@ -15,6 +15,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
+use service_runtime::consumer_protocol::ConduitRuntimeEvent;
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -255,7 +256,7 @@ type OutboundSender = mpsc::UnboundedSender<OutboundFrame>;
 
 #[derive(Debug)]
 enum OutboundFrame {
-    Event(ProductEvent),
+    Event(ConduitRuntimeEvent),
     Response {
         id: String,
         response: Box<service_runtime::ConsumerResponse>,
@@ -398,7 +399,7 @@ async fn send_response(
 
 async fn send_event(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    event: ProductEvent,
+    event: ConduitRuntimeEvent,
 ) -> std::result::Result<(), ()> {
     let frame = ServerEventFrame::new(event);
     let text = serde_json::to_string(&frame).map_err(|_error| ())?;
@@ -436,11 +437,11 @@ impl WatchState {
         }
     }
 
-    fn product_event(&self, event: &service_runtime::RuntimeEvent) -> Option<ProductEvent> {
+    fn product_event(&self, event: &service_runtime::RuntimeEvent) -> Option<ConduitRuntimeEvent> {
         match event.kind {
             service_runtime::RuntimeEventKind::SessionsIndexChanged if self.sessions => {
                 let revision = event.payload.get("revision")?.as_i64()?;
-                Some(ProductEvent::SessionsIndexChanged { revision })
+                Some(ConduitRuntimeEvent::SessionsIndexChanged { revision })
             }
             service_runtime::RuntimeEventKind::SessionTimelineChanged => {
                 let open_session_id = event.payload.get("openSessionId")?.as_str()?;
@@ -448,8 +449,14 @@ impl WatchState {
                     return None;
                 }
                 let revision = event.payload.get("revision")?.as_i64()?;
-                let items = event.payload.get("items").cloned();
-                Some(ProductEvent::SessionTimelineChanged {
+                let items = event
+                    .payload
+                    .get("items")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .ok()?;
+                Some(ConduitRuntimeEvent::SessionTimelineChanged {
                     open_session_id: open_session_id.to_owned(),
                     revision,
                     items,
@@ -458,21 +465,6 @@ impl WatchState {
             _ => None,
         }
     }
-}
-
-#[derive(Debug, serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum ProductEvent {
-    SessionsIndexChanged {
-        revision: i64,
-    },
-    SessionTimelineChanged {
-        #[serde(rename = "openSessionId")]
-        open_session_id: String,
-        revision: i64,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        items: Option<serde_json::Value>,
-    },
 }
 
 #[cfg(test)]

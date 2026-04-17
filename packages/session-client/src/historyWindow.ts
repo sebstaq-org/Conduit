@@ -1,4 +1,11 @@
 import {
+  ConduitProvidersConfigSnapshotResultSchema,
+  ConduitSessionHistoryWindowSchema,
+  ConduitSessionNewResultSchema,
+  ConduitSessionOpenResultSchema,
+  ConduitSessionSetConfigOptionResultSchema,
+} from "@conduit/app-protocol";
+import {
   ProvidersConfigSnapshotResultSchema,
   SessionHistoryWindowSchema,
   SessionNewResultSchema,
@@ -28,7 +35,9 @@ function readSessionHistoryResponse(
   return {
     id: response.id,
     ok: response.ok,
-    result: SessionHistoryWindowSchema.parse(response.result),
+    result: SessionHistoryWindowSchema.parse(
+      ConduitSessionHistoryWindowSchema.parse(response.result),
+    ),
     error: response.error,
   };
 }
@@ -47,7 +56,9 @@ function readSessionNewResponse(
   return {
     id: response.id,
     ok: response.ok,
-    result: SessionNewResultSchema.parse(response.result),
+    result: SessionNewResultSchema.parse(
+      ConduitSessionNewResultSchema.parse(response.result),
+    ),
     error: response.error,
   };
 }
@@ -66,7 +77,9 @@ function readSessionOpenResponse(
   return {
     id: response.id,
     ok: response.ok,
-    result: SessionOpenResultSchema.parse(response.result),
+    result: SessionOpenResultSchema.parse(
+      ConduitSessionOpenResultSchema.parse(response.result),
+    ),
     error: response.error,
   };
 }
@@ -85,7 +98,9 @@ function readSessionSetConfigOptionResponse(
   return {
     id: response.id,
     ok: response.ok,
-    result: SessionSetConfigOptionResultSchema.parse(response.result),
+    result: SessionSetConfigOptionResultSchema.parse(
+      ConduitSessionSetConfigOptionResultSchema.parse(response.result),
+    ),
     error: response.error,
   };
 }
@@ -104,7 +119,9 @@ function readProvidersConfigSnapshotResponse(
   return {
     id: response.id,
     ok: response.ok,
-    result: ProvidersConfigSnapshotResultSchema.parse(response.result),
+    result: ProvidersConfigSnapshotResultSchema.parse(
+      ConduitProvidersConfigSnapshotResultSchema.parse(response.result),
+    ),
     error: response.error,
   };
 }

@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@conduit/app-protocol": "workspace:*",
     "@conduit/session-contracts": "workspace:*",
     "@conduit/session-model": "workspace:*"
   }

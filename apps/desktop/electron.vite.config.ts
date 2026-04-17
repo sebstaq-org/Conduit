@@ -11,6 +11,10 @@ const workspaceAliases = {
     import.meta.dirname,
     "../../packages/app-core/src/index.ts",
   ),
+  "@conduit/app-protocol": resolve(
+    import.meta.dirname,
+    "../../packages/app-protocol/src/index.ts",
+  ),
   "@conduit/design-system-tokens": resolve(
     import.meta.dirname,
     "../../packages/design-system-tokens/src/index.ts",
@@ -56,6 +60,7 @@ export default defineConfig({
         "@": resolve(import.meta.dirname, "src/renderer"),
         "@conduit/app-client": workspaceAliases["@conduit/app-client"],
         "@conduit/app-core": workspaceAliases["@conduit/app-core"],
+        "@conduit/app-protocol": workspaceAliases["@conduit/app-protocol"],
         "@conduit/design-system-tokens":
           workspaceAliases["@conduit/design-system-tokens"],
         "@conduit/session-client": workspaceAliases["@conduit/session-client"],

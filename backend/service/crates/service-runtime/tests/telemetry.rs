@@ -5,6 +5,7 @@ mod support;
 use app_api as _;
 #[cfg(feature = "benchmarks")]
 use criterion as _;
+use schemars as _;
 use serde as _;
 use serde_json::{Value, json};
 use std::io;

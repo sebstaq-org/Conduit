@@ -6,6 +6,7 @@
       "@/*": ["./src/*"],
       "@conduit/app-client": ["../../packages/app-client/src/index.ts"],
       "@conduit/app-core": ["../../packages/app-core/src/index.ts"],
+      "@conduit/app-protocol": ["../../packages/app-protocol/src/index.ts"],
       "@conduit/design-system-tokens": [
         "../../packages/design-system-tokens/src/index.ts"
       ],
@@ -14,6 +15,7 @@
   },
   "include": [
     "../../packages/session-client/src/**/*.ts",
+    "../../packages/app-protocol/src/**/*.ts",
     "../../packages/session-contracts/src/**/*.ts",
     "../../packages/session-model/src/**/*.ts",
     "../../packages/app-client/src/**/*.ts",

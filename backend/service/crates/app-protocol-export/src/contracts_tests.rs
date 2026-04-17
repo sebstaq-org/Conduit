@@ -2,7 +2,12 @@
 
 use crate::contracts::{ProtocolSchema, TypeScriptEmitter, acp_schema_value, root_definition};
 use agent_client_protocol_schema as acp;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
+use service_runtime::consumer_protocol::{
+    ConduitProvidersConfigSnapshotResult, ConduitServerFrame, ConduitSessionOpenResult,
+};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,7 +35,7 @@ fn selected_roots_match_vendored_acp_schema() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn generated_contracts_keep_structured_ui_fields() -> Result<(), Box<dyn Error>> {
-    let output = TypeScriptEmitter::new(ProtocolSchema::from_acp_types()?).emit()?;
+    let output = TypeScriptEmitter::new(ProtocolSchema::from_backend_types()?).emit()?;
     ensure_contains(
         &output,
         "configOptions: z.array(AcpSessionConfigOptionSchema)",
@@ -41,6 +46,68 @@ fn generated_contracts_keep_structured_ui_fields() -> Result<(), Box<dyn Error>>
         "configOptions: z.array(z.record(z.string(), z.unknown()))",
     )?;
     ensure_missing(&output, "resource: z.unknown()")?;
+    ensure_contains(&output, "const ConduitServerFrameSchema")?;
+    ensure_contains(&output, "v: z.literal(1)")?;
+    ensure_contains(&output, "items: z.array(ConduitTranscriptItemSchema)")?;
+    ensure_contains(
+        &output,
+        "configOptions: z.union([z.array(AcpSessionConfigOptionSchema), z.null()]).optional()",
+    )?;
+    Ok(())
+}
+
+#[test]
+fn conduit_consumer_contract_fixtures_roundtrip_through_backend_serde() -> Result<(), Box<dyn Error>>
+{
+    roundtrip::<ConduitServerFrame>(serde_json::json!({
+        "v": 1,
+        "type": "event",
+        "event": {
+            "kind": "session_timeline_changed",
+            "openSessionId": "open-1",
+            "revision": 7,
+            "items": [{
+                "kind": "message",
+                "id": "item-1",
+                "role": "agent",
+                "content": [{ "type": "text", "text": "hello" }]
+            }]
+        }
+    }))?;
+    roundtrip::<ConduitServerFrame>(serde_json::json!({
+        "v": 1,
+        "type": "response",
+        "id": "cmd-1",
+        "response": {
+            "id": "cmd-1",
+            "ok": true,
+            "result": { "subscribed": true },
+            "error": null,
+            "snapshot": null
+        }
+    }))?;
+    roundtrip::<ConduitSessionOpenResult>(serde_json::json!({
+        "sessionId": "session-1",
+        "configOptions": null,
+        "modes": null,
+        "models": null,
+        "currentModeId": null,
+        "openSessionId": "open-1",
+        "revision": 3,
+        "items": [],
+        "nextCursor": null
+    }))?;
+    roundtrip::<ConduitProvidersConfigSnapshotResult>(serde_json::json!({
+        "entries": [{
+            "provider": "codex",
+            "status": "loading",
+            "configOptions": null,
+            "modes": null,
+            "models": null,
+            "fetchedAt": null,
+            "error": null
+        }]
+    }))?;
     Ok(())
 }
 
@@ -83,6 +150,18 @@ fn ensure_equal(left: &Value, right: &Value, message: &str) -> Result<(), Box<dy
     } else {
         Err(message.to_owned().into())
     }
+}
+
+fn roundtrip<T>(fixture: Value) -> Result<(), Box<dyn Error>>
+where
+    T: DeserializeOwned + Serialize,
+{
+    let parsed: T = serde_json::from_value(fixture.clone())?;
+    ensure_equal(
+        &serde_json::to_value(parsed)?,
+        &fixture,
+        "Conduit fixture should roundtrip",
+    )
 }
 
 fn generated_schema() -> Result<Value, Box<dyn Error>> {

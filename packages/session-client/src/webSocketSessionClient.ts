@@ -1,5 +1,10 @@
 import { createConsumerCommand } from "@conduit/session-contracts";
 import {
+  ConduitSessionsWatchResultSchema,
+  ConduitSessionWatchResultSchema,
+} from "@conduit/app-protocol";
+import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
+import {
   readProvidersConfigSnapshotResponse,
   readSessionHistoryResponse,
   readSessionNewResponse,
@@ -33,7 +38,6 @@ import type {
   ProjectSuggestionsView,
   ProjectUpdateRequest,
   ProvidersConfigSnapshotResult,
-  RuntimeEvent,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
@@ -208,6 +212,7 @@ class WebSocketSessionClient implements SessionClientPort {
       this.timelineSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
+    ConduitSessionWatchResultSchema.parse(response.result);
     return () => {
       this.timelineSubscriptions.delete(subscription);
     };
@@ -224,6 +229,7 @@ class WebSocketSessionClient implements SessionClientPort {
       this.sessionIndexSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
+    ConduitSessionsWatchResultSchema.parse(response.result);
     return () => {
       this.sessionIndexSubscriptions.delete(subscription);
     };
@@ -232,11 +238,11 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.transport.dispatch(command);
     return response;
   }
-  private handleRuntimeEvent(event: RuntimeEvent): void {
+  private handleRuntimeEvent(event: ConduitRuntimeEvent): void {
     this.handleTimelineEvent(event);
     this.handleSessionsIndexEvent(event);
   }
-  private handleTimelineEvent(eventFrame: RuntimeEvent): void {
+  private handleTimelineEvent(eventFrame: ConduitRuntimeEvent): void {
     const event = readSessionTimelineChanged(eventFrame);
     if (event) {
       for (const subscription of this.timelineSubscriptions) {
@@ -246,7 +252,7 @@ class WebSocketSessionClient implements SessionClientPort {
       }
     }
   }
-  private handleSessionsIndexEvent(eventFrame: RuntimeEvent): void {
+  private handleSessionsIndexEvent(eventFrame: ConduitRuntimeEvent): void {
     const event = readSessionsIndexChanged(eventFrame);
     if (event) {
       for (const subscription of this.sessionIndexSubscriptions) {
