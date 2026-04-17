@@ -17,7 +17,9 @@ interface RowProps {
   depth?: number;
   icon?: IconSlotName | undefined;
   label: string;
+  leading?: ReactNode | undefined;
   meta?: string | undefined;
+  reserveLeadingSpace?: boolean | undefined;
   muted?: boolean | undefined;
   onPress?: (() => void) | undefined;
   selected?: boolean | undefined;
@@ -27,20 +29,48 @@ interface RowProps {
 interface RowContentProps {
   icon?: IconSlotName | undefined;
   label: string;
+  leading?: ReactNode | undefined;
   meta?: string | undefined;
   muted: boolean;
+  reserveLeadingSpace: boolean;
+  theme: Theme;
   trailing?: ReactNode | undefined;
+}
+
+function renderLeadingSlot(args: {
+  leading: ReactNode | undefined;
+  reserveLeadingSpace: boolean;
+  theme: Theme;
+}): ReactNode {
+  if (args.leading === undefined && !args.reserveLeadingSpace) {
+    return null;
+  }
+
+  return (
+    <Box
+      alignItems="center"
+      height={args.theme.panel.icon}
+      justifyContent="center"
+      width={args.theme.panel.icon}
+    >
+      {args.leading}
+    </Box>
+  );
 }
 
 function renderRowContent({
   icon,
   label,
+  leading,
   meta,
   muted,
+  reserveLeadingSpace,
+  theme,
   trailing,
 }: RowContentProps): ReactNode {
   return (
     <>
+      {renderLeadingSlot({ leading, reserveLeadingSpace, theme })}
       {icon !== undefined && <IconSlot name={icon} />}
       <Text
         numberOfLines={rowLabelNumberOfLines}
@@ -54,43 +84,59 @@ function renderRowContent({
   );
 }
 
-function Row({
-  depth = 0,
-  icon,
+interface PressableRowProps {
+  children: ReactNode;
+  depth: number;
+  hovered: boolean;
+  label: string;
+  onHoverIn: () => void;
+  onHoverOut: () => void;
+  onPress: () => void;
+  selected: boolean;
+  theme: Theme;
+}
+
+function renderPressableRow({
+  children,
+  depth,
+  hovered,
   label,
-  meta,
-  muted = false,
+  onHoverIn,
+  onHoverOut,
   onPress,
-  selected = false,
-  trailing,
-}: RowProps): React.JSX.Element {
-  const theme = useTheme<Theme>();
-  const [hovered, setHovered] = useState(false);
+  selected,
+  theme,
+}: PressableRowProps): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onHoverIn={onHoverIn}
+      onHoverOut={onHoverOut}
+      onPress={onPress}
+      style={({ pressed }) =>
+        createRowStyle(theme, depth, { hovered, pressed, selected })
+      }
+    >
+      {children}
+    </Pressable>
+  );
+}
 
-  const rowChildren = renderRowContent({ icon, label, meta, muted, trailing });
+interface StaticRowProps {
+  children: ReactNode;
+  depth: number;
+  selected: boolean;
+  theme: Theme;
+}
 
-  if (onPress !== undefined) {
-    return (
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="button"
-        accessibilityState={{ selected }}
-        onHoverIn={() => {
-          setHovered(true);
-        }}
-        onHoverOut={() => {
-          setHovered(false);
-        }}
-        onPress={onPress}
-        style={({ pressed }) =>
-          createRowStyle(theme, depth, { hovered, pressed, selected })
-        }
-      >
-        {rowChildren}
-      </Pressable>
-    );
-  }
-
+function renderStaticRow({
+  children,
+  depth,
+  selected,
+  theme,
+}: StaticRowProps): React.JSX.Element {
   return (
     <Box
       style={createRowStyle(theme, depth, {
@@ -99,9 +145,56 @@ function Row({
         selected,
       })}
     >
-      {rowChildren}
+      {children}
     </Box>
   );
+}
+
+function Row({
+  depth = 0,
+  icon,
+  label,
+  leading,
+  meta,
+  muted = false,
+  onPress,
+  reserveLeadingSpace = false,
+  selected = false,
+  trailing,
+}: RowProps): React.JSX.Element {
+  const theme = useTheme<Theme>();
+  const [hovered, setHovered] = useState(false);
+
+  const rowChildren = renderRowContent({
+    icon,
+    label,
+    leading,
+    meta,
+    muted,
+    reserveLeadingSpace,
+    theme,
+    trailing,
+  });
+
+  if (onPress !== undefined) {
+    return renderPressableRow({
+      children: rowChildren,
+      depth,
+      hovered,
+      label,
+      onHoverIn: () => {
+        setHovered(true);
+      },
+      onHoverOut: () => {
+        setHovered(false);
+      },
+      onPress,
+      selected,
+      theme,
+    });
+  }
+
+  return renderStaticRow({ children: rowChildren, depth, selected, theme });
 }
 
 export { Row };

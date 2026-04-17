@@ -53,6 +53,12 @@ export {
   selectActiveSession,
 } from "./session-selection";
 export type { ActiveSession } from "./session-selection";
+export {
+  selectSessionPromptTurnStreaming,
+  sessionPromptTurnFinished,
+  sessionPromptTurnStarted,
+} from "./session-prompt-turns";
+export type { SessionPromptTurnIdentity } from "./session-prompt-turns";
 export { useSessionTimeline } from "./session-timeline";
 export {
   usePlanInteractionSource,

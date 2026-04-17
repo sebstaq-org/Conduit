@@ -1,9 +1,8 @@
-import type {
-  ProviderId,
-  SessionConfigOption,
-  SessionNewResult,
-} from "@conduit/session-client";
-import type { NewSessionMutationArg, OpenSessionMutationArg } from "./api";
+import type { OpenSessionMutationArg } from "./api";
+import type { SessionPromptTurnIdentity } from "./session-prompt-turns";
+import { promptTrackedOpenSession } from "./session-prompt-turn-command";
+import { submitDraftPrompt } from "./session-commands-draft-submit";
+import type { DraftCommittedSession } from "./session-commands-draft-submit";
 import type {
   useNewSessionMutation,
   useOpenSessionMutation,
@@ -11,13 +10,7 @@ import type {
   useSetSessionConfigOptionMutation,
 } from "./api-hooks";
 import type { ActiveSession } from "./session-selection";
-import {
-  initialDraftConfigSyncState,
-  syncDraftConfigAfterPrompt,
-} from "./session-commands-draft";
 import { logFailure, logInfo } from "./frontend-logger";
-
-const NEW_SESSION_HISTORY_LIMIT = 100;
 
 type NewSessionTrigger = ReturnType<typeof useNewSessionMutation>[0];
 type OpenSessionTrigger = ReturnType<typeof useOpenSessionMutation>[0];
@@ -41,21 +34,16 @@ interface SubmitPromptArgs {
     | ((session: DraftCommittedSession) => void)
     | undefined;
   onFailure?: ((failure: PromptFailure) => void) | undefined;
+  onPromptTurnFinished?:
+    | ((identity: SessionPromptTurnIdentity) => void)
+    | undefined;
+  onPromptTurnStarted?:
+    | ((identity: SessionPromptTurnIdentity) => void)
+    | undefined;
   promptSession: PromptSessionTrigger;
   setSessionConfigOption: SetSessionConfigOptionTrigger;
   setDraft: (draft: string) => void;
   text: string;
-}
-
-interface DraftCommittedSession {
-  configOptions: SessionConfigOption[] | null;
-  configSyncBlocked: boolean;
-  configSyncError: string | null;
-  modes: unknown;
-  models: unknown;
-  openSessionId: string;
-  provider: ProviderId;
-  sessionId: string;
 }
 
 interface OpenSessionFailure {
@@ -67,31 +55,6 @@ interface PromptFailure {
   activeSession: ActiveSession;
   error: unknown;
   text: string;
-}
-
-function committedDraftSession(args: {
-  activeSession: Extract<ActiveSession, { kind: "draft" }>;
-  response: SessionNewResult;
-  syncState: {
-    configOptions: SessionConfigOption[] | null;
-    configSyncBlocked: boolean;
-    configSyncError: string | null;
-    openSessionId: string;
-  };
-}): DraftCommittedSession {
-  if (args.activeSession.provider === null) {
-    throw new Error("draft provider missing");
-  }
-  return {
-    configOptions: args.syncState.configOptions,
-    configSyncBlocked: args.syncState.configSyncBlocked,
-    configSyncError: args.syncState.configSyncError,
-    modes: args.response.modes,
-    models: args.response.models,
-    openSessionId: args.syncState.openSessionId,
-    provider: args.activeSession.provider,
-    sessionId: args.response.sessionId,
-  };
 }
 
 interface CanSubmitPromptArgs {
@@ -147,118 +110,13 @@ async function openSessionRow({
   }
 }
 
-async function promptOpenSession(
-  promptSession: PromptSessionTrigger,
-  openSessionId: string,
-  text: string,
-): Promise<void> {
-  await promptSession({
-    openSessionId,
-    prompt: [{ text, type: "text" }],
-  }).unwrap();
-}
-
-async function createDraftSession(args: {
-  activeSession: Extract<ActiveSession, { kind: "draft" }>;
-  newSession: NewSessionTrigger;
-}): Promise<SessionNewResult | null> {
-  if (args.activeSession.provider === null) {
-    return null;
-  }
-  const response = await args
-    .newSession({
-      cwd: args.activeSession.cwd,
-      limit: NEW_SESSION_HISTORY_LIMIT,
-      provider: args.activeSession.provider,
-    } satisfies NewSessionMutationArg)
-    .unwrap();
-  return response;
-}
-
-function draftSelectedConfig(
-  activeSession: Extract<ActiveSession, { kind: "draft" }>,
-): Record<string, string> {
-  if (activeSession.provider === null) {
-    return {};
-  }
-  return activeSession.selectedConfigByProvider[activeSession.provider] ?? {};
-}
-
-function commitDraftIfConfigBlocked(args: {
-  activeSession: Extract<ActiveSession, { kind: "draft" }>;
-  onDraftPromptCommitted:
-    | ((session: DraftCommittedSession) => void)
-    | undefined;
-  response: SessionNewResult;
-  syncState: {
-    configOptions: SessionConfigOption[] | null;
-    configSyncBlocked: boolean;
-    configSyncError: string | null;
-    openSessionId: string;
-  };
-}): boolean {
-  if (!args.syncState.configSyncBlocked) {
-    return false;
-  }
-  args.onDraftPromptCommitted?.(
-    committedDraftSession({
-      activeSession: args.activeSession,
-      response: args.response,
-      syncState: args.syncState,
-    }),
-  );
-  return true;
-}
-
-async function submitDraftPrompt({
-  activeSession,
-  newSession,
-  onDraftPromptCommitted,
-  openSession,
-  promptSession,
-  setSessionConfigOption,
-  setDraft,
-  text,
-}: SubmitPromptArgs & {
-  activeSession: Extract<ActiveSession, { kind: "draft" }>;
-}): Promise<void> {
-  const response = await createDraftSession({ activeSession, newSession });
-  if (response === null) {
-    return;
-  }
-  const syncState = await syncDraftConfigAfterPrompt({
-    activeSession,
-    openSession,
-    selectedConfig: draftSelectedConfig(activeSession),
-    sessionId: response.sessionId,
-    setSessionConfigOption,
-    state: initialDraftConfigSyncState(
-      response.configOptions ?? null,
-      response.history.openSessionId,
-    ),
-  });
-  if (
-    commitDraftIfConfigBlocked({
-      activeSession,
-      onDraftPromptCommitted,
-      response,
-      syncState,
-    })
-  ) {
-    return;
-  }
-  await promptOpenSession(promptSession, syncState.openSessionId, text);
-  onDraftPromptCommitted?.(
-    committedDraftSession({ activeSession, response, syncState }),
-  );
-  setDraft("");
-}
-
 async function submitPrompt({
   activeSession,
   newSession,
   onDraftPromptCommitted,
   onFailure,
+  onPromptTurnFinished,
+  onPromptTurnStarted,
   openSession,
   promptSession,
   setSessionConfigOption,
@@ -271,6 +129,8 @@ async function submitPrompt({
         activeSession,
         newSession,
         onDraftPromptCommitted,
+        onPromptTurnFinished,
+        onPromptTurnStarted,
         openSession,
         promptSession,
         setSessionConfigOption,
@@ -279,7 +139,17 @@ async function submitPrompt({
       });
       return;
     }
-    await promptOpenSession(promptSession, activeSession.openSessionId, text);
+    await promptTrackedOpenSession({
+      identity: {
+        provider: activeSession.provider,
+        sessionId: activeSession.sessionId,
+      },
+      onPromptTurnFinished,
+      onPromptTurnStarted,
+      openSessionId: activeSession.openSessionId,
+      promptSession,
+      text,
+    });
     setDraft("");
   } catch (error) {
     // The mutation state renders the failure while preserving the draft.

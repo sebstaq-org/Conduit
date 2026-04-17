@@ -6,6 +6,7 @@ import type {
 } from "@/app-state";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
+import { GlimmerText } from "@/ui";
 import { SessionComposerPlanInteractionSurface } from "./session-composer-plan-interaction";
 import { SessionComposerActionRow } from "./session-composer-action-row";
 import { SessionComposerInput } from "./session-composer-input";
@@ -20,6 +21,8 @@ import {
   sessionComposerPaddingY,
 } from "./session-composer.styles";
 
+const sessionComposerActivityLabel = "Working...";
+
 interface SessionComposerSurfaceProps {
   activeSession: ActiveSession | null;
   canSend: boolean;
@@ -30,6 +33,7 @@ interface SessionComposerSurfaceProps {
   onProviderSelect: (provider: ProviderId) => void;
   onSend: () => void;
   isConfigUpdating: boolean;
+  isWorking: boolean;
   planInteractionActions: SessionComposerPlanInteractionActions;
   planInteractionView: SessionComposerPlanInteractionView;
   setDraft: (draft: string) => void;
@@ -43,6 +47,21 @@ function renderComposerErrorMessage(
     return null;
   }
   return <Text variant="rowLabelMuted">{message}</Text>;
+}
+
+function renderPromptTurnStatus(
+  isWorking: boolean,
+  theme: Theme,
+): React.JSX.Element {
+  return (
+    <Box
+      minHeight={theme.textVariants.meta.lineHeight}
+      pb="xxs"
+      px={sessionComposerPaddingX}
+    >
+      {isWorking && <GlimmerText text={sessionComposerActivityLabel} />}
+    </Box>
+  );
 }
 
 interface SessionComposerStandardBodyProps {
@@ -134,51 +153,42 @@ function createActiveComposerSurfaceStyle(args: {
   return createSessionComposerSurfaceStyle(args.theme);
 }
 
-function SessionComposerSurface({
-  activeSession,
-  canSend,
-  configOptions,
-  draft,
-  errorMessage,
-  onConfigOptionSelect,
-  onProviderSelect,
-  onSend,
-  isConfigUpdating,
-  planInteractionActions,
-  planInteractionView,
-  setDraft,
-  theme,
-}: SessionComposerSurfaceProps): React.JSX.Element {
+function SessionComposerSurface(
+  props: SessionComposerSurfaceProps,
+): React.JSX.Element {
   const composerBody = renderComposerBody({
-    activeSession,
-    canSend,
-    configOptions,
-    draft,
-    isConfigUpdating,
-    onConfigOptionSelect,
-    onProviderSelect,
-    onSend,
-    planInteractionActions,
-    planInteractionView,
-    setDraft,
+    activeSession: props.activeSession,
+    canSend: props.canSend,
+    configOptions: props.configOptions,
+    draft: props.draft,
+    isConfigUpdating: props.isConfigUpdating,
+    onConfigOptionSelect: props.onConfigOptionSelect,
+    onProviderSelect: props.onProviderSelect,
+    onSend: props.onSend,
+    planInteractionActions: props.planInteractionActions,
+    planInteractionView: props.planInteractionView,
+    setDraft: props.setDraft,
   });
   const surfaceStyle = createActiveComposerSurfaceStyle({
-    activeCard: planInteractionView.activeCard,
-    theme,
+    activeCard: props.planInteractionView.activeCard,
+    theme: props.theme,
   });
   return (
-    <Box
-      backgroundColor={sessionComposerBackgroundColor}
-      borderColor={sessionComposerBorderColor}
-      borderRadius={sessionComposerBorderRadius}
-      borderWidth={1}
-      gap={sessionComposerGap}
-      px={sessionComposerPaddingX}
-      py={sessionComposerPaddingY}
-      style={surfaceStyle}
-    >
-      {composerBody}
-      {renderComposerErrorMessage(errorMessage)}
+    <Box gap="xxs">
+      {renderPromptTurnStatus(props.isWorking, props.theme)}
+      <Box
+        backgroundColor={sessionComposerBackgroundColor}
+        borderColor={sessionComposerBorderColor}
+        borderRadius={sessionComposerBorderRadius}
+        borderWidth={1}
+        gap={sessionComposerGap}
+        px={sessionComposerPaddingX}
+        py={sessionComposerPaddingY}
+        style={surfaceStyle}
+      >
+        {composerBody}
+        {renderComposerErrorMessage(props.errorMessage)}
+      </Box>
     </Box>
   );
 }
