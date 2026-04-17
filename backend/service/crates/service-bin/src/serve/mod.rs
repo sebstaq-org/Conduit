@@ -38,6 +38,7 @@ struct ServeState {
     client_log_sink: client_logs::ClientLogSink,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
+    app_base_url: String,
 }
 
 const CATALOG_COMMANDS: [&str; 20] = [
@@ -69,13 +70,23 @@ const CATALOG_COMMANDS: [&str; 20] = [
 ///
 /// Returns an error when the TCP listener cannot bind or the server exits with
 /// an I/O failure.
-pub(crate) async fn run(host: &str, port: u16, relay_endpoint: Option<String>) -> Result<()> {
+pub(crate) async fn run(
+    host: &str,
+    port: u16,
+    relay_endpoint: Option<String>,
+    app_base_url: String,
+) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
     let product_home = product_home()?;
     axum::serve(
         listener,
-        router(open_product_store()?, product_home, relay_endpoint)
-            .into_make_service_with_connect_info::<SocketAddr>(),
+        router(
+            open_product_store()?,
+            product_home,
+            relay_endpoint,
+            app_base_url,
+        )
+        .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
@@ -85,11 +96,13 @@ fn router(
     local_store: LocalStore,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
+    app_base_url: String,
 ) -> Router {
     router_with_actor(
         RuntimeActor::start(local_store),
         product_home,
         relay_endpoint,
+        app_base_url,
     )
 }
 
@@ -97,6 +110,7 @@ fn router_with_actor(
     actor: RuntimeActor,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
+    app_base_url: String,
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
     Router::new()
@@ -112,6 +126,7 @@ fn router_with_actor(
             client_log_sink,
             product_home,
             relay_endpoint,
+            app_base_url,
         }))
 }
 
@@ -158,7 +173,7 @@ async fn pairing(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
         )
             .into_response();
     };
-    match pairing_response(&state.product_home, endpoint, "https://app.conduit.local") {
+    match pairing_response(&state.product_home, endpoint, &state.app_base_url) {
         Ok(response) => (StatusCode::OK, Json(json!(response))).into_response(),
         Err(error) => {
             tracing::warn!(

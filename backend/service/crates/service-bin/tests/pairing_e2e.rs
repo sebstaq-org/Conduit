@@ -32,6 +32,7 @@ use x25519_dalek as _;
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 
 const RELAY_ENDPOINT: &str = "relay.example.test:443";
+const APP_BASE_URL: &str = "https://expo.test/app";
 
 #[test]
 fn cli_pairing_offer_is_stable_and_minimal() -> TestResult<()> {
@@ -72,6 +73,49 @@ fn cli_pairing_offer_changes_for_new_home() -> TestResult<()> {
 }
 
 #[test]
+fn cli_pairing_offer_survives_concurrent_first_creation() -> TestResult<()> {
+    let home = test_home("cli-concurrent")?;
+    let mut children = Vec::new();
+    for _index in 0..16 {
+        children.push(
+            Command::new(service_bin())
+                .args(["pair", "--json", "--relay-endpoint", RELAY_ENDPOINT])
+                .env("CONDUIT_HOME", &home)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?,
+        );
+    }
+
+    let mut responses = Vec::new();
+    for child in children {
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            cleanup(&home);
+            return Err(format!(
+                "concurrent pair failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        responses.push(serde_json::from_slice::<Value>(&output.stdout)?);
+    }
+    cleanup(&home);
+
+    let first_offer = offer(responses.first().ok_or("missing concurrent responses")?)?;
+    for response in responses.iter().skip(1) {
+        let current_offer = offer(response)?;
+        if field(first_offer, "serverId") != field(current_offer, "serverId") {
+            return Err("concurrent pair changed serverId".into());
+        }
+        if field(first_offer, "daemonPublicKeyB64") != field(current_offer, "daemonPublicKeyB64") {
+            return Err("concurrent pair changed public key".into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn cli_pairing_requires_relay_endpoint() -> TestResult<()> {
     let home = test_home("cli-no-relay")?;
     let output = Command::new(service_bin())
@@ -93,13 +137,13 @@ fn cli_pairing_requires_relay_endpoint() -> TestResult<()> {
 fn serve_pairing_and_status_are_stable_and_minimal() -> TestResult<()> {
     let home = test_home("serve-stable")?;
     let port = free_port()?;
-    let mut first_child = spawn_serve(&home, port, true)?;
+    let mut first_child = spawn_serve(&home, port, true, APP_BASE_URL)?;
     wait_for_http(port)?;
     let first_pairing = get_json(port, "/api/pairing")?;
     let first_status = get_json(port, "/api/daemon/status")?;
     stop_child(&mut first_child)?;
 
-    let mut second_child = spawn_serve(&home, port, true)?;
+    let mut second_child = spawn_serve(&home, port, true, APP_BASE_URL)?;
     wait_for_http(port)?;
     let second_pairing = get_json(port, "/api/pairing")?;
     let second_status = get_json(port, "/api/daemon/status")?;
@@ -120,6 +164,13 @@ fn serve_pairing_and_status_are_stable_and_minimal() -> TestResult<()> {
     if first_status.get("pairingConfigured") != Some(&Value::Bool(true)) {
         return Err("daemon status did not report configured pairing".into());
     }
+    if !first_pairing
+        .get("url")
+        .and_then(Value::as_str)
+        .is_some_and(|url| url.starts_with(APP_BASE_URL))
+    {
+        return Err("pairing URL did not use configured app base URL".into());
+    }
     assert_offer_minimal(&first_pairing)
 }
 
@@ -127,7 +178,7 @@ fn serve_pairing_and_status_are_stable_and_minimal() -> TestResult<()> {
 fn serve_pairing_fails_without_relay_endpoint_but_status_remains_available() -> TestResult<()> {
     let home = test_home("serve-no-relay")?;
     let port = free_port()?;
-    let mut child = spawn_serve(&home, port, false)?;
+    let mut child = spawn_serve(&home, port, false, APP_BASE_URL)?;
     wait_for_http(port)?;
     let status = get_json(port, "/api/daemon/status")?;
     let pairing_response = get_raw(port, "/api/pairing")?;
@@ -175,11 +226,19 @@ fn run_pair(home: &Path) -> TestResult<Value> {
     Ok(serde_json::from_slice(&output.stdout)?)
 }
 
-fn spawn_serve(home: &Path, port: u16, relay: bool) -> TestResult<Child> {
+fn spawn_serve(home: &Path, port: u16, relay: bool, app_base_url: &str) -> TestResult<Child> {
     let mut command = Command::new(service_bin());
     let port_text = port.to_string();
     command
-        .args(["serve", "--host", "127.0.0.1", "--port", &port_text])
+        .args([
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            &port_text,
+            "--app-base-url",
+            app_base_url,
+        ])
         .env("CONDUIT_HOME", home)
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
@@ -244,6 +303,27 @@ fn assert_offer_minimal(value: &Value) -> TestResult<()> {
     }
     if field(offer_value, "daemonPublicKeyB64").is_none() {
         return Err("missing daemonPublicKeyB64".into());
+    }
+    if field(offer_value, "nonce").is_none() {
+        return Err("missing nonce".into());
+    }
+    if field(offer_value, "expiresAt").is_none() {
+        return Err("missing expiresAt".into());
+    }
+    if offer_value
+        .get("authorization")
+        .and_then(|authorization| authorization.get("required"))
+        != Some(&Value::Bool(true))
+    {
+        return Err("missing required authorization boundary".into());
+    }
+    if offer_value
+        .get("authorization")
+        .and_then(|authorization| authorization.get("boundary"))
+        .and_then(Value::as_str)
+        != Some("relay-handshake")
+    {
+        return Err("unexpected authorization boundary".into());
     }
     let public_key = field(offer_value, "daemonPublicKeyB64").ok_or("missing public key")?;
     let public_key_bytes = STANDARD.decode(public_key)?;

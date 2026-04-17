@@ -35,6 +35,7 @@ async fn main() -> Result<()> {
             host,
             port,
             relay_endpoint,
+            app_base_url,
         } => {
             telemetry::init();
             tracing::debug!(
@@ -42,7 +43,7 @@ async fn main() -> Result<()> {
                 source = "service-bin",
                 args = ?args
             );
-            serve::run(&host, port, relay_endpoint).await
+            serve::run(&host, port, relay_endpoint, app_base_url).await
         }
         cli::Command::Pair {
             relay_endpoint,

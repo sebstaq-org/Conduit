@@ -1,14 +1,32 @@
 const CONNECTION_OFFER_VERSION = 1 as const;
+const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
 const OFFER_FRAGMENT_MARKER = "#offer=";
+const AUTHORIZATION_BOUNDARY = "relay-handshake";
+const BASE64_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_PATTERN =
+  /^(?:[+/0-9A-Za-z]{4})*(?:[+/0-9A-Za-z]{2}==|[+/0-9A-Za-z]{3}=)?$/;
+const OFFER_KEYS =
+  "v serverId daemonPublicKeyB64 nonce expiresAt authorization relay".split(
+    " ",
+  );
 
-interface ConnectionOfferV1 {
-  v: typeof CONNECTION_OFFER_VERSION;
+type ConnectionOfferV1 = Record<
+  typeof CONNECTION_OFFER_VERSION_FIELD,
+  typeof CONNECTION_OFFER_VERSION
+> & {
   serverId: string;
   daemonPublicKeyB64: string;
+  nonce: string;
+  expiresAt: string;
+  authorization: {
+    required: true;
+    boundary: typeof AUTHORIZATION_BOUNDARY;
+  };
   relay: {
     endpoint: string;
   };
-}
+};
 
 interface TrustedHostRecord {
   serverId: string;
@@ -59,50 +77,160 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-function decodeBase64UrlUtf8(encoded: string): string {
-  const normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
+function byteAt(bytes: Uint8Array, index: number): number {
+  const value = bytes[index];
+  if (value === undefined) {
+    throw new Error("pairing offer fragment must be valid bytes");
+  }
+  return value;
+}
+
+function sextet(character: string): number {
+  const value = BASE64_ALPHABET.indexOf(character);
+  if (value === -1) {
+    throw new Error("pairing offer contains invalid base64");
+  }
+  return value;
+}
+
+function normalizedBase64(
+  encoded: string,
+  label: string,
+  urlSafe: boolean,
+): string {
+  let normalized = encoded;
+  if (urlSafe) {
+    normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
+  }
+  if (normalized.length % 4 === 1) {
+    throw new Error(`${label} must be valid base64`);
+  }
   const padded = normalized.padEnd(
     normalized.length + ((4 - (normalized.length % 4)) % 4),
     "=",
   );
-  if (typeof atob === "function") {
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (char) => char.codePointAt(0) ?? 0);
-    return new TextDecoder().decode(bytes);
+  if (!BASE64_PATTERN.test(padded)) {
+    throw new Error(`${label} must be valid base64`);
   }
-  return Buffer.from(padded, "base64").toString("utf8");
+  return padded;
 }
 
-function decodeStandardBase64Bytes(encoded: string): Uint8Array {
-  if (!/^[+/0-9=A-Za-z]+$/.test(encoded) || encoded.length % 4 !== 0) {
-    throw new Error("pairing offer daemonPublicKeyB64 must be standard base64");
+function optionalSextet(character: string): number {
+  if (character === "=") {
+    return 0;
   }
-  if (typeof atob === "function") {
-    const binary = atob(encoded);
-    return Uint8Array.from(binary, (char) => char.codePointAt(0) ?? 0);
+  return sextet(character);
+}
+
+function decodePaddedBase64Chunk(chunk: string, bytes: number[]): void {
+  const first = sextet(chunk.charAt(0));
+  const second = sextet(chunk.charAt(1));
+  const third = optionalSextet(chunk.charAt(2));
+  const fourth = optionalSextet(chunk.charAt(3));
+  bytes.push(first * 4 + Math.floor(second / 16));
+  if (chunk.charAt(2) !== "=") {
+    bytes.push((second % 16) * 16 + Math.floor(third / 4));
   }
-  return Uint8Array.from(Buffer.from(encoded, "base64"));
+  if (chunk.charAt(3) !== "=") {
+    bytes.push((third % 4) * 64 + fourth);
+  }
+}
+
+function decodeBase64Bytes(
+  encoded: string,
+  label: string,
+  urlSafe: boolean,
+): Uint8Array {
+  const padded = normalizedBase64(encoded, label, urlSafe);
+  const bytes: number[] = [];
+  for (let index = 0; index < padded.length; index += 4) {
+    decodePaddedBase64Chunk(padded.slice(index, index + 4), bytes);
+  }
+  return Uint8Array.from(bytes);
+}
+
+function decodeAscii(bytes: Uint8Array): string {
+  let result = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    const value = byteAt(bytes, index);
+    if (value > 127) {
+      throw new Error("pairing offer fragment must be ASCII JSON");
+    }
+    result += String.fromCodePoint(value);
+  }
+  return result;
+}
+
+function decodeBase64UrlJson(encoded: string): string {
+  return decodeAscii(
+    decodeBase64Bytes(encoded, "pairing offer fragment", true),
+  );
 }
 
 function requireDaemonPublicKey(value: unknown): string {
   const publicKey = requireNonEmptyString(value, "daemonPublicKeyB64");
-  const bytes = decodeStandardBase64Bytes(publicKey);
+  if (publicKey.length % 4 !== 0) {
+    throw new Error("pairing offer daemonPublicKeyB64 must be standard base64");
+  }
+  const bytes = decodeBase64Bytes(
+    publicKey,
+    "pairing offer daemonPublicKeyB64",
+    false,
+  );
   if (bytes.length !== 32) {
     throw new Error("pairing offer daemonPublicKeyB64 must decode to 32 bytes");
   }
   return publicKey;
 }
 
-function readConnectionOffer(value: unknown): ConnectionOfferV1 {
-  const record = requireRecord(value, "pairing offer");
+function requireNonce(value: unknown): string {
+  const nonce = requireNonEmptyString(value, "nonce");
+  const bytes = decodeBase64Bytes(nonce, "pairing offer nonce", true);
+  if (bytes.length !== 16) {
+    throw new Error("pairing offer nonce must decode to 16 bytes");
+  }
+  return nonce;
+}
+
+function requireExpiresAt(value: unknown, now: Date): string {
+  const expiresAt = requireNonEmptyString(value, "expiresAt");
+  const expiresAtMs = Date.parse(expiresAt);
+  if (!Number.isFinite(expiresAtMs)) {
+    throw new TypeError("pairing offer expiresAt must be a valid timestamp");
+  }
+  if (expiresAtMs <= now.getTime()) {
+    throw new Error("pairing offer has expired");
+  }
+  return expiresAt;
+}
+
+function requireAuthorization(
+  value: unknown,
+): ConnectionOfferV1["authorization"] {
+  const authorization = requireRecord(value, "pairing offer authorization");
   assertExactKeys(
-    record,
-    ["v", "serverId", "daemonPublicKeyB64", "relay"],
-    "pairing offer",
+    authorization,
+    ["required", "boundary"],
+    "pairing offer authorization",
   );
+  if (
+    authorization.required !== true ||
+    authorization.boundary !== AUTHORIZATION_BOUNDARY
+  ) {
+    throw new Error("pairing offer authorization boundary is invalid");
+  }
+  return { required: true, boundary: AUTHORIZATION_BOUNDARY };
+}
+
+function readConnectionOffer(
+  value: unknown,
+  now: Date = new Date(),
+): ConnectionOfferV1 {
+  const record = requireRecord(value, "pairing offer");
+  assertExactKeys(record, OFFER_KEYS, "pairing offer");
   const relay = requireRecord(record.relay, "pairing offer relay");
   assertExactKeys(relay, ["endpoint"], "pairing offer relay");
-  if (record.v !== CONNECTION_OFFER_VERSION) {
+  if (record[CONNECTION_OFFER_VERSION_FIELD] !== CONNECTION_OFFER_VERSION) {
     throw new Error("unsupported pairing offer version");
   }
   const serverId = requireNonEmptyString(record.serverId, "serverId");
@@ -110,16 +238,22 @@ function readConnectionOffer(value: unknown): ConnectionOfferV1 {
     throw new Error("pairing offer serverId is invalid");
   }
   return {
-    v: CONNECTION_OFFER_VERSION,
+    [CONNECTION_OFFER_VERSION_FIELD]: CONNECTION_OFFER_VERSION,
     serverId,
     daemonPublicKeyB64: requireDaemonPublicKey(record.daemonPublicKeyB64),
+    nonce: requireNonce(record.nonce),
+    expiresAt: requireExpiresAt(record.expiresAt, now),
+    authorization: requireAuthorization(record.authorization),
     relay: {
       endpoint: requireNonEmptyString(relay.endpoint, "relay.endpoint"),
     },
   };
 }
 
-function parseConnectionOfferUrl(urlOrFragment: string): ConnectionOfferV1 {
+function parseConnectionOfferUrl(
+  urlOrFragment: string,
+  now?: Date,
+): ConnectionOfferV1 {
   const markerIndex = urlOrFragment.indexOf(OFFER_FRAGMENT_MARKER);
   if (markerIndex === -1) {
     throw new Error("pairing offer URL is missing #offer= fragment");
@@ -130,7 +264,7 @@ function parseConnectionOfferUrl(urlOrFragment: string): ConnectionOfferV1 {
   if (!encoded) {
     throw new Error("pairing offer fragment is empty");
   }
-  return readConnectionOffer(JSON.parse(decodeBase64UrlUtf8(encoded)));
+  return readConnectionOffer(JSON.parse(decodeBase64UrlJson(encoded)), now);
 }
 
 function evaluateConnectionOfferTrust(
@@ -151,6 +285,7 @@ function evaluateConnectionOfferTrust(
 }
 
 export {
+  AUTHORIZATION_BOUNDARY,
   CONNECTION_OFFER_VERSION,
   evaluateConnectionOfferTrust,
   parseConnectionOfferUrl,

@@ -143,6 +143,7 @@ export type {
 };
 
 export {
+  AUTHORIZATION_BOUNDARY,
   CONNECTION_OFFER_VERSION,
   evaluateConnectionOfferTrust,
   parseConnectionOfferUrl,

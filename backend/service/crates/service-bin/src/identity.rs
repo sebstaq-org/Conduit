@@ -8,6 +8,8 @@ use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use time::format_description::well_known::Rfc3339;
+use time::{Duration, OffsetDateTime};
 use x25519_dalek::{PublicKey, StaticSecret};
 
 const IDENTITY_FILE_NAME: &str = "daemon-identity.json";
@@ -15,6 +17,8 @@ const KEYPAIR_FILE_NAME: &str = "daemon-keypair.json";
 const IDENTITY_VERSION: u8 = 1;
 const KEYPAIR_VERSION: u8 = 1;
 const KEYPAIR_ALGORITHM: &str = "x25519";
+const OFFER_TTL: Duration = Duration::minutes(10);
+const AUTHORIZATION_BOUNDARY: &str = "relay-handshake";
 
 /// The stable daemon identity exposed to trusted clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -35,8 +39,23 @@ pub(crate) struct ConnectionOfferV1 {
     pub(crate) server_id: String,
     /// Daemon public key encoded with standard base64.
     pub(crate) daemon_public_key_b64: String,
+    /// Single-use relay handshake nonce encoded as base64url without padding.
+    pub(crate) nonce: String,
+    /// Expiration timestamp for accepting this offer.
+    pub(crate) expires_at: String,
+    /// Authorization boundary required after offer parsing.
+    pub(crate) authorization: OfferAuthorization,
     /// Relay routing details.
     pub(crate) relay: RelayOffer,
+}
+
+/// Authorization boundary carried by the offer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct OfferAuthorization {
+    /// Whether later authorization is required.
+    pub(crate) required: bool,
+    /// Boundary that must enforce authorization.
+    pub(crate) boundary: String,
 }
 
 /// Relay endpoint carried by a pairing offer.
@@ -142,11 +161,38 @@ pub(crate) fn pairing_response(
     relay_endpoint: &str,
     app_base_url: &str,
 ) -> Result<PairingResponse, DaemonIdentityError> {
+    pairing_response_at(
+        home,
+        relay_endpoint,
+        app_base_url,
+        OffsetDateTime::now_utc(),
+    )
+}
+
+fn pairing_response_at(
+    home: &Path,
+    relay_endpoint: &str,
+    app_base_url: &str,
+    now: OffsetDateTime,
+) -> Result<PairingResponse, DaemonIdentityError> {
     let identity = load_or_create_daemon_identity(home)?;
+    let expires_at =
+        (now + OFFER_TTL)
+            .format(&Rfc3339)
+            .map_err(|source| DaemonIdentityError::InvalidFile {
+                path: home.join(IDENTITY_FILE_NAME),
+                message: source.to_string(),
+            })?;
     let offer = ConnectionOfferV1 {
         v: IDENTITY_VERSION,
         server_id: identity.server_id,
         daemon_public_key_b64: identity.daemon_public_key_b64,
+        nonce: generate_nonce(),
+        expires_at,
+        authorization: OfferAuthorization {
+            required: true,
+            boundary: AUTHORIZATION_BOUNDARY.to_owned(),
+        },
         relay: RelayOffer {
             endpoint: relay_endpoint.to_owned(),
         },
@@ -189,7 +235,17 @@ fn load_or_create_identity(home: &Path) -> Result<StoredIdentity, DaemonIdentity
                 v: IDENTITY_VERSION,
                 server_id: generate_server_id(),
             };
-            write_secret_file(&path, &identity)?;
+            if let Err(error) = write_secret_file(&path, &identity) {
+                if is_already_exists(&error) {
+                    return fs::read_to_string(&path)
+                        .map_err(|source| DaemonIdentityError::Io {
+                            path: path.clone(),
+                            source,
+                        })
+                        .and_then(|raw| parse_identity(&path, &raw));
+                }
+                return Err(error);
+            }
             Ok(identity)
         }
         Err(source) => Err(DaemonIdentityError::Io { path, source }),
@@ -217,7 +273,17 @@ fn load_or_create_keypair(home: &Path) -> Result<StoredKeyPair, DaemonIdentityEr
         Ok(raw) => parse_keypair(&path, &raw),
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let keypair = generate_keypair();
-            write_secret_file(&path, &keypair)?;
+            if let Err(error) = write_secret_file(&path, &keypair) {
+                if is_already_exists(&error) {
+                    return fs::read_to_string(&path)
+                        .map_err(|source| DaemonIdentityError::Io {
+                            path: path.clone(),
+                            source,
+                        })
+                        .and_then(|raw| parse_keypair(&path, &raw));
+                }
+                return Err(error);
+            }
             Ok(keypair)
         }
         Err(source) => Err(DaemonIdentityError::Io { path, source }),
@@ -278,6 +344,12 @@ fn generate_server_id() -> String {
     format!("srv_{}", URL_SAFE_NO_PAD.encode(bytes))
 }
 
+fn generate_nonce() -> String {
+    let mut bytes = [0_u8; 16];
+    OsRng.fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
 fn write_secret_file<T: Serialize>(path: &Path, value: &T) -> Result<(), DaemonIdentityError> {
     let bytes =
         serde_json::to_vec_pretty(value).map_err(|source| DaemonIdentityError::InvalidFile {
@@ -315,14 +387,24 @@ fn invalid_file(path: &Path, message: &str) -> DaemonIdentityError {
     }
 }
 
+fn is_already_exists(error: &DaemonIdentityError) -> bool {
+    matches!(
+        error,
+        DaemonIdentityError::Io { source, .. } if source.kind() == ErrorKind::AlreadyExists
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        KEYPAIR_FILE_NAME, daemon_status_response, load_or_create_daemon_identity, pairing_response,
+        AUTHORIZATION_BOUNDARY, KEYPAIR_FILE_NAME, OFFER_TTL, daemon_status_response,
+        load_or_create_daemon_identity, pairing_response, pairing_response_at,
     };
     use std::error::Error;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use time::OffsetDateTime;
+    use time::format_description::well_known::Rfc3339;
 
     type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -383,12 +465,36 @@ mod tests {
         if response.offer.relay.endpoint != "relay.example.test:443" {
             return Err("unexpected relay endpoint".into());
         }
+        if response.offer.nonce.is_empty() {
+            return Err("missing offer nonce".into());
+        }
+        if response.offer.authorization.boundary != AUTHORIZATION_BOUNDARY {
+            return Err("unexpected authorization boundary".into());
+        }
+        if !response.offer.authorization.required {
+            return Err("offer did not require later authorization".into());
+        }
         for forbidden in ["secret", "CONDUIT_HOME", "local-store", "daemon-keypair"] {
             if text.contains(forbidden) {
                 return Err(format!("pairing response leaked {forbidden}").into());
             }
         }
         Ok(())
+    }
+
+    #[test]
+    fn pairing_response_expires_ten_minutes_after_creation() -> TestResult<()> {
+        let home = test_home("expiry")?;
+        let now = OffsetDateTime::from_unix_timestamp(1_700_000_000)?;
+        let response =
+            pairing_response_at(&home, "relay.example.test:443", "https://app.test", now)?;
+        let expected = (now + OFFER_TTL).format(&Rfc3339)?;
+        cleanup(home);
+
+        if response.offer.expires_at == expected {
+            return Ok(());
+        }
+        Err(format!("unexpected expiresAt {}", response.offer.expires_at).into())
     }
 
     #[test]

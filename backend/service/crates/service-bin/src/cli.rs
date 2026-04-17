@@ -14,6 +14,8 @@ pub(crate) enum Command {
         port: u16,
         /// Relay endpoint used for pairing offers.
         relay_endpoint: Option<String>,
+        /// Base application URL that receives pairing offer fragments.
+        app_base_url: String,
     },
     /// Emits the daemon pairing offer.
     Pair {
@@ -42,6 +44,7 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
                 .or_else(|| std::env::var("CONDUIT_RELAY_ENDPOINT").ok())
                 .map(|value| value.trim().to_owned())
                 .filter(|value| !value.is_empty()),
+            app_base_url: app_base_url(args),
         }),
         "pair" => pair_command(args),
         "runtime" => Ok(Command::Runtime {
@@ -59,12 +62,16 @@ fn pair_command(args: &[String]) -> Result<Command> {
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty())
             .ok_or(crate::error::ServiceError::MissingRelayEndpoint)?,
-        app_base_url: optional_value(args, "--app-base-url")
-            .or_else(|| std::env::var("CONDUIT_APP_BASE_URL").ok())
-            .map(|value| value.trim().to_owned())
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| "https://app.conduit.local".to_owned()),
+        app_base_url: app_base_url(args),
     })
+}
+
+fn app_base_url(args: &[String]) -> String {
+    optional_value(args, "--app-base-url")
+        .or_else(|| std::env::var("CONDUIT_APP_BASE_URL").ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://app.conduit.local".to_owned())
 }
 
 fn runtime_command(args: &[String]) -> Result<ConsumerCommand> {

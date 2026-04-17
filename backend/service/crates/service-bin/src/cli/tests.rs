@@ -95,6 +95,7 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
         host,
         port,
         relay_endpoint,
+        app_base_url,
     } = parse_command(&args)?
     else {
         return Err("expected serve command".into());
@@ -108,7 +109,22 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     if relay_endpoint.is_some() {
         return Err("unexpected relay endpoint".into());
     }
+    if app_base_url != "https://app.conduit.local" {
+        return Err(format!("unexpected app base url {app_base_url}").into());
+    }
     Ok(())
+}
+
+#[test]
+fn serve_accepts_app_base_url() -> TestResult<()> {
+    let args = strings(&["serve", "--app-base-url", "https://expo.test/app"]);
+    let Command::Serve { app_base_url, .. } = parse_command(&args)? else {
+        return Err("expected serve command".into());
+    };
+    if app_base_url == "https://expo.test/app" {
+        return Ok(());
+    }
+    Err(format!("unexpected app base url {app_base_url}").into())
 }
 
 #[test]
