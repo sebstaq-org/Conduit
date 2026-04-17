@@ -1,0 +1,81 @@
+name: Stage
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conduit-stage-${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, x64]
+    outputs:
+      artifact_name: ${{ steps.stage.outputs.artifact_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version-file: .nvmrc
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.1
+          components: rustfmt, clippy
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build stage artifact
+        id: stage
+        env:
+          CONDUIT_STAGE_BUILD_REF: HEAD
+        run: pnpm run stage:build
+
+      - name: Upload stage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.artifact_name }}
+          path: ${{ steps.stage.outputs.artifact_path }}
+          retention-days: 14
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download stage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: stage-artifact
+
+      - name: Install stage artifact
+        run: bash scripts/stage/conduit-stage.sh install-artifact "stage-artifact/${{ needs.build.outputs.artifact_name }}"
+
+      - name: Restart stage
+        run: |
+          bash scripts/stage/conduit-stage.sh stop
+          bash scripts/stage/conduit-stage.sh start

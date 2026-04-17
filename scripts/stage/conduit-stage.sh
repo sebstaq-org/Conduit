@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 STAGE_ROOT="${CONDUIT_STAGE_ROOT:-/srv/devops/repos/conduit-stage}"
 RELEASES_DIR="$STAGE_ROOT/releases"
+ARTIFACTS_DIR="$STAGE_ROOT/artifacts"
 CURRENT_LINK="$STAGE_ROOT/current"
 BUILD_DIR="$STAGE_ROOT/.build"
 BACKEND_HOST="${CONDUIT_STAGE_BACKEND_HOST:-127.0.0.1}"
@@ -13,13 +14,14 @@ BACKEND_PORT="${CONDUIT_STAGE_BACKEND_PORT:-4274}"
 WEB_HOST="${CONDUIT_STAGE_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${CONDUIT_STAGE_WEB_PORT:-4310}"
 WS_URL="${CONDUIT_STAGE_WS_URL:-ws://${BACKEND_HOST}:${BACKEND_PORT}/api/session}"
-BUILD_REF="${CONDUIT_STAGE_BUILD_REF:-origin/main}"
+CLIENT_LOG_URL="${CONDUIT_STAGE_CLIENT_LOG_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/client-log}"
+BUILD_REF="${CONDUIT_STAGE_BUILD_REF:-HEAD}"
 DATA_ROOT="$STAGE_ROOT/data"
 PID_DIR="$STAGE_ROOT/pids"
 LOG_DIR="$STAGE_ROOT/logs"
 RUNNER_PATH="$STAGE_ROOT/conduit-stage"
-SUPERVISOR_PID_FILE="$PID_DIR/supervisor.pid"
 ELECTRON_PID_FILE="$PID_DIR/electron.pid"
+BACKEND_PID_FILE="$PID_DIR/backend.pid"
 RUNTIME_STATUS_FILE="$PID_DIR/runtime-status.json"
 
 run() {
@@ -33,6 +35,7 @@ run() {
 ensure_stage_dirs() {
   run mkdir -p "$STAGE_ROOT"
   run mkdir -p "$RELEASES_DIR"
+  run mkdir -p "$ARTIFACTS_DIR"
   run mkdir -p "$BUILD_DIR"
   run mkdir -p "$DATA_ROOT"
   run mkdir -p "$PID_DIR"
@@ -59,10 +62,23 @@ pid_running() {
   kill -0 "$pid" >/dev/null 2>&1
 }
 
+wait_for_pid_exit() {
+  local pid="$1"
+  local attempts=50
+  local index=0
+  while [[ "$index" -lt "$attempts" ]]; do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 0.1
+    index=$((index + 1))
+  done
+}
+
 wait_for_runtime_ready() {
   local backend_url="http://${BACKEND_HOST}:${BACKEND_PORT}/health"
   local web_url="http://${WEB_HOST}:${WEB_PORT}/"
-  local attempts=30
+  local attempts=60
   local index=0
   while [[ "$index" -lt "$attempts" ]]; do
     if curl --silent --show-error --fail --max-time 2 "$backend_url" >/dev/null 2>&1 &&
@@ -75,29 +91,19 @@ wait_for_runtime_ready() {
   return 1
 }
 
-wait_for_pid_exit() {
-  local pid="$1"
-  local attempts=30
-  local index=0
-  while [[ "$index" -lt "$attempts" ]]; do
-    if ! kill -0 "$pid" >/dev/null 2>&1; then
-      return
-    fi
-    sleep 0.1
-    index=$((index + 1))
-  done
-}
-
 write_stage_runner() {
   cat >"$RUNNER_PATH" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-STAGE_ROOT="${STAGE_ROOT}"
 REPO_SCRIPT="${REPO_ROOT}/scripts/stage/conduit-stage.sh"
-if [[ "\${1:-}" == "refresh" ]]; then
-  exec "\$REPO_SCRIPT" refresh
-fi
-exec "\$REPO_SCRIPT" "\$@"
+case "\${1:-open}" in
+  refresh)
+    exec "\$REPO_SCRIPT" refresh
+    ;;
+  *)
+    exec "\$REPO_SCRIPT" "\$@"
+    ;;
+esac
 EOF
   chmod +x "$RUNNER_PATH"
 }
@@ -137,29 +143,16 @@ seed_worklets_cache() {
   )
 }
 
-install_desktop_entry() {
-  local applications_dir
-  applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-  local desktop_file="$applications_dir/conduit-stage.desktop"
-  run mkdir -p "$applications_dir"
-  cat >"$desktop_file" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Conduit Stage
-Comment=Run isolated Conduit Electron stage build
-Exec=${RUNNER_PATH} open
-Terminal=false
-Icon=utilities-terminal
-Categories=Development;
-EOF
-  printf "Desktop entry installed: %s\n" "$desktop_file"
+write_github_output() {
+  local name="$1"
+  local value="$2"
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf "%s=%s\n" "$name" "$value" >>"$GITHUB_OUTPUT"
+  fi
 }
 
-refresh_stage() {
+build_artifact() {
   ensure_stage_dirs
-  if [[ "$BUILD_REF" == origin/* ]]; then
-    run git -C "$REPO_ROOT" fetch origin
-  fi
   local commit
   commit="$(run git -C "$REPO_ROOT" rev-parse --verify "$BUILD_REF")"
   local short_commit
@@ -169,50 +162,66 @@ refresh_stage() {
   local release_name="${timestamp}-${short_commit}"
   local scratch_dir="$BUILD_DIR/$release_name"
   local source_dir="$scratch_dir/source"
-  local release_dir="$RELEASES_DIR/$release_name"
+  local resources_dir="$scratch_dir/stage-resources"
+  local forge_out_dir="$scratch_dir/forge"
+  local bundle_root="$scratch_dir/bundle"
+  local bundle_dir="$bundle_root/$release_name"
+  local artifact_name="conduit-stage-${release_name}-linux-x64.tar.gz"
+  local artifact_path="$ARTIFACTS_DIR/$artifact_name"
 
   run rm -rf "$scratch_dir"
   run mkdir -p "$source_dir"
-  run mkdir -p "$release_dir/bin"
-  run mkdir -p "$release_dir/desktop"
-  run mkdir -p "$release_dir/meta"
+  run mkdir -p "$resources_dir/bin"
+  run mkdir -p "$bundle_dir"
 
   run git -C "$REPO_ROOT" archive --format=tar "$commit" | tar -x -f - -C "$source_dir"
 
   (
     cd "$source_dir"
-    export EXPO_PUBLIC_CONDUIT_SESSION_WS_URL="$WS_URL"
+    export EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL="$CLIENT_LOG_URL"
     export EXPO_PUBLIC_CONDUIT_LOG_PROFILE="stage"
+    export EXPO_PUBLIC_CONDUIT_SESSION_WS_URL="$WS_URL"
+    export CONDUIT_STAGE_PACKAGE_OUT_DIR="$forge_out_dir"
+    export CONDUIT_STAGE_RESOURCES_DIR="$resources_dir"
     run pnpm install --frozen-lockfile
     run pnpm run build
     run pnpm --filter @conduit/desktop run build
     seed_worklets_cache "$REPO_ROOT" "$source_dir"
-    run pnpm --filter @conduit/frontend exec expo export --platform web --output-dir "$release_dir/web"
+    run pnpm --filter @conduit/frontend exec expo export --platform web --output-dir "$resources_dir/web"
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
+    run cp backend/service/target/release/service-bin "$resources_dir/bin/service-bin"
+    chmod +x "$resources_dir/bin/service-bin"
+    write_manifest "$resources_dir/manifest.json" "$commit" "$timestamp"
+    run pnpm --filter @conduit/desktop run package:stage
   )
 
-  run cp "$source_dir/backend/service/target/release/service-bin" "$release_dir/bin/service-bin"
-  chmod +x "$release_dir/bin/service-bin"
-  (
-    cd "$source_dir/apps/desktop"
-    tar -cf - out
-  ) | (
-    cd "$release_dir/desktop"
-    tar -xf -
-  )
-  cat >"$release_dir/desktop/package.json" <<EOF
-{
-  "name": "conduit-stage-desktop",
-  "private": true,
-  "type": "module",
-  "main": "./out/main/index.js"
+  local package_dir
+  package_dir="$(find "$forge_out_dir" -maxdepth 1 -type d -name "*-linux-x64" | head -n 1)"
+  if [[ -z "$package_dir" ]]; then
+    printf "No Forge linux x64 package found in %s\n" "$forge_out_dir" >&2
+    exit 1
+  fi
+
+  run cp -a "$package_dir" "$bundle_dir/app"
+  run cp "$resources_dir/manifest.json" "$bundle_dir/manifest.json"
+  validate_release_dir "$bundle_dir"
+  run tar -C "$bundle_root" -czf "$artifact_path" "$release_name"
+  printf "Stage artifact built: %s\n" "$artifact_path"
+  write_github_output "artifact_path" "$artifact_path"
+  write_github_output "artifact_name" "$artifact_name"
 }
-EOF
-  cat >"$release_dir/meta/build.json" <<EOF
+
+write_manifest() {
+  local manifest_path="$1"
+  local commit="$2"
+  local timestamp="$3"
+  cat >"$manifest_path" <<EOF
 {
   "commit": "$commit",
   "buildRef": "$BUILD_REF",
   "createdAt": "$timestamp",
+  "platform": "linux",
+  "arch": "x64",
   "backendHost": "$BACKEND_HOST",
   "backendPort": $BACKEND_PORT,
   "webHost": "$WEB_HOST",
@@ -220,14 +229,69 @@ EOF
   "websocketUrl": "$WS_URL"
 }
 EOF
+}
 
+validate_release_dir() {
+  local release_dir="$1"
+  if [[ ! -f "$release_dir/manifest.json" ]]; then
+    printf "Stage release is missing manifest.json\n" >&2
+    exit 1
+  fi
+  local executable
+  executable="$(stage_executable_for_release "$release_dir")"
+  if [[ -z "$executable" || ! -x "$executable" ]]; then
+    printf "Stage release is missing executable app/conduit-stage\n" >&2
+    exit 1
+  fi
+}
+
+stage_executable_for_release() {
+  local release_dir="$1"
+  local executable="$release_dir/app/conduit-stage"
+  if [[ -x "$executable" ]]; then
+    printf "%s\n" "$executable"
+    return
+  fi
+  find "$release_dir/app" -maxdepth 1 -type f -executable -name "conduit-stage*" | head -n 1
+}
+
+install_artifact() {
+  ensure_stage_dirs
+  local artifact_path="${1:-}"
+  if [[ -z "$artifact_path" ]]; then
+    printf "install-artifact requires a tarball path\n" >&2
+    exit 1
+  fi
+  local scratch_dir="$BUILD_DIR/install-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  run rm -rf "$scratch_dir"
+  run mkdir -p "$scratch_dir"
+  run tar -xzf "$artifact_path" -C "$scratch_dir"
+  local extracted_dir
+  extracted_dir="$(find "$scratch_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+  if [[ -z "$extracted_dir" ]]; then
+    printf "Artifact did not contain a release directory: %s\n" "$artifact_path" >&2
+    exit 1
+  fi
+  validate_release_dir "$extracted_dir"
+
+  local release_name
+  release_name="$(basename "$extracted_dir")"
+  local release_dir="$RELEASES_DIR/$release_name"
+  run rm -rf "$release_dir"
+  run mv "$extracted_dir" "$release_dir"
+  run rm -rf "$scratch_dir"
   ln -sfn "$release_dir" "$CURRENT_LINK"
   write_stage_runner
-  if pid_running "$ELECTRON_PID_FILE" || pid_running "$SUPERVISOR_PID_FILE" || pid_running "$PID_DIR/backend.pid" || pid_running "$PID_DIR/web.pid"; then
-    stop_stage
-    start_stage
-  fi
-  printf "Stage refreshed to %s\n" "$release_name"
+  printf "Stage installed: %s\n" "$release_dir"
+}
+
+deploy_stage() {
+  build_artifact
+  local latest_artifact
+  latest_artifact="$(find "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "conduit-stage-*-linux-x64.tar.gz" -printf "%T@ %p\n" | sort -nr | head -n 1 | cut -d " " -f 2-)"
+  install_artifact "$latest_artifact"
+  stop_stage
+  start_stage
 }
 
 start_stage() {
@@ -237,10 +301,13 @@ start_stage() {
     printf "No stage release found. Run: %s refresh\n" "$0" >&2
     exit 1
   }
+  validate_release_dir "$current_release"
 
   if ! pid_running "$ELECTRON_PID_FILE"; then
+    local executable
+    executable="$(stage_executable_for_release "$current_release")"
     rm -f "$RUNTIME_STATUS_FILE"
-    CONDUIT_STAGE_RELEASE_DIR="$current_release" \
+    CONDUIT_STAGE_RUNTIME="1" \
       CONDUIT_STAGE_DATA_ROOT="$DATA_ROOT" \
       CONDUIT_STAGE_LOG_DIR="$LOG_DIR" \
       CONDUIT_STAGE_PID_DIR="$PID_DIR" \
@@ -249,7 +316,7 @@ start_stage() {
       CONDUIT_STAGE_BACKEND_PORT="$BACKEND_PORT" \
       CONDUIT_STAGE_WEB_HOST="$WEB_HOST" \
       CONDUIT_STAGE_WEB_PORT="$WEB_PORT" \
-      setsid pnpm --dir "$REPO_ROOT/apps/desktop" exec electron --no-sandbox "$current_release/desktop" >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
+      setsid "$executable" --no-sandbox >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
     printf "%s" "$!" >"$ELECTRON_PID_FILE"
     sleep 0.2
     if ! pid_running "$ELECTRON_PID_FILE"; then
@@ -268,16 +335,28 @@ start_stage() {
 }
 
 stop_stage() {
-  local pid_file
-  for pid_file in "$ELECTRON_PID_FILE" "$SUPERVISOR_PID_FILE" "$PID_DIR/backend.pid" "$PID_DIR/web.pid"; do
-    if pid_running "$pid_file"; then
-      local pid
-      pid="$(cat "$pid_file")"
-      kill "$pid" >/dev/null 2>&1 || true
+  if pid_running "$ELECTRON_PID_FILE"; then
+    local pid
+    pid="$(cat "$ELECTRON_PID_FILE")"
+    kill "$pid" >/dev/null 2>&1 || true
+    wait_for_pid_exit "$pid"
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -KILL "$pid" >/dev/null 2>&1 || true
       wait_for_pid_exit "$pid"
     fi
-    rm -f "$pid_file"
-  done
+  fi
+  rm -f "$ELECTRON_PID_FILE"
+
+  if pid_running "$BACKEND_PID_FILE"; then
+    local backend_pid
+    backend_pid="$(cat "$BACKEND_PID_FILE")"
+    kill "$backend_pid" >/dev/null 2>&1 || true
+    wait_for_pid_exit "$backend_pid"
+    if kill -0 "$backend_pid" >/dev/null 2>&1; then
+      kill -KILL "$backend_pid" >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -f "$BACKEND_PID_FILE"
 }
 
 status_stage() {
@@ -294,12 +373,8 @@ status_stage() {
     printf "Electron: stopped\n"
   fi
 
-  if pid_running "$SUPERVISOR_PID_FILE"; then
-    printf "Legacy supervisor: running (pid %s)\n" "$(cat "$SUPERVISOR_PID_FILE")"
-  fi
-
-  if pid_running "$PID_DIR/backend.pid"; then
-    printf "Backend: running (pid %s)\n" "$(cat "$PID_DIR/backend.pid")"
+  if pid_running "$BACKEND_PID_FILE"; then
+    printf "Backend: running (pid %s)\n" "$(cat "$BACKEND_PID_FILE")"
   else
     printf "Backend: stopped\n"
   fi
@@ -314,8 +389,22 @@ status_stage() {
   fi
 }
 
-open_stage() {
-  start_stage
+install_desktop_entry() {
+  local applications_dir
+  applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+  local desktop_file="$applications_dir/conduit-stage.desktop"
+  run mkdir -p "$applications_dir"
+  cat >"$desktop_file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Conduit Stage
+Comment=Run isolated Conduit Electron stage build
+Exec=${RUNNER_PATH} open
+Terminal=false
+Icon=utilities-terminal
+Categories=Development;
+EOF
+  printf "Desktop entry installed: %s\n" "$desktop_file"
 }
 
 show_logs() {
@@ -324,16 +413,7 @@ show_logs() {
     backend)
       tail -n 200 "$LOG_DIR/backend.log"
       ;;
-    frontend)
-      tail -n 200 "$LOG_DIR/frontend.log"
-      ;;
-    web)
-      tail -n 200 "$LOG_DIR/electron.log"
-      ;;
-    supervisor)
-      tail -n 200 "$LOG_DIR/electron.log"
-      ;;
-    electron)
+    electron | frontend | web)
       tail -n 200 "$LOG_DIR/electron.log"
       ;;
     all)
@@ -353,22 +433,31 @@ usage() {
 Usage: $0 <command>
 
 Commands:
-  refresh               Build selected ref (default: origin/main) into stage release
-  start                 Start Electron stage and wait for runtime readiness
-  stop                  Stop Electron stage and child backend process
-  status                Show current release and process status
-  open                  Start stage if needed
-  logs [backend|frontend|electron|web|supervisor] Show recent log output
-  install-desktop-entry Install a desktop launcher for stage open
+  build-artifact         Build selected ref (default: HEAD) into a stage tarball
+  install-artifact PATH  Install a stage tarball and update current atomically
+  deploy                 Build, install, stop old stage, and start new stage
+  refresh                Alias for deploy
+  start                  Start packaged Electron stage and wait for readiness
+  stop                   Stop packaged Electron stage and child backend process
+  status                 Show current release and process status
+  open                   Start stage if needed
+  logs [backend|frontend|electron|web] Show recent log output
+  install-desktop-entry  Install a desktop launcher for stage open
 EOF
 }
 
 command="${1:-}"
 case "$command" in
-  refresh)
-    refresh_stage
+  build-artifact)
+    build_artifact
     ;;
-  start)
+  install-artifact)
+    install_artifact "${2:-}"
+    ;;
+  deploy | refresh)
+    deploy_stage
+    ;;
+  start | open)
     start_stage
     ;;
   stop)
@@ -376,9 +465,6 @@ case "$command" in
     ;;
   status)
     status_stage
-    ;;
-  open)
-    open_stage
     ;;
   logs)
     show_logs "${2:-all}"

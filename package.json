@@ -48,6 +48,8 @@
     "frontend:types:generate": "pnpm --filter @conduit/frontend exec expo customize tsconfig.json",
     "frontend:typecheck": "pnpm --filter @conduit/frontend run typecheck",
     "frontend:web": "pnpm --filter @conduit/frontend run web",
+    "stage:build": "bash scripts/stage/conduit-stage.sh build-artifact",
+    "stage:deploy": "bash scripts/stage/conduit-stage.sh deploy",
     "stage:refresh": "bash scripts/stage/conduit-stage.sh refresh",
     "stage:start": "bash scripts/stage/conduit-stage.sh start",
     "stage:stop": "bash scripts/stage/conduit-stage.sh stop",

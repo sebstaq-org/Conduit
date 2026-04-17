@@ -178,13 +178,10 @@ export default defineConfig({
       files: [
         "apps/desktop/src/client.ts",
         "apps/desktop/src/server.ts",
-        "apps/desktop/src/main/stage.ts",
         "src/client.ts",
         "src/server.ts",
-        "src/main/stage.ts",
         "**/src/client.ts",
         "**/src/server.ts",
-        "**/src/main/stage.ts",
       ],
       rules: {
         "eslint/no-ternary": "off",
@@ -213,16 +210,6 @@ export default defineConfig({
         "unicorn/prefer-query-selector": "off",
         "unicorn/prefer-top-level-await": "off",
         "unicorn/switch-case-braces": "off",
-      },
-    },
-    {
-      files: ["apps/desktop/src/main/stage.ts", "**/src/main/stage.ts"],
-      rules: {
-        "eslint/no-await-in-loop": "off",
-        "promise/always-return": "off",
-        "promise/param-names": "off",
-        "promise/prefer-await-to-callbacks": "off",
-        "promise/prefer-await-to-then": "off",
       },
     },
     {

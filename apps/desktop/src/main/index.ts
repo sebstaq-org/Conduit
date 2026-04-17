@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
-import { runStageRuntimeIfConfigured } from "./stage.js";
+import { runStageRuntimeIfConfigured } from "./stage/runtime.js";
 
 const currentDirectory = import.meta.dirname;
 const mainWindows = new Set<BrowserWindow>();
