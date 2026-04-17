@@ -9,12 +9,13 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 12] = [
+const APPROVED_CRATES: [&str; 13] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
+    "conduit-cli",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
@@ -131,7 +132,7 @@ fn write_workspace_packages(repo_root: &Path) -> Result<()> {
 fn write_crates(repo_root: &Path) -> Result<()> {
     for crate_name in APPROVED_CRATES {
         let crate_root = repo_root.join("backend/service/crates").join(crate_name);
-        let entry = if crate_name == "service-bin" {
+        let entry = if matches!(crate_name, "conduit-cli" | "service-bin") {
             "main.rs"
         } else {
             "lib.rs"
@@ -224,13 +225,14 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 12] {
+fn local_deps() -> [LocalDeps; 13] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
         ("acp-discovery", Vec::<&str>::new()),
         ("app-api", vec!["acp-contracts", "acp-core"]),
         ("app-protocol-export", vec!["service-runtime"]),
+        ("conduit-cli", vec!["acp-core", "acp-discovery", "app-api"]),
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),

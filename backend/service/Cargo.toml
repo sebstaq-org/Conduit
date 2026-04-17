@@ -3,6 +3,7 @@ members = [
   "crates/acp-contracts",
   "crates/acp-core",
   "crates/acp-discovery",
+  "crates/conduit-cli",
   "crates/app-protocol-export",
   "crates/app-api",
   "crates/provider-claude",
