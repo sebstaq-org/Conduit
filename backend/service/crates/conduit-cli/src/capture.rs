@@ -63,6 +63,7 @@ pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
     let timestamp = timestamp()?;
     let output = output_path(output, &operation, &timestamp);
     create_output_dir(&output)?;
+    create_capture_cwd(&operation, &cwd)?;
     let mut ledger = Ledger::new(&cwd, &output, operation_name(&operation));
     ledger.push("capture.start", true)?;
     write_manifest(&operation, &cwd, &output, &timestamp)?;
@@ -112,9 +113,24 @@ fn capture_provider(
     ledger: &mut Ledger,
 ) -> Result<Value> {
     match operation {
-        CaptureOperation::SessionList => capture_session_list(service, cwd, ledger),
-        CaptureOperation::SessionLoad { session_id } => {
+        CaptureOperation::New => capture_session_new(service, cwd, ledger),
+        CaptureOperation::List => capture_session_list(service, cwd, ledger),
+        CaptureOperation::Load { session_id } => {
             capture_session_load(service, session_id, cwd, ledger)
+        }
+    }
+}
+
+fn capture_session_new(service: &mut AppService, cwd: &Path, ledger: &mut Ledger) -> Result<Value> {
+    ledger.push("provider.session_new.start", true)?;
+    match service.new_session(cwd.to_path_buf()) {
+        Ok(response) => {
+            ledger.push("provider.session_new.finish", true)?;
+            Ok(serde_json::to_value(response)?)
+        }
+        Err(error) => {
+            ledger.push("provider.session_new.finish", false)?;
+            Err(error.into())
         }
     }
 }
@@ -205,6 +221,13 @@ fn create_output_dir(output: &Path) -> Result<()> {
     create_dir(output).map_err(|source| CliError::io(Some(output.to_path_buf()), source))
 }
 
+fn create_capture_cwd(operation: &CaptureOperation, cwd: &Path) -> Result<()> {
+    if matches!(operation, CaptureOperation::New) {
+        create_dir_all(cwd).map_err(|source| CliError::io(Some(cwd.to_path_buf()), source))?;
+    }
+    Ok(())
+}
+
 fn write_manifest(
     operation: &CaptureOperation,
     cwd: &Path,
@@ -227,9 +250,19 @@ fn write_manifest(
 
 fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
     match operation {
-        CaptureOperation::SessionList => validate_session_list(value),
-        CaptureOperation::SessionLoad { .. } => validate_session_load(value),
+        CaptureOperation::New => validate_session_new(value),
+        CaptureOperation::List => validate_session_list(value),
+        CaptureOperation::Load { .. } => validate_session_load(value),
     }
+}
+
+fn validate_session_new(value: &Value) -> Result<()> {
+    if value.get("sessionId").and_then(Value::as_str).is_some() {
+        return Ok(());
+    }
+    Err(CliError::invalid_capture(
+        "provider session/new response must contain a sessionId string",
+    ))
 }
 
 fn validate_session_list(value: &Value) -> Result<()> {
@@ -270,22 +303,24 @@ fn validate_session_load(value: &Value) -> Result<()> {
 
 fn operation_name(operation: &CaptureOperation) -> &'static str {
     match operation {
-        CaptureOperation::SessionList => "session/list",
-        CaptureOperation::SessionLoad { .. } => "session/load",
+        CaptureOperation::New => "session/new",
+        CaptureOperation::List => "session/list",
+        CaptureOperation::Load { .. } => "session/load",
     }
 }
 
 fn operation_slug(operation: &CaptureOperation) -> &'static str {
     match operation {
-        CaptureOperation::SessionList => "session-list",
-        CaptureOperation::SessionLoad { .. } => "session-load",
+        CaptureOperation::New => "session-new",
+        CaptureOperation::List => "session-list",
+        CaptureOperation::Load { .. } => "session-load",
     }
 }
 
 fn session_id(operation: &CaptureOperation) -> Option<String> {
     match operation {
-        CaptureOperation::SessionList => None,
-        CaptureOperation::SessionLoad { session_id } => Some(session_id.clone()),
+        CaptureOperation::New | CaptureOperation::List => None,
+        CaptureOperation::Load { session_id } => Some(session_id.clone()),
     }
 }
 
@@ -345,7 +380,10 @@ impl Ledger {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_output_dir, validate_session_list, validate_session_load, write_json};
+    use super::{
+        create_output_dir, validate_session_list, validate_session_load, validate_session_new,
+        write_json,
+    };
     use serde_json::json;
     use std::fs::{create_dir, read_to_string};
     use tempfile::TempDir;
@@ -353,6 +391,20 @@ mod tests {
     #[test]
     fn accepts_session_list_with_sessions_array() {
         assert!(validate_session_list(&json!({ "sessions": [] })).is_ok());
+    }
+
+    #[test]
+    fn accepts_session_new_with_session_id() {
+        assert!(validate_session_new(&json!({ "sessionId": "session-1" })).is_ok());
+    }
+
+    #[test]
+    fn rejects_session_new_without_session_id() {
+        let error = validate_session_new(&json!({ "models": {} }))
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        assert!(error.contains("sessionId string"));
     }
 
     #[test]
