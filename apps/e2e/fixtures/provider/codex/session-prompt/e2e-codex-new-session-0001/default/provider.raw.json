@@ -1,0 +1,27 @@
+{
+  "promptRequest": {
+    "prompt": [
+      {
+        "text": "Reply with exactly CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT.",
+        "type": "text"
+      }
+    ],
+    "sessionId": "e2e-codex-new-session-0001"
+  },
+  "promptResponse": {
+    "stopReason": "end_turn"
+  },
+  "promptUpdates": [
+    {
+      "index": 0,
+      "update": {
+        "content": {
+          "text": "CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    }
+  ]
+}

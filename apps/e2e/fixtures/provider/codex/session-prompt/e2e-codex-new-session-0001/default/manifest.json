@@ -1,0 +1,12 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Sanitized from manual Codex capture; session id, cwd, prompt text, and agent text replaced with deterministic E2E values.",
+  "cwd": "/tmp/conduit-e2e-fixture-project",
+  "manualCapture": false,
+  "operation": "session/prompt",
+  "provider": "codex",
+  "sessionId": "e2e-codex-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/codex/session-prompt/smoke-projection-20260417T203641Z",
+  "timestamp": "2026-01-01T00:00:00Z"
+}

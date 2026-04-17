@@ -12,12 +12,14 @@
 )]
 
 use acp_core::{
-    ConnectionState, InteractionResponse, LoadedTranscriptSnapshot, ProviderSnapshot, RawWireEvent,
-    TranscriptUpdateSnapshot,
+    ConnectionState, InteractionResponse, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
+    ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
 use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
 use load::{SessionLoadFixture, read_session_load_fixtures};
+use new::read_session_new_fixtures;
+use prompt::{SessionPromptFixture, read_session_prompt_fixtures};
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
 use std::collections::HashMap;
@@ -25,6 +27,8 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 mod load;
+mod new;
+mod prompt;
 
 const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
 
@@ -32,7 +36,9 @@ const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, Pro
 #[derive(Debug, Clone)]
 pub struct FixtureProviderFactory {
     session_lists: HashMap<ProviderId, Value>,
+    session_news: HashMap<ProviderId, Value>,
     session_loads: HashMap<(ProviderId, String), SessionLoadFixture>,
+    session_prompts: HashMap<(ProviderId, String), SessionPromptFixture>,
 }
 
 impl FixtureProviderFactory {
@@ -51,18 +57,24 @@ impl FixtureProviderFactory {
             )));
         }
         let mut session_lists = HashMap::new();
+        let mut session_news = HashMap::new();
         let mut session_loads = HashMap::new();
+        let mut session_prompts = HashMap::new();
         for provider in PROVIDERS {
             let path = session_list_path(root, provider);
             if path.exists() {
                 let value = read_session_list_fixture(&path)?;
                 session_lists.insert(provider, value);
             }
+            read_session_new_fixtures(root, provider, &mut session_news)?;
             read_session_load_fixtures(root, provider, &mut session_loads)?;
+            read_session_prompt_fixtures(root, provider, &mut session_prompts)?;
         }
         Ok(Self {
             session_lists,
+            session_news,
             session_loads,
+            session_prompts,
         })
     }
 }
@@ -71,13 +83,21 @@ impl ProviderFactory for FixtureProviderFactory {
     fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
         Ok(Box::new(FixtureProviderPort {
             provider,
+            last_prompt: None,
             session_list: self
                 .session_lists
                 .get(&provider)
                 .cloned()
                 .unwrap_or_else(empty_session_list),
+            session_new: self.session_news.get(&provider).cloned(),
             session_loads: self
                 .session_loads
+                .iter()
+                .filter(|((fixture_provider, _), _)| *fixture_provider == provider)
+                .map(|((_, session_id), fixture)| (session_id.clone(), fixture.clone()))
+                .collect(),
+            session_prompts: self
+                .session_prompts
                 .iter()
                 .filter(|((fixture_provider, _), _)| *fixture_provider == provider)
                 .map(|((_, session_id), fixture)| (session_id.clone(), fixture.clone()))
@@ -89,8 +109,11 @@ impl ProviderFactory for FixtureProviderFactory {
 
 struct FixtureProviderPort {
     provider: ProviderId,
+    last_prompt: Option<PromptLifecycleSnapshot>,
     session_list: Value,
+    session_new: Option<Value>,
     session_loads: HashMap<String, SessionLoadFixture>,
+    session_prompts: HashMap<String, SessionPromptFixture>,
     loaded_transcripts: HashMap<String, LoadedTranscriptSnapshot>,
 }
 
@@ -103,7 +126,7 @@ impl ProviderPort for FixtureProviderPort {
             capabilities: json!({}),
             auth_methods: Vec::new(),
             live_sessions: Vec::new(),
-            last_prompt: None,
+            last_prompt: self.last_prompt.clone(),
             loaded_transcripts: self.loaded_transcripts.values().cloned().collect(),
         }
     }
@@ -117,7 +140,12 @@ impl ProviderPort for FixtureProviderPort {
     }
 
     fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
-        unsupported("session/new")
+        self.session_new.clone().ok_or_else(|| {
+            RuntimeError::Provider(format!(
+                "missing session/new fixture for {}",
+                self.provider.as_str()
+            ))
+        })
     }
 
     fn session_list(&mut self, _cwd: Option<PathBuf>, cursor: Option<String>) -> Result<Value> {
@@ -145,11 +173,31 @@ impl ProviderPort for FixtureProviderPort {
 
     fn session_prompt(
         &mut self,
-        _session_id: String,
-        _prompt: Vec<Value>,
-        _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+        session_id: String,
+        prompt: Vec<Value>,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
-        unsupported("session/prompt")
+        let fixture = self
+            .session_prompts
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeError::Provider(format!(
+                    "missing session/prompt fixture for {} session {session_id}",
+                    self.provider.as_str()
+                ))
+            })?;
+        if fixture.prompt != prompt {
+            return Err(RuntimeError::Provider(format!(
+                "session/prompt fixture prompt mismatch for {} session {session_id}",
+                self.provider.as_str()
+            )));
+        }
+        for update in &fixture.updates {
+            update_sink(update.clone());
+        }
+        self.last_prompt = Some(fixture.lifecycle(self.provider, session_id));
+        Ok(fixture.response)
     }
 
     fn session_cancel(&mut self, _session_id: String) -> Result<Value> {
@@ -316,6 +364,75 @@ mod tests {
     }
 
     #[test]
+    fn codex_session_new_returns_raw_fixture() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_new_capture(
+            root.path(),
+            "capture-1",
+            json!({
+                "sessionId": "session-1",
+                "configOptions": [],
+                "modes": { "availableModes": [], "currentModeId": null },
+                "models": null
+            }),
+        )?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let response = port.session_new("/repo".into())?;
+
+        if response.get("sessionId").and_then(Value::as_str) != Some("session-1") {
+            return Err(format!("unexpected response {response}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn missing_session_new_fixture_fails_explicitly() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let error = port
+            .session_new("/repo".into())
+            .err()
+            .ok_or("missing session/new unexpectedly succeeded")?;
+
+        if !error.to_string().contains("missing session/new fixture") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn duplicate_session_new_fixture_fails_load() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        for capture in ["capture-1", "capture-2"] {
+            write_session_new_capture(root.path(), capture, json!({ "sessionId": capture }))?;
+        }
+        let error = FixtureProviderFactory::load(root.path())
+            .err()
+            .ok_or("duplicate session/new fixture unexpectedly loaded")?;
+
+        if !error.to_string().contains("duplicate session/new fixture") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_session_new_fixture_fails_load() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_new_capture(root.path(), "capture-1", json!({ "models": null }))?;
+        let error = FixtureProviderFactory::load(root.path())
+            .err()
+            .ok_or("malformed session/new fixture unexpectedly loaded")?;
+
+        if !error.to_string().contains("sessionId string") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn session_load_indexes_capture_with_manifest_session_id() -> TestResult<()> {
         let root = fixture_root(json!({ "sessions": [] }))?;
         write_session_load_capture(
@@ -424,6 +541,77 @@ mod tests {
     }
 
     #[test]
+    fn session_prompt_replays_updates_and_lifecycle() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_prompt_capture(
+            root.path(),
+            SessionPromptCapture {
+                capture: "default",
+                prompt: vec![json!({ "type": "text", "text": "hello" })],
+                response: json!({ "stopReason": "end_turn" }),
+                session_id: "session-1",
+                updates: vec![transcript_update(0, "agent_message_chunk", "reply")],
+            },
+        )?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let mut updates = Vec::new();
+
+        let response = port.session_prompt(
+            "session-1".to_owned(),
+            vec![json!({ "type": "text", "text": "hello" })],
+            &mut |update| updates.push(update),
+        )?;
+
+        if response.get("stopReason").and_then(Value::as_str) != Some("end_turn") {
+            return Err(format!("unexpected response {response}").into());
+        }
+        if updates.first().map(|update| update.variant.as_str()) != Some("agent_message_chunk") {
+            return Err(format!("unexpected updates {updates:?}").into());
+        }
+        if port
+            .snapshot()
+            .last_prompt
+            .and_then(|prompt| prompt.agent_text_chunks.first().cloned())
+            .as_deref()
+            != Some("reply")
+        {
+            return Err("expected prompt lifecycle agent text chunk".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn session_prompt_rejects_prompt_mismatch() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_prompt_capture(
+            root.path(),
+            SessionPromptCapture {
+                capture: "default",
+                prompt: vec![json!({ "type": "text", "text": "expected" })],
+                response: json!({ "stopReason": "end_turn" }),
+                session_id: "session-1",
+                updates: Vec::new(),
+            },
+        )?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let error = port
+            .session_prompt(
+                "session-1".to_owned(),
+                vec![json!({ "type": "text", "text": "actual" })],
+                &mut |_| {},
+            )
+            .err()
+            .ok_or("prompt mismatch unexpectedly succeeded")?;
+
+        if !error.to_string().contains("prompt mismatch") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn malformed_session_load_fixture_fails_load() -> TestResult<()> {
         let root = fixture_root(json!({ "sessions": [] }))?;
         let dir = root.path().join("codex/session-load/capture-1");
@@ -459,11 +647,6 @@ mod tests {
         let mut factory = FixtureProviderFactory::load(root.path())?;
         let mut port = factory.connect(ProviderId::Codex)?;
 
-        assert_unsupported(port.session_new("/repo".into()), "session/new")?;
-        assert_unsupported(
-            port.session_prompt("session-1".to_owned(), Vec::new(), &mut |_| {}),
-            "session/prompt",
-        )?;
         assert_unsupported(
             port.session_cancel("session-1".to_owned()),
             "session/cancel",
@@ -577,6 +760,72 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn runtime_session_new_and_prompt_use_fixture_provider() -> TestResult<()> {
+        let root = fixture_root(json!({ "sessions": [] }))?;
+        write_session_new_capture(
+            root.path(),
+            "default",
+            json!({
+                "sessionId": "session-1",
+                "configOptions": [],
+                "modes": { "availableModes": [], "currentModeId": null },
+                "models": null
+            }),
+        )?;
+        write_session_prompt_capture(
+            root.path(),
+            SessionPromptCapture {
+                capture: "default",
+                prompt: vec![json!({ "type": "text", "text": "hello" })],
+                response: json!({ "stopReason": "end_turn" }),
+                session_id: "session-1",
+                updates: vec![transcript_update(0, "agent_message_chunk", "fixture-ready")],
+            },
+        )?;
+        let factory = FixtureProviderFactory::load(root.path())?;
+        let store = LocalStore::open_path(root.path().join("store.sqlite3"))?;
+        let mut runtime = ServiceRuntime::with_factory(factory, store);
+
+        let created = runtime.dispatch(command(
+            "new",
+            "session/new",
+            "codex",
+            json!({ "cwd": "/repo", "limit": 40 }),
+        ));
+        if !created.ok {
+            return Err(format!("session/new failed: {created:?}").into());
+        }
+        let open_session_id = created
+            .result
+            .pointer("/history/openSessionId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("missing openSessionId: {}", created.result))?;
+
+        let prompted = runtime.dispatch(command(
+            "prompt",
+            "session/prompt",
+            "all",
+            json!({
+                "openSessionId": open_session_id,
+                "prompt": [{ "type": "text", "text": "hello" }]
+            }),
+        ));
+        if !prompted.ok {
+            return Err(format!("session/prompt failed: {prompted:?}").into());
+        }
+        let history = runtime.dispatch(command(
+            "history",
+            "session/history",
+            "all",
+            json!({ "openSessionId": open_session_id, "limit": 40 }),
+        ));
+        if !value_contains_string(&history.result, "fixture-ready") {
+            return Err(format!("history did not expose prompt fixture {}", history.result).into());
+        }
+        Ok(())
+    }
+
     fn assert_unsupported(result: service_runtime::Result<Value>, command: &str) -> TestResult<()> {
         let error = result
             .err()
@@ -644,6 +893,59 @@ mod tests {
                     "rawUpdateCount": capture.updates.len(),
                     "updates": capture.updates
                 }
+            }))?,
+        )?;
+        Ok(())
+    }
+
+    fn write_session_new_capture(
+        root: &std::path::Path,
+        capture: &str,
+        response: Value,
+    ) -> TestResult<()> {
+        let dir = root.join("codex/session-new").join(capture);
+        create_dir_all(&dir)?;
+        write(
+            dir.join("provider.raw.json"),
+            serde_json::to_string(&response)?,
+        )?;
+        Ok(())
+    }
+
+    struct SessionPromptCapture<'a> {
+        capture: &'a str,
+        prompt: Vec<Value>,
+        response: Value,
+        session_id: &'a str,
+        updates: Vec<acp_core::TranscriptUpdateSnapshot>,
+    }
+
+    fn write_session_prompt_capture(
+        root: &std::path::Path,
+        capture: SessionPromptCapture<'_>,
+    ) -> TestResult<()> {
+        let dir = root
+            .join("codex/session-prompt")
+            .join(capture.session_id)
+            .join(capture.capture);
+        create_dir_all(&dir)?;
+        write(
+            dir.join("manifest.json"),
+            serde_json::to_string(&json!({
+                "operation": "session/prompt",
+                "provider": "codex",
+                "sessionId": capture.session_id
+            }))?,
+        )?;
+        write(
+            dir.join("provider.raw.json"),
+            serde_json::to_string(&json!({
+                "promptRequest": {
+                    "sessionId": capture.session_id,
+                    "prompt": capture.prompt
+                },
+                "promptResponse": capture.response,
+                "promptUpdates": capture.updates
             }))?,
         )?;
         Ok(())
