@@ -17,3 +17,7 @@ artifacts/manual/*
 apps/frontend/android/
 apps/frontend/ios/
 apps/frontend/expo-env.d.ts
+
+# E2E artifacts
+apps/e2e/test-results/
+apps/e2e/playwright-report/
