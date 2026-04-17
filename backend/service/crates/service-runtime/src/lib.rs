@@ -13,6 +13,7 @@
 
 mod app_service;
 mod command;
+pub mod consumer_protocol;
 mod error;
 mod event;
 mod manager;

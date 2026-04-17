@@ -1,4 +1,5 @@
-import type { RuntimeEvent } from "@conduit/session-contracts";
+import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
+import { TranscriptItemSchema } from "@conduit/session-model";
 import type { TranscriptItem } from "@conduit/session-model";
 
 interface SessionTimelineChanged {
@@ -12,7 +13,7 @@ interface SessionsIndexChanged {
 }
 
 function readSessionTimelineChanged(
-  event: RuntimeEvent,
+  event: ConduitRuntimeEvent,
 ): SessionTimelineChanged | null {
   if (event.kind !== "session_timeline_changed") {
     return null;
@@ -26,14 +27,14 @@ function readSessionTimelineChanged(
     openSessionId,
     revision,
   };
-  if (Array.isArray(event.items)) {
-    changed.items = event.items;
+  if (event.items) {
+    changed.items = TranscriptItemSchema.array().parse(event.items);
   }
   return changed;
 }
 
 function readSessionsIndexChanged(
-  event: RuntimeEvent,
+  event: ConduitRuntimeEvent,
 ): SessionsIndexChanged | null {
   if (event.kind !== "sessions_index_changed") {
     return null;

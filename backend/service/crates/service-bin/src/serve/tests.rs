@@ -90,7 +90,7 @@ fn sessions_watch_projects_only_index_events() -> TestResult<()> {
         RuntimeEventKind::SessionsIndexChanged,
         json!({ "revision": 4 }),
     )?;
-    let product_event = watches.product_event(&event);
+    let product_event = watches.product_event(&event)?;
 
     if serde_json::to_value(product_event)?
         == json!({
@@ -127,8 +127,8 @@ fn session_watch_filters_by_open_session_id() -> TestResult<()> {
             "revision": 5
         }),
     )?;
-    let ignored = watches.product_event(&ignored_event);
-    let projected = watches.product_event(&projected_event);
+    let ignored = watches.product_event(&ignored_event)?;
+    let projected = watches.product_event(&projected_event)?;
 
     if ignored.is_some() {
         return Err("session watch projected another open session".into());
@@ -143,6 +143,56 @@ fn session_watch_filters_by_open_session_id() -> TestResult<()> {
         return Ok(());
     }
     Err("session watch did not project a minimal timeline event".into())
+}
+
+#[test]
+fn session_watch_ignores_unwatched_timeline_events_before_item_projection() -> TestResult<()> {
+    let mut watches = WatchState::default();
+    watches.apply_command(
+        "session/watch",
+        &json!({
+            "subscribed": true,
+            "openSessionId": "open-session-1"
+        }),
+    );
+    let event = runtime_event(
+        RuntimeEventKind::SessionTimelineChanged,
+        json!({
+            "openSessionId": "open-session-2",
+            "revision": 4,
+            "items": [{ "kind": "message", "id": "bad", "role": "agent" }]
+        }),
+    )?;
+
+    if watches.product_event(&event)?.is_none() {
+        return Ok(());
+    }
+    Err("unwatched timeline event should not be projected".into())
+}
+
+#[test]
+fn session_watch_reports_invalid_watched_timeline_items() -> TestResult<()> {
+    let mut watches = WatchState::default();
+    watches.apply_command(
+        "session/watch",
+        &json!({
+            "subscribed": true,
+            "openSessionId": "open-session-1"
+        }),
+    );
+    let event = runtime_event(
+        RuntimeEventKind::SessionTimelineChanged,
+        json!({
+            "openSessionId": "open-session-1",
+            "revision": 4,
+            "items": [{ "kind": "message", "id": "bad", "role": "agent" }]
+        }),
+    )?;
+
+    if watches.product_event(&event).is_err() {
+        return Ok(());
+    }
+    Err("watched invalid timeline items should be an explicit contract error".into())
 }
 
 #[test]

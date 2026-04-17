@@ -1,26 +1,60 @@
-import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
-import type { ServerFrame } from "@conduit/session-contracts";
+import { ConduitServerFrameSchema } from "@conduit/app-protocol";
+import type {
+  ConduitConsumerResponse,
+  ConduitRuntimeEvent,
+} from "@conduit/app-protocol";
+import type { ConsumerResponse } from "@conduit/session-contracts";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+interface ParsedServerResponseFrame {
+  id: string;
+  response: ConsumerResponse;
+  type: "response";
 }
 
-function isServerFrame(value: unknown): value is ServerFrame {
-  if (!isRecord(value) || value.v !== CONDUIT_TRANSPORT_VERSION) {
-    return false;
-  }
-  if (value.type === "response") {
-    return typeof value.id === "string" && isRecord(value.response);
-  }
-  return value.type === "event" && isRecord(value.event);
+interface ParsedServerEventFrame {
+  event: ConduitRuntimeEvent;
+  type: "event";
 }
 
-function parseServerFrame(text: string): ServerFrame | null {
-  const parsed: unknown = JSON.parse(text);
-  if (!isServerFrame(parsed)) {
+type ParsedServerFrame = ParsedServerResponseFrame | ParsedServerEventFrame;
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
     return null;
   }
-  return parsed;
+}
+
+function readConsumerResponse(
+  response: ConduitConsumerResponse,
+): ConsumerResponse {
+  return {
+    error: response.error ?? null,
+    id: response.id,
+    ok: response.ok,
+    result: response.result,
+  };
+}
+
+function parseServerFrame(text: string): ParsedServerFrame | null {
+  const parsed = parseJson(text);
+  const frame = ConduitServerFrameSchema.safeParse(parsed);
+  if (!frame.success) {
+    return null;
+  }
+  if (frame.data.type === "response") {
+    return {
+      id: frame.data.id,
+      response: readConsumerResponse(frame.data.response),
+      type: "response",
+    };
+  }
+  return {
+    event: frame.data.event,
+    type: "event",
+  };
 }
 
 export { parseServerFrame };
+export type { ParsedServerFrame };

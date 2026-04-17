@@ -1,3 +1,4 @@
+import { ConduitSessionGroupsViewSchema } from "@conduit/app-protocol";
 import { SessionGroupsViewSchema } from "@conduit/session-model";
 import type {
   ConsumerResponse,
@@ -10,7 +11,9 @@ function readSessionGroupsResponse(
   if (!response.ok) {
     throw new Error(response.error?.message ?? "session groups request failed");
   }
-  return SessionGroupsViewSchema.parse(response.result);
+  return SessionGroupsViewSchema.parse(
+    ConduitSessionGroupsViewSchema.parse(response.result),
+  );
 }
 
 export { readSessionGroupsResponse };

@@ -232,6 +232,9 @@ importers:
 
   packages/session-client:
     dependencies:
+      '@conduit/app-protocol':
+        specifier: workspace:*
+        version: link:../app-protocol
       '@conduit/session-contracts':
         specifier: workspace:*
         version: link:../session-contracts

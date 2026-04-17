@@ -1,5 +1,10 @@
 import { createConsumerCommand } from "@conduit/session-contracts";
 import {
+  ConduitSessionsWatchResultSchema,
+  ConduitSessionWatchResultSchema,
+} from "@conduit/app-protocol";
+import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
+import {
   readProvidersConfigSnapshotResponse,
   readSessionHistoryResponse,
   readSessionNewResponse,
@@ -33,7 +38,6 @@ import type {
   ProjectSuggestionsView,
   ProjectUpdateRequest,
   ProvidersConfigSnapshotResult,
-  RuntimeEvent,
   SessionGroupsQuery,
   SessionGroupsView,
   SessionHistoryRequest,
@@ -53,15 +57,33 @@ import type {
   SessionsIndexChanged,
 } from "./timelineEvent.js";
 
+interface TimelineSubscription {
+  handler: (event: SessionTimelineChanged) => void;
+  openSessionId: string;
+}
+
+interface SessionIndexSubscription {
+  handler: (event: SessionsIndexChanged) => void;
+}
+
+function confirmGeneratedSubscription(
+  result: unknown,
+  cleanup: () => void,
+  parse: (result: unknown) => unknown,
+): void {
+  try {
+    parse(result);
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly timelineSubscriptions = new Set<{
-    openSessionId: string;
-    handler: (event: SessionTimelineChanged) => void;
-  }>();
-  private readonly sessionIndexSubscriptions = new Set<{
-    handler: (event: SessionsIndexChanged) => void;
-  }>();
+  private readonly timelineSubscriptions = new Set<TimelineSubscription>();
+  private readonly sessionIndexSubscriptions =
+    new Set<SessionIndexSubscription>();
   private readonly transport: WebSocketTransport;
   public constructor(options: SessionClientOptions = {}) {
     this.transport = new WebSocketTransport(options, (event) => {
@@ -208,6 +230,13 @@ class WebSocketSessionClient implements SessionClientPort {
       this.timelineSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
+    confirmGeneratedSubscription(
+      response.result,
+      () => {
+        this.timelineSubscriptions.delete(subscription);
+      },
+      (result) => ConduitSessionWatchResultSchema.parse(result),
+    );
     return () => {
       this.timelineSubscriptions.delete(subscription);
     };
@@ -224,6 +253,13 @@ class WebSocketSessionClient implements SessionClientPort {
       this.sessionIndexSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
+    confirmGeneratedSubscription(
+      response.result,
+      () => {
+        this.sessionIndexSubscriptions.delete(subscription);
+      },
+      (result) => ConduitSessionsWatchResultSchema.parse(result),
+    );
     return () => {
       this.sessionIndexSubscriptions.delete(subscription);
     };
@@ -232,11 +268,11 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.transport.dispatch(command);
     return response;
   }
-  private handleRuntimeEvent(event: RuntimeEvent): void {
+  private handleRuntimeEvent(event: ConduitRuntimeEvent): void {
     this.handleTimelineEvent(event);
     this.handleSessionsIndexEvent(event);
   }
-  private handleTimelineEvent(eventFrame: RuntimeEvent): void {
+  private handleTimelineEvent(eventFrame: ConduitRuntimeEvent): void {
     const event = readSessionTimelineChanged(eventFrame);
     if (event) {
       for (const subscription of this.timelineSubscriptions) {
@@ -246,7 +282,7 @@ class WebSocketSessionClient implements SessionClientPort {
       }
     }
   }
-  private handleSessionsIndexEvent(eventFrame: RuntimeEvent): void {
+  private handleSessionsIndexEvent(eventFrame: ConduitRuntimeEvent): void {
     const event = readSessionsIndexChanged(eventFrame);
     if (event) {
       for (const subscription of this.sessionIndexSubscriptions) {
@@ -255,4 +291,5 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
-export { WebSocketSessionClient };
+
+export { WebSocketSessionClient, confirmGeneratedSubscription };
