@@ -8,25 +8,42 @@ import type {
   PlanInteractionRuntimePort,
   SessionComposerPlanInteractionActions,
 } from "./plan-interaction-types";
+import { logFailure } from "./frontend-logger";
 import type { Dispatch, SetStateAction } from "react";
 import type { PlanInteractionLocalState } from "./plan-interaction-controller";
 import { clearLocalCardState } from "./plan-interaction-controller";
 
-function dismissAction(args: {
+function logPlanInteractionFailure(error: unknown, action: string): void {
+  try {
+    logFailure("frontend.plan_interaction.action.failed", error, { action });
+  } catch {
+    // Logging must not turn an already-failed interaction action into a UI crash.
+  }
+}
+
+function runInteractionAction(action: string, task: () => Promise<void>): void {
+  void (async (): Promise<void> => {
+    try {
+      await task();
+    } catch (error) {
+      logPlanInteractionFailure(error, action);
+    }
+  })();
+}
+
+async function dismissAction(args: {
   card: PlanInteractionCard | null;
   port: PlanInteractionRuntimePort;
   setState: Dispatch<SetStateAction<PlanInteractionLocalState>>;
-}): void {
+}): Promise<void> {
   const card = args.card;
   if (card === null || args.port.openSessionId === null) {
     return;
   }
   if (card.kind === "terminal_decision") {
-    args.port.setCollaborationMode("default");
-    clearLocalCardState({ card, setState: args.setState });
     return;
   }
-  args.port.respondInteraction({
+  await args.port.respondInteraction({
     interactionId: card.interactionId,
     openSessionId: args.port.openSessionId,
     response: { kind: "cancel" },
@@ -34,43 +51,43 @@ function dismissAction(args: {
   clearLocalCardState({ card, setState: args.setState });
 }
 
-function submitTerminalChoice(args: {
+async function submitTerminalChoice(args: {
   card: PlanInteractionCard;
   optionId: string;
   port: PlanInteractionRuntimePort;
   setState: Dispatch<SetStateAction<PlanInteractionLocalState>>;
-}): boolean {
+}): Promise<boolean> {
   if (args.optionId !== IMPLEMENT_PLAN_OPTION_ID) {
     return false;
   }
-  args.port.setCollaborationMode("default");
-  args.port.promptSession(IMPLEMENT_PLAN_USER_MESSAGE);
+  await args.port.setCollaborationMode("default");
+  await args.port.promptSession(IMPLEMENT_PLAN_USER_MESSAGE);
   clearLocalCardState({ card: args.card, setState: args.setState });
   return true;
 }
 
-function submitChoiceAction(args: {
+async function submitChoiceAction(args: {
   card: PlanInteractionCard | null;
   optionId: string;
   port: PlanInteractionRuntimePort;
   setState: Dispatch<SetStateAction<PlanInteractionLocalState>>;
-}): void {
+}): Promise<void> {
   const card = args.card;
   if (card === null || args.port.openSessionId === null) {
     return;
   }
-  if (
-    card.kind === "terminal_decision" &&
-    submitTerminalChoice({
+  if (card.kind === "terminal_decision") {
+    const submitted = await submitTerminalChoice({
       card,
       optionId: args.optionId,
       port: args.port,
       setState: args.setState,
-    })
-  ) {
-    return;
+    });
+    if (submitted) {
+      return;
+    }
   }
-  args.port.respondInteraction({
+  await args.port.respondInteraction({
     interactionId: card.interactionId,
     openSessionId: args.port.openSessionId,
     response: { kind: "selected", optionId: args.optionId },
@@ -78,23 +95,23 @@ function submitChoiceAction(args: {
   clearLocalCardState({ card, setState: args.setState });
 }
 
-function submitInteractionAction(args: {
+async function submitInteractionAction(args: {
   card: PlanInteractionCard | null;
   port: PlanInteractionRuntimePort;
   setState: Dispatch<SetStateAction<PlanInteractionLocalState>>;
   state: PlanInteractionLocalState;
-}): void {
+}): Promise<void> {
   const card = args.card;
   const text = args.state.otherText.trim();
   if (card === null || args.port.openSessionId === null || text.length === 0) {
     return;
   }
   if (card.kind === "terminal_decision") {
-    args.port.promptSession(text);
+    await args.port.promptSession(text);
     clearLocalCardState({ card, setState: args.setState });
     return;
   }
-  args.port.respondInteraction({
+  await args.port.respondInteraction({
     interactionId: card.interactionId,
     openSessionId: args.port.openSessionId,
     response: {
@@ -117,20 +134,26 @@ function createPlanInteractionActions(args: {
 }): SessionComposerPlanInteractionActions {
   return {
     dismissInteraction: (): void => {
-      dismissAction(args);
+      runInteractionAction("dismiss", async () => {
+        await dismissAction(args);
+      });
     },
     selectOption: args.selectOption,
     setOtherText: args.setOtherText,
     submitChoice: (optionId: string): void => {
-      submitChoiceAction({
-        card: args.card,
-        optionId,
-        port: args.port,
-        setState: args.setState,
+      runInteractionAction("submit_choice", async () => {
+        await submitChoiceAction({
+          card: args.card,
+          optionId,
+          port: args.port,
+          setState: args.setState,
+        });
       });
     },
     submitInteraction: (): void => {
-      submitInteractionAction(args);
+      runInteractionAction("submit_interaction", async () => {
+        await submitInteractionAction(args);
+      });
     },
   };
 }

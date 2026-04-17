@@ -39,6 +39,18 @@ interface BackendInteractionResolutionData {
   toolCallId: string;
 }
 
+interface BackendTerminalPlanData {
+  codexTurnId?: string;
+  interactionId: string;
+  itemId: string;
+  planText: string;
+  providerSource: string;
+  sessionUpdate: "terminal_plan";
+  source: "codex.terminalPlan";
+  status: "pending";
+  threadId?: string;
+}
+
 interface PlanInteractionOption {
   kind: "choice" | "other";
   label: string;
@@ -83,9 +95,9 @@ interface PlanInteractionRuntimePort {
   history: SessionHistoryWindow | null;
   lastResolution: string | null;
   openSessionId: string | null;
-  promptSession: (text: string) => void;
-  respondInteraction: (request: PlanInteractionRespondRequest) => void;
-  setCollaborationMode: (value: CollaborationMode) => void;
+  promptSession: (text: string) => Promise<void>;
+  respondInteraction: (request: PlanInteractionRespondRequest) => Promise<void>;
+  setCollaborationMode: (value: CollaborationMode) => Promise<void>;
 }
 
 interface SessionComposerPlanInteractionActions {
@@ -115,7 +127,6 @@ const CANCEL_OPTION_ID = "cancel";
 const COLLABORATION_MODE_CONFIG_ID = "collaboration_mode";
 const IMPLEMENT_PLAN_OPTION_ID = "implement-now";
 const IMPLEMENT_PLAN_USER_MESSAGE = "Implement plan";
-const PROPOSED_PLAN_TAG = "<proposed_plan>";
 
 export {
   ANSWER_OTHER_OPTION_ID,
@@ -123,12 +134,12 @@ export {
   COLLABORATION_MODE_CONFIG_ID,
   IMPLEMENT_PLAN_OPTION_ID,
   IMPLEMENT_PLAN_USER_MESSAGE,
-  PROPOSED_PLAN_TAG,
 };
 export type {
   BackendInteractionOption,
   BackendInteractionRequestData,
   BackendInteractionResolutionData,
+  BackendTerminalPlanData,
   CollaborationMode,
   InteractionResolutionStatus,
   PlanInteractionCard,

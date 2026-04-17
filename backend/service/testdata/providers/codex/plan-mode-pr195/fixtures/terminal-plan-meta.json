@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "capture_source": {
+    "run_id": "codex-acp-terminal-plan-meta-20260416T221545Z",
+    "summary_artifact": "summary.md",
+    "direct_wire_artifact": "raw-frames.jsonl",
+    "conduit_provider_wire_artifact": "proxy-wire/codex-wire-550196.jsonl"
+  },
+  "provider_wire_evidence": {
+    "method": "session/update",
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "# Static HTML Hello World Page\n\n## Summary\nCreate one minimal static HTML entry page that renders a visible Hello World message."
+    },
+    "_meta": {
+      "codex": {
+        "terminalPlan": {
+          "source": "TurnItem::Plan",
+          "text": "# Static HTML Hello World Page\n\n## Summary\nCreate one minimal static HTML entry page that renders a visible Hello World message.",
+          "itemId": "019d985e-38e5-7742-ae12-e8f16a27e7ff-plan",
+          "turnId": "019d985e-38e5-7742-ae12-e8f16a27e7ff",
+          "threadId": "019d985e-3840-7a23-b44c-47a20084a8c7"
+        }
+      }
+    }
+  },
+  "expected_normalized_event": {
+    "variant": "terminal_plan",
+    "data": {
+      "sessionUpdate": "terminal_plan",
+      "interactionId": "terminal-plan:019d985e-38e5-7742-ae12-e8f16a27e7ff-plan",
+      "source": "codex.terminalPlan",
+      "providerSource": "TurnItem::Plan",
+      "itemId": "019d985e-38e5-7742-ae12-e8f16a27e7ff-plan",
+      "codexTurnId": "019d985e-38e5-7742-ae12-e8f16a27e7ff",
+      "threadId": "019d985e-3840-7a23-b44c-47a20084a8c7",
+      "planText": "# Static HTML Hello World Page\n\n## Summary\nCreate one minimal static HTML entry page that renders a visible Hello World message.",
+      "status": "pending"
+    }
+  },
+  "verified": {
+    "provider_wire_terminal_plan_count": 1,
+    "direct_acp_terminal_plan_count": 2,
+    "conduit_history_terminal_meta_item_count_before_normalization": 0,
+    "conduit_timeline_terminal_meta_event_count_before_normalization": 0
+  }
+}

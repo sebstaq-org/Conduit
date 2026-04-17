@@ -39,6 +39,32 @@ function transcriptMessage(args: {
   };
 }
 
+function terminalPlanItem(args: {
+  items: TranscriptItem[];
+  markdown: string;
+}): TranscriptItem {
+  const sequence = nextSequence(args.items);
+  const itemId = `fixture-plan-${sequence}`;
+  return {
+    data: {
+      codexTurnId: turnId(sequence),
+      interactionId: `terminal-plan:${itemId}`,
+      itemId,
+      planText: args.markdown,
+      providerSource: "TurnItem::Plan",
+      sessionUpdate: "terminal_plan",
+      source: "codex.terminalPlan",
+      status: "pending",
+      threadId: "fixture-thread",
+    },
+    id: `plan-interaction-dev-terminal-plan-${sequence}`,
+    kind: "event",
+    status: "complete",
+    turnId: turnId(sequence),
+    variant: "terminal_plan",
+  };
+}
+
 function backendOptions(card: PlanInteractionCard): BackendInteractionOption[] {
   return [
     ...card.options.map((option) => ({
@@ -112,4 +138,9 @@ function interactionResolutionItem(args: {
   };
 }
 
-export { interactionRequestItem, interactionResolutionItem, transcriptMessage };
+export {
+  interactionRequestItem,
+  interactionResolutionItem,
+  terminalPlanItem,
+  transcriptMessage,
+};

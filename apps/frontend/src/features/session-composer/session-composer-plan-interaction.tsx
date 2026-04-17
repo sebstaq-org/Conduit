@@ -8,14 +8,13 @@ import type {
   SessionComposerPlanInteractionActions,
 } from "@/app-state";
 import {
-  createPlanInteractionEscStyle,
-  createPlanInteractionFooterStyle,
   createPlanInteractionHeaderStyle,
   createPlanInteractionInlineInputStyle,
   createPlanInteractionTerminalOtherInputStyle,
   createPlanInteractionTerminalOtherRowStyle,
   createPlanInteractionTerminalPrefixStyle,
 } from "./session-composer-plan-interaction.styles";
+import { renderPlanInteractionActionRows } from "./session-composer-plan-interaction-footer";
 
 interface SessionComposerPlanInteractionSurfaceProps {
   actions: SessionComposerPlanInteractionActions;
@@ -170,48 +169,6 @@ function renderOptionRows(args: {
   return renderQuestionOptionRows(args);
 }
 
-function renderActionRows(args: {
-  canSubmit: boolean;
-  hasOtherSelection: boolean;
-  handleDismissInteraction: () => void;
-  handleSubmit: (() => void) | undefined;
-  submitLabel: string;
-  theme: Theme;
-}): React.JSX.Element {
-  if (!args.hasOtherSelection) {
-    return (
-      <Box style={createPlanInteractionFooterStyle()}>
-        <TextButton
-          appearance="secondary"
-          label="Dismiss"
-          onPress={args.handleDismissInteraction}
-        />
-        <Box style={createPlanInteractionEscStyle(args.theme)}>
-          <Text variant="meta">ESC</Text>
-        </Box>
-      </Box>
-    );
-  }
-  return (
-    <Box style={createPlanInteractionFooterStyle()}>
-      <TextButton
-        appearance="secondary"
-        label="Dismiss"
-        onPress={args.handleDismissInteraction}
-      />
-      <Box style={createPlanInteractionEscStyle(args.theme)}>
-        <Text variant="meta">ESC</Text>
-      </Box>
-      <TextButton
-        appearance="primary"
-        label={args.submitLabel}
-        disabled={!args.canSubmit}
-        onPress={args.handleSubmit}
-      />
-    </Box>
-  );
-}
-
 function renderOtherInput(args: {
   card: PlanInteractionCard;
   handleOtherTextChange: (value: string) => void;
@@ -281,8 +238,9 @@ function SessionComposerPlanInteractionSurface({
         selectedOptionId,
         theme,
       })}
-      {renderActionRows({
+      {renderPlanInteractionActionRows({
         canSubmit,
+        card,
         hasOtherSelection,
         handleDismissInteraction,
         handleSubmit,

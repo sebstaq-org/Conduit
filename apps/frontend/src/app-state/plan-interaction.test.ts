@@ -87,6 +87,34 @@ function siblingInteractionResolution(): TranscriptItem {
   };
 }
 
+function terminalPlanEvent(): TranscriptItem {
+  return {
+    data: {
+      interactionId: "terminal-plan:item-plan",
+      itemId: "item-plan",
+      planText: "# Plan\n",
+      providerSource: "TurnItem::Plan",
+      sessionUpdate: "terminal_plan",
+      source: "codex.terminalPlan",
+      status: "pending",
+      threadId: "thread-1",
+    },
+    id: "terminal-plan-event",
+    kind: "event",
+    variant: "terminal_plan",
+  };
+}
+
+function proposedPlanMessage(): TranscriptItem {
+  return {
+    content: [{ text: "<proposed_plan># Plan</proposed_plan>", type: "text" }],
+    id: "agent-plan-message",
+    kind: "message",
+    role: "agent",
+    status: "complete",
+  };
+}
+
 function startProductFlowFixture(): ReturnType<
   typeof createPlanInteractionFixtureState
 > {
@@ -173,6 +201,36 @@ describe("plan interaction projection", () => {
     expect(
       activePlanInteractionCard({
         items: [...questions, siblingInteractionResolution()],
+      }),
+    ).toBeNull();
+  });
+
+  it("opens terminal decision from normalized terminal plan events", () => {
+    const card = activePlanInteractionCard({ items: [terminalPlanEvent()] });
+
+    expect(card?.kind).toBe("terminal_decision");
+    expect(card?.interactionId).toBe("terminal-plan:item-plan");
+    expect(card?.questionId).toBe("terminal-plan");
+  });
+
+  it("does not infer terminal decisions from proposed-plan markdown", () => {
+    expect(
+      activePlanInteractionCard({ items: [proposedPlanMessage()] }),
+    ).toBeNull();
+  });
+
+  it("hides terminal decision after the user continues the turn", () => {
+    expect(
+      activePlanInteractionCard({
+        items: [
+          terminalPlanEvent(),
+          {
+            content: [{ text: "Revise", type: "text" }],
+            id: "user-1",
+            kind: "message",
+            role: "user",
+          },
+        ],
       }),
     ).toBeNull();
   });
