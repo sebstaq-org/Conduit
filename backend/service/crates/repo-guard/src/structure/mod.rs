@@ -31,13 +31,14 @@ const APPROVED_PACKAGES: [&str; 7] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 14] = [
+const APPROVED_CRATES: [&str; 15] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
     "conduit-cli",
+    "provider-fixture",
     "provider-claude",
     "provider-codex",
     "provider-copilot",

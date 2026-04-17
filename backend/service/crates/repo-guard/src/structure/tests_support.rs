@@ -9,13 +9,14 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 14] = [
+const APPROVED_CRATES: [&str; 15] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
     "conduit-cli",
+    "provider-fixture",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
@@ -226,7 +227,7 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 14] {
+fn local_deps() -> [LocalDeps; 15] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
@@ -236,6 +237,10 @@ fn local_deps() -> [LocalDeps; 14] {
         (
             "conduit-cli",
             vec!["acp-core", "acp-discovery", "app-api", "session-projection"],
+        ),
+        (
+            "provider-fixture",
+            vec!["acp-core", "acp-discovery", "service-runtime"],
         ),
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
@@ -249,6 +254,7 @@ fn local_deps() -> [LocalDeps; 14] {
                 "provider-claude",
                 "provider-codex",
                 "provider-copilot",
+                "provider-fixture",
                 "session-store",
                 "tracing",
                 "tracing-subscriber",

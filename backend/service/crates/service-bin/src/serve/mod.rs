@@ -15,10 +15,12 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
+use service_runtime::ProviderFactory;
 use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -64,11 +66,26 @@ const CATALOG_COMMANDS: [&str; 20] = [
 ///
 /// Returns an error when the TCP listener cannot bind or the server exits with
 /// an I/O failure.
-pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
+pub(crate) async fn run(host: &str, port: u16, provider_fixtures: Option<PathBuf>) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
+    let local_store = open_product_store()?;
+    if let Some(root) = provider_fixtures {
+        let factory = provider_fixture::FixtureProviderFactory::load(&root).map_err(|source| {
+            crate::error::ServiceError::InvalidFlagValue {
+                flag: "--provider-fixtures".to_owned(),
+                value: root.display().to_string(),
+                message: source.to_string(),
+            }
+        })?;
+        return serve_router(listener, router_with_factory(factory, local_store)).await;
+    }
+    serve_router(listener, router(local_store)).await
+}
+
+async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
     axum::serve(
         listener,
-        router(open_product_store()?).into_make_service_with_connect_info::<SocketAddr>(),
+        router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
@@ -76,6 +93,13 @@ pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
 
 fn router(local_store: LocalStore) -> Router {
     router_with_actor(RuntimeActor::start(local_store))
+}
+
+fn router_with_factory<F>(factory: F, local_store: LocalStore) -> Router
+where
+    F: Clone + ProviderFactory + 'static,
+{
+    router_with_actor(RuntimeActor::start_with_factory(factory, local_store))
 }
 
 fn router_with_actor(actor: RuntimeActor) -> Router {

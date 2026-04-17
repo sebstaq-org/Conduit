@@ -1,0 +1,408 @@
+//! Fixture-backed provider runtime for deterministic Conduit tests.
+
+#![forbid(unsafe_code)]
+#![deny(
+    missing_docs,
+    rustdoc::bare_urls,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_codeblock_attributes,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::missing_crate_level_docs,
+    rustdoc::private_intra_doc_links
+)]
+
+use acp_core::{
+    ConnectionState, InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
+};
+use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
+use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+use serde_json::{Value, json};
+use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
+use std::collections::HashMap;
+use std::fs::read_to_string;
+use std::path::{Path, PathBuf};
+
+const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
+
+/// Fixture-backed provider factory keyed by provider id.
+#[derive(Debug, Clone)]
+pub struct FixtureProviderFactory {
+    session_lists: HashMap<ProviderId, Value>,
+}
+
+impl FixtureProviderFactory {
+    /// Loads fixture-backed provider data from a fixture root.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when an existing fixture file cannot be read, cannot be
+    /// parsed as JSON, or does not contain a top-level `sessions` array.
+    pub fn load(root: impl AsRef<Path>) -> Result<Self> {
+        let root = root.as_ref();
+        if !root.is_dir() {
+            return Err(RuntimeError::Provider(format!(
+                "fixture root {} must be an existing directory",
+                root.display()
+            )));
+        }
+        let mut session_lists = HashMap::new();
+        for provider in PROVIDERS {
+            let path = session_list_path(root, provider);
+            if !path.exists() {
+                continue;
+            }
+            let value = read_session_list_fixture(&path)?;
+            session_lists.insert(provider, value);
+        }
+        Ok(Self { session_lists })
+    }
+}
+
+impl ProviderFactory for FixtureProviderFactory {
+    fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
+        Ok(Box::new(FixtureProviderPort {
+            provider,
+            session_list: self
+                .session_lists
+                .get(&provider)
+                .cloned()
+                .unwrap_or_else(empty_session_list),
+        }))
+    }
+}
+
+struct FixtureProviderPort {
+    provider: ProviderId,
+    session_list: Value,
+}
+
+impl ProviderPort for FixtureProviderPort {
+    fn snapshot(&self) -> ProviderSnapshot {
+        ProviderSnapshot {
+            provider: self.provider,
+            connection_state: ConnectionState::Ready,
+            discovery: fixture_discovery(self.provider),
+            capabilities: json!({}),
+            auth_methods: Vec::new(),
+            live_sessions: Vec::new(),
+            last_prompt: None,
+            loaded_transcripts: Vec::new(),
+        }
+    }
+
+    fn raw_events(&self) -> Vec<RawWireEvent> {
+        Vec::new()
+    }
+
+    fn disconnect(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn session_new(&mut self, _cwd: PathBuf) -> Result<Value> {
+        unsupported("session/new")
+    }
+
+    fn session_list(&mut self, _cwd: Option<PathBuf>, cursor: Option<String>) -> Result<Value> {
+        if cursor.is_some() {
+            return Ok(empty_session_list());
+        }
+        Ok(self.session_list.clone())
+    }
+
+    fn session_load(&mut self, _session_id: String, _cwd: PathBuf) -> Result<Value> {
+        unsupported("session/load")
+    }
+
+    fn session_prompt(
+        &mut self,
+        _session_id: String,
+        _prompt: Vec<Value>,
+        _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<Value> {
+        unsupported("session/prompt")
+    }
+
+    fn session_cancel(&mut self, _session_id: String) -> Result<Value> {
+        unsupported("session/cancel")
+    }
+
+    fn session_set_config_option(
+        &mut self,
+        _session_id: String,
+        _config_id: String,
+        _value: String,
+    ) -> Result<Value> {
+        unsupported("session/set_config_option")
+    }
+
+    fn session_respond_interaction(
+        &mut self,
+        _session_id: String,
+        _interaction_id: String,
+        _response: InteractionResponse,
+    ) -> Result<Value> {
+        unsupported("session/respond_interaction")
+    }
+}
+
+fn read_session_list_fixture(path: &Path) -> Result<Value> {
+    let body = read_to_string(path).map_err(|source| {
+        RuntimeError::Provider(format!(
+            "failed to read fixture {}: {source}",
+            path.display()
+        ))
+    })?;
+    let value: Value = serde_json::from_str(&body).map_err(|source| {
+        RuntimeError::Provider(format!(
+            "failed to parse fixture {}: {source}",
+            path.display()
+        ))
+    })?;
+    if !value.is_object() {
+        return Err(invalid_fixture(path, "must be a JSON object"));
+    }
+    if value.get("sessions").and_then(Value::as_array).is_none() {
+        return Err(invalid_fixture(path, "must contain a sessions array"));
+    }
+    Ok(value)
+}
+
+fn session_list_path(root: &Path, provider: ProviderId) -> PathBuf {
+    root.join(provider.as_str())
+        .join("session-list")
+        .join("provider.raw.json")
+}
+
+fn empty_session_list() -> Value {
+    json!({ "sessions": [] })
+}
+
+fn unsupported(command: &'static str) -> Result<Value> {
+    Err(RuntimeError::UnsupportedCommand(command.to_owned()))
+}
+
+fn invalid_fixture(path: &Path, message: &'static str) -> RuntimeError {
+    RuntimeError::Provider(format!("invalid fixture {}: {message}", path.display()))
+}
+
+fn fixture_discovery(provider: ProviderId) -> ProviderDiscovery {
+    ProviderDiscovery {
+        provider,
+        launcher: LauncherCommand {
+            executable: PathBuf::from("provider-fixture"),
+            args: Vec::new(),
+            display: "provider-fixture".to_owned(),
+        },
+        resolved_path: "provider-fixture".to_owned(),
+        version: "fixture".to_owned(),
+        auth_hints: Vec::new(),
+        initialize_viable: true,
+        transport_diagnostics: Vec::new(),
+        initialize_probe: InitializeProbe {
+            response: json!({}),
+            payload: InitializeResponse::new(ProtocolVersion::V1)
+                .agent_info(Implementation::new("fixture-provider", "0.5.0")),
+            stdout_lines: Vec::new(),
+            stderr_lines: Vec::new(),
+            elapsed_ms: 0,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FixtureProviderFactory;
+    use acp_core::InteractionResponse;
+    use acp_discovery::ProviderId;
+    use serde_json::{Value, json};
+    use service_runtime::{ConsumerCommand, ProviderFactory, RuntimeError, ServiceRuntime};
+    use session_store::LocalStore;
+    use std::fs::{create_dir_all, write};
+    use tempfile::TempDir;
+
+    type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[test]
+    fn codex_session_list_returns_raw_fixture() -> TestResult<()> {
+        let root = fixture_root(json!({
+            "sessions": [{ "sessionId": "session-1", "cwd": "/repo" }],
+            "nextCursor": "cursor-1"
+        }))?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let response = port.session_list(None, None)?;
+
+        if response.get("nextCursor").and_then(Value::as_str) != Some("cursor-1") {
+            return Err(format!("unexpected response {response}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cursor_pages_terminate_after_raw_fixture_page() -> TestResult<()> {
+        let root = fixture_root(json!({
+            "sessions": [{ "sessionId": "session-1", "cwd": "/repo" }],
+            "nextCursor": "cursor-1"
+        }))?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+        let response = port.session_list(None, Some("cursor-1".to_owned()))?;
+
+        if response != json!({ "sessions": [] }) {
+            return Err(format!("unexpected cursor response {response}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn missing_provider_fixture_returns_empty_session_list() -> TestResult<()> {
+        let root = TempDir::new()?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Claude)?;
+        let response = port.session_list(None, None)?;
+
+        if response != json!({ "sessions": [] }) {
+            return Err(format!("unexpected response {response}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_session_list_fixture_fails_load() -> TestResult<()> {
+        let root = fixture_root(json!({ "nextCursor": null }))?;
+        let error = FixtureProviderFactory::load(root.path())
+            .err()
+            .ok_or("malformed fixture unexpectedly loaded")?;
+
+        if !error.to_string().contains("sessions array") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_root_must_exist() -> TestResult<()> {
+        let root = TempDir::new()?;
+        let missing = root.path().join("missing");
+        let error = FixtureProviderFactory::load(&missing)
+            .err()
+            .ok_or("missing fixture root unexpectedly loaded")?;
+
+        if !error.to_string().contains("existing directory") {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unsupported_methods_return_unsupported_command() -> TestResult<()> {
+        let root = TempDir::new()?;
+        let mut factory = FixtureProviderFactory::load(root.path())?;
+        let mut port = factory.connect(ProviderId::Codex)?;
+
+        assert_unsupported(port.session_new("/repo".into()), "session/new")?;
+        assert_unsupported(
+            port.session_load("session-1".to_owned(), "/repo".into()),
+            "session/load",
+        )?;
+        assert_unsupported(
+            port.session_prompt("session-1".to_owned(), Vec::new(), &mut |_| {}),
+            "session/prompt",
+        )?;
+        assert_unsupported(
+            port.session_cancel("session-1".to_owned()),
+            "session/cancel",
+        )?;
+        assert_unsupported(
+            port.session_set_config_option(
+                "session-1".to_owned(),
+                "mode".to_owned(),
+                "default".to_owned(),
+            ),
+            "session/set_config_option",
+        )?;
+        assert_unsupported(
+            port.session_respond_interaction(
+                "session-1".to_owned(),
+                "interaction-1".to_owned(),
+                InteractionResponse::Cancelled,
+            ),
+            "session/respond_interaction",
+        )
+    }
+
+    #[test]
+    fn runtime_session_list_and_grouped_use_fixture_provider() -> TestResult<()> {
+        let root = fixture_root(json!({
+            "sessions": [{
+                "sessionId": "session-1",
+                "cwd": "/repo",
+                "title": "Fixture session",
+                "updatedAt": "9999-01-01T00:00:00Z"
+            }],
+            "nextCursor": "cursor-1"
+        }))?;
+        let factory = FixtureProviderFactory::load(root.path())?;
+        let mut store = LocalStore::open_path(root.path().join("store.sqlite3"))?;
+        store.add_project("/repo")?;
+        let mut runtime = ServiceRuntime::with_factory(factory, store);
+
+        let listed = runtime.dispatch(command("list", "session/list", "codex", json!({})));
+        if listed
+            .result
+            .pointer("/sessions/0/sessionId")
+            .and_then(Value::as_str)
+            != Some("session-1")
+        {
+            return Err(format!("unexpected session/list result {}", listed.result).into());
+        }
+
+        runtime.force_refresh_session_index("all")?;
+        let grouped = runtime.dispatch(command(
+            "grouped",
+            "sessions/grouped",
+            "all",
+            json!({ "updatedWithinDays": null }),
+        ));
+        if grouped
+            .result
+            .pointer("/groups/0/sessions/0/sessionId")
+            .and_then(Value::as_str)
+            != Some("session-1")
+        {
+            return Err(format!("unexpected sessions/grouped result {}", grouped.result).into());
+        }
+        Ok(())
+    }
+
+    fn assert_unsupported(result: service_runtime::Result<Value>, command: &str) -> TestResult<()> {
+        let error = result
+            .err()
+            .ok_or_else(|| format!("{command} unexpectedly succeeded"))?;
+        if !matches!(error, RuntimeError::UnsupportedCommand(ref error_command) if error_command == command)
+        {
+            return Err(format!("unexpected error {error}").into());
+        }
+        Ok(())
+    }
+
+    fn command(id: &str, name: &str, provider: &str, params: Value) -> ConsumerCommand {
+        ConsumerCommand {
+            id: id.to_owned(),
+            command: name.to_owned(),
+            provider: provider.to_owned(),
+            params,
+        }
+    }
+
+    fn fixture_root(value: Value) -> TestResult<TempDir> {
+        let root = TempDir::new()?;
+        let dir = root.path().join("codex/session-list");
+        create_dir_all(&dir)?;
+        write(
+            dir.join("provider.raw.json"),
+            serde_json::to_string(&value)?,
+        )?;
+        Ok(root)
+    }
+}

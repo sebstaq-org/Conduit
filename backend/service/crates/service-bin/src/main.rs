@@ -33,7 +33,11 @@ async fn main() -> Result<()> {
     );
     let command = parse_command(&args)?;
     match command {
-        cli::Command::Serve { host, port } => serve::run(&host, port).await,
+        cli::Command::Serve {
+            host,
+            port,
+            provider_fixtures,
+        } => serve::run(&host, port, provider_fixtures).await,
         cli::Command::Runtime { command } => runtime::run(command),
     }
 }

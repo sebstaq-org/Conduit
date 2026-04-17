@@ -1722,6 +1722,19 @@ name = "provider-copilot"
 version = "0.5.0"
 
 [[package]]
+name = "provider-fixture"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "agent-client-protocol-schema",
+ "serde_json",
+ "service-runtime",
+ "session-store",
+ "tempfile",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2239,6 +2252,7 @@ dependencies = [
  "axum",
  "directories",
  "futures-util",
+ "provider-fixture",
  "serde",
  "serde_json",
  "service-runtime",
