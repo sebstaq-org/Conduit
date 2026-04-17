@@ -44,14 +44,16 @@ jobs:
         with:
           version: 10.30.3
 
+      - name: Configure pnpm store
+        run: |
+          pnpm config set store-dir "$RUNNER_TEMP/conduit-stage-pnpm-store-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          mkdir -p "$(pnpm store path --silent)"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           cache: pnpm
           node-version-file: .nvmrc
-
-      - name: Configure pnpm store
-        run: pnpm config set store-dir "$RUNNER_TEMP/conduit-stage-pnpm-store-${GITHUB_RUN_ID}-${GITHUB_JOB}"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
