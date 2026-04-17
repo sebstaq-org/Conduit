@@ -5,66 +5,51 @@ import { z } from "zod";
 
 const PROTOCOL_CONTRACT_VERSION = 1 as const;
 
-// prettier-ignore
 const AcpRoleSchema = z.union([z.literal("assistant"), z.literal("user")]);
-// prettier-ignore
 type AcpRole = z.infer<typeof AcpRoleSchema>;
 
-// prettier-ignore
 const AcpAnnotationsSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   audience: z.union([z.array(AcpRoleSchema), z.null()]).optional(),
   lastModified: z.union([z.string(), z.null()]).optional(),
   priority: z.union([z.number(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type AcpAnnotations = z.infer<typeof AcpAnnotationsSchema>;
 
-// prettier-ignore
 const AcpAudioContentSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
   data: z.string(),
   mimeType: z.string()
 }).strict();
-// prettier-ignore
 type AcpAudioContent = z.infer<typeof AcpAudioContentSchema>;
 
-// prettier-ignore
 const AcpBlobResourceContentsSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   blob: z.string(),
   mimeType: z.union([z.string(), z.null()]).optional(),
   uri: z.string()
 }).strict();
-// prettier-ignore
 type AcpBlobResourceContents = z.infer<typeof AcpBlobResourceContentsSchema>;
 
-// prettier-ignore
 const AcpTextResourceContentsSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   mimeType: z.union([z.string(), z.null()]).optional(),
   text: z.string(),
   uri: z.string()
 }).strict();
-// prettier-ignore
 type AcpTextResourceContents = z.infer<typeof AcpTextResourceContentsSchema>;
 
-// prettier-ignore
 const AcpEmbeddedResourceResourceSchema = z.union([AcpTextResourceContentsSchema, AcpBlobResourceContentsSchema]);
-// prettier-ignore
 type AcpEmbeddedResourceResource = z.infer<typeof AcpEmbeddedResourceResourceSchema>;
 
-// prettier-ignore
 const AcpEmbeddedResourceSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
   resource: AcpEmbeddedResourceResourceSchema
 }).strict();
-// prettier-ignore
 type AcpEmbeddedResource = z.infer<typeof AcpEmbeddedResourceSchema>;
 
-// prettier-ignore
 const AcpImageContentSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
@@ -72,10 +57,8 @@ const AcpImageContentSchema = z.object({
   mimeType: z.string(),
   uri: z.union([z.string(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type AcpImageContent = z.infer<typeof AcpImageContentSchema>;
 
-// prettier-ignore
 const AcpResourceLinkSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
@@ -86,19 +69,15 @@ const AcpResourceLinkSchema = z.object({
   title: z.union([z.string(), z.null()]).optional(),
   uri: z.string()
 }).strict();
-// prettier-ignore
 type AcpResourceLink = z.infer<typeof AcpResourceLinkSchema>;
 
-// prettier-ignore
 const AcpTextContentSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
   text: z.string()
 }).strict();
-// prettier-ignore
 type AcpTextContent = z.infer<typeof AcpTextContentSchema>;
 
-// prettier-ignore
 const AcpContentBlockSchema = z.discriminatedUnion("type", [
   AcpTextContentSchema.extend({
   type: z.literal("text")
@@ -116,36 +95,28 @@ const AcpContentBlockSchema = z.discriminatedUnion("type", [
   type: z.literal("resource")
 })
 ]);
-// prettier-ignore
 type AcpContentBlock = z.infer<typeof AcpContentBlockSchema>;
 
-// prettier-ignore
 const AcpContentSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: AcpContentBlockSchema
 }).strict();
-// prettier-ignore
 type AcpContent = z.infer<typeof AcpContentSchema>;
 
-// prettier-ignore
 const AcpDiffSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   newText: z.string(),
   oldText: z.union([z.string(), z.null()]).optional(),
   path: z.string()
 }).strict();
-// prettier-ignore
 type AcpDiff = z.infer<typeof AcpDiffSchema>;
 
-// prettier-ignore
 const AcpTerminalSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   terminalId: z.string()
 }).strict();
-// prettier-ignore
 type AcpTerminal = z.infer<typeof AcpTerminalSchema>;
 
-// prettier-ignore
 const AcpToolCallContentSchema = z.discriminatedUnion("type", [
   AcpContentSchema.extend({
   type: z.literal("content")
@@ -157,34 +128,24 @@ const AcpToolCallContentSchema = z.discriminatedUnion("type", [
   type: z.literal("terminal")
 })
 ]);
-// prettier-ignore
 type AcpToolCallContent = z.infer<typeof AcpToolCallContentSchema>;
 
-// prettier-ignore
 const AcpToolCallIdSchema = z.string();
-// prettier-ignore
 type AcpToolCallId = z.infer<typeof AcpToolCallIdSchema>;
 
-// prettier-ignore
 const AcpToolCallLocationSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   line: z.union([z.number().int().nonnegative(), z.null()]).optional(),
   path: z.string()
 }).strict();
-// prettier-ignore
 type AcpToolCallLocation = z.infer<typeof AcpToolCallLocationSchema>;
 
-// prettier-ignore
 const AcpToolCallStatusSchema = z.union([z.literal("pending"), z.literal("in_progress"), z.literal("completed"), z.literal("failed")]);
-// prettier-ignore
 type AcpToolCallStatus = z.infer<typeof AcpToolCallStatusSchema>;
 
-// prettier-ignore
 const AcpToolKindSchema = z.union([z.literal("read"), z.literal("edit"), z.literal("delete"), z.literal("move"), z.literal("search"), z.literal("execute"), z.literal("think"), z.literal("fetch"), z.literal("switch_mode"), z.literal("other")]);
-// prettier-ignore
 type AcpToolKind = z.infer<typeof AcpToolKindSchema>;
 
-// prettier-ignore
 const AcpToolCallUpdateSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: z.union([z.array(AcpToolCallContentSchema), z.null()]).optional(),
@@ -196,135 +157,97 @@ const AcpToolCallUpdateSchema = z.object({
   title: z.union([z.string(), z.null()]).optional(),
   toolCallId: AcpToolCallIdSchema
 }).strict();
-// prettier-ignore
 type AcpToolCallUpdate = z.infer<typeof AcpToolCallUpdateSchema>;
 
-// prettier-ignore
 const AcpPlanEntryPrioritySchema = z.union([z.literal("high"), z.literal("medium"), z.literal("low")]);
-// prettier-ignore
 type AcpPlanEntryPriority = z.infer<typeof AcpPlanEntryPrioritySchema>;
 
-// prettier-ignore
 const AcpPlanEntryStatusSchema = z.union([z.literal("pending"), z.literal("in_progress"), z.literal("completed")]);
-// prettier-ignore
 type AcpPlanEntryStatus = z.infer<typeof AcpPlanEntryStatusSchema>;
 
-// prettier-ignore
 const AcpPlanEntrySchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: z.string(),
   priority: AcpPlanEntryPrioritySchema,
   status: AcpPlanEntryStatusSchema
 }).strict();
-// prettier-ignore
 type AcpPlanEntry = z.infer<typeof AcpPlanEntrySchema>;
 
-// prettier-ignore
 const AcpPlanSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   entries: z.array(AcpPlanEntrySchema)
 }).strict();
-// prettier-ignore
 type AcpPlan = z.infer<typeof AcpPlanSchema>;
 
-// prettier-ignore
 const AcpUnstructuredCommandInputSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   hint: z.string()
 }).strict();
-// prettier-ignore
 type AcpUnstructuredCommandInput = z.infer<typeof AcpUnstructuredCommandInputSchema>;
 
-// prettier-ignore
 const AcpAvailableCommandInputSchema = AcpUnstructuredCommandInputSchema;
-// prettier-ignore
 type AcpAvailableCommandInput = z.infer<typeof AcpAvailableCommandInputSchema>;
 
-// prettier-ignore
 const AcpAvailableCommandSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   description: z.string(),
   input: z.union([AcpAvailableCommandInputSchema, z.null()]).optional(),
   name: z.string()
 }).strict();
-// prettier-ignore
 type AcpAvailableCommand = z.infer<typeof AcpAvailableCommandSchema>;
 
-// prettier-ignore
 const AcpAvailableCommandsUpdateSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   availableCommands: z.array(AcpAvailableCommandSchema)
 }).strict();
-// prettier-ignore
 type AcpAvailableCommandsUpdate = z.infer<typeof AcpAvailableCommandsUpdateSchema>;
 
-// prettier-ignore
 const AcpSessionModeIdSchema = z.string();
-// prettier-ignore
 type AcpSessionModeId = z.infer<typeof AcpSessionModeIdSchema>;
 
-// prettier-ignore
 const AcpCurrentModeUpdateSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   currentModeId: AcpSessionModeIdSchema
 }).strict();
-// prettier-ignore
 type AcpCurrentModeUpdate = z.infer<typeof AcpCurrentModeUpdateSchema>;
 
-// prettier-ignore
 const AcpSessionConfigIdSchema = z.string();
-// prettier-ignore
 type AcpSessionConfigId = z.infer<typeof AcpSessionConfigIdSchema>;
 
-// prettier-ignore
 const AcpSessionConfigOptionCategorySchema = z.union([z.literal("mode"), z.literal("model"), z.literal("thought_level"), z.string()]);
-// prettier-ignore
 type AcpSessionConfigOptionCategory = z.infer<typeof AcpSessionConfigOptionCategorySchema>;
 
-// prettier-ignore
 const AcpSessionConfigGroupIdSchema = z.string();
-// prettier-ignore
 type AcpSessionConfigGroupId = z.infer<typeof AcpSessionConfigGroupIdSchema>;
 
-// prettier-ignore
 const AcpSessionConfigValueIdSchema = z.string();
-// prettier-ignore
 type AcpSessionConfigValueId = z.infer<typeof AcpSessionConfigValueIdSchema>;
 
-// prettier-ignore
 const AcpSessionConfigSelectOptionSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   description: z.union([z.string(), z.null()]).optional(),
   name: z.string(),
   value: AcpSessionConfigValueIdSchema
 }).strict();
-// prettier-ignore
 type AcpSessionConfigSelectOption = z.infer<typeof AcpSessionConfigSelectOptionSchema>;
 
-// prettier-ignore
 const AcpSessionConfigSelectGroupSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   group: AcpSessionConfigGroupIdSchema,
   name: z.string(),
   options: z.array(AcpSessionConfigSelectOptionSchema)
 }).strict();
-// prettier-ignore
 type AcpSessionConfigSelectGroup = z.infer<typeof AcpSessionConfigSelectGroupSchema>;
 
-// prettier-ignore
 const AcpSessionConfigSelectOptionsSchema = z.union([z.array(AcpSessionConfigSelectOptionSchema), z.array(AcpSessionConfigSelectGroupSchema)]);
-// prettier-ignore
 type AcpSessionConfigSelectOptions = z.infer<typeof AcpSessionConfigSelectOptionsSchema>;
 
-// prettier-ignore
 const AcpSessionConfigSelectSchema = z.object({
   currentValue: AcpSessionConfigValueIdSchema,
   options: AcpSessionConfigSelectOptionsSchema
 }).strict();
-// prettier-ignore
 type AcpSessionConfigSelect = z.infer<typeof AcpSessionConfigSelectSchema>;
 
-// prettier-ignore
 const AcpSessionConfigOptionSchema = AcpSessionConfigSelectSchema.extend({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   category: z.union([AcpSessionConfigOptionCategorySchema, z.null()]).optional(),
@@ -333,35 +256,27 @@ const AcpSessionConfigOptionSchema = AcpSessionConfigSelectSchema.extend({
   name: z.string(),
   type: z.literal("select")
 });
-// prettier-ignore
 type AcpSessionConfigOption = z.infer<typeof AcpSessionConfigOptionSchema>;
 
-// prettier-ignore
 const AcpConfigOptionUpdateSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   configOptions: z.array(AcpSessionConfigOptionSchema)
 }).strict();
-// prettier-ignore
 type AcpConfigOptionUpdate = z.infer<typeof AcpConfigOptionUpdateSchema>;
 
-// prettier-ignore
 const AcpSessionInfoUpdateSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   title: z.union([z.string(), z.null()]).optional(),
   updatedAt: z.union([z.string(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type AcpSessionInfoUpdate = z.infer<typeof AcpSessionInfoUpdateSchema>;
 
-// prettier-ignore
 const AcpContentChunkSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: AcpContentBlockSchema
 }).strict();
-// prettier-ignore
 type AcpContentChunk = z.infer<typeof AcpContentChunkSchema>;
 
-// prettier-ignore
 const AcpToolCallSchema = z.object({
   _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: z.array(AcpToolCallContentSchema).optional(),
@@ -373,10 +288,8 @@ const AcpToolCallSchema = z.object({
   title: z.string(),
   toolCallId: AcpToolCallIdSchema
 }).strict();
-// prettier-ignore
 type AcpToolCall = z.infer<typeof AcpToolCallSchema>;
 
-// prettier-ignore
 const AcpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
   AcpContentChunkSchema.extend({
   sessionUpdate: z.literal("user_message_chunk")
@@ -409,20 +322,14 @@ const AcpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
   sessionUpdate: z.literal("session_info_update")
 })
 ]);
-// prettier-ignore
 type AcpSessionUpdate = z.infer<typeof AcpSessionUpdateSchema>;
 
-// prettier-ignore
 const ConduitTranscriptItemStatusSchema = z.union([z.literal("complete"), z.literal("streaming"), z.literal("cancelled"), z.literal("failed")]);
-// prettier-ignore
 type ConduitTranscriptItemStatus = z.infer<typeof ConduitTranscriptItemStatusSchema>;
 
-// prettier-ignore
 const ConduitTranscriptMessageRoleSchema = z.union([z.literal("user"), z.literal("agent")]);
-// prettier-ignore
 type ConduitTranscriptMessageRole = z.infer<typeof ConduitTranscriptMessageRoleSchema>;
 
-// prettier-ignore
 const ConduitTranscriptItemSchema = z.union([z.object({
   content: z.array(AcpContentBlockSchema),
   id: z.string(),
@@ -440,10 +347,8 @@ const ConduitTranscriptItemSchema = z.union([z.object({
   turnId: z.union([z.string(), z.null()]).optional(),
   variant: z.string()
 }).strict()]);
-// prettier-ignore
 type ConduitTranscriptItem = z.infer<typeof ConduitTranscriptItemSchema>;
 
-// prettier-ignore
 const ConduitRuntimeEventSchema = z.union([z.object({
   kind: z.literal("sessions_index_changed"),
   revision: z.number().int()
@@ -453,27 +358,21 @@ const ConduitRuntimeEventSchema = z.union([z.object({
   openSessionId: z.string(),
   revision: z.number().int()
 }).strict()]);
-// prettier-ignore
 type ConduitRuntimeEvent = z.infer<typeof ConduitRuntimeEventSchema>;
 
-// prettier-ignore
 const ConduitServerEventFrameSchema = z.object({
   event: ConduitRuntimeEventSchema,
   type: z.literal("event"),
   v: z.literal(1)
 }).strict();
-// prettier-ignore
 type ConduitServerEventFrame = z.infer<typeof ConduitServerEventFrameSchema>;
 
-// prettier-ignore
 const ConduitConsumerErrorSchema = z.object({
   code: z.string(),
   message: z.string()
 }).strict();
-// prettier-ignore
 type ConduitConsumerError = z.infer<typeof ConduitConsumerErrorSchema>;
 
-// prettier-ignore
 const ConduitConsumerResponseSchema = z.object({
   error: z.union([ConduitConsumerErrorSchema, z.null()]).optional(),
   id: z.string(),
@@ -481,34 +380,26 @@ const ConduitConsumerResponseSchema = z.object({
   result: z.unknown(),
   snapshot: z.unknown().optional()
 }).strict();
-// prettier-ignore
 type ConduitConsumerResponse = z.infer<typeof ConduitConsumerResponseSchema>;
 
-// prettier-ignore
 const ConduitServerResponseFrameSchema = z.object({
   id: z.string(),
   response: ConduitConsumerResponseSchema,
   type: z.literal("response"),
   v: z.literal(1)
 }).strict();
-// prettier-ignore
 type ConduitServerResponseFrame = z.infer<typeof ConduitServerResponseFrameSchema>;
 
-// prettier-ignore
 const ConduitServerFrameSchema = z.union([ConduitServerResponseFrameSchema, ConduitServerEventFrameSchema]);
-// prettier-ignore
 type ConduitServerFrame = z.infer<typeof ConduitServerFrameSchema>;
 
-// prettier-ignore
 const ConduitInteractionOptionSchema = z.object({
   kind: z.string(),
   name: z.string(),
   optionId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitInteractionOption = z.infer<typeof ConduitInteractionOptionSchema>;
 
-// prettier-ignore
 const ConduitInteractionRequestDataSchema = z.object({
   interactionId: z.string(),
   isOther: z.boolean(),
@@ -522,15 +413,11 @@ const ConduitInteractionRequestDataSchema = z.object({
   status: z.literal("pending"),
   toolCallId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitInteractionRequestData = z.infer<typeof ConduitInteractionRequestDataSchema>;
 
-// prettier-ignore
 const ConduitInteractionResolutionStatusSchema = z.union([z.literal("resolved"), z.literal("cancelled"), z.literal("failed")]);
-// prettier-ignore
 type ConduitInteractionResolutionStatus = z.infer<typeof ConduitInteractionResolutionStatusSchema>;
 
-// prettier-ignore
 const ConduitInteractionResolutionDataSchema = z.object({
   interactionId: z.string(),
   rawOutput: z.unknown(),
@@ -538,10 +425,8 @@ const ConduitInteractionResolutionDataSchema = z.object({
   status: ConduitInteractionResolutionStatusSchema,
   toolCallId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitInteractionResolutionData = z.infer<typeof ConduitInteractionResolutionDataSchema>;
 
-// prettier-ignore
 const ConduitTerminalPlanDataSchema = z.object({
   codexTurnId: z.union([z.string(), z.null()]).optional(),
   interactionId: z.string(),
@@ -553,20 +438,16 @@ const ConduitTerminalPlanDataSchema = z.object({
   status: z.literal("pending"),
   threadId: z.union([z.string(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type ConduitTerminalPlanData = z.infer<typeof ConduitTerminalPlanDataSchema>;
 
-// prettier-ignore
 const ConduitSessionHistoryWindowSchema = z.object({
   items: z.array(ConduitTranscriptItemSchema),
   nextCursor: z.union([z.string(), z.null()]).optional(),
   openSessionId: z.string(),
   revision: z.number().int()
 }).strict();
-// prettier-ignore
 type ConduitSessionHistoryWindow = z.infer<typeof ConduitSessionHistoryWindowSchema>;
 
-// prettier-ignore
 const ConduitSessionNewResultSchema = z.object({
   configOptions: z.union([z.array(AcpSessionConfigOptionSchema), z.null()]).optional(),
   currentModeId: z.union([z.string(), z.null()]).optional(),
@@ -575,10 +456,8 @@ const ConduitSessionNewResultSchema = z.object({
   modes: z.unknown().optional(),
   sessionId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitSessionNewResult = z.infer<typeof ConduitSessionNewResultSchema>;
 
-// prettier-ignore
 const ConduitSessionOpenResultSchema = z.object({
   configOptions: z.union([z.array(AcpSessionConfigOptionSchema), z.null()]).optional(),
   currentModeId: z.union([z.string(), z.null()]).optional(),
@@ -590,96 +469,72 @@ const ConduitSessionOpenResultSchema = z.object({
   revision: z.number().int(),
   sessionId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitSessionOpenResult = z.infer<typeof ConduitSessionOpenResultSchema>;
 
-// prettier-ignore
 const ConduitSessionSetConfigOptionResultSchema = z.object({
   configOptions: z.array(AcpSessionConfigOptionSchema),
   sessionId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitSessionSetConfigOptionResult = z.infer<typeof ConduitSessionSetConfigOptionResultSchema>;
 
-// prettier-ignore
 const ConduitProjectRowSchema = z.object({
   cwd: z.string(),
   displayName: z.string(),
   projectId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitProjectRow = z.infer<typeof ConduitProjectRowSchema>;
 
-// prettier-ignore
 const ConduitProjectListViewSchema = z.object({
   projects: z.array(ConduitProjectRowSchema)
 }).strict();
-// prettier-ignore
 type ConduitProjectListView = z.infer<typeof ConduitProjectListViewSchema>;
 
-// prettier-ignore
 const ConduitProjectSuggestionSchema = z.object({
   cwd: z.string(),
   suggestionId: z.string()
 }).strict();
-// prettier-ignore
 type ConduitProjectSuggestion = z.infer<typeof ConduitProjectSuggestionSchema>;
 
-// prettier-ignore
 const ConduitProjectSuggestionsViewSchema = z.object({
   suggestions: z.array(ConduitProjectSuggestionSchema)
 }).strict();
-// prettier-ignore
 type ConduitProjectSuggestionsView = z.infer<typeof ConduitProjectSuggestionsViewSchema>;
 
-// prettier-ignore
 const ConduitGlobalSettingsViewSchema = z.object({
   sessionGroupsUpdatedWithinDays: z.union([z.number().int().nonnegative(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type ConduitGlobalSettingsView = z.infer<typeof ConduitGlobalSettingsViewSchema>;
 
-// prettier-ignore
 const ConduitProviderIdSchema = z.union([z.literal("claude"), z.literal("copilot"), z.literal("codex")]);
-// prettier-ignore
 type ConduitProviderId = z.infer<typeof ConduitProviderIdSchema>;
 
-// prettier-ignore
 const ConduitSessionRowSchema = z.object({
   provider: ConduitProviderIdSchema,
   sessionId: z.string(),
   title: z.union([z.string(), z.null()]).optional(),
   updatedAt: z.union([z.string(), z.null()]).optional()
 }).strict();
-// prettier-ignore
 type ConduitSessionRow = z.infer<typeof ConduitSessionRowSchema>;
 
-// prettier-ignore
 const ConduitSessionGroupSchema = z.object({
   cwd: z.string(),
   displayName: z.string(),
   groupId: z.string(),
   sessions: z.array(ConduitSessionRowSchema)
 }).strict();
-// prettier-ignore
 type ConduitSessionGroup = z.infer<typeof ConduitSessionGroupSchema>;
 
-// prettier-ignore
 const ConduitSessionGroupsViewSchema = z.object({
   groups: z.array(ConduitSessionGroupSchema),
   isRefreshing: z.boolean(),
   refreshedAt: z.union([z.string(), z.null()]).optional(),
   revision: z.number().int()
 }).strict();
-// prettier-ignore
 type ConduitSessionGroupsView = z.infer<typeof ConduitSessionGroupsViewSchema>;
 
-// prettier-ignore
 const ConduitProviderConfigSnapshotStatusSchema = z.union([z.literal("loading"), z.literal("ready"), z.literal("error"), z.literal("unavailable")]);
-// prettier-ignore
 type ConduitProviderConfigSnapshotStatus = z.infer<typeof ConduitProviderConfigSnapshotStatusSchema>;
 
-// prettier-ignore
 const ConduitProviderConfigSnapshotEntrySchema = z.object({
   configOptions: z.union([z.array(AcpSessionConfigOptionSchema), z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
@@ -689,29 +544,22 @@ const ConduitProviderConfigSnapshotEntrySchema = z.object({
   provider: ConduitProviderIdSchema,
   status: ConduitProviderConfigSnapshotStatusSchema
 }).strict();
-// prettier-ignore
 type ConduitProviderConfigSnapshotEntry = z.infer<typeof ConduitProviderConfigSnapshotEntrySchema>;
 
-// prettier-ignore
 const ConduitProvidersConfigSnapshotResultSchema = z.object({
   entries: z.array(ConduitProviderConfigSnapshotEntrySchema)
 }).strict();
-// prettier-ignore
 type ConduitProvidersConfigSnapshotResult = z.infer<typeof ConduitProvidersConfigSnapshotResultSchema>;
 
-// prettier-ignore
 const ConduitSessionsWatchResultSchema = z.object({
   subscribed: z.boolean()
 }).strict();
-// prettier-ignore
 type ConduitSessionsWatchResult = z.infer<typeof ConduitSessionsWatchResultSchema>;
 
-// prettier-ignore
 const ConduitSessionWatchResultSchema = z.object({
   openSessionId: z.string(),
   subscribed: z.boolean()
 }).strict();
-// prettier-ignore
 type ConduitSessionWatchResult = z.infer<typeof ConduitSessionWatchResultSchema>;
 
 export {

@@ -179,12 +179,11 @@ impl TypeScriptEmitter {
         }
 
         let expression = self.zod_for_schema(&definition)?;
-        self.output.push_str("// prettier-ignore\n");
         self.output.push_str("const ");
         self.output.push_str(&schema_identifier(name));
         self.output.push_str(" = ");
         self.output.push_str(&expression);
-        self.output.push_str(";\n// prettier-ignore\ntype ");
+        self.output.push_str(";\ntype ");
         self.output.push_str(&type_identifier(name));
         self.output.push_str(" = z.infer<typeof ");
         self.output.push_str(&schema_identifier(name));

@@ -2,3 +2,4 @@ artifacts/**
 vendor/**
 backend/service/target/**
 pnpm-lock.yaml
+packages/app-protocol/src/generated.ts
