@@ -29,7 +29,7 @@ impl acp::Client for SdkClient {
     ) -> acp::Result<acp::RequestPermissionResponse> {
         let session_id = args.session_id.to_string();
         let tool_call_id = args.tool_call.tool_call_id.to_string();
-        let question = question_details(&args);
+        let question = question_details(&args)?;
         let (response_tx, response_rx) = oneshot::channel();
         {
             let mut updates = self.updates.lock().map_err(|error| {
@@ -62,7 +62,7 @@ impl acp::Client for SdkClient {
                 tool_call_id,
                 &question,
                 args.tool_call.fields.raw_input.as_ref(),
-            );
+            )?;
             record_update(&mut updates, update);
         }
         Ok(response_rx.await.unwrap_or_else(|_error| {
@@ -101,7 +101,7 @@ impl acp::Client for SdkClient {
             }
             if let acp::SessionUpdate::ToolCallUpdate(tool_call_update) = &args.update
                 && let Some(snapshot) =
-                    interaction_resolution_update(&mut updates, tool_call_update, &update)
+                    interaction_resolution_update(&mut updates, tool_call_update, &update)?
             {
                 record_update(&mut updates, snapshot);
             }
@@ -112,27 +112,21 @@ impl acp::Client for SdkClient {
 
 #[derive(Clone)]
 struct InteractionQuestion {
-    id: Option<String>,
+    id: String,
     header: Option<String>,
-    prompt: Option<String>,
+    prompt: String,
     is_other: bool,
-    options: Vec<Value>,
+    options: Vec<ConduitInteractionOption>,
 }
 
-fn question_details(args: &acp::RequestPermissionRequest) -> InteractionQuestion {
+fn question_details(args: &acp::RequestPermissionRequest) -> acp::Result<InteractionQuestion> {
     let raw_input = args.tool_call.fields.raw_input.as_ref();
-    let id = raw_input
-        .and_then(|value| value.pointer("/question/id"))
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
+    let id = required_question_string(raw_input, "/question/id", "question.id")?;
     let header = raw_input
         .and_then(|value| value.pointer("/question/header"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned);
-    let prompt = raw_input
-        .and_then(|value| value.pointer("/question/question"))
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
+    let prompt = required_question_string(raw_input, "/question/question", "question.question")?;
     let is_other = raw_input
         .and_then(|value| value.pointer("/question/isOther"))
         .and_then(Value::as_bool)
@@ -145,20 +139,42 @@ fn question_details(args: &acp::RequestPermissionRequest) -> InteractionQuestion
         .options
         .iter()
         .map(|option| {
-            json!({
-                "optionId": option.option_id.0.as_ref(),
-                "name": option.name,
-                "kind": option.kind
-            })
+            Ok(ConduitInteractionOption::new(
+                option_kind_string(option.kind)?,
+                option.name.clone(),
+                option.option_id.0.as_ref().to_owned(),
+            ))
         })
-        .collect();
-    InteractionQuestion {
+        .collect::<acp::Result<Vec<_>>>()?;
+    Ok(InteractionQuestion {
         id,
         header,
         prompt,
         is_other,
         options,
-    }
+    })
+}
+
+fn required_question_string(
+    raw_input: Option<&Value>,
+    pointer: &'static str,
+    field: &'static str,
+) -> acp::Result<String> {
+    raw_input
+        .and_then(|value| value.pointer(pointer))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| protocol_event_error(format!("request permission payload missing {field}")))
+}
+
+fn option_kind_string(kind: acp::PermissionOptionKind) -> acp::Result<String> {
+    let value = to_value(kind).map_err(|error| {
+        protocol_event_error(format!("permission option kind serialization failed: {error}"))
+    })?;
+    value
+        .as_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| protocol_event_error("permission option kind did not serialize as string"))
 }
 
 fn next_update_index(updates: &mut PromptUpdateState) -> usize {
@@ -177,37 +193,41 @@ fn interaction_request_update(
     tool_call_id: String,
     question: &InteractionQuestion,
     raw_input: Option<&Value>,
-) -> TranscriptUpdateSnapshot {
-    TranscriptUpdateSnapshot {
+) -> acp::Result<TranscriptUpdateSnapshot> {
+    let data = ConduitInteractionRequestData::new(ConduitInteractionRequestInput {
+        interaction_id,
+        tool_call_id,
+        question_id: question.id.clone(),
+        question_header: question.header.clone(),
+        question: question.prompt.clone(),
+        is_other: question.is_other,
+        options: question.options.clone(),
+        raw_input: raw_input.cloned().unwrap_or(Value::Null),
+    });
+    Ok(TranscriptUpdateSnapshot {
         index: next_update_index(updates),
         variant: "interaction_request".to_owned(),
-        update: json!({
-            "sessionUpdate": "interaction_request",
-            "interactionId": interaction_id,
-            "toolCallId": tool_call_id,
-            "requestType": "request_user_input",
-            "questionId": question.id,
-            "questionHeader": question.header,
-            "question": question.prompt,
-            "isOther": question.is_other,
-            "options": question.options,
-            "status": "pending",
-            "rawInput": raw_input.cloned().unwrap_or(Value::Null)
-        }),
-    }
+        update: to_value(data).map_err(|error| {
+            protocol_event_error(format!("interaction request data serialization failed: {error}"))
+        })?,
+    })
 }
 
 fn interaction_resolution_update(
     updates: &mut PromptUpdateState,
     update: &acp::ToolCallUpdate,
     update_value: &Value,
-) -> Option<TranscriptUpdateSnapshot> {
-    let status = interaction_terminal_status(update, update_value)?;
+) -> acp::Result<Option<TranscriptUpdateSnapshot>> {
+    let Some(status) = interaction_terminal_status(update, update_value) else {
+        return Ok(None);
+    };
     let tool_call_id = update.tool_call_id.to_string();
-    let queue = updates
-        .interaction_queue_by_tool_call
-        .get_mut(&tool_call_id)?;
-    let interaction_id = queue.pop_front()?;
+    let Some(queue) = updates.interaction_queue_by_tool_call.get_mut(&tool_call_id) else {
+        return Ok(None);
+    };
+    let Some(interaction_id) = queue.pop_front() else {
+        return Ok(None);
+    };
     if queue.is_empty() {
         updates.interaction_queue_by_tool_call.remove(&tool_call_id);
     }
@@ -215,33 +235,43 @@ fn interaction_resolution_update(
         .get("rawOutput")
         .cloned()
         .unwrap_or(Value::Null);
-    Some(TranscriptUpdateSnapshot {
+    let data = ConduitInteractionResolutionData::new(
+        interaction_id,
+        tool_call_id,
+        status,
+        raw_output,
+    );
+    Ok(Some(TranscriptUpdateSnapshot {
         index: next_update_index(updates),
         variant: "interaction_resolution".to_owned(),
-        update: json!({
-            "sessionUpdate": "interaction_resolution",
-            "interactionId": interaction_id,
-            "toolCallId": tool_call_id,
-            "status": status,
-            "rawOutput": raw_output
-        }),
-    })
+        update: to_value(data).map_err(|error| {
+            protocol_event_error(format!(
+                "interaction resolution data serialization failed: {error}"
+            ))
+        })?,
+    }))
 }
 
 fn interaction_terminal_status(
     update: &acp::ToolCallUpdate,
     update_value: &Value,
-) -> Option<&'static str> {
+) -> Option<ConduitInteractionResolutionStatus> {
     let raw_outcome = update_value
         .get("rawOutput")
         .and_then(|value| value.get("outcome"))
         .and_then(Value::as_str);
     match update.fields.status {
-        Some(acp::ToolCallStatus::Completed) => Some("resolved"),
-        Some(acp::ToolCallStatus::Failed) if raw_outcome == Some("cancelled") => Some("cancelled"),
-        Some(acp::ToolCallStatus::Failed) => Some("failed"),
+        Some(acp::ToolCallStatus::Completed) => Some(ConduitInteractionResolutionStatus::Resolved),
+        Some(acp::ToolCallStatus::Failed) if raw_outcome == Some("cancelled") => {
+            Some(ConduitInteractionResolutionStatus::Cancelled)
+        }
+        Some(acp::ToolCallStatus::Failed) => Some(ConduitInteractionResolutionStatus::Failed),
         _ => None,
     }
+}
+
+fn protocol_event_error(message: impl Into<String>) -> acp::Error {
+    acp::Error::internal_error().data(message.into())
 }
 
 fn record_update(updates: &mut PromptUpdateState, snapshot: TranscriptUpdateSnapshot) {
@@ -511,5 +541,111 @@ pub(super) fn actor_stopped(provider: ProviderId, operation: &str) -> AcpError {
     AcpError::ActorStopped {
         provider,
         operation: operation.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod ui_event_data_tests {
+    use super::{
+        InteractionQuestion, PromptUpdateState, interaction_request_update,
+        interaction_resolution_update,
+    };
+    use crate::{
+        ConduitInteractionOption, ConduitInteractionRequestData, ConduitInteractionResolutionData,
+        ConduitInteractionResolutionStatus,
+    };
+    use agent_client_protocol as acp;
+    use serde_json::json;
+    use std::collections::VecDeque;
+    use std::error::Error;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    #[test]
+    fn interaction_request_update_serializes_exported_dto() -> TestResult {
+        let mut updates = PromptUpdateState::default();
+        let question = InteractionQuestion {
+            id: "question-1".to_owned(),
+            header: Some("Question".to_owned()),
+            prompt: "Proceed?".to_owned(),
+            is_other: true,
+            options: vec![ConduitInteractionOption::new(
+                "allow_once".to_owned(),
+                "Yes".to_owned(),
+                "yes".to_owned(),
+            )],
+        };
+
+        let snapshot = interaction_request_update(
+            &mut updates,
+            "interaction-1".to_owned(),
+            "tool-call-1".to_owned(),
+            &question,
+            Some(&json!({ "question": { "id": "question-1" } })),
+        )?;
+
+        let data: ConduitInteractionRequestData = serde_json::from_value(snapshot.update)?;
+        ensure_eq(
+            &snapshot.variant.as_str(),
+            &"interaction_request",
+            "snapshot variant",
+        )?;
+        ensure_eq(&data.session_update.as_str(), &"interaction_request", "session update")?;
+        ensure_eq(&data.request_type.as_str(), &"request_user_input", "request type")?;
+        ensure_eq(&data.status.as_str(), &"pending", "request status")?;
+        ensure_eq(&data.question_id.as_str(), &"question-1", "question id")?;
+        Ok(())
+    }
+
+    #[test]
+    fn interaction_resolution_update_serializes_exported_dto() -> TestResult {
+        let mut updates = PromptUpdateState::default();
+        updates.interaction_queue_by_tool_call.insert(
+            "tool-call-1".to_owned(),
+            VecDeque::from(["interaction-1".to_owned()]),
+        );
+        let update = acp::ToolCallUpdate::new(
+            "tool-call-1",
+            acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::Completed),
+        );
+        let update_value = json!({
+            "toolCallId": "tool-call-1",
+            "status": "completed",
+            "rawOutput": { "outcome": "approved" }
+        });
+
+        let Some(snapshot) = interaction_resolution_update(&mut updates, &update, &update_value)?
+        else {
+            return Err(std::io::Error::other("expected interaction resolution snapshot").into());
+        };
+
+        let data: ConduitInteractionResolutionData = serde_json::from_value(snapshot.update)?;
+        ensure_eq(
+            &snapshot.variant.as_str(),
+            &"interaction_resolution",
+            "snapshot variant",
+        )?;
+        ensure_eq(
+            &data.session_update.as_str(),
+            &"interaction_resolution",
+            "session update",
+        )?;
+        ensure_eq(
+            &data.status,
+            &ConduitInteractionResolutionStatus::Resolved,
+            "resolution status",
+        )?;
+        ensure_eq(&data.tool_call_id.as_str(), &"tool-call-1", "tool call id")?;
+        Ok(())
+    }
+
+    fn ensure_eq<T>(actual: &T, expected: &T, label: &str) -> TestResult
+    where
+        T: std::fmt::Debug + PartialEq,
+    {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("{label}: expected {expected:?}, got {actual:?}").into())
     }
 }

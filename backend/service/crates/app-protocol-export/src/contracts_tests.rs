@@ -1,16 +1,17 @@
 //! Tests for generated app protocol contracts.
 
 use crate::contracts::{ProtocolSchema, TypeScriptEmitter, acp_schema_value, root_definition};
+use acp_core::{
+    ConduitInteractionRequestData, ConduitInteractionResolutionData, ConduitTerminalPlanData,
+};
 use agent_client_protocol_schema as acp;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use service_runtime::ConsumerResponse;
 use service_runtime::consumer_protocol::{
-    ConduitInteractionRequestData, ConduitInteractionResolutionData,
     ConduitProvidersConfigSnapshotResult, ConduitRuntimeEvent, ConduitServerEventFrame,
     ConduitServerFrame, ConduitServerResponseFrame, ConduitSessionOpenResult,
-    ConduitTerminalPlanData,
 };
 use std::error::Error;
 use std::fs;

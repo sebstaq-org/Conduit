@@ -1,4 +1,5 @@
 use super::{ContractError, merge_schema};
+use acp_core as conduit_core;
 use agent_client_protocol_schema as acp;
 use serde_json::Value;
 use service_runtime::consumer_protocol as conduit;
@@ -81,22 +82,22 @@ fn merge_conduit_types(definitions: &mut BTreeMap<String, Value>) -> Result<(), 
     );
     merge_backend_schema!(
         definitions,
-        conduit::ConduitInteractionOption,
+        conduit_core::ConduitInteractionOption,
         "ConduitInteractionOption"
     );
     merge_backend_schema!(
         definitions,
-        conduit::ConduitInteractionRequestData,
+        conduit_core::ConduitInteractionRequestData,
         "ConduitInteractionRequestData"
     );
     merge_backend_schema!(
         definitions,
-        conduit::ConduitInteractionResolutionData,
+        conduit_core::ConduitInteractionResolutionData,
         "ConduitInteractionResolutionData"
     );
     merge_backend_schema!(
         definitions,
-        conduit::ConduitTerminalPlanData,
+        conduit_core::ConduitTerminalPlanData,
         "ConduitTerminalPlanData"
     );
     merge_session_result_types(definitions)?;

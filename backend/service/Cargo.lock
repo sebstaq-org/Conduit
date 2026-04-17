@@ -23,6 +23,7 @@ dependencies = [
  "acp-discovery",
  "agent-client-protocol",
  "async-trait",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -138,6 +139,7 @@ dependencies = [
 name = "app-protocol-export"
 version = "0.5.0"
 dependencies = [
+ "acp-core",
  "agent-client-protocol-schema",
  "schemars",
  "serde",
