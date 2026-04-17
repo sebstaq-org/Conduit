@@ -3,7 +3,7 @@
 use acp_discovery::ProviderId;
 use serde::Serialize;
 use serde_json::{Value, json};
-use service_runtime::ProviderFactory;
+use service_runtime::{ProviderFactory, ProviderInitializeRequest};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -137,6 +137,11 @@ where
         }
     };
 
+    if let Err(error) = port.initialize(ProviderInitializeRequest::conduit_default()) {
+        let _disconnect_status = port.disconnect();
+        let message = error.to_string();
+        return failed_entry(provider, classify_status(&message), fetched_at, message);
+    }
     let probe_result = port.session_new(cwd);
     let _disconnect_status = port.disconnect();
     match probe_result {
@@ -214,9 +219,14 @@ mod tests {
         PROVIDER_CONFIG_SNAPSHOT_INTERVAL, ProviderConfigSnapshots,
         run_provider_config_snapshot_worker_with_wait,
     };
-    use acp_core::{ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+    use acp_core::{
+        ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,
+        ProviderInitializeResult, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot,
+    };
     use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
-    use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+    use agent_client_protocol_schema::{
+        AgentCapabilities, Implementation, InitializeResponse, ProtocolVersion,
+    };
     use serde_json::{Value, json};
     use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
     use std::path::PathBuf;
@@ -256,16 +266,22 @@ mod tests {
         let probed_lock = calls.lock();
         assert!(probed_lock.is_ok(), "snapshot calls lock");
         let probed = probed_lock.map(|locked| locked.clone()).unwrap_or_default();
-        assert_eq!(probed.len(), 6);
+        assert_eq!(probed.len(), 12);
         assert_eq!(
             probed,
             vec![
-                ProviderId::Claude,
-                ProviderId::Copilot,
-                ProviderId::Codex,
-                ProviderId::Claude,
-                ProviderId::Copilot,
-                ProviderId::Codex,
+                (ProviderId::Claude, "initialize".to_owned()),
+                (ProviderId::Claude, "session/new".to_owned()),
+                (ProviderId::Copilot, "initialize".to_owned()),
+                (ProviderId::Copilot, "session/new".to_owned()),
+                (ProviderId::Codex, "initialize".to_owned()),
+                (ProviderId::Codex, "session/new".to_owned()),
+                (ProviderId::Claude, "initialize".to_owned()),
+                (ProviderId::Claude, "session/new".to_owned()),
+                (ProviderId::Copilot, "initialize".to_owned()),
+                (ProviderId::Copilot, "session/new".to_owned()),
+                (ProviderId::Codex, "initialize".to_owned()),
+                (ProviderId::Codex, "session/new".to_owned()),
             ],
         );
         let snapshot = snapshots.snapshot_value();
@@ -290,12 +306,12 @@ mod tests {
 
     #[derive(Clone)]
     struct SnapshotProbeFactory {
-        calls: Arc<Mutex<Vec<ProviderId>>>,
+        calls: Arc<Mutex<Vec<(ProviderId, String)>>>,
     }
 
     struct SnapshotProbePort {
         provider: ProviderId,
-        calls: Arc<Mutex<Vec<ProviderId>>>,
+        calls: Arc<Mutex<Vec<(ProviderId, String)>>>,
     }
 
     impl ProviderFactory for SnapshotProbeFactory {
@@ -308,6 +324,22 @@ mod tests {
     }
 
     impl ProviderPort for SnapshotProbePort {
+        fn initialize(
+            &mut self,
+            request: ProviderInitializeRequest,
+        ) -> Result<ProviderInitializeResult> {
+            let mut locked = self
+                .calls
+                .lock()
+                .map_err(|error| RuntimeError::Provider(format!("snapshot calls lock: {error}")))?;
+            locked.push((self.provider, "initialize".to_owned()));
+            Ok(test_initialize_result(request))
+        }
+
+        fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+            Ok(None)
+        }
+
         fn snapshot(&self) -> ProviderSnapshot {
             ProviderSnapshot {
                 provider: self.provider,
@@ -354,7 +386,7 @@ mod tests {
                 .calls
                 .lock()
                 .map_err(|error| RuntimeError::Provider(format!("snapshot calls lock: {error}")))?;
-            locked.push(self.provider);
+            locked.push((self.provider, "session/new".to_owned()));
             Ok(json!({
                 "sessionId": format!("snapshot-{}", self.provider.as_str()),
                 "configOptions": []
@@ -396,6 +428,18 @@ mod tests {
                 "sessionId": session_id,
                 "configOptions": []
             }))
+        }
+    }
+
+    fn test_initialize_result(request: ProviderInitializeRequest) -> ProviderInitializeResult {
+        ProviderInitializeResult {
+            request,
+            response: ProviderInitializeResponse {
+                protocol_version: ProtocolVersion::V1,
+                agent_capabilities: AgentCapabilities::default(),
+                agent_info: Some(Implementation::new("test-agent", "0.1.0")),
+                auth_methods: Vec::new(),
+            },
         }
     }
 }

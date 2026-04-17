@@ -3,8 +3,10 @@
 mod interaction_response;
 mod logging;
 mod prompt_flow;
+mod provider_lifecycle;
 
 use self::interaction_response::parse_interaction_response;
+use self::provider_lifecycle::initialize_provider_port;
 use crate::command::ConsumerCommand;
 use crate::command::ConsumerResponse;
 use crate::error::{
@@ -20,7 +22,6 @@ use crate::manager_response::{
 };
 use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
-use acp_core::ConnectionState;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
 use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
@@ -257,15 +258,12 @@ where
     }
 
     fn initialize(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
-        let snapshot = {
+        let (result, snapshot) = {
             let provider_port = self.provider(provider)?;
-            provider_port.snapshot()
+            let result = initialize_provider_port(provider_port.as_mut())?;
+            (result, provider_port.snapshot())
         };
-        Ok(ConsumerResponse::success(
-            id,
-            to_value(&snapshot)?,
-            snapshot,
-        ))
+        Ok(ConsumerResponse::success(id, to_value(&result)?, snapshot))
     }
 
     fn session_new(
@@ -281,7 +279,7 @@ where
             optional_u64_param("session/new", params, "limit")?,
         )?;
         let (provider_result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_new(cwd.clone())?;
             (result, provider_port.snapshot())
         };
@@ -309,7 +307,7 @@ where
 
     fn session_list(&mut self, id: String, provider: ProviderId) -> Result<ConsumerResponse> {
         let (result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_list(None, None)?;
             (result, provider_port.snapshot())
         };
@@ -339,7 +337,7 @@ where
         let cwd =
             absolute_normalized_cwd("session/load", path_param("session/load", params, "cwd")?)?;
         let (result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_load(session_id.clone(), cwd.clone())?;
             (result, provider_port.snapshot())
         };
@@ -404,7 +402,7 @@ where
             cache_hit = false
         );
         let (provider_result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_load(session_id.clone(), cwd)?;
             (result, provider_port.snapshot())
         };
@@ -434,7 +432,7 @@ where
         let config_id = string_param("session/set_config_option", params, "configId")?;
         let value = string_param("session/set_config_option", params, "value")?;
         let (provider_result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_set_config_option(
                 session_id.clone(),
                 config_id,
@@ -514,7 +512,7 @@ where
                 .open_session_key("session/respond_interaction", &open_session_id)?
         };
         let provider_response = {
-            let provider_port = self.provider(key.provider)?;
+            let provider_port = self.initialized_provider(key.provider)?;
             provider_port.session_respond_interaction(
                 key.session_id.clone(),
                 interaction_id.clone(),
@@ -540,7 +538,7 @@ where
     ) -> Result<ConsumerResponse> {
         let session_id = string_param("session/cancel", params, "session_id")?;
         let (result, snapshot) = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             let result = provider_port.session_cancel(session_id)?;
             (result, provider_port.snapshot())
         };
@@ -565,48 +563,6 @@ where
         Ok(ConsumerResponse::success(id, json!({}), snapshot))
     }
 
-    pub(crate) fn provider(&mut self, provider: ProviderId) -> Result<&mut Box<dyn ProviderPort>> {
-        if self
-            .providers
-            .get(&provider)
-            .is_some_and(|entry| entry.snapshot().connection_state == ConnectionState::Disconnected)
-        {
-            self.providers.remove(&provider);
-            self.loaded_provider_sessions
-                .retain(|key| key.provider != provider);
-            self.session_states
-                .retain(|key, _| key.provider != provider);
-        }
-        if !self.providers.contains_key(&provider) {
-            let service = self.factory.connect(provider)?;
-            self.providers.insert(provider, service);
-        }
-        self.providers
-            .get_mut(&provider)
-            .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
-    }
-
-    fn take_provider(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>> {
-        if self
-            .providers
-            .get(&provider)
-            .is_some_and(|entry| entry.snapshot().connection_state == ConnectionState::Disconnected)
-        {
-            self.providers.remove(&provider);
-            self.loaded_provider_sessions
-                .retain(|key| key.provider != provider);
-            self.session_states
-                .retain(|key, _| key.provider != provider);
-        }
-        if !self.providers.contains_key(&provider) {
-            let service = self.factory.connect(provider)?;
-            self.providers.insert(provider, service);
-        }
-        self.providers
-            .remove(&provider)
-            .ok_or_else(|| RuntimeError::Provider("provider manager lost provider".to_owned()))
-    }
-
     fn resolve_session_open_state(
         &mut self,
         provider: ProviderId,
@@ -625,7 +581,7 @@ where
             return Ok(state);
         }
         let provider_result = {
-            let provider_port = self.provider(provider)?;
+            let provider_port = self.initialized_provider(provider)?;
             provider_port.session_load(session_id.to_owned(), cwd.to_path_buf())?
         };
         self.loaded_provider_sessions.insert(key.clone());
@@ -665,7 +621,7 @@ where
         }
         let cwd = PathBuf::from(&key.cwd);
         let result = {
-            let provider_port = self.provider(key.provider)?;
+            let provider_port = self.initialized_provider(key.provider)?;
             provider_port.session_load(key.session_id.clone(), cwd)
         };
         let result = result?;
