@@ -186,7 +186,3 @@ pub(crate) fn value_contains_string(value: &Value, expected: &str) -> bool {
         Value::Null | Value::Bool(_) | Value::Number(_) => false,
     }
 }
-
-pub(crate) fn fixture_factory(root: &TempDir) -> TestResult<FixtureProviderFactory> {
-    Ok(FixtureProviderFactory::load(root.path())?)
-}
