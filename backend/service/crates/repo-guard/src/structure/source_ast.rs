@@ -8,7 +8,10 @@ use syn::{
 };
 
 const OUTPUT_FUNCTIONS: [&str; 2] = ["stderr", "stdout"];
-const OUTPUT_ALLOWED_FILES: [&str; 1] = ["backend/service/crates/service-bin/src/runtime.rs"];
+const OUTPUT_ALLOWED_FILES: [&str; 2] = [
+    "backend/service/crates/conduit-cli/src/main.rs",
+    "backend/service/crates/service-bin/src/runtime.rs",
+];
 
 pub(super) fn check_ast(relative: &str, syntax: &File, failures: &mut Vec<String>) {
     check_file_suppressions(relative, syntax, failures);

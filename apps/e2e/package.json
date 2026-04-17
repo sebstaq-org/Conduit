@@ -1,0 +1,15 @@
+{
+  "name": "@conduit/e2e",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "scripts": {
+    "test": "cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test",
+    "test:headed": "cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test --headed",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.59.1",
+    "typescript": "6.0.2"
+  }
+}

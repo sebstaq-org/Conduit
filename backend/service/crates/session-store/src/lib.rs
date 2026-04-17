@@ -14,10 +14,10 @@
 use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use ids::{history_cursor, open_session_id_for};
-use prompt_turn::prompt_turn_items;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
+use session_projection::{project_items, prompt_turn_items};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -26,26 +26,23 @@ use timeline_storage::{
     cursor_end, i64_from_usize, insert_items, insert_items_at, next_revision, replace_turn_items,
     usize_from_i64,
 };
-use transcript::project_items;
 
 mod history_limit;
 mod ids;
 mod open_session_state;
 mod project_suggestions;
 mod projects;
-mod prompt_turn;
 mod schema;
 mod session_index;
 mod settings;
 mod timeline_storage;
-mod transcript;
 
 pub use project_suggestions::ProjectSuggestion;
 pub use projects::{ProjectRow, project_id_for_cwd};
 use schema::{BOOTSTRAP_SCHEMA, MIGRATE_SCHEMA_5_TO_6, SCHEMA_VERSION};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
+pub use session_projection::{MessageRole, TranscriptItem, TranscriptItemStatus};
 pub use settings::GlobalSettings;
-pub use transcript::{MessageRole, TranscriptItem, TranscriptItemStatus};
 
 /// Result type for local store operations.
 pub type Result<T> = std::result::Result<T, Error>;

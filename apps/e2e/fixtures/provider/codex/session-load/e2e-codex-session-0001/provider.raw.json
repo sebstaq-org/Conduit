@@ -1,0 +1,42 @@
+{
+  "response": {
+    "configOptions": [],
+    "currentModeId": null,
+    "modes": {
+      "availableModes": [],
+      "currentModeId": null
+    },
+    "models": null
+  },
+  "loadedTranscript": {
+    "identity": {
+      "provider": "codex",
+      "acpSessionId": "e2e-codex-session-0001"
+    },
+    "rawUpdateCount": 2,
+    "updates": [
+      {
+        "index": 0,
+        "variant": "user_message_chunk",
+        "update": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Open the deterministic E2E fixture session."
+          }
+        }
+      },
+      {
+        "index": 1,
+        "variant": "agent_message_chunk",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT"
+          }
+        }
+      }
+    ]
+  }
+}

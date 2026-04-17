@@ -1,0 +1,10 @@
+{
+  "sessions": [
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-codex-session-0001",
+      "title": "Conduit E2E fixture session",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ]
+}

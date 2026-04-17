@@ -1,0 +1,58 @@
+{
+  "request": {
+    "clientCapabilities": {
+      "fs": {
+        "readTextFile": false,
+        "writeTextFile": false
+      },
+      "terminal": false
+    },
+    "clientInfo": {
+      "name": "conduit",
+      "title": "Conduit",
+      "version": "0.5.0"
+    },
+    "method": "initialize",
+    "protocolVersion": 1
+  },
+  "response": {
+    "agentCapabilities": {
+      "loadSession": true,
+      "mcpCapabilities": {
+        "http": true,
+        "sse": false
+      },
+      "promptCapabilities": {
+        "audio": false,
+        "embeddedContext": true,
+        "image": true
+      },
+      "sessionCapabilities": {
+        "list": {}
+      }
+    },
+    "agentInfo": {
+      "name": "codex-acp",
+      "title": "Codex",
+      "version": "0.11.1"
+    },
+    "authMethods": [
+      {
+        "description": "Use your ChatGPT login with Codex CLI (requires a paid ChatGPT subscription)",
+        "id": "chatgpt",
+        "name": "Login with ChatGPT"
+      },
+      {
+        "description": "Requires setting the `CODEX_API_KEY` environment variable.",
+        "id": "codex-api-key",
+        "name": "Use CODEX_API_KEY"
+      },
+      {
+        "description": "Requires setting the `OPENAI_API_KEY` environment variable.",
+        "id": "openai-api-key",
+        "name": "Use OPENAI_API_KEY"
+      }
+    ],
+    "protocolVersion": 1
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Removed absolute local capture output path; raw ACP initialize request/response preserved.",
+  "manualCapture": true,
+  "operation": "initialize",
+  "provider": "codex",
+  "sourceCapture": "conduit-artifacts/manual/captures/codex/initialize/2026-04-17T224602.802320677Z",
+  "timestamp": "2026-04-17T22:46:02.802320677Z"
+}

@@ -36,6 +36,7 @@
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
     "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p acp-contracts --test protocol_captures && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test golden_testdata && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test plan_mode_pr195_canonical",
     "docs:check": "vitest run scripts/docs-guardrails.test.ts",
+    "e2e": "pnpm --filter @conduit/e2e run test",
     "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "protocol:generate": "cargo run --quiet --manifest-path backend/service/Cargo.toml -p app-protocol-export -- generate",
     "protocol:check": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p app-protocol-export -- check",

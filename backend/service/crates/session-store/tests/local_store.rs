@@ -4,6 +4,7 @@ use acp_core::TranscriptUpdateSnapshot;
 use acp_discovery::ProviderId;
 use serde as _;
 use serde_json::{Value, json};
+use session_projection as _;
 use session_store::{
     HistoryLimit, LocalStore, OpenSessionKey, PromptTurnReplace, SessionIndexEntry,
     TranscriptItemStatus, project_id_for_cwd,
