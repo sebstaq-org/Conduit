@@ -78,10 +78,7 @@ fn codex_pr195_canonical_index_is_decision_complete() -> TestResult<()> {
     assert_required_rows(&index)?;
     let missing_rows = validate_row_shapes(&index)?;
 
-    let expected_missing: BTreeSet<&str> = BTreeSet::from([
-        "typed_terminal_plan_signal",
-        "explicit_implement_plan_action",
-    ]);
+    let expected_missing: BTreeSet<&str> = BTreeSet::from(["explicit_implement_plan_action"]);
     if missing_rows != expected_missing {
         return Err(format!(
             "unexpected missing rows: expected {:?}, got {:?}",

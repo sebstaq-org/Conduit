@@ -10,6 +10,7 @@ import { activePlanInteractionCard } from "./plan-interaction-projection";
 import {
   interactionRequestItem,
   interactionResolutionItem,
+  terminalPlanItem,
   transcriptMessage,
 } from "./plan-interaction-dev-wire";
 
@@ -43,14 +44,19 @@ function historyItemsAfterAgentSteps(
   let nextState = state;
   let step = scenario.steps[nextState.stepIndex] ?? null;
   while (step?.kind === "agent_plan") {
+    const message = transcriptMessage({
+      items: nextState.historyItems,
+      role: "agent",
+      text: step.markdown,
+    });
     nextState = {
       collaborationMode: nextState.collaborationMode,
       historyItems: [
         ...nextState.historyItems,
-        transcriptMessage({
-          items: nextState.historyItems,
-          role: "agent",
-          text: step.markdown,
+        message,
+        terminalPlanItem({
+          items: [...nextState.historyItems, message],
+          markdown: step.markdown,
         }),
       ],
       lastResolution: nextState.lastResolution,
@@ -70,14 +76,19 @@ function nextStateAfterSingleAgentPlan(
   if (step?.kind !== "agent_plan") {
     return null;
   }
+  const message = transcriptMessage({
+    items: state.historyItems,
+    role: "agent",
+    text: step.markdown,
+  });
   return {
     collaborationMode: state.collaborationMode,
     historyItems: [
       ...state.historyItems,
-      transcriptMessage({
-        items: state.historyItems,
-        role: "agent",
-        text: step.markdown,
+      message,
+      terminalPlanItem({
+        items: [...state.historyItems, message],
+        markdown: step.markdown,
       }),
     ],
     lastResolution: state.lastResolution,

@@ -19,7 +19,7 @@ directory. This table is the human-readable view of the same row ids.
 | `invalid_option_behavior`                        | `verified` | `RUN_PRB_CONDUIT_LIVE_C` | Invalid option is provider-driven: command ok, prompt outcome cancelled.            |
 | `continuation_after_plan_and_session_load`       | `verified` | `RUN_DIRECT`             | Continuation after `session/load` works with same session id.                       |
 | `prompt_lane_supports_mid_turn_answers`          | `verified` | `RUN_PRB_CONDUIT_LIVE_C` | Mid-turn out-of-band answer lane is verified in Conduit live chain.                 |
-| `typed_terminal_plan_signal`                     | `missing`  | `RUN_DIRECT`             | No typed plan terminal signal in wire; use product rule for completion.             |
+| `typed_terminal_plan_signal`                     | `verified` | `RUN_TERMINAL_PLAN_META` | Patched adapter preserves Codex `TurnItem::Plan` as `_meta.codex.terminalPlan`.     |
 | `explicit_implement_plan_action`                 | `missing`  | `RUN_PRB_CONDUIT_LIVE_C` | No explicit implement-plan action in observed command surfaces.                     |
 
 ## Codex A-Gate verdict

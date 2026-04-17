@@ -77,12 +77,10 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
     {
       kind: "agent_plan",
       markdown: [
-        "<proposed_plan>",
         "## Proposed plan",
         "1. Starta med en liten vardagsrutin.",
         "2. Bryt arbetet i tre konkreta steg.",
         "3. Avsluta med en enkel kontroll.",
-        "</proposed_plan>",
       ].join("\n"),
     },
     {
@@ -113,12 +111,10 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
     {
       kind: "agent_plan",
       markdown: [
-        "<proposed_plan>",
         "## Proposed plan",
         "1. Håll planen smal.",
         "2. Byt ut det användaren ville ändra.",
         "3. Implementera när användaren väljer det.",
-        "</proposed_plan>",
       ].join("\n"),
     },
   ],

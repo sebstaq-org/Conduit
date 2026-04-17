@@ -3,12 +3,12 @@ import {
   ANSWER_OTHER_OPTION_ID,
   CANCEL_OPTION_ID,
   IMPLEMENT_PLAN_OPTION_ID,
-  PROPOSED_PLAN_TAG,
 } from "./plan-interaction-types";
 import type {
   BackendInteractionOption,
   BackendInteractionRequestData,
   BackendInteractionResolutionData,
+  BackendTerminalPlanData,
   PlanInteractionCard,
   PlanInteractionOption,
 } from "./plan-interaction-types";
@@ -42,6 +42,19 @@ function isInteractionResolutionData(
   );
 }
 
+function isTerminalPlanData(value: unknown): value is BackendTerminalPlanData {
+  return (
+    isRecord(value) &&
+    value.sessionUpdate === "terminal_plan" &&
+    typeof value.interactionId === "string" &&
+    typeof value.itemId === "string" &&
+    typeof value.planText === "string" &&
+    typeof value.providerSource === "string" &&
+    value.source === "codex.terminalPlan" &&
+    value.status === "pending"
+  );
+}
+
 function interactionRequestData(
   item: TranscriptItem,
 ): BackendInteractionRequestData | null {
@@ -61,6 +74,18 @@ function interactionResolutionData(
     return null;
   }
   if (!isInteractionResolutionData(item.data)) {
+    return null;
+  }
+  return item.data;
+}
+
+function terminalPlanData(
+  item: TranscriptItem,
+): BackendTerminalPlanData | null {
+  if (item.kind !== "event" || item.variant !== "terminal_plan") {
+    return null;
+  }
+  if (!isTerminalPlanData(item.data)) {
     return null;
   }
   return item.data;
@@ -144,34 +169,17 @@ function latestPendingQuestionCard(
   return null;
 }
 
-function blockText(block: unknown): string {
-  if (isRecord(block) && typeof block.text === "string") {
-    return block.text;
-  }
-  return "";
-}
-
-function messageText(item: TranscriptItem): string {
-  if (item.kind !== "message") {
-    return "";
-  }
-  return item.content.map(blockText).join("");
-}
-
-function latestUnansweredProposedPlan(
+function latestUnansweredTerminalPlan(
   items: TranscriptItem[],
-): TranscriptItem | null {
+): BackendTerminalPlanData | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index];
     if (item.kind === "message" && item.role === "user") {
       return null;
     }
-    if (
-      item.kind === "message" &&
-      item.role === "agent" &&
-      messageText(item).includes(PROPOSED_PLAN_TAG)
-    ) {
-      return item;
+    const plan = terminalPlanData(item);
+    if (plan !== null) {
+      return plan;
     }
   }
   return null;
@@ -180,12 +188,12 @@ function latestUnansweredProposedPlan(
 function terminalPlanCardFor(
   items: TranscriptItem[],
 ): PlanInteractionCard | null {
-  const planItem = latestUnansweredProposedPlan(items);
-  if (planItem === null) {
+  const plan = latestUnansweredTerminalPlan(items);
+  if (plan === null) {
     return null;
   }
   return {
-    interactionId: `terminal-plan:${planItem.id}`,
+    interactionId: plan.interactionId,
     kind: "terminal_decision",
     options: [
       {
@@ -253,4 +261,5 @@ export {
   interactionRequestData,
   interactionResolutionData,
   selectedPlanInteractionOption,
+  terminalPlanData,
 };

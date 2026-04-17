@@ -6,7 +6,8 @@
     "RUN_EDGECASES_FINAL",
     "RUN_PRB_CONDUIT_LIVE_C",
     "RUN_INTERACTIONS_ATTEMPT",
-    "RUN_CONDUIT"
+    "RUN_CONDUIT",
+    "RUN_TERMINAL_PLAN_META"
   ],
   "rows": [
     {
@@ -312,28 +313,28 @@
     },
     {
       "row_id": "typed_terminal_plan_signal",
-      "status": "missing",
+      "status": "verified",
       "sources": [
         {
-          "run_id": "RUN_DIRECT",
-          "artifact": "fixtures/terminal-and-absence.json",
-          "command": "absence_proofs.typed_terminal_plan_signal.command"
+          "run_id": "RUN_TERMINAL_PLAN_META",
+          "artifact": "fixtures/terminal-plan-meta.json",
+          "command": "rtk jq -s '{terminalPlanCount:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.content._meta.codex.terminalPlan)] | length)}' raw-frames.jsonl"
         }
       ],
       "evidence_excerpt": {
-        "promptTerminal": "stopReason=end_turn|cancelled",
-        "typedPlanSignalFound": false
+        "method": "session/update",
+        "sessionUpdate": "agent_message_chunk",
+        "meta_path": "content._meta.codex.terminalPlan",
+        "providerSource": "TurnItem::Plan",
+        "textMatchesContent": true
       },
-      "normalized_evidence": null,
-      "gap": "No plan-specific typed terminal signal in observed Codex ACP wire.",
-      "decision": "Plan completion must be inferred by product rule, not provider typed event.",
-      "proof_of_absence": {
-        "command": "rtk jq -s '{planUpdateCount:([.[] | select(.direction==\"incoming\" and .frame.method==\"session/update\" and .frame.params.update.sessionUpdate==\"plan\")] | length),turnItemPlanTokenCount:([.[] | select((.frame|tostring)|contains(\"TurnItem::Plan\"))] | length)}' RUN_DIRECT/raw-frames.jsonl",
-        "observed_result": {
-          "planUpdateCount": 0,
-          "turnItemPlanTokenCount": 0
-        }
-      }
+      "normalized_evidence": {
+        "expected_variant": "terminal_plan",
+        "expected_sessionUpdate": "terminal_plan",
+        "artifact": "fixtures/terminal-plan-meta.json#/expected_normalized_event"
+      },
+      "gap": "Conduit runtime previously flattened this to agent markdown only; PR implementation must preserve it as terminal_plan.",
+      "decision": "Normalize _meta.codex.terminalPlan into a terminal_plan transcript/timeline event and drive the composer terminal card from that event."
     },
     {
       "row_id": "explicit_implement_plan_action",

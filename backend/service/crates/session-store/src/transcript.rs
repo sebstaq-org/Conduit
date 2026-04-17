@@ -2,7 +2,7 @@
 
 use acp_core::TranscriptUpdateSnapshot;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 /// One projected transcript item for UI consumption.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +83,7 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
         match text_role(&update) {
             Some((role, content)) => {
                 append_content_item(&mut items, update.index, role, content);
+                append_terminal_plan_event(&mut items, None, None, None, &update);
             }
             None => items.push(TranscriptItem::Event {
                 id: format!("transcript-update-{}", update.index),
@@ -120,6 +121,13 @@ pub(crate) fn project_prompt_turn_items(
                         status,
                         stop_reason,
                     },
+                );
+                append_terminal_plan_event(
+                    &mut items,
+                    Some(turn_id),
+                    Some(status),
+                    stop_reason,
+                    &update,
                 );
             }
             None => items.push(TranscriptItem::Event {
@@ -205,4 +213,239 @@ fn text_role(update: &TranscriptUpdateSnapshot) -> Option<(MessageRole, Value)> 
     };
     let content = update.update.get("content")?.clone();
     Some((role, content))
+}
+
+fn append_terminal_plan_event(
+    items: &mut Vec<TranscriptItem>,
+    turn_id: Option<&str>,
+    status: Option<TranscriptItemStatus>,
+    stop_reason: Option<&str>,
+    update: &TranscriptUpdateSnapshot,
+) {
+    let Some(data) = terminal_plan_data(update) else {
+        return;
+    };
+    let id_prefix = turn_id.unwrap_or("transcript");
+    items.push(TranscriptItem::Event {
+        id: format!("{id_prefix}-update-{}-terminal-plan", update.index),
+        turn_id: turn_id.map(ToOwned::to_owned),
+        status,
+        stop_reason: stop_reason.map(ToOwned::to_owned),
+        variant: "terminal_plan".to_owned(),
+        data,
+    });
+}
+
+fn terminal_plan_data(update: &TranscriptUpdateSnapshot) -> Option<Value> {
+    let plan = update.update.pointer("/_meta/codex/terminalPlan")?;
+    let item_id = plan.get("itemId").and_then(Value::as_str)?;
+    let plan_text = plan.get("text").and_then(Value::as_str)?;
+    let provider_source = plan.get("source").and_then(Value::as_str)?;
+    if provider_source != "TurnItem::Plan" {
+        return None;
+    }
+    if update
+        .update
+        .pointer("/content/text")
+        .and_then(Value::as_str)?
+        != plan_text
+    {
+        return None;
+    }
+    let mut data = Map::new();
+    data.insert(
+        "sessionUpdate".to_owned(),
+        Value::String("terminal_plan".to_owned()),
+    );
+    data.insert(
+        "interactionId".to_owned(),
+        Value::String(format!("terminal-plan:{item_id}")),
+    );
+    data.insert(
+        "source".to_owned(),
+        Value::String("codex.terminalPlan".to_owned()),
+    );
+    data.insert(
+        "providerSource".to_owned(),
+        Value::String(provider_source.to_owned()),
+    );
+    data.insert("itemId".to_owned(), Value::String(item_id.to_owned()));
+    data.insert("planText".to_owned(), Value::String(plan_text.to_owned()));
+    data.insert("status".to_owned(), Value::String("pending".to_owned()));
+    if let Some(codex_turn_id) = plan.get("turnId").and_then(Value::as_str) {
+        data.insert(
+            "codexTurnId".to_owned(),
+            Value::String(codex_turn_id.to_owned()),
+        );
+    }
+    if let Some(thread_id) = plan.get("threadId").and_then(Value::as_str) {
+        data.insert("threadId".to_owned(), Value::String(thread_id.to_owned()));
+    }
+    Some(Value::Object(data))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MessageRole, TranscriptItem, TranscriptItemStatus, project_prompt_turn_items};
+    use acp_core::TranscriptUpdateSnapshot;
+    use serde_json::{Value, json};
+    use std::error::Error;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    #[test]
+    fn terminal_plan_meta_projects_agent_message_and_terminal_plan_event() -> TestResult {
+        let items = project_prompt_turn_items(
+            "turn-1",
+            &[terminal_plan_update()],
+            TranscriptItemStatus::Complete,
+            Some("end_turn"),
+        );
+
+        ensure_eq(&items.len(), &2usize, "terminal plan item count")?;
+        assert_agent_message(&items[0])?;
+        assert_terminal_plan_event(&items[1])
+    }
+
+    #[test]
+    fn plain_agent_message_chunk_does_not_create_terminal_plan_event() {
+        let items = project_prompt_turn_items(
+            "turn-1",
+            &[TranscriptUpdateSnapshot {
+                index: 0,
+                variant: "agent_message_chunk".to_owned(),
+                update: json!({
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": {
+                        "type": "text",
+                        "text": "normal markdown"
+                    }
+                }),
+            }],
+            TranscriptItemStatus::Complete,
+            None,
+        );
+
+        assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn terminal_plan_meta_requires_turn_item_plan_source() {
+        let items = project_prompt_turn_items(
+            "turn-1",
+            &[terminal_plan_update_with(json!({
+                "source": "AgentMessage::FinalAnswer",
+                "text": "# Plan\n",
+                "itemId": "item-plan",
+                "turnId": "codex-turn",
+                "threadId": "codex-thread"
+            }))],
+            TranscriptItemStatus::Complete,
+            None,
+        );
+
+        assert_eq!(items.len(), 1);
+    }
+
+    #[test]
+    fn terminal_plan_meta_requires_visible_text_match() {
+        let items = project_prompt_turn_items(
+            "turn-1",
+            &[terminal_plan_update_with(json!({
+                "source": "TurnItem::Plan",
+                "text": "# Different Plan\n",
+                "itemId": "item-plan",
+                "turnId": "codex-turn",
+                "threadId": "codex-thread"
+            }))],
+            TranscriptItemStatus::Complete,
+            None,
+        );
+
+        assert_eq!(items.len(), 1);
+    }
+
+    fn ensure_eq<T>(actual: &T, expected: &T, label: &str) -> TestResult
+    where
+        T: std::fmt::Debug + PartialEq,
+    {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("{label}: expected {expected:?}, got {actual:?}").into())
+    }
+
+    fn terminal_plan_update() -> TranscriptUpdateSnapshot {
+        terminal_plan_update_with(json!({
+            "source": "TurnItem::Plan",
+            "text": "# Plan\n",
+            "itemId": "item-plan",
+            "turnId": "codex-turn",
+            "threadId": "codex-thread"
+        }))
+    }
+
+    fn terminal_plan_update_with(plan: Value) -> TranscriptUpdateSnapshot {
+        TranscriptUpdateSnapshot {
+            index: 0,
+            variant: "agent_message_chunk".to_owned(),
+            update: json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": "# Plan\n" },
+                "_meta": {
+                    "codex": {
+                        "terminalPlan": plan
+                    }
+                }
+            }),
+        }
+    }
+
+    fn assert_agent_message(item: &TranscriptItem) -> TestResult {
+        let TranscriptItem::Message { content, role, .. } = item else {
+            return Err(format!("expected message item, got {item:?}").into());
+        };
+        ensure_eq(role, &MessageRole::Agent, "message role")?;
+        ensure_eq(
+            &content[0].get("text").and_then(Value::as_str),
+            &Some("# Plan\n"),
+            "message text",
+        )?;
+        Ok(())
+    }
+
+    fn assert_terminal_plan_event(item: &TranscriptItem) -> TestResult {
+        let TranscriptItem::Event {
+            variant,
+            data,
+            status,
+            stop_reason,
+            ..
+        } = item
+        else {
+            return Err(format!("expected terminal_plan event, got {item:?}").into());
+        };
+        ensure_eq(variant, &"terminal_plan".to_owned(), "event variant")?;
+        ensure_eq(
+            status,
+            &Some(TranscriptItemStatus::Complete),
+            "event status",
+        )?;
+        ensure_eq(&stop_reason.as_deref(), &Some("end_turn"), "stop reason")?;
+        ensure_str(data, "sessionUpdate", "terminal_plan")?;
+        ensure_str(data, "interactionId", "terminal-plan:item-plan")?;
+        ensure_str(data, "providerSource", "TurnItem::Plan")?;
+        ensure_str(data, "planText", "# Plan\n")?;
+        ensure_str(data, "codexTurnId", "codex-turn")?;
+        ensure_str(data, "threadId", "codex-thread")?;
+        Ok(())
+    }
+
+    fn ensure_str(data: &Value, field: &str, expected: &str) -> TestResult {
+        ensure_eq(
+            &data.get(field).and_then(Value::as_str),
+            &Some(expected),
+            field,
+        )
+    }
 }

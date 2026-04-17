@@ -153,13 +153,15 @@ function usePlanInteractionFixturePort(): PlanInteractionRuntimePort {
     history: fixtureHistory({ enabled, state }),
     lastResolution: state.lastResolution,
     openSessionId,
-    promptSession: (text): void => {
+    promptSession: async (text): Promise<void> => {
       setState((current) => promptPlanInteractionFixture(current, text));
+      await Promise.resolve();
     },
-    respondInteraction: (request): void => {
+    respondInteraction: async (request): Promise<void> => {
       setState((current) => respondPlanInteractionFixture(current, request));
+      await Promise.resolve();
     },
-    setCollaborationMode: (value: CollaborationMode): void => {
+    setCollaborationMode: async (value: CollaborationMode): Promise<void> => {
       setState((current) => ({
         collaborationMode: value,
         historyItems: current.historyItems,
@@ -167,6 +169,7 @@ function usePlanInteractionFixturePort(): PlanInteractionRuntimePort {
         scenarioId: current.scenarioId,
         stepIndex: current.stepIndex,
       }));
+      await Promise.resolve();
     },
   };
 }
@@ -202,28 +205,32 @@ function createLivePort(args: {
     history: args.timeline.history ?? null,
     lastResolution: latestResolutionStatus(args.timeline.history),
     openSessionId: args.openSessionId,
-    promptSession: (text): void => {
+    promptSession: async (text): Promise<void> => {
       if (args.openSessionId === null) {
         return;
       }
-      void args.commands.promptSession({
-        openSessionId: args.openSessionId,
-        prompt: [{ text, type: "text" }],
-      });
+      await args.commands
+        .promptSession({
+          openSessionId: args.openSessionId,
+          prompt: [{ text, type: "text" }],
+        })
+        .unwrap();
     },
-    respondInteraction: (request): void => {
-      void args.commands.respondInteraction(request);
+    respondInteraction: async (request): Promise<void> => {
+      await args.commands.respondInteraction(request).unwrap();
     },
-    setCollaborationMode: (value: CollaborationMode): void => {
+    setCollaborationMode: async (value: CollaborationMode): Promise<void> => {
       if (!args.enabled || args.activeSession?.kind !== "open") {
         return;
       }
-      void args.commands.setSessionConfigOption({
-        configId: COLLABORATION_MODE_CONFIG_ID,
-        provider: args.activeSession.provider,
-        sessionId: args.activeSession.sessionId,
-        value,
-      });
+      await args.commands
+        .setSessionConfigOption({
+          configId: COLLABORATION_MODE_CONFIG_ID,
+          provider: args.activeSession.provider,
+          sessionId: args.activeSession.sessionId,
+          value,
+        })
+        .unwrap();
     },
   };
 }
