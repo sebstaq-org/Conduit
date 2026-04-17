@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import {
   AcpSessionUpdateSchema,
   AcpToolCallUpdateSchema,
+  ConduitServerFrameSchema,
+  ConduitSessionOpenResultSchema,
 } from "../packages/app-protocol/src/index.js";
 import type { AcpSessionUpdate } from "../packages/app-protocol/src/index.js";
 
@@ -20,6 +22,7 @@ if (!isRecord(parsedFixtures)) {
 }
 
 const appProtocolFixtures = parsedFixtures;
+const protocolVersionField = "v";
 
 const malformedConfigOptionUpdate = {
   sessionUpdate: "config_option_update",
@@ -87,4 +90,33 @@ describe("generated app protocol contracts", () => {
       AcpSessionUpdateSchema.parse(malformedEmbeddedResourceUpdate),
     ).toThrow();
   });
+});
+
+it("rejects extra fields on generated Conduit wire contracts", () => {
+  expect(() =>
+    ConduitServerFrameSchema.parse({
+      [protocolVersionField]: 1,
+      type: "event",
+      event: {
+        kind: "sessions_index_changed",
+        revision: 4,
+      },
+      unexpected: true,
+    }),
+  ).toThrow();
+
+  expect(() =>
+    ConduitSessionOpenResultSchema.parse({
+      sessionId: "session-1",
+      configOptions: null,
+      modes: null,
+      models: null,
+      currentModeId: null,
+      openSessionId: "open-1",
+      revision: 9,
+      items: [],
+      nextCursor: null,
+      unexpected: true,
+    }),
+  ).toThrow();
 });

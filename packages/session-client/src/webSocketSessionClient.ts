@@ -57,15 +57,33 @@ import type {
   SessionsIndexChanged,
 } from "./timelineEvent.js";
 
+interface TimelineSubscription {
+  handler: (event: SessionTimelineChanged) => void;
+  openSessionId: string;
+}
+
+interface SessionIndexSubscription {
+  handler: (event: SessionsIndexChanged) => void;
+}
+
+function confirmGeneratedSubscription(
+  result: unknown,
+  cleanup: () => void,
+  parse: (result: unknown) => unknown,
+): void {
+  try {
+    parse(result);
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
-  private readonly timelineSubscriptions = new Set<{
-    openSessionId: string;
-    handler: (event: SessionTimelineChanged) => void;
-  }>();
-  private readonly sessionIndexSubscriptions = new Set<{
-    handler: (event: SessionsIndexChanged) => void;
-  }>();
+  private readonly timelineSubscriptions = new Set<TimelineSubscription>();
+  private readonly sessionIndexSubscriptions =
+    new Set<SessionIndexSubscription>();
   private readonly transport: WebSocketTransport;
   public constructor(options: SessionClientOptions = {}) {
     this.transport = new WebSocketTransport(options, (event) => {
@@ -212,7 +230,13 @@ class WebSocketSessionClient implements SessionClientPort {
       this.timelineSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
-    ConduitSessionWatchResultSchema.parse(response.result);
+    confirmGeneratedSubscription(
+      response.result,
+      () => {
+        this.timelineSubscriptions.delete(subscription);
+      },
+      (result) => ConduitSessionWatchResultSchema.parse(result),
+    );
     return () => {
       this.timelineSubscriptions.delete(subscription);
     };
@@ -229,7 +253,13 @@ class WebSocketSessionClient implements SessionClientPort {
       this.sessionIndexSubscriptions.delete(subscription);
       throw new Error(response.error?.message ?? "event subscription failed");
     }
-    ConduitSessionsWatchResultSchema.parse(response.result);
+    confirmGeneratedSubscription(
+      response.result,
+      () => {
+        this.sessionIndexSubscriptions.delete(subscription);
+      },
+      (result) => ConduitSessionsWatchResultSchema.parse(result),
+    );
     return () => {
       this.sessionIndexSubscriptions.delete(subscription);
     };
@@ -261,4 +291,5 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
-export { WebSocketSessionClient };
+
+export { WebSocketSessionClient, confirmGeneratedSubscription };

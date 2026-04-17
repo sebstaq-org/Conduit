@@ -50,6 +50,7 @@ fn generated_contracts_keep_structured_ui_fields() -> Result<(), Box<dyn Error>>
     ensure_missing(&output, "resource: z.unknown()")?;
     ensure_contains(&output, "const ConduitServerFrameSchema")?;
     ensure_contains(&output, "v: z.literal(1)")?;
+    ensure_contains(&output, "}).strict()")?;
     ensure_contains(&output, "items: z.array(ConduitTranscriptItemSchema)")?;
     ensure_contains(
         &output,
