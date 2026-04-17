@@ -6,7 +6,7 @@ use acp_discovery::ProviderId;
 use app_api::AppService;
 use serde::Serialize;
 use serde_json::{Value, json};
-use std::fs::{File, create_dir, create_dir_all};
+use std::fs::{File, create_dir, create_dir_all, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
@@ -118,6 +118,10 @@ fn capture_provider(
         CaptureOperation::Load { session_id } => {
             capture_session_load(service, session_id, cwd, ledger)
         }
+        CaptureOperation::Prompt {
+            session_id,
+            prompt_path,
+        } => capture_session_prompt(service, session_id.as_deref(), prompt_path, cwd, ledger),
     }
 }
 
@@ -177,6 +181,71 @@ fn capture_session_load(
     }
 }
 
+fn capture_session_prompt(
+    service: &mut AppService,
+    session_id: Option<&str>,
+    prompt_path: &Path,
+    cwd: &Path,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    let prompt = read_prompt_blocks(prompt_path)?;
+    let (session_new, resolved_session_id) = match session_id {
+        Some(session_id) => (Value::Null, session_id.to_owned()),
+        None => {
+            let response = capture_session_new(service, cwd, ledger)?;
+            let session_id = extract_session_id(&response)?;
+            (response, session_id)
+        }
+    };
+
+    let mut prompt_updates = Vec::new();
+    ledger.push("provider.session_prompt.start", true)?;
+    match service.prompt_content_blocks(&resolved_session_id, prompt.clone(), &mut |update| {
+        prompt_updates.push(update);
+    }) {
+        Ok(response) => {
+            ledger.push("provider.session_prompt.finish", true)?;
+            Ok(json!({
+                "sessionNew": session_new,
+                "promptRequest": {
+                    "sessionId": resolved_session_id,
+                    "prompt": prompt,
+                },
+                "promptResponse": response,
+                "promptUpdates": prompt_updates,
+            }))
+        }
+        Err(error) => {
+            ledger.push("provider.session_prompt.finish", false)?;
+            Err(error.into())
+        }
+    }
+}
+
+fn read_prompt_blocks(path: &Path) -> Result<Vec<Value>> {
+    let body =
+        read_to_string(path).map_err(|source| CliError::io(Some(path.to_path_buf()), source))?;
+    let value: Value = serde_json::from_str(&body)?;
+    match value {
+        Value::Array(blocks) => Ok(blocks),
+        _ => Err(CliError::invalid_command(
+            "session/prompt prompt file must contain a ContentBlock array",
+        )),
+    }
+}
+
+fn extract_session_id(value: &Value) -> Result<String> {
+    value
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/new response must contain a sessionId string",
+            )
+        })
+}
+
 fn loaded_transcript_value(
     snapshot: &acp_core::ProviderSnapshot,
     session_id: &str,
@@ -222,7 +291,10 @@ fn create_output_dir(output: &Path) -> Result<()> {
 }
 
 fn create_capture_cwd(operation: &CaptureOperation, cwd: &Path) -> Result<()> {
-    if matches!(operation, CaptureOperation::New) {
+    if matches!(
+        operation,
+        CaptureOperation::New | CaptureOperation::Prompt { .. }
+    ) {
         create_dir_all(cwd).map_err(|source| CliError::io(Some(cwd.to_path_buf()), source))?;
     }
     Ok(())
@@ -253,6 +325,7 @@ fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
         CaptureOperation::New => validate_session_new(value),
         CaptureOperation::List => validate_session_list(value),
         CaptureOperation::Load { .. } => validate_session_load(value),
+        CaptureOperation::Prompt { .. } => validate_session_prompt(value),
     }
 }
 
@@ -301,11 +374,52 @@ fn validate_session_load(value: &Value) -> Result<()> {
     ))
 }
 
+fn validate_session_prompt(value: &Value) -> Result<()> {
+    if value
+        .pointer("/promptRequest/sessionId")
+        .and_then(Value::as_str)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider session/prompt capture must contain promptRequest.sessionId string",
+        ));
+    }
+    if value
+        .pointer("/promptRequest/prompt")
+        .and_then(Value::as_array)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider session/prompt capture must contain promptRequest.prompt array",
+        ));
+    }
+    if value
+        .pointer("/promptResponse/stopReason")
+        .and_then(Value::as_str)
+        .is_none()
+    {
+        return Err(CliError::invalid_capture(
+            "provider session/prompt capture must contain promptResponse.stopReason string",
+        ));
+    }
+    if value
+        .get("promptUpdates")
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return Ok(());
+    }
+    Err(CliError::invalid_capture(
+        "provider session/prompt capture must contain promptUpdates array",
+    ))
+}
+
 fn operation_name(operation: &CaptureOperation) -> &'static str {
     match operation {
         CaptureOperation::New => "session/new",
         CaptureOperation::List => "session/list",
         CaptureOperation::Load { .. } => "session/load",
+        CaptureOperation::Prompt { .. } => "session/prompt",
     }
 }
 
@@ -314,6 +428,7 @@ fn operation_slug(operation: &CaptureOperation) -> &'static str {
         CaptureOperation::New => "session-new",
         CaptureOperation::List => "session-list",
         CaptureOperation::Load { .. } => "session-load",
+        CaptureOperation::Prompt { .. } => "session-prompt",
     }
 }
 
@@ -321,6 +436,7 @@ fn session_id(operation: &CaptureOperation) -> Option<String> {
     match operation {
         CaptureOperation::New | CaptureOperation::List => None,
         CaptureOperation::Load { session_id } => Some(session_id.clone()),
+        CaptureOperation::Prompt { session_id, .. } => session_id.clone(),
     }
 }
 
@@ -381,11 +497,11 @@ impl Ledger {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_output_dir, validate_session_list, validate_session_load, validate_session_new,
-        write_json,
+        create_output_dir, read_prompt_blocks, validate_session_list, validate_session_load,
+        validate_session_new, validate_session_prompt, write_json,
     };
     use serde_json::json;
-    use std::fs::{create_dir, read_to_string};
+    use std::fs::{create_dir, read_to_string, write};
     use tempfile::TempDir;
 
     #[test]
@@ -466,6 +582,88 @@ mod tests {
         .map(|error| error.to_string())
         .unwrap_or_default();
         assert!(error.contains("loadedTranscript.updates array"));
+    }
+
+    #[test]
+    fn accepts_session_prompt_with_prompt_request_response_and_updates() {
+        assert!(
+            validate_session_prompt(&json!({
+                "sessionNew": null,
+                "promptRequest": {
+                    "sessionId": "session-1",
+                    "prompt": [{ "type": "text", "text": "hello" }]
+                },
+                "promptResponse": { "stopReason": "end_turn" },
+                "promptUpdates": []
+            }))
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_session_prompt_without_prompt_request_session_id() {
+        let error = validate_session_prompt(&json!({
+            "promptRequest": { "prompt": [] },
+            "promptResponse": { "stopReason": "end_turn" },
+            "promptUpdates": []
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("promptRequest.sessionId string"));
+    }
+
+    #[test]
+    fn rejects_session_prompt_without_prompt_response_stop_reason() {
+        let error = validate_session_prompt(&json!({
+            "promptRequest": { "sessionId": "session-1", "prompt": [] },
+            "promptResponse": {},
+            "promptUpdates": []
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("promptResponse.stopReason string"));
+    }
+
+    #[test]
+    fn rejects_session_prompt_without_updates() {
+        let error = validate_session_prompt(&json!({
+            "promptRequest": { "sessionId": "session-1", "prompt": [] },
+            "promptResponse": { "stopReason": "end_turn" }
+        }))
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+        assert!(error.contains("promptUpdates array"));
+    }
+
+    #[test]
+    fn reads_prompt_content_block_array() -> Result<(), Box<dyn std::error::Error>> {
+        let tempdir = TempDir::new()?;
+        let path = tempdir.path().join("prompt.json");
+        write(&path, r#"[{"type":"text","text":"hello"}]"#)?;
+        let blocks = read_prompt_blocks(&path)?;
+        if blocks != vec![json!({ "type": "text", "text": "hello" })] {
+            return Err("prompt blocks did not parse".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_prompt_file_that_is_not_content_block_array()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let tempdir = TempDir::new()?;
+        let path = tempdir.path().join("prompt.json");
+        write(&path, r#"{"type":"text","text":"hello"}"#)?;
+        let error = read_prompt_blocks(&path)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        if !error.contains("ContentBlock array") {
+            return Err("expected ContentBlock array error".into());
+        }
+        Ok(())
     }
 
     #[test]
