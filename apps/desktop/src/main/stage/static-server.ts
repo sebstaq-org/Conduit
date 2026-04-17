@@ -229,9 +229,24 @@ function closeStaticServer(server: Server | null, onClosed: () => void): void {
     onClosed();
     return;
   }
-  server.close(() => {
+  let closed = false;
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  const finish = (): void => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    if (closeTimer !== null) {
+      clearTimeout(closeTimer);
+    }
     onClosed();
+  };
+  closeTimer = setTimeout(finish, 1000);
+  closeTimer.unref();
+  server.close(() => {
+    finish();
   });
+  server.closeAllConnections();
 }
 
 export { closeStaticServer, injectRuntimeConfig, startStaticServer };
