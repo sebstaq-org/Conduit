@@ -91,7 +91,12 @@ fn consumer_proof_is_not_a_product_command() -> TestResult<()> {
 #[test]
 fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     let args = strings(&["serve"]);
-    let Command::Serve { host, port } = parse_command(&args)? else {
+    let Command::Serve {
+        host,
+        port,
+        relay_endpoint,
+    } = parse_command(&args)?
+    else {
         return Err("expected serve command".into());
     };
     if host != "127.0.0.1" {
@@ -99,6 +104,45 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     }
     if port != 4174 {
         return Err(format!("unexpected port {port}").into());
+    }
+    if relay_endpoint.is_some() {
+        return Err("unexpected relay endpoint".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn pair_requires_relay_endpoint() -> TestResult<()> {
+    let args = strings(&["pair", "--json"]);
+    let error = parse_command(&args)
+        .err()
+        .ok_or("pair unexpectedly parsed")?;
+    if matches!(error, ServiceError::MissingRelayEndpoint) {
+        return Ok(());
+    }
+    Err(format!("unexpected error {error}").into())
+}
+
+#[test]
+fn pair_accepts_relay_endpoint() -> TestResult<()> {
+    let args = strings(&[
+        "pair",
+        "--json",
+        "--relay-endpoint",
+        "relay.example.test:443",
+    ]);
+    let Command::Pair {
+        relay_endpoint,
+        app_base_url,
+    } = parse_command(&args)?
+    else {
+        return Err("expected pair command".into());
+    };
+    if relay_endpoint != "relay.example.test:443" {
+        return Err(format!("unexpected relay endpoint {relay_endpoint}").into());
+    }
+    if app_base_url != "https://app.conduit.local" {
+        return Err(format!("unexpected app base url {app_base_url}").into());
     }
     Ok(())
 }

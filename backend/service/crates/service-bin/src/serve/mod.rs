@@ -5,6 +5,8 @@ mod client_logs;
 mod wire;
 
 use crate::error::Result;
+use crate::home::product_home;
+use crate::identity::{daemon_status_response, pairing_response};
 use crate::local_store::open_product_store;
 use actor::RuntimeActor;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -19,6 +21,7 @@ use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEve
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -33,6 +36,8 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 struct ServeState {
     actor: RuntimeActor,
     client_log_sink: client_logs::ClientLogSink,
+    product_home: PathBuf,
+    relay_endpoint: Option<String>,
 }
 
 const CATALOG_COMMANDS: [&str; 20] = [
@@ -64,31 +69,49 @@ const CATALOG_COMMANDS: [&str; 20] = [
 ///
 /// Returns an error when the TCP listener cannot bind or the server exits with
 /// an I/O failure.
-pub(crate) async fn run(host: &str, port: u16) -> Result<()> {
+pub(crate) async fn run(host: &str, port: u16, relay_endpoint: Option<String>) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
+    let product_home = product_home()?;
     axum::serve(
         listener,
-        router(open_product_store()?).into_make_service_with_connect_info::<SocketAddr>(),
+        router(open_product_store()?, product_home, relay_endpoint)
+            .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
 }
 
-fn router(local_store: LocalStore) -> Router {
-    router_with_actor(RuntimeActor::start(local_store))
+fn router(
+    local_store: LocalStore,
+    product_home: PathBuf,
+    relay_endpoint: Option<String>,
+) -> Router {
+    router_with_actor(
+        RuntimeActor::start(local_store),
+        product_home,
+        relay_endpoint,
+    )
 }
 
-fn router_with_actor(actor: RuntimeActor) -> Router {
+fn router_with_actor(
+    actor: RuntimeActor,
+    product_home: PathBuf,
+    relay_endpoint: Option<String>,
+) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
     Router::new()
         .route("/health", get(health))
         .route("/api/catalog", get(catalog))
+        .route("/api/daemon/status", get(daemon_status))
+        .route("/api/pairing", get(pairing))
         .route("/api/session", get(session_socket))
         .route("/api/client-log", post(client_log_ingest))
         .layer(CorsLayer::permissive())
         .with_state(Arc::new(ServeState {
             actor,
             client_log_sink,
+            product_home,
+            relay_endpoint,
         }))
 }
 
@@ -105,6 +128,51 @@ async fn catalog() -> Json<serde_json::Value> {
         "providers": ["claude", "copilot", "codex"],
         "commands": CATALOG_COMMANDS,
     }))
+}
+
+async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
+    match daemon_status_response(&state.product_home, state.relay_endpoint.clone()) {
+        Ok(status) => (StatusCode::OK, Json(json!(status))).into_response(),
+        Err(error) => {
+            tracing::warn!(
+                event_name = "daemon_status.failed",
+                source = "service-bin",
+                error = ?error
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": error.to_string() })),
+            )
+                .into_response()
+        }
+    }
+}
+
+async fn pairing(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
+    let Some(endpoint) = state.relay_endpoint.as_deref() else {
+        return (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "missing relay endpoint; set CONDUIT_RELAY_ENDPOINT"
+            })),
+        )
+            .into_response();
+    };
+    match pairing_response(&state.product_home, endpoint, "https://app.conduit.local") {
+        Ok(response) => (StatusCode::OK, Json(json!(response))).into_response(),
+        Err(error) => {
+            tracing::warn!(
+                event_name = "pairing.failed",
+                source = "service-bin",
+                error = ?error
+            );
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": error.to_string() })),
+            )
+                .into_response()
+        }
+    }
 }
 
 async fn session_socket(

@@ -1,7 +1,7 @@
 //! Product local-store path ownership for `service-bin`.
 
-use crate::error::{Result, ServiceError};
-use directories::ProjectDirs;
+use crate::error::Result;
+use crate::home::product_home;
 use session_store::LocalStore;
 use std::path::PathBuf;
 
@@ -16,8 +16,5 @@ pub(crate) fn open_product_store() -> Result<LocalStore> {
 }
 
 fn product_store_path() -> Result<PathBuf> {
-    let Some(project_dirs) = ProjectDirs::from("dev", "Conduit", "Conduit") else {
-        return Err(ServiceError::LocalStoreDataDirectory);
-    };
-    Ok(project_dirs.data_dir().join("local-store.sqlite3"))
+    Ok(product_home()?.join("local-store.sqlite3"))
 }
