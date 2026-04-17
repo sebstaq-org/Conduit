@@ -45,7 +45,37 @@ fn rejects_app_protocol_imports_from_frontend_feature_code() -> Result<()> {
 }
 
 #[test]
-fn accepts_app_protocol_imports_from_frontend_app_state() -> Result<()> {
+fn accepts_app_protocol_imports_from_frontend_protocol_adapter() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture.repo_root.join("apps/frontend/package.json"),
+        concat!(
+            "{\n",
+            "  \"name\": \"@conduit/frontend\",\n",
+            "  \"private\": true,\n",
+            "  \"version\": \"0.5.0\",\n",
+            "  \"dependencies\": {\n",
+            "    \"@conduit/app-protocol\": \"workspace:*\"\n",
+            "  }\n",
+            "}\n",
+        ),
+    )?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("apps/frontend/src/app-state/protocol/session-update.ts"),
+        "import type { AcpSessionUpdate } from '@conduit/app-protocol';\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure(
+        failures.is_empty(),
+        "expected frontend protocol adapter imports to pass",
+    )
+}
+
+#[test]
+fn rejects_app_protocol_imports_from_non_protocol_app_state() -> Result<()> {
     let fixture = fixture()?;
     write_file(
         &fixture.repo_root.join("apps/frontend/package.json"),
@@ -68,9 +98,9 @@ fn accepts_app_protocol_imports_from_frontend_app_state() -> Result<()> {
     )?;
 
     let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
-    ensure(
-        failures.is_empty(),
-        "expected frontend app-state protocol imports to pass",
+    ensure_contains(
+        &failures,
+        "apps/frontend/src/app-state/session/protocol.ts imports @conduit/app-protocol outside the client/adaptation boundary.",
     )
 }
 

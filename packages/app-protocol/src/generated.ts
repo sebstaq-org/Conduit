@@ -6,90 +6,173 @@ import { z } from "zod";
 const PROTOCOL_CONTRACT_VERSION = 1 as const;
 
 // prettier-ignore
-const AcpMetaSchema = z.record(z.string(), z.unknown());
+const AcpRoleSchema = z.union([z.literal("assistant"), z.literal("user")]);
 // prettier-ignore
-type AcpMeta = z.infer<typeof AcpMetaSchema>;
+type AcpRole = z.infer<typeof AcpRoleSchema>;
 
 // prettier-ignore
-const AcpTextContentSchema = z.object({
-  type: z.literal("text"),
-  annotations: z.unknown().optional().nullable(),
-  text: z.string(),
-  _meta: AcpMetaSchema.optional().nullable()
+const AcpAnnotationsSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  audience: z.union([z.array(AcpRoleSchema), z.null()]).optional(),
+  lastModified: z.union([z.string(), z.null()]).optional(),
+  priority: z.union([z.number(), z.null()]).optional()
 });
 // prettier-ignore
-type AcpTextContent = z.infer<typeof AcpTextContentSchema>;
-
-// prettier-ignore
-const AcpImageContentSchema = z.object({
-  type: z.literal("image"),
-  annotations: z.unknown().optional().nullable(),
-  data: z.string(),
-  mimeType: z.string(),
-  uri: z.string().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
-});
-// prettier-ignore
-type AcpImageContent = z.infer<typeof AcpImageContentSchema>;
+type AcpAnnotations = z.infer<typeof AcpAnnotationsSchema>;
 
 // prettier-ignore
 const AcpAudioContentSchema = z.object({
-  type: z.literal("audio"),
-  annotations: z.unknown().optional().nullable(),
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
   data: z.string(),
-  mimeType: z.string(),
-  _meta: AcpMetaSchema.optional().nullable()
+  mimeType: z.string()
 });
 // prettier-ignore
 type AcpAudioContent = z.infer<typeof AcpAudioContentSchema>;
 
 // prettier-ignore
-const AcpResourceLinkContentSchema = z.object({
-  type: z.literal("resource_link"),
-  annotations: z.unknown().optional().nullable(),
-  name: z.string(),
-  uri: z.string(),
-  description: z.string().optional().nullable(),
-  mimeType: z.string().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
+const AcpBlobResourceContentsSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  blob: z.string(),
+  mimeType: z.union([z.string(), z.null()]).optional(),
+  uri: z.string()
 });
 // prettier-ignore
-type AcpResourceLinkContent = z.infer<typeof AcpResourceLinkContentSchema>;
+type AcpBlobResourceContents = z.infer<typeof AcpBlobResourceContentsSchema>;
 
 // prettier-ignore
-const AcpEmbeddedResourceContentSchema = z.object({
-  type: z.literal("resource"),
-  annotations: z.unknown().optional().nullable(),
-  resource: z.unknown(),
-  _meta: AcpMetaSchema.optional().nullable()
+const AcpTextResourceContentsSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  mimeType: z.union([z.string(), z.null()]).optional(),
+  text: z.string(),
+  uri: z.string()
 });
 // prettier-ignore
-type AcpEmbeddedResourceContent = z.infer<typeof AcpEmbeddedResourceContentSchema>;
+type AcpTextResourceContents = z.infer<typeof AcpTextResourceContentsSchema>;
+
+// prettier-ignore
+const AcpEmbeddedResourceResourceSchema = z.union([AcpTextResourceContentsSchema, AcpBlobResourceContentsSchema]);
+// prettier-ignore
+type AcpEmbeddedResourceResource = z.infer<typeof AcpEmbeddedResourceResourceSchema>;
+
+// prettier-ignore
+const AcpEmbeddedResourceSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
+  resource: AcpEmbeddedResourceResourceSchema
+});
+// prettier-ignore
+type AcpEmbeddedResource = z.infer<typeof AcpEmbeddedResourceSchema>;
+
+// prettier-ignore
+const AcpImageContentSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
+  data: z.string(),
+  mimeType: z.string(),
+  uri: z.union([z.string(), z.null()]).optional()
+});
+// prettier-ignore
+type AcpImageContent = z.infer<typeof AcpImageContentSchema>;
+
+// prettier-ignore
+const AcpResourceLinkSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  mimeType: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  size: z.union([z.number().int(), z.null()]).optional(),
+  title: z.union([z.string(), z.null()]).optional(),
+  uri: z.string()
+});
+// prettier-ignore
+type AcpResourceLink = z.infer<typeof AcpResourceLinkSchema>;
+
+// prettier-ignore
+const AcpTextContentSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  annotations: z.union([AcpAnnotationsSchema, z.null()]).optional(),
+  text: z.string()
+});
+// prettier-ignore
+type AcpTextContent = z.infer<typeof AcpTextContentSchema>;
 
 // prettier-ignore
 const AcpContentBlockSchema = z.discriminatedUnion("type", [
-  AcpTextContentSchema,
-  AcpImageContentSchema,
-  AcpAudioContentSchema,
-  AcpResourceLinkContentSchema,
-  AcpEmbeddedResourceContentSchema
+  AcpTextContentSchema.extend({
+  type: z.literal("text")
+}),
+  AcpImageContentSchema.extend({
+  type: z.literal("image")
+}),
+  AcpAudioContentSchema.extend({
+  type: z.literal("audio")
+}),
+  AcpResourceLinkSchema.extend({
+  type: z.literal("resource_link")
+}),
+  AcpEmbeddedResourceSchema.extend({
+  type: z.literal("resource")
+})
 ]);
 // prettier-ignore
 type AcpContentBlock = z.infer<typeof AcpContentBlockSchema>;
 
 // prettier-ignore
-const AcpContentChunkSchema = z.object({
-  content: AcpContentBlockSchema,
-  messageId: z.string().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
+const AcpContentSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  content: AcpContentBlockSchema
 });
 // prettier-ignore
-type AcpContentChunk = z.infer<typeof AcpContentChunkSchema>;
+type AcpContent = z.infer<typeof AcpContentSchema>;
 
 // prettier-ignore
-const AcpToolKindSchema = z.union([z.literal("read"), z.literal("edit"), z.literal("delete"), z.literal("move"), z.literal("search"), z.literal("execute"), z.literal("think"), z.literal("fetch"), z.literal("switch_mode"), z.literal("other")]);
+const AcpDiffSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  newText: z.string(),
+  oldText: z.union([z.string(), z.null()]).optional(),
+  path: z.string()
+});
 // prettier-ignore
-type AcpToolKind = z.infer<typeof AcpToolKindSchema>;
+type AcpDiff = z.infer<typeof AcpDiffSchema>;
+
+// prettier-ignore
+const AcpTerminalSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  terminalId: z.string()
+});
+// prettier-ignore
+type AcpTerminal = z.infer<typeof AcpTerminalSchema>;
+
+// prettier-ignore
+const AcpToolCallContentSchema = z.discriminatedUnion("type", [
+  AcpContentSchema.extend({
+  type: z.literal("content")
+}),
+  AcpDiffSchema.extend({
+  type: z.literal("diff")
+}),
+  AcpTerminalSchema.extend({
+  type: z.literal("terminal")
+})
+]);
+// prettier-ignore
+type AcpToolCallContent = z.infer<typeof AcpToolCallContentSchema>;
+
+// prettier-ignore
+const AcpToolCallIdSchema = z.string();
+// prettier-ignore
+type AcpToolCallId = z.infer<typeof AcpToolCallIdSchema>;
+
+// prettier-ignore
+const AcpToolCallLocationSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  line: z.union([z.number().int().nonnegative(), z.null()]).optional(),
+  path: z.string()
+});
+// prettier-ignore
+type AcpToolCallLocation = z.infer<typeof AcpToolCallLocationSchema>;
 
 // prettier-ignore
 const AcpToolCallStatusSchema = z.union([z.literal("pending"), z.literal("in_progress"), z.literal("completed"), z.literal("failed")]);
@@ -97,63 +180,21 @@ const AcpToolCallStatusSchema = z.union([z.literal("pending"), z.literal("in_pro
 type AcpToolCallStatus = z.infer<typeof AcpToolCallStatusSchema>;
 
 // prettier-ignore
-const AcpToolCallContentSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("content"),
-    content: AcpContentBlockSchema,
-    _meta: AcpMetaSchema.optional().nullable()
-  }),
-  z.object({
-    type: z.literal("diff"),
-    path: z.string(),
-    oldText: z.string().optional().nullable(),
-    newText: z.string(),
-    _meta: AcpMetaSchema.optional().nullable()
-  }),
-  z.object({
-    type: z.literal("terminal"),
-    terminalId: z.string(),
-    _meta: AcpMetaSchema.optional().nullable()
-  })
-]);
+const AcpToolKindSchema = z.union([z.literal("read"), z.literal("edit"), z.literal("delete"), z.literal("move"), z.literal("search"), z.literal("execute"), z.literal("think"), z.literal("fetch"), z.literal("switch_mode"), z.literal("other")]);
 // prettier-ignore
-type AcpToolCallContent = z.infer<typeof AcpToolCallContentSchema>;
-
-// prettier-ignore
-const AcpToolCallLocationSchema = z.object({
-  path: z.string(),
-  line: z.number().int().nonnegative().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
-});
-// prettier-ignore
-type AcpToolCallLocation = z.infer<typeof AcpToolCallLocationSchema>;
-
-// prettier-ignore
-const AcpToolCallSchema = z.object({
-  toolCallId: z.string(),
-  title: z.string(),
-  kind: AcpToolKindSchema.optional(),
-  status: AcpToolCallStatusSchema.optional(),
-  content: z.array(AcpToolCallContentSchema).optional(),
-  locations: z.array(AcpToolCallLocationSchema).optional(),
-  rawInput: z.unknown().optional().nullable(),
-  rawOutput: z.unknown().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
-});
-// prettier-ignore
-type AcpToolCall = z.infer<typeof AcpToolCallSchema>;
+type AcpToolKind = z.infer<typeof AcpToolKindSchema>;
 
 // prettier-ignore
 const AcpToolCallUpdateSchema = z.object({
-  toolCallId: z.string(),
-  kind: AcpToolKindSchema.optional().nullable(),
-  status: AcpToolCallStatusSchema.optional().nullable(),
-  title: z.string().optional().nullable(),
-  content: z.array(AcpToolCallContentSchema).optional().nullable(),
-  locations: z.array(AcpToolCallLocationSchema).optional().nullable(),
-  rawInput: z.unknown().optional().nullable(),
-  rawOutput: z.unknown().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  content: z.union([z.array(AcpToolCallContentSchema), z.null()]).optional(),
+  kind: z.union([AcpToolKindSchema, z.null()]).optional(),
+  locations: z.union([z.array(AcpToolCallLocationSchema), z.null()]).optional(),
+  rawInput: z.unknown().optional(),
+  rawOutput: z.unknown().optional(),
+  status: z.union([AcpToolCallStatusSchema, z.null()]).optional(),
+  title: z.union([z.string(), z.null()]).optional(),
+  toolCallId: AcpToolCallIdSchema
 });
 // prettier-ignore
 type AcpToolCallUpdate = z.infer<typeof AcpToolCallUpdateSchema>;
@@ -170,142 +211,298 @@ type AcpPlanEntryStatus = z.infer<typeof AcpPlanEntryStatusSchema>;
 
 // prettier-ignore
 const AcpPlanEntrySchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   content: z.string(),
   priority: AcpPlanEntryPrioritySchema,
-  status: AcpPlanEntryStatusSchema,
-  _meta: AcpMetaSchema.optional().nullable()
+  status: AcpPlanEntryStatusSchema
 });
 // prettier-ignore
 type AcpPlanEntry = z.infer<typeof AcpPlanEntrySchema>;
 
 // prettier-ignore
 const AcpPlanSchema = z.object({
-  entries: z.array(AcpPlanEntrySchema),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  entries: z.array(AcpPlanEntrySchema)
 });
 // prettier-ignore
 type AcpPlan = z.infer<typeof AcpPlanSchema>;
 
 // prettier-ignore
-const AcpAvailableCommandInputSchema = z.object({
-  hint: z.string(),
-  _meta: AcpMetaSchema.optional().nullable()
+const AcpUnstructuredCommandInputSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  hint: z.string()
 });
+// prettier-ignore
+type AcpUnstructuredCommandInput = z.infer<typeof AcpUnstructuredCommandInputSchema>;
+
+// prettier-ignore
+const AcpAvailableCommandInputSchema = AcpUnstructuredCommandInputSchema;
 // prettier-ignore
 type AcpAvailableCommandInput = z.infer<typeof AcpAvailableCommandInputSchema>;
 
 // prettier-ignore
 const AcpAvailableCommandSchema = z.object({
-  name: z.string(),
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
   description: z.string(),
-  input: AcpAvailableCommandInputSchema.optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
+  input: z.union([AcpAvailableCommandInputSchema, z.null()]).optional(),
+  name: z.string()
 });
 // prettier-ignore
 type AcpAvailableCommand = z.infer<typeof AcpAvailableCommandSchema>;
 
 // prettier-ignore
 const AcpAvailableCommandsUpdateSchema = z.object({
-  availableCommands: z.array(AcpAvailableCommandSchema),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  availableCommands: z.array(AcpAvailableCommandSchema)
 });
 // prettier-ignore
 type AcpAvailableCommandsUpdate = z.infer<typeof AcpAvailableCommandsUpdateSchema>;
 
 // prettier-ignore
+const AcpSessionModeIdSchema = z.string();
+// prettier-ignore
+type AcpSessionModeId = z.infer<typeof AcpSessionModeIdSchema>;
+
+// prettier-ignore
 const AcpCurrentModeUpdateSchema = z.object({
-  currentModeId: z.string(),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  currentModeId: AcpSessionModeIdSchema
 });
 // prettier-ignore
 type AcpCurrentModeUpdate = z.infer<typeof AcpCurrentModeUpdateSchema>;
 
 // prettier-ignore
+const AcpSessionConfigIdSchema = z.string();
+// prettier-ignore
+type AcpSessionConfigId = z.infer<typeof AcpSessionConfigIdSchema>;
+
+// prettier-ignore
+const AcpSessionConfigOptionCategorySchema = z.union([z.literal("mode"), z.literal("model"), z.literal("thought_level"), z.string()]);
+// prettier-ignore
+type AcpSessionConfigOptionCategory = z.infer<typeof AcpSessionConfigOptionCategorySchema>;
+
+// prettier-ignore
+const AcpSessionConfigGroupIdSchema = z.string();
+// prettier-ignore
+type AcpSessionConfigGroupId = z.infer<typeof AcpSessionConfigGroupIdSchema>;
+
+// prettier-ignore
+const AcpSessionConfigValueIdSchema = z.string();
+// prettier-ignore
+type AcpSessionConfigValueId = z.infer<typeof AcpSessionConfigValueIdSchema>;
+
+// prettier-ignore
+const AcpSessionConfigSelectOptionSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  value: AcpSessionConfigValueIdSchema
+});
+// prettier-ignore
+type AcpSessionConfigSelectOption = z.infer<typeof AcpSessionConfigSelectOptionSchema>;
+
+// prettier-ignore
+const AcpSessionConfigSelectGroupSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  group: AcpSessionConfigGroupIdSchema,
+  name: z.string(),
+  options: z.array(AcpSessionConfigSelectOptionSchema)
+});
+// prettier-ignore
+type AcpSessionConfigSelectGroup = z.infer<typeof AcpSessionConfigSelectGroupSchema>;
+
+// prettier-ignore
+const AcpSessionConfigSelectOptionsSchema = z.union([z.array(AcpSessionConfigSelectOptionSchema), z.array(AcpSessionConfigSelectGroupSchema)]);
+// prettier-ignore
+type AcpSessionConfigSelectOptions = z.infer<typeof AcpSessionConfigSelectOptionsSchema>;
+
+// prettier-ignore
+const AcpSessionConfigSelectSchema = z.object({
+  currentValue: AcpSessionConfigValueIdSchema,
+  options: AcpSessionConfigSelectOptionsSchema
+});
+// prettier-ignore
+type AcpSessionConfigSelect = z.infer<typeof AcpSessionConfigSelectSchema>;
+
+// prettier-ignore
+const AcpSessionConfigOptionSchema = AcpSessionConfigSelectSchema.extend({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  category: z.union([AcpSessionConfigOptionCategorySchema, z.null()]).optional(),
+  description: z.union([z.string(), z.null()]).optional(),
+  id: AcpSessionConfigIdSchema,
+  name: z.string(),
+  type: z.literal("select")
+});
+// prettier-ignore
+type AcpSessionConfigOption = z.infer<typeof AcpSessionConfigOptionSchema>;
+
+// prettier-ignore
 const AcpConfigOptionUpdateSchema = z.object({
-  configOptions: z.array(z.record(z.string(), z.unknown())),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  configOptions: z.array(AcpSessionConfigOptionSchema)
 });
 // prettier-ignore
 type AcpConfigOptionUpdate = z.infer<typeof AcpConfigOptionUpdateSchema>;
 
 // prettier-ignore
 const AcpSessionInfoUpdateSchema = z.object({
-  title: z.string().optional().nullable(),
-  updatedAt: z.string().optional().nullable(),
-  _meta: AcpMetaSchema.optional().nullable()
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  title: z.union([z.string(), z.null()]).optional(),
+  updatedAt: z.union([z.string(), z.null()]).optional()
 });
 // prettier-ignore
 type AcpSessionInfoUpdate = z.infer<typeof AcpSessionInfoUpdateSchema>;
 
 // prettier-ignore
+const AcpContentChunkSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  content: AcpContentBlockSchema
+});
+// prettier-ignore
+type AcpContentChunk = z.infer<typeof AcpContentChunkSchema>;
+
+// prettier-ignore
+const AcpToolCallSchema = z.object({
+  _meta: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+  content: z.array(AcpToolCallContentSchema).optional(),
+  kind: AcpToolKindSchema.optional(),
+  locations: z.array(AcpToolCallLocationSchema).optional(),
+  rawInput: z.unknown().optional(),
+  rawOutput: z.unknown().optional(),
+  status: AcpToolCallStatusSchema.optional(),
+  title: z.string(),
+  toolCallId: AcpToolCallIdSchema
+});
+// prettier-ignore
+type AcpToolCall = z.infer<typeof AcpToolCallSchema>;
+
+// prettier-ignore
 const AcpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
-  AcpContentChunkSchema.extend({ sessionUpdate: z.literal("user_message_chunk") }),
-  AcpContentChunkSchema.extend({ sessionUpdate: z.literal("agent_message_chunk") }),
-  AcpContentChunkSchema.extend({ sessionUpdate: z.literal("agent_thought_chunk") }),
-  AcpToolCallSchema.extend({ sessionUpdate: z.literal("tool_call") }),
-  AcpToolCallUpdateSchema.extend({ sessionUpdate: z.literal("tool_call_update") }),
-  AcpPlanSchema.extend({ sessionUpdate: z.literal("plan") }),
-  AcpAvailableCommandsUpdateSchema.extend({ sessionUpdate: z.literal("available_commands_update") }),
-  AcpCurrentModeUpdateSchema.extend({ sessionUpdate: z.literal("current_mode_update") }),
-  AcpConfigOptionUpdateSchema.extend({ sessionUpdate: z.literal("config_option_update") }),
-  AcpSessionInfoUpdateSchema.extend({ sessionUpdate: z.literal("session_info_update") })
+  AcpContentChunkSchema.extend({
+  sessionUpdate: z.literal("user_message_chunk")
+}),
+  AcpContentChunkSchema.extend({
+  sessionUpdate: z.literal("agent_message_chunk")
+}),
+  AcpContentChunkSchema.extend({
+  sessionUpdate: z.literal("agent_thought_chunk")
+}),
+  AcpToolCallSchema.extend({
+  sessionUpdate: z.literal("tool_call")
+}),
+  AcpToolCallUpdateSchema.extend({
+  sessionUpdate: z.literal("tool_call_update")
+}),
+  AcpPlanSchema.extend({
+  sessionUpdate: z.literal("plan")
+}),
+  AcpAvailableCommandsUpdateSchema.extend({
+  sessionUpdate: z.literal("available_commands_update")
+}),
+  AcpCurrentModeUpdateSchema.extend({
+  sessionUpdate: z.literal("current_mode_update")
+}),
+  AcpConfigOptionUpdateSchema.extend({
+  sessionUpdate: z.literal("config_option_update")
+}),
+  AcpSessionInfoUpdateSchema.extend({
+  sessionUpdate: z.literal("session_info_update")
+})
 ]);
 // prettier-ignore
 type AcpSessionUpdate = z.infer<typeof AcpSessionUpdateSchema>;
 
 export {
   PROTOCOL_CONTRACT_VERSION,
-  AcpMetaSchema,
-  AcpTextContentSchema,
-  AcpImageContentSchema,
+  AcpRoleSchema,
+  AcpAnnotationsSchema,
   AcpAudioContentSchema,
-  AcpResourceLinkContentSchema,
-  AcpEmbeddedResourceContentSchema,
+  AcpBlobResourceContentsSchema,
+  AcpTextResourceContentsSchema,
+  AcpEmbeddedResourceResourceSchema,
+  AcpEmbeddedResourceSchema,
+  AcpImageContentSchema,
+  AcpResourceLinkSchema,
+  AcpTextContentSchema,
   AcpContentBlockSchema,
-  AcpContentChunkSchema,
-  AcpToolKindSchema,
-  AcpToolCallStatusSchema,
+  AcpContentSchema,
+  AcpDiffSchema,
+  AcpTerminalSchema,
   AcpToolCallContentSchema,
+  AcpToolCallIdSchema,
   AcpToolCallLocationSchema,
-  AcpToolCallSchema,
+  AcpToolCallStatusSchema,
+  AcpToolKindSchema,
   AcpToolCallUpdateSchema,
   AcpPlanEntryPrioritySchema,
   AcpPlanEntryStatusSchema,
   AcpPlanEntrySchema,
   AcpPlanSchema,
+  AcpUnstructuredCommandInputSchema,
   AcpAvailableCommandInputSchema,
   AcpAvailableCommandSchema,
   AcpAvailableCommandsUpdateSchema,
+  AcpSessionModeIdSchema,
   AcpCurrentModeUpdateSchema,
+  AcpSessionConfigIdSchema,
+  AcpSessionConfigOptionCategorySchema,
+  AcpSessionConfigGroupIdSchema,
+  AcpSessionConfigValueIdSchema,
+  AcpSessionConfigSelectOptionSchema,
+  AcpSessionConfigSelectGroupSchema,
+  AcpSessionConfigSelectOptionsSchema,
+  AcpSessionConfigSelectSchema,
+  AcpSessionConfigOptionSchema,
   AcpConfigOptionUpdateSchema,
   AcpSessionInfoUpdateSchema,
+  AcpContentChunkSchema,
+  AcpToolCallSchema,
   AcpSessionUpdateSchema,
 };
 
 export type {
-  AcpMeta,
-  AcpTextContent,
-  AcpImageContent,
+  AcpRole,
+  AcpAnnotations,
   AcpAudioContent,
-  AcpResourceLinkContent,
-  AcpEmbeddedResourceContent,
+  AcpBlobResourceContents,
+  AcpTextResourceContents,
+  AcpEmbeddedResourceResource,
+  AcpEmbeddedResource,
+  AcpImageContent,
+  AcpResourceLink,
+  AcpTextContent,
   AcpContentBlock,
-  AcpContentChunk,
-  AcpToolKind,
-  AcpToolCallStatus,
+  AcpContent,
+  AcpDiff,
+  AcpTerminal,
   AcpToolCallContent,
+  AcpToolCallId,
   AcpToolCallLocation,
-  AcpToolCall,
+  AcpToolCallStatus,
+  AcpToolKind,
   AcpToolCallUpdate,
   AcpPlanEntryPriority,
   AcpPlanEntryStatus,
   AcpPlanEntry,
   AcpPlan,
+  AcpUnstructuredCommandInput,
   AcpAvailableCommandInput,
   AcpAvailableCommand,
   AcpAvailableCommandsUpdate,
+  AcpSessionModeId,
   AcpCurrentModeUpdate,
+  AcpSessionConfigId,
+  AcpSessionConfigOptionCategory,
+  AcpSessionConfigGroupId,
+  AcpSessionConfigValueId,
+  AcpSessionConfigSelectOption,
+  AcpSessionConfigSelectGroup,
+  AcpSessionConfigSelectOptions,
+  AcpSessionConfigSelect,
+  AcpSessionConfigOption,
   AcpConfigOptionUpdate,
   AcpSessionInfoUpdate,
+  AcpContentChunk,
+  AcpToolCall,
   AcpSessionUpdate,
 };

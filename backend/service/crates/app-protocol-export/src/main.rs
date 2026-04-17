@@ -1,6 +1,8 @@
 //! Generates the TypeScript app protocol boundary package.
 
 mod contracts;
+#[cfg(test)]
+mod contracts_tests;
 
 use std::env;
 use std::error::Error;
@@ -31,14 +33,14 @@ fn write_generated_file() -> Result<(), Box<dyn Error>> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(path, contracts::generate_typescript())?;
+    fs::write(path, contracts::generate_typescript()?)?;
     Ok(())
 }
 
 fn check_generated_file() -> Result<(), Box<dyn Error>> {
     let path = generated_path()?;
     let current = fs::read_to_string(&path)?;
-    let generated = contracts::generate_typescript();
+    let generated = contracts::generate_typescript()?;
     if current == generated {
         return Ok(());
     }

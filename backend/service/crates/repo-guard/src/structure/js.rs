@@ -216,7 +216,7 @@ impl ImportCheck<'_> {
         }
         if unit.name == "@conduit/app-protocol"
             || unit.name == "@conduit/session-client"
-            || is_frontend_app_state_file(self.repo_root, unit, file)
+            || is_frontend_app_protocol_adapter(self.repo_root, unit, file)
         {
             return false;
         }
@@ -292,9 +292,9 @@ fn is_repo_path(specifier: &str) -> bool {
         || specifier.starts_with("artifacts/")
 }
 
-fn is_frontend_app_state_file(repo_root: &Path, unit: &Unit, file: &Path) -> bool {
+fn is_frontend_app_protocol_adapter(repo_root: &Path, unit: &Unit, file: &Path) -> bool {
     if unit.name != "@conduit/frontend" {
         return false;
     }
-    relative_path(repo_root, file).starts_with("apps/frontend/src/app-state/")
+    relative_path(repo_root, file).starts_with("apps/frontend/src/app-state/protocol/")
 }

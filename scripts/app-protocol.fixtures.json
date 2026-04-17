@@ -1,0 +1,62 @@
+{
+  "toolCallUpdate": {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "tool-1",
+    "status": "completed",
+    "content": [
+      {
+        "type": "content",
+        "content": {
+          "type": "text",
+          "text": "done"
+        }
+      }
+    ]
+  },
+  "embeddedTextResourceUpdate": {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "resource",
+      "resource": {
+        "text": "context",
+        "uri": "file:///workspace/context.md",
+        "mimeType": "text/markdown"
+      }
+    }
+  },
+  "embeddedBlobResourceUpdate": {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "resource",
+      "resource": {
+        "blob": "Y29udGV4dA==",
+        "uri": "file:///workspace/context.bin",
+        "mimeType": "application/octet-stream"
+      }
+    }
+  },
+  "configOptionUpdate": {
+    "sessionUpdate": "config_option_update",
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "description": "Preferred model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "gpt-5.4",
+        "options": [
+          {
+            "value": "gpt-5.4",
+            "name": "GPT-5.4"
+          },
+          {
+            "value": "gpt-5.4-mini",
+            "name": "GPT-5.4 Mini",
+            "description": "Lower latency"
+          }
+        ]
+      }
+    ]
+  }
+}
