@@ -1,20 +1,24 @@
 //! Official ACP SDK actor for one provider connection.
 
+mod initialize;
 mod internals;
 
 use super::InteractionResponse;
 use super::helpers::{identity, session_update_variant, unexpected};
 use super::prompt::{prompt_content_blocks, stop_reason_string};
 use crate::error::{AcpError, Result};
+use crate::initialize::{ProviderInitializeRequest, ProviderInitializeResult};
 use crate::snapshot::{
     ConnectionState, LiveSessionSnapshot, LoadedTranscriptSnapshot, PromptLifecycleSnapshot,
     PromptLifecycleState, ProviderSnapshot, TranscriptUpdateSnapshot,
 };
+use crate::{
+    ConduitInteractionOption, ConduitInteractionRequestData, ConduitInteractionRequestInput,
+    ConduitInteractionResolutionData, ConduitInteractionResolutionStatus,
+};
 use acp_discovery::{LauncherCommand, ProcessEnvironment, ProviderDiscovery, ProviderId};
 use agent_client_protocol::{self as acp, Agent as _};
-use internals::{
-    apply_process_environment, child_has_exited, disconnected, sdk_error, send_reply, to_values,
-};
+use internals::{apply_process_environment, child_has_exited, disconnected, sdk_error, send_reply};
 use serde_json::{Value, json, to_value};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
@@ -27,6 +31,13 @@ use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 pub(super) enum HostCommand {
+    Initialize {
+        request: ProviderInitializeRequest,
+        reply: Sender<Result<ProviderInitializeResult>>,
+    },
+    InitializeResult {
+        reply: Sender<Result<Option<ProviderInitializeResult>>>,
+    },
     Snapshot {
         reply: Sender<Result<ProviderSnapshot>>,
     },
@@ -274,11 +285,10 @@ mod tests {
 }
 
 struct SdkHostActor {
-    auth_methods: Vec<Value>,
-    capabilities: Value,
     child: Option<tokio::process::Child>,
     connection: Option<acp::ClientSideConnection>,
     discovery: ProviderDiscovery,
+    initialize_result: Option<ProviderInitializeResult>,
     last_prompt: Option<PromptLifecycleSnapshot>,
     loaded_transcripts: BTreeMap<String, LoadedTranscriptSnapshot>,
     live_sessions: BTreeMap<String, LiveSessionSnapshot>,
@@ -296,17 +306,11 @@ impl SdkHostActor {
         let updates = Arc::new(Mutex::new(PromptUpdateState::default()));
         let (connection, child) =
             spawn_sdk_connection(provider, &launcher, &environment, &updates)?;
-        let initialize = connection
-            .initialize(acp::InitializeRequest::new(acp::ProtocolVersion::V1))
-            .await
-            .map_err(|source| sdk_error(provider, "initialize", source))?;
         Ok(Self {
-            auth_methods: to_values(provider, initialize.auth_methods, "authMethods")?,
-            capabilities: to_value(initialize.agent_capabilities)
-                .map_err(|error| unexpected(provider, error.to_string()))?,
             child: Some(child),
             connection: Some(connection),
             discovery,
+            initialize_result: None,
             last_prompt: None,
             loaded_transcripts: BTreeMap::new(),
             live_sessions: BTreeMap::new(),
@@ -324,6 +328,13 @@ impl SdkHostActor {
 
     async fn handle_command(&mut self, command: HostCommand) {
         match command {
+            HostCommand::Initialize { request, reply } => {
+                let result = self.initialize(request).await;
+                send_reply(reply, result);
+            }
+            HostCommand::InitializeResult { reply } => {
+                send_reply(reply, Ok(self.initialize_result()));
+            }
             HostCommand::Snapshot { reply } => send_reply(reply, Ok(self.snapshot())),
             HostCommand::Disconnect { reply } => {
                 self.disconnect().await;
@@ -376,12 +387,23 @@ impl SdkHostActor {
     }
 
     fn snapshot(&mut self) -> ProviderSnapshot {
+        let capabilities = self
+            .initialize_result
+            .as_ref()
+            .and_then(|result| to_value(&result.response.agent_capabilities).ok())
+            .unwrap_or(Value::Null);
+        let auth_methods = self
+            .initialize_result
+            .as_ref()
+            .and_then(|result| to_value(&result.response.auth_methods).ok())
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
         ProviderSnapshot {
             provider: self.provider,
             connection_state: self.connection_state(),
             discovery: self.discovery.clone(),
-            capabilities: self.capabilities.clone(),
-            auth_methods: self.auth_methods.clone(),
+            capabilities,
+            auth_methods,
             live_sessions: self.live_sessions.values().cloned().collect(),
             last_prompt: self.last_prompt.clone(),
             loaded_transcripts: self.loaded_transcripts.values().cloned().collect(),
@@ -400,7 +422,7 @@ impl SdkHostActor {
     async fn new_session(&mut self, cwd: PathBuf) -> Result<acp::NewSessionResponse> {
         let cwd_text = cwd.display().to_string();
         let response = self
-            .connection()?
+            .initialized_connection("session/new")?
             .new_session(acp::NewSessionRequest::new(cwd))
             .await
             .map_err(|source| sdk_error(self.provider, "session/new", source))?;
@@ -423,7 +445,7 @@ impl SdkHostActor {
     ) -> Result<acp::ListSessionsResponse> {
         let request = acp::ListSessionsRequest::new().cwd(cwd).cursor(cursor);
         let response = self
-            .connection()?
+            .initialized_connection("session/list")?
             .list_sessions(request)
             .await
             .map_err(|source| sdk_error(self.provider, "session/list", source))?;
@@ -454,7 +476,7 @@ impl SdkHostActor {
             self.provider,
         )?;
         let response = self
-            .connection()?
+            .initialized_connection("session/load")?
             .load_session(acp::LoadSessionRequest::new(
                 session_id.clone(),
                 cwd.clone(),
@@ -493,7 +515,7 @@ impl SdkHostActor {
         config_id: String,
         value: String,
     ) -> Result<acp::SetSessionConfigOptionResponse> {
-        self.connection()?
+        self.initialized_connection("session/set_config_option")?
             .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
                 session_id, config_id, value,
             ))
@@ -525,7 +547,7 @@ impl SdkHostActor {
         cancel_after: Option<Duration>,
     ) -> Result<acp::PromptResponse> {
         let prompt = self
-            .connection()?
+            .initialized_connection("session/prompt")?
             .prompt(acp::PromptRequest::new(session_id.clone(), prompt));
         tokio::pin!(prompt);
         if let Some(after) = cancel_after {
@@ -538,7 +560,7 @@ impl SdkHostActor {
 
     async fn cancel_prompt(&self, session_id: acp::SessionId) -> Result<()> {
         cancel_pending_interactions_for_session(self.provider, &session_id.to_string());
-        self.connection()?
+        self.initialized_connection("session/cancel")?
             .cancel(acp::CancelNotification::new(session_id))
             .await
             .map_err(|source| sdk_error(self.provider, "session/cancel", source))
@@ -632,6 +654,9 @@ impl SdkHostActor {
         if child_has_exited(&mut self.child) {
             self.connection = None;
             return ConnectionState::Disconnected;
+        }
+        if self.initialize_result.is_none() {
+            return ConnectionState::Connected;
         }
         ConnectionState::Ready
     }

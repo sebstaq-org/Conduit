@@ -1,8 +1,6 @@
-use super::unexpected;
 use crate::error::{AcpError, Result};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use agent_client_protocol as acp;
-use serde_json::{Value, to_value};
 use std::sync::mpsc::Sender;
 
 pub(super) fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {
@@ -11,18 +9,6 @@ pub(super) fn child_has_exited(child: &mut Option<tokio::process::Child>) -> boo
         .and_then(|process| process.try_wait().ok())
         .flatten()
         .is_some()
-}
-
-pub(super) fn to_values<T>(provider: ProviderId, values: Vec<T>, field: &str) -> Result<Vec<Value>>
-where
-    T: serde::Serialize,
-{
-    values
-        .into_iter()
-        .map(|value| {
-            to_value(value).map_err(|error| unexpected(provider, format!("{field}: {error}")))
-        })
-        .collect()
 }
 
 pub(super) fn disconnected(provider: ProviderId, operation: &str) -> AcpError {

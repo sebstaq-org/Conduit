@@ -1,15 +1,16 @@
 import type { TranscriptItem } from "@conduit/session-client";
-import {
-  ANSWER_OTHER_OPTION_ID,
-  CANCEL_OPTION_ID,
+import type {
+  InteractionResolutionStatus,
+  PlanInteractionCard,
 } from "./plan-interaction-types";
 import type {
   BackendInteractionOption,
   BackendInteractionRequestData,
   BackendInteractionResolutionData,
-  InteractionResolutionStatus,
-  PlanInteractionCard,
-} from "./plan-interaction-types";
+} from "./protocol/plan-interaction-data";
+
+const DEV_ANSWER_OTHER_OPTION_ID = "answer-other";
+const DEV_CANCEL_OPTION_ID = "cancel";
 
 function nextSequence(items: TranscriptItem[]): number {
   return items.length + 1;
@@ -72,7 +73,11 @@ function backendOptions(card: PlanInteractionCard): BackendInteractionOption[] {
       name: option.label,
       optionId: option.optionId,
     })),
-    { kind: "cancel", name: "Cancel", optionId: CANCEL_OPTION_ID },
+    {
+      kind: "cancel",
+      name: "Cancel",
+      optionId: DEV_CANCEL_OPTION_ID,
+    },
   ];
 }
 
@@ -82,7 +87,7 @@ function interactionRequestItem(args: {
 }): TranscriptItem {
   const sequence = nextSequence(args.items);
   const isOther = args.card.options.some(
-    (option) => option.optionId === ANSWER_OTHER_OPTION_ID,
+    (option) => option.optionId === DEV_ANSWER_OTHER_OPTION_ID,
   );
   const data: BackendInteractionRequestData = {
     interactionId: args.card.interactionId,

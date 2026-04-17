@@ -1,7 +1,10 @@
 //! `app-api` backed provider runtime adapter.
 
 use crate::{ProviderFactory, ProviderPort, Result, RuntimeError};
-use acp_core::{InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+use acp_core::{
+    InteractionResponse, ProviderInitializeRequest, ProviderInitializeResult, ProviderSnapshot,
+    RawWireEvent, TranscriptUpdateSnapshot,
+};
 use acp_discovery::{ProcessEnvironment, ProviderId};
 use app_api::AppService;
 use serde::Serialize;
@@ -36,6 +39,21 @@ struct AppServicePort {
 }
 
 impl ProviderPort for AppServicePort {
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        self.service
+            .initialize_provider(request)
+            .map_err(|error| RuntimeError::Provider(error.to_string()))
+    }
+
+    fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        self.service
+            .provider_initialize_result()
+            .map_err(|error| RuntimeError::Provider(error.to_string()))
+    }
+
     fn snapshot(&self) -> ProviderSnapshot {
         self.service.get_provider_snapshot()
     }

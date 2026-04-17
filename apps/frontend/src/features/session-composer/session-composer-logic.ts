@@ -20,7 +20,7 @@ function copyOptionWithCurrentValue(
     category: option.category,
     type: option.type,
     currentValue,
-    options: option.options,
+    values: option.values,
   };
 }
 

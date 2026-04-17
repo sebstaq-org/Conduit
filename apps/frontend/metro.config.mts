@@ -19,6 +19,22 @@ config.watchFolders.push(workletsOutputPath);
 const defaultResolveRequest = config.resolver.resolveRequest;
 const metroConfig = getBundleModeMetroConfig(config);
 const bundleModeResolveRequest = metroConfig.resolver.resolveRequest;
+type ResolveRequest = NonNullable<typeof metroConfig.resolver.resolveRequest>;
+
+const isRelativeJavaScriptRequest = (requestName: string): boolean =>
+  requestName.startsWith(".") && requestName.endsWith(".js");
+
+const resolveWithDefaultFallback: ResolveRequest = (
+  context,
+  moduleName,
+  platform,
+) => {
+  if (defaultResolveRequest) {
+    return defaultResolveRequest(context, moduleName, platform);
+  }
+
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 const resolveTypeScriptSourceRequest = (
   originModulePath: string,
@@ -42,6 +58,28 @@ const resolveTypeScriptSourceRequest = (
   return { type: "sourceFile", filePath: sourceFilePath };
 };
 
+const resolveWithTypeScriptExtensionFallback: ResolveRequest = (
+  context,
+  moduleName,
+  platform,
+) => {
+  const requestName = String(moduleName);
+
+  try {
+    return resolveWithDefaultFallback(context, moduleName, platform);
+  } catch (error) {
+    if (!isRelativeJavaScriptRequest(requestName)) {
+      throw error;
+    }
+
+    return resolveWithDefaultFallback(
+      context,
+      requestName.replace(/\.js$/u, ".ts"),
+      platform,
+    );
+  }
+};
+
 metroConfig.resolver.resolveRequest = (
   context,
   moduleName,
@@ -61,11 +99,7 @@ metroConfig.resolver.resolveRequest = (
     return bundleModeResolveRequest(context, moduleName, platform);
   }
 
-  if (defaultResolveRequest) {
-    return defaultResolveRequest(context, moduleName, platform);
-  }
-
-  return context.resolveRequest(context, moduleName, platform);
+  return resolveWithTypeScriptExtensionFallback(context, moduleName, platform);
 };
 
 // oxlint-disable-next-line import/no-default-export -- Metro config loader requires a default config value.

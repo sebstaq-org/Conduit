@@ -137,7 +137,7 @@ where
         observed_updates: &mut Vec<TranscriptUpdateSnapshot>,
     ) -> Result<ProviderPromptRun> {
         let mut projection_error = None;
-        let mut provider_port = self.take_provider(context.provider)?;
+        let mut provider_port = self.take_initialized_provider(context.provider)?;
         let result = provider_port.session_prompt(
             context.target.key.session_id.clone(),
             context.prompt.to_vec(),

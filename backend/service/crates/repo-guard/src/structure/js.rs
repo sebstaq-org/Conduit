@@ -83,6 +83,7 @@ pub(super) fn check_workspace_imports(
         for file in source_files(unit)? {
             let source =
                 read_to_string(&file).map_err(|error| Error::io(Some(file.clone()), error))?;
+            check.record_session_contract_wire_export(unit, &file, &source)?;
             for specifier in import_specifiers(&source)? {
                 check.record(unit, &file, &specifier);
             }
@@ -227,6 +228,100 @@ impl ImportCheck<'_> {
         ));
         true
     }
+
+    fn record_session_contract_wire_export(
+        &mut self,
+        unit: &Unit,
+        file: &Path,
+        source: &str,
+    ) -> Result<()> {
+        if unit.name != "@conduit/session-contracts" {
+            return Ok(());
+        }
+        for symbol in forbidden_session_contract_wire_symbols(source)? {
+            self.failures.push(format!(
+                "{} defines backend-to-frontend wire contract {symbol}; use @conduit/app-protocol in client/adaptation layers instead.",
+                relative_path(self.repo_root, file),
+            ));
+        }
+        Ok(())
+    }
+}
+
+const FORBIDDEN_SESSION_CONTRACT_SYMBOLS: [&str; 6] = [
+    "RuntimeEventSchema",
+    "RuntimeEventKind",
+    "RuntimeEvent",
+    "ServerEventFrame",
+    "ServerFrame",
+    "ServerResponseFrame",
+];
+
+fn forbidden_session_contract_wire_symbols(source: &str) -> Result<Vec<&'static str>> {
+    let mut symbols = Vec::new();
+    for captures in session_contract_definition_regex()?.captures_iter(source) {
+        if let Some(symbol) = captures
+            .get(1)
+            .and_then(|capture| forbidden_session_contract_symbol(capture.as_str()))
+            && !symbols.contains(&symbol)
+        {
+            symbols.push(symbol);
+        }
+    }
+    for captures in export_list_regex()?.captures_iter(source) {
+        let Some(list) = captures.get(1).map(|capture| capture.as_str()) else {
+            continue;
+        };
+        for symbol in FORBIDDEN_SESSION_CONTRACT_SYMBOLS {
+            if contains_identifier(list, symbol) && !symbols.contains(&symbol) {
+                symbols.push(symbol);
+            }
+        }
+    }
+    Ok(symbols)
+}
+
+fn forbidden_session_contract_symbol(name: &str) -> Option<&'static str> {
+    FORBIDDEN_SESSION_CONTRACT_SYMBOLS
+        .iter()
+        .copied()
+        .find(|symbol| *symbol == name)
+}
+
+fn contains_identifier(source: &str, identifier: &str) -> bool {
+    source.match_indices(identifier).any(|(index, _match)| {
+        let before = source[..index].chars().next_back();
+        let after = source[index + identifier.len()..].chars().next();
+        !before.is_some_and(is_identifier_char) && !after.is_some_and(is_identifier_char)
+    })
+}
+
+fn is_identifier_char(value: char) -> bool {
+    value == '_' || value == '$' || value.is_ascii_alphanumeric()
+}
+
+fn session_contract_definition_regex() -> Result<&'static Regex> {
+    static REGEX: OnceLock<std::result::Result<Regex, String>> = OnceLock::new();
+    REGEX
+        .get_or_init(|| {
+            Regex::new(concat!(
+                r"(?m)^\s*(?:export\s+)?(?:type|interface|const|class|enum)\s+",
+                r"(RuntimeEventSchema|RuntimeEventKind|RuntimeEvent|ServerEventFrame|ServerFrame|ServerResponseFrame)\b"
+            ))
+            .map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map_err(|error| Error::invalid_args(&format!("invalid session contract definition regex: {error}")))
+}
+
+fn export_list_regex() -> Result<&'static Regex> {
+    static REGEX: OnceLock<std::result::Result<Regex, String>> = OnceLock::new();
+    REGEX
+        .get_or_init(|| {
+            Regex::new(r"(?s)\bexport\s+(?:type\s+)?\{([^}]*)\}").map_err(|error| error.to_string())
+        })
+        .as_ref()
+        .map_err(|error| Error::invalid_args(&format!("invalid export list regex: {error}")))
 }
 
 fn collect_dependencies(manifest: &Manifest) -> HashSet<String> {

@@ -105,6 +105,58 @@ fn rejects_app_protocol_imports_from_non_protocol_app_state() -> Result<()> {
 }
 
 #[test]
+fn rejects_backend_wire_contracts_in_session_contracts() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/session-contracts/src/wire.ts"),
+        "export type ServerFrame = { type: 'event' };\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "packages/session-contracts/src/wire.ts defines backend-to-frontend wire contract ServerFrame; use @conduit/app-protocol in client/adaptation layers instead.",
+    )
+}
+
+#[test]
+fn accepts_backend_wire_contract_names_in_comments_and_strings() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/session-contracts/src/wire.ts"),
+        concat!(
+            "// RuntimeEvent is documented here but not defined.\n",
+            "export const note = 'ServerFrame';\n",
+            "export type LocalRuntimeEventName = string;\n",
+        ),
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure(failures.is_empty(), "expected comments and strings to pass")
+}
+
+#[test]
+fn rejects_backend_wire_contracts_reexported_from_session_contracts() -> Result<()> {
+    let fixture = fixture()?;
+    write_file(
+        &fixture
+            .repo_root
+            .join("packages/session-contracts/src/wire.ts"),
+        "type Local = string;\nexport type { Local, RuntimeEvent };\n",
+    )?;
+
+    let failures = collect_failures(&fixture.repo_root, &fixture.metadata)?;
+    ensure_contains(
+        &failures,
+        "packages/session-contracts/src/wire.ts defines backend-to-frontend wire contract RuntimeEvent; use @conduit/app-protocol in client/adaptation layers instead.",
+    )
+}
+
+#[test]
 fn rejects_forbidden_provider_dependencies() -> Result<()> {
     let mut fixture = fixture()?;
     if let Some(resolve) = fixture.metadata.resolve.as_mut()

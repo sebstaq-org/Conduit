@@ -1,23 +1,43 @@
 //! Provider runtime ports used by the consumer manager.
 
 use crate::Result;
-use acp_core::{InteractionResponse, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot};
+use acp_core::{
+    InteractionResponse, ProviderInitializeRequest, ProviderInitializeResult, ProviderSnapshot,
+    RawWireEvent, TranscriptUpdateSnapshot,
+};
 use acp_discovery::ProviderId;
 use serde_json::Value;
 use std::path::PathBuf;
 
 /// Factory for connecting provider runtimes.
 pub trait ProviderFactory: Send {
-    /// Connects and initializes one provider runtime.
+    /// Connects one provider runtime.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider runtime cannot be connected.
+    fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>>;
+}
+
+/// One provider runtime managed by `service-runtime`.
+pub trait ProviderPort: Send {
+    /// Runs ACP `initialize` for the provider runtime.
     ///
     /// # Errors
     ///
     /// Returns an error when the provider runtime cannot be initialized.
-    fn connect(&mut self, provider: ProviderId) -> Result<Box<dyn ProviderPort>>;
-}
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult>;
 
-/// One initialized provider runtime managed by `service-runtime`.
-pub trait ProviderPort: Send {
+    /// Returns the completed ACP `initialize` exchange when available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider runtime cannot answer the request.
+    fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>>;
+
     /// Returns the current read-side provider snapshot.
     fn snapshot(&self) -> ProviderSnapshot;
 
