@@ -1,5 +1,5 @@
 import { getDefaultConfig } from "expo/metro-config.js";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { getBundleModeMetroConfig } from "react-native-worklets/bundleMode/index.js";
@@ -26,6 +26,18 @@ metroConfig.resolver.resolveRequest = (
   platform,
 ): unknown => {
   const requestName = String(moduleName);
+
+  if (requestName.startsWith(".") && requestName.endsWith(".js")) {
+    const sourceRequestPath = path.resolve(
+      path.dirname(String(context.originModulePath)),
+      requestName.slice(0, -".js".length),
+    );
+    const sourceFilePath = `${sourceRequestPath}.ts`;
+
+    if (existsSync(sourceFilePath)) {
+      return { type: "sourceFile", filePath: sourceFilePath };
+    }
+  }
 
   if (requestName.startsWith(workletsModulePath)) {
     return bundleModeResolveRequest(context, moduleName, platform);
