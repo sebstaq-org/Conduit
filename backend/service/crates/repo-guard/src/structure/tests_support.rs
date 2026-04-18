@@ -95,7 +95,9 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "packages/app-client/src",
         "packages/app-core/src",
         "packages/app-protocol/src",
+        "packages/cloudflare-relay/src",
         "packages/design-system-tokens/src",
+        "packages/relay-transport/src",
         "packages/session-client/src",
         "packages/session-contracts/src",
         "packages/session-model/src",
@@ -164,17 +166,19 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 9] {
+fn workspace_packages() -> [(&'static str, &'static str); 11] {
     [
         ("@conduit/desktop", "apps/desktop"),
         ("@conduit/frontend", "apps/frontend"),
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
         ("@conduit/app-protocol", "packages/app-protocol"),
+        ("@conduit/cloudflare-relay", "packages/cloudflare-relay"),
         (
             "@conduit/design-system-tokens",
             "packages/design-system-tokens",
         ),
+        ("@conduit/relay-transport", "packages/relay-transport"),
         ("@conduit/session-client", "packages/session-client"),
         ("@conduit/session-contracts", "packages/session-contracts"),
         ("@conduit/session-model", "packages/session-model"),

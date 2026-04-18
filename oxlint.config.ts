@@ -95,6 +95,7 @@ export default defineConfig({
     {
       files: ["**/*.config.ts", "**/*.config.mts", "oxlint.config.ts"],
       rules: {
+        "eslint/max-lines": "off",
         "import/no-nodejs-modules": "off",
         "import/no-default-export": "off",
         "typescript/no-unsafe-argument": "off",
@@ -141,6 +142,7 @@ export default defineConfig({
         "src/app/**/*.tsx",
       ],
       rules: {
+        "eslint/max-lines": "off",
         "import/no-default-export": "off",
       },
     },
@@ -242,6 +244,88 @@ export default defineConfig({
       files: ["packages/session-client/src/index.ts"],
       rules: {
         "promise/avoid-new": "off",
+      },
+    },
+    {
+      files: ["packages/relay-transport/src/**/*.ts"],
+      rules: {
+        "eslint/id-length": "off",
+        "eslint/max-statements": "off",
+        "eslint/no-ternary": "off",
+        "eslint/no-use-before-define": "off",
+        "eslint/require-await": "off",
+        "import/group-exports": "off",
+        "oxc/no-async-await": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "unicorn/prefer-spread": "off",
+        "unicorn/prefer-ternary": "off",
+      },
+    },
+    {
+      files: ["packages/relay-transport/src/**/*.test.ts"],
+      rules: {
+        "eslint/max-lines-per-function": "off",
+        "oxc/no-async-await": "off",
+        "oxc/no-rest-spread-properties": "off",
+      },
+    },
+    {
+      files: ["packages/cloudflare-relay/src/**/*.ts"],
+      rules: {
+        "eslint/id-length": "off",
+        "typescript/promise-function-async": "off",
+      },
+    },
+    {
+      files: ["packages/cloudflare-relay/src/index.ts"],
+      rules: {
+        "import/no-default-export": "off",
+        "import/no-anonymous-default-export": "off",
+        "eslint/no-use-before-define": "off",
+        "eslint/require-await": "off",
+        "oxc/no-async-await": "off",
+        "typescript/promise-function-async": "off",
+      },
+    },
+    {
+      files: ["packages/cloudflare-relay/src/request.ts"],
+      rules: {
+        "eslint/max-statements": "off",
+        "eslint/no-use-before-define": "off",
+      },
+    },
+    {
+      files: ["packages/cloudflare-relay/src/relayObject.ts"],
+      rules: {
+        "eslint/class-methods-use-this": "off",
+        "eslint/max-params": "off",
+        "eslint/max-statements": "off",
+        "eslint/no-use-before-define": "off",
+      },
+    },
+    {
+      files: [
+        "packages/cloudflare-relay/src/**/*.test.ts",
+        "packages/cloudflare-relay/src/relayTestHarness.ts",
+      ],
+      rules: {
+        "eslint/max-lines-per-function": "off",
+        "eslint/no-use-before-define": "off",
+        "import/no-nodejs-modules": "off",
+        "jest/max-expects": "off",
+        "eslint/max-statements": "off",
+        "eslint/no-await-in-loop": "off",
+        "eslint/no-ternary": "off",
+        "unicorn/numeric-separators-style": "off",
+        "unicorn/prefer-ternary": "off",
+        "vitest/no-conditional-tests": "off",
+        "vitest/prefer-strict-boolean-matchers": "off",
+        "vitest/prefer-to-be-truthy": "off",
+        "oxc/no-async-await": "off",
+        "promise/avoid-new": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/promise-function-async": "off",
       },
     },
   ],

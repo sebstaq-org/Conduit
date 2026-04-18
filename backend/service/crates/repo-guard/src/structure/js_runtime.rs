@@ -2,7 +2,10 @@
 
 pub(super) fn violation_message(unit_name: &str, specifier: &str) -> Option<&'static str> {
     match unit_name {
-        "@conduit/app-client" | "@conduit/app-core" | "@conduit/design-system-tokens" => {
+        "@conduit/app-client"
+        | "@conduit/app-core"
+        | "@conduit/design-system-tokens"
+        | "@conduit/relay-transport" => {
             is_frontend_runtime(specifier).then_some("imports forbidden framework or shell runtime")
         }
         _ => None,

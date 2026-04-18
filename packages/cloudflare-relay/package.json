@@ -1,0 +1,27 @@
+{
+  "name": "@conduit/cloudflare-relay",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "wrangler.toml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "deploy": "wrangler deploy",
+    "dev:test": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
+    "test:e2e": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
+    "test:live": "vitest run --root ../.. packages/cloudflare-relay/src/relay.live.test.ts"
+  },
+  "dependencies": {
+    "@conduit/relay-transport": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7",
+    "miniflare": "4.20260415.0",
+    "wrangler": "4.83.0"
+  }
+}
