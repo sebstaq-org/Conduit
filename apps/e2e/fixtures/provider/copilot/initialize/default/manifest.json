@@ -1,9 +1,10 @@
 {
   "captureKind": "provider",
   "contractBoundary": "provider-acp",
-  "curation": "Synthetic E2E initialize fixture; no manual provider data.",
-  "manualCapture": false,
+  "curation": "Removed absolute local capture output path and replaced local terminal-auth command path with the stable launcher name `copilot`; ACP initialize request/response shape preserved.",
+  "manualCapture": true,
   "operation": "initialize",
   "provider": "copilot",
-  "timestamp": "2026-04-18T00:00:00.000000000Z"
+  "sourceCapture": "conduit-artifacts/manual/captures/copilot/initialize/cli-parity-20260418T233653Z",
+  "timestamp": "2026-04-18T23:36:53.729037189Z"
 }

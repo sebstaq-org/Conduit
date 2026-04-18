@@ -62,20 +62,21 @@ struct LedgerEvent {
 /// written, or the provider response is not a valid v1 provider capture.
 pub(crate) fn run_capture(request: CaptureRequest) -> Result<CaptureResult> {
     let CaptureRequest {
+        provider,
         operation,
         cwd,
         output,
     } = request;
     let timestamp = timestamp()?;
-    let output = output_path(output, &operation, &timestamp);
+    let output = output_path(output, provider, &operation, &timestamp);
     create_output_dir(&output)?;
     create_capture_cwd(&operation, &cwd)?;
-    let mut ledger = Ledger::new(&cwd, &output, operation_name(&operation));
+    let mut ledger = Ledger::new(provider, &cwd, &output, operation_name(&operation));
     ledger.push("capture.start", true)?;
-    write_manifest(&operation, &cwd, &output, &timestamp)?;
+    write_manifest(provider, &operation, &cwd, &output, &timestamp)?;
 
     ledger.push("provider.connect.start", true)?;
-    let mut service = match AppService::connect_provider(ProviderId::Codex) {
+    let mut service = match AppService::connect_provider(provider) {
         Ok(service) => {
             ledger.push("provider.connect.finish", true)?;
             service
@@ -413,12 +414,13 @@ fn loaded_transcript_value(
 
 fn output_path(
     configured: Option<PathBuf>,
+    provider: ProviderId,
     operation: &CaptureOperation,
     timestamp: &str,
 ) -> PathBuf {
     configured.unwrap_or_else(|| {
         PathBuf::from(DEFAULT_CAPTURE_ROOT)
-            .join("codex")
+            .join(provider.as_str())
             .join(operation_slug(operation))
             .join(timestamp.replace(':', ""))
     })
@@ -449,6 +451,7 @@ fn create_capture_cwd(operation: &CaptureOperation, cwd: &Path) -> Result<()> {
 }
 
 fn write_manifest(
+    provider: ProviderId,
     operation: &CaptureOperation,
     cwd: &Path,
     output: &Path,
@@ -461,7 +464,7 @@ fn write_manifest(
         manual_capture: true,
         operation: operation_name(operation),
         output_path: output.display().to_string(),
-        provider: "codex",
+        provider: provider.as_str(),
         session_id: session_id(operation),
         timestamp: timestamp.to_owned(),
     };
@@ -515,15 +518,17 @@ struct Ledger {
     events: Vec<LedgerEvent>,
     operation: &'static str,
     output_path: String,
+    provider: ProviderId,
 }
 
 impl Ledger {
-    fn new(cwd: &Path, output: &Path, operation: &'static str) -> Self {
+    fn new(provider: ProviderId, cwd: &Path, output: &Path, operation: &'static str) -> Self {
         Self {
             cwd: cwd.display().to_string(),
             events: Vec::new(),
             operation,
             output_path: output.display().to_string(),
+            provider,
         }
     }
 
@@ -534,7 +539,7 @@ impl Ledger {
             ok,
             operation: self.operation,
             output_path: self.output_path.clone(),
-            provider: "codex",
+            provider: self.provider.as_str(),
             timestamp: timestamp()?,
         });
         Ok(())
