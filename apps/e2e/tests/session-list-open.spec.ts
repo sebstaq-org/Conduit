@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { fixtureCwd, startE2eHarness } from "../src/harness.js";
 import type { E2eHarness } from "../src/harness.js";
 
@@ -21,7 +22,7 @@ test.afterAll(async () => {
 test("session list opens fixture transcript", async ({ page }) => {
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
-  await page.goto(activeHarness.frontendUrl);
+  await openFrontend(page, activeHarness);
 
   const sessionRow = page.getByRole("button", { name: fixtureSessionTitle });
   await expect(sessionRow).toBeVisible();
@@ -33,7 +34,7 @@ test("session list opens fixture transcript", async ({ page }) => {
 test("draft prompt creates fixture session", async ({ page }) => {
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
-  await page.goto(activeHarness.frontendUrl);
+  await openFrontend(page, activeHarness);
 
   await page.getByLabel(`New session in ${fixtureCwd}`).click();
   await page.getByLabel("Select provider for new session").click();
@@ -55,4 +56,18 @@ function requireHarness(): E2eHarness {
     throw new Error("E2E harness did not start");
   }
   return harness;
+}
+
+async function openFrontend(
+  page: Page,
+  activeHarness: E2eHarness,
+): Promise<void> {
+  await page.addInitScript((sessionWsUrl) => {
+    (
+      globalThis as {
+        CONDUIT_RUNTIME_CONFIG?: { sessionWsUrl: string };
+      }
+    ).CONDUIT_RUNTIME_CONFIG = { sessionWsUrl };
+  }, activeHarness.sessionWsUrl);
+  await page.goto(activeHarness.frontendUrl);
 }
