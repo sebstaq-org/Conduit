@@ -1,4 +1,12 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+
+import { encodeUrlBase64 } from "./base64.js";
+
+const RELAY_CAPABILITY_BYTES = 32;
+const RELAY_CAPABILITY_ENCODED_LENGTH = 43;
 const RELAY_PROTOCOL_VERSION = 1;
+const RELAY_WEBSOCKET_PROTOCOL_PREFIX = "conduit-relay.v1.";
+const capabilityPattern = /^[A-Za-z0-9_-]{43}$/;
 const relayVersionField = "v";
 
 type RelayRole = "client" | "server";
@@ -14,11 +22,13 @@ type RelayEnvelope = RelayControlFrame;
 function buildRelayWebSocketUrl(
   endpoint: string,
   options: {
+    readonly capability: string;
     readonly serverId: string;
     readonly role: RelayRole;
     readonly connectionId?: string;
   },
 ): string {
+  assertRelayCapability(options.capability);
   const url = new URL(endpoint);
   if (url.protocol === "http:") {
     url.protocol = "ws:";
@@ -31,6 +41,42 @@ function buildRelayWebSocketUrl(
     url.searchParams.set("connectionId", options.connectionId);
   }
   return url.toString();
+}
+
+function buildRelayWebSocketProtocol(capability: string): string {
+  assertRelayCapability(capability);
+  return `${RELAY_WEBSOCKET_PROTOCOL_PREFIX}${capability}`;
+}
+
+function deriveRelayConnectionId(clientCapability: string): string {
+  assertRelayCapability(clientCapability);
+  return `conn_${digestRouteId("client", clientCapability)}`;
+}
+
+function deriveRelayServerId(daemonCapability: string): string {
+  assertRelayCapability(daemonCapability);
+  return `srv_${digestRouteId("server", daemonCapability)}`;
+}
+
+function generateRelayCapability(): string {
+  const bytes = new Uint8Array(RELAY_CAPABILITY_BYTES);
+  crypto.getRandomValues(bytes);
+  return encodeUrlBase64(bytes);
+}
+
+function parseRelayWebSocketProtocol(header: string | null): string {
+  if (header === null) {
+    throw new Error("relay websocket protocol is required");
+  }
+  for (const rawProtocol of header.split(",")) {
+    const protocol = rawProtocol.trim();
+    if (protocol.startsWith(RELAY_WEBSOCKET_PROTOCOL_PREFIX)) {
+      const capability = protocol.slice(RELAY_WEBSOCKET_PROTOCOL_PREFIX.length);
+      assertRelayCapability(capability);
+      return capability;
+    }
+  }
+  throw new Error("relay websocket protocol is invalid");
 }
 
 function parseRelayEnvelope(value: string): RelayEnvelope {
@@ -69,5 +115,30 @@ function recordField(record: object, field: string): unknown {
   return (record as Record<string, unknown>)[field];
 }
 
-export { RELAY_PROTOCOL_VERSION, buildRelayWebSocketUrl, parseRelayEnvelope };
+function assertRelayCapability(value: string): void {
+  if (
+    value.length !== RELAY_CAPABILITY_ENCODED_LENGTH ||
+    !capabilityPattern.test(value)
+  ) {
+    throw new Error("relay capability is invalid");
+  }
+}
+
+function digestRouteId(kind: "client" | "server", capability: string): string {
+  const bytes = new TextEncoder().encode(
+    `conduit-relay-route:${kind}:${capability}`,
+  );
+  return encodeUrlBase64(sha256(bytes));
+}
+
+export {
+  RELAY_PROTOCOL_VERSION,
+  buildRelayWebSocketProtocol,
+  buildRelayWebSocketUrl,
+  deriveRelayConnectionId,
+  deriveRelayServerId,
+  generateRelayCapability,
+  parseRelayEnvelope,
+  parseRelayWebSocketProtocol,
+};
 export type { RelayControlFrame, RelayEnvelope, RelayRole };

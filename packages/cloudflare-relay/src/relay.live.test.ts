@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { runRelayAdversarialScenario } from "./relayAdversarialHarness.js";
 import {
+  relayWebSocketProtocol,
   runRelayHealthCheck,
   runRelayRoundtripScenario,
 } from "./relayTestHarness.js";
@@ -16,13 +18,16 @@ function createLiveHarness(endpoint: string): RelayTestHarness {
       expect(response.ok).toBe(true);
       return response.json();
     },
-    openSocket: (url: string): Promise<TestSocket> => openLiveSocket(url),
+    openRejectedSocket: (url: string, capability?: string): Promise<void> =>
+      openRejectedLiveSocket(url, capability),
+    openSocket: (url: string, capability: string): Promise<TestSocket> =>
+      openLiveSocket(url, capability),
   };
 }
 
-function openLiveSocket(url: string): Promise<TestSocket> {
+function openLiveSocket(url: string, capability: string): Promise<TestSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
+    const socket = new WebSocket(url, relayWebSocketProtocol(capability));
     const timeout = setTimeout(() => {
       socket.close();
       reject(new Error("timed out opening live relay websocket"));
@@ -34,6 +39,30 @@ function openLiveSocket(url: string): Promise<TestSocket> {
     socket.addEventListener("error", () => {
       clearTimeout(timeout);
       reject(new Error("live relay websocket failed to open"));
+    });
+  });
+}
+
+function openRejectedLiveSocket(
+  url: string,
+  capability?: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const protocol =
+      capability === undefined ? undefined : relayWebSocketProtocol(capability);
+    const socket = new WebSocket(url, protocol);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("timed out waiting for live relay rejection"));
+    }, 10000);
+    socket.addEventListener("open", () => {
+      clearTimeout(timeout);
+      socket.close();
+      reject(new Error("live relay websocket unexpectedly opened"));
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      resolve();
     });
   });
 }
@@ -51,6 +80,7 @@ if (liveEndpoint === undefined) {
 
       await runRelayHealthCheck(harness);
       await runRelayRoundtripScenario(harness, `live_${Date.now()}`);
+      await runRelayAdversarialScenario(harness, `live_attack_${Date.now()}`);
     }, 30000);
   });
 }

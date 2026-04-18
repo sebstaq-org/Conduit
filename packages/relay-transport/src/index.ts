@@ -7,8 +7,13 @@ export {
 
 export {
   RELAY_PROTOCOL_VERSION,
+  buildRelayWebSocketProtocol,
   buildRelayWebSocketUrl,
+  deriveRelayConnectionId,
+  deriveRelayServerId,
+  generateRelayCapability,
   parseRelayEnvelope,
+  parseRelayWebSocketProtocol,
 } from "./protocol.js";
 
 export type {

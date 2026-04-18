@@ -4,11 +4,19 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { MAX_FRAME_BYTES } from "./limits.js";
+import { runRelayAdversarialScenario } from "./relayAdversarialHarness.js";
 import {
+  relayWebSocketProtocol,
   runRelayHealthCheck,
   runRelayRoundtripScenario,
 } from "./relayTestHarness.js";
 import type { RelayTestHarness, TestSocket } from "./relayTestHarness.js";
+import {
+  buildRelayWebSocketUrl,
+  deriveRelayConnectionId,
+  deriveRelayServerId,
+  generateRelayCapability,
+} from "@conduit/relay-transport";
 
 const workerScriptPath = fileURLToPath(new URL("index.ts", import.meta.url));
 const endpoint = "http://relay.local";
@@ -46,10 +54,42 @@ describe("cloudflare relay local e2e", () => {
     await runRelayRoundtripScenario(harness, "local_roundtrip");
   });
 
+  it("rejects relay socket hijacking without disturbing valid sockets", async () => {
+    const harness = await createLocalHarness();
+
+    await runRelayAdversarialScenario(harness, "local_attack");
+  }, 15000);
+
+  it("rejects query-param-only relay capabilities", async () => {
+    const harness = await createLocalHarness();
+    const daemonCapability = generateRelayCapability();
+    const serverId = deriveRelayServerId(daemonCapability);
+    const url = new URL(
+      buildRelayWebSocketUrl(endpoint, {
+        capability: daemonCapability,
+        role: "server",
+        serverId,
+      }),
+    );
+    url.searchParams.set("capability", daemonCapability);
+
+    await harness.openRejectedSocket(url.toString());
+  });
+
   it("closes oversized buffered client frames", async () => {
     const harness = await createLocalHarness();
+    const daemonCapability = generateRelayCapability();
+    const clientCapability = generateRelayCapability();
+    const serverId = deriveRelayServerId(daemonCapability);
+    const connectionId = deriveRelayConnectionId(clientCapability);
     const client = await harness.openSocket(
-      `${endpoint}/v1/relay/srv_limit?role=client&connectionId=conn_limit`,
+      buildRelayWebSocketUrl(endpoint, {
+        capability: clientCapability,
+        connectionId,
+        role: "client",
+        serverId,
+      }),
+      clientCapability,
     );
 
     client.send("x".repeat(MAX_FRAME_BYTES + 1));
@@ -79,18 +119,26 @@ async function createLocalHarness(): Promise<RelayTestHarness> {
       }
       return response.json();
     },
-    openSocket: async (url: string): Promise<TestSocket> => {
-      const dispatchUrl = websocketUrlToHttp(url);
-      const response = await currentMiniflare?.dispatchFetch(dispatchUrl, {
-        headers: { Upgrade: "websocket" },
-      });
-      if (response === undefined || response.status !== 101) {
-        let body = "missing response";
-        if (response !== undefined) {
-          body = await response.text();
-        }
+    openRejectedSocket: async (
+      url: string,
+      capability?: string,
+    ): Promise<void> => {
+      const response = await dispatchWebSocket(url, capability);
+      if (response.status === 101) {
+        response.webSocket?.accept();
+        response.webSocket?.close();
+        throw new Error("local relay websocket unexpectedly opened");
+      }
+    },
+    openSocket: async (
+      url: string,
+      capability: string,
+    ): Promise<TestSocket> => {
+      const response = await dispatchWebSocket(url, capability);
+      if (response.status !== 101) {
+        const body = await response.text();
         throw new Error(
-          `local relay websocket failed with ${response?.status}: ${body}`,
+          `local relay websocket failed with ${response.status}: ${body}`,
         );
       }
       const webSocket = response.webSocket;
@@ -101,6 +149,24 @@ async function createLocalHarness(): Promise<RelayTestHarness> {
       return webSocket;
     },
   };
+}
+
+async function dispatchWebSocket(
+  url: string,
+  capability?: string,
+): Promise<Response> {
+  const headers = new Headers({ Upgrade: "websocket" });
+  if (capability !== undefined) {
+    headers.set("Sec-WebSocket-Protocol", relayWebSocketProtocol(capability));
+  }
+  const response = await currentMiniflare?.dispatchFetch(
+    websocketUrlToHttp(url),
+    { headers },
+  );
+  if (response === undefined) {
+    throw new Error("local relay runtime is not initialized");
+  }
+  return response;
 }
 
 async function bundleWorkerScript(): Promise<string> {

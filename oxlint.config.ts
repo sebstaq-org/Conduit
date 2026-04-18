@@ -307,6 +307,7 @@ export default defineConfig({
     {
       files: [
         "packages/cloudflare-relay/src/**/*.test.ts",
+        "packages/cloudflare-relay/src/relayAdversarialHarness.ts",
         "packages/cloudflare-relay/src/relayTestHarness.ts",
       ],
       rules: {

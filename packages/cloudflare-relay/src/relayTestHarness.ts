@@ -1,8 +1,12 @@
 import {
   acceptRelayClientHandshake,
+  buildRelayWebSocketProtocol,
   buildRelayWebSocketUrl,
   createRelayClientHandshake,
+  deriveRelayConnectionId,
+  deriveRelayServerId,
   generateRelayDaemonKeyPair,
+  generateRelayCapability,
   parseRelayEnvelope,
 } from "@conduit/relay-transport";
 import { expect } from "vitest";
@@ -12,7 +16,11 @@ type TestSocket = Pick<WebSocket, "addEventListener" | "close" | "send">;
 interface RelayTestHarness {
   readonly endpoint: string;
   readonly fetchJson: (path: string) => Promise<unknown>;
-  readonly openSocket: (url: string) => Promise<TestSocket>;
+  readonly openRejectedSocket: (
+    url: string,
+    capability?: string,
+  ) => Promise<void>;
+  readonly openSocket: (url: string, capability: string) => Promise<TestSocket>;
 }
 
 const plaintextFromClient = "PLAINTEXT_CLIENT_MARKER_DO_NOT_LEAK";
@@ -30,26 +38,36 @@ async function runRelayRoundtripScenario(
   harness: RelayTestHarness,
   suffix: string,
 ): Promise<void> {
-  const serverId = `srv_e2e_${suffix}`;
-  const connectionId = `conn_${suffix}`;
+  const daemonCapability = generateRelayCapability();
+  const clientCapability = generateRelayCapability();
+  const relayServerId = deriveRelayServerId(daemonCapability);
+  const connectionId = deriveRelayConnectionId(clientCapability);
   const context = {
     connectionId,
-    offerNonce: "EjRWeBI0VngSNFZ4EjRWeA",
-    serverId,
+    offerNonce: `relay-roundtrip-${suffix}`,
+    serverId: relayServerId,
   };
   const daemonKeys = generateRelayDaemonKeyPair();
   const control = await harness.openSocket(
-    buildRelayWebSocketUrl(harness.endpoint, { role: "server", serverId }),
+    buildRelayWebSocketUrl(harness.endpoint, {
+      capability: daemonCapability,
+      role: "server",
+      serverId: relayServerId,
+    }),
+    daemonCapability,
   );
+  const clientWaiting = waitForMessage(control, "roundtrip control");
   const client = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
+      capability: clientCapability,
       connectionId,
       role: "client",
-      serverId,
+      serverId: relayServerId,
     }),
+    clientCapability,
   );
 
-  expect(parseRelayEnvelope(await waitForMessage(control))).toMatchObject({
+  expect(parseRelayEnvelope(await clientWaiting)).toMatchObject({
     connectionId,
     type: "client_waiting",
   });
@@ -68,13 +86,17 @@ async function runRelayRoundtripScenario(
 
   const data = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
+      capability: daemonCapability,
       connectionId,
       role: "server",
-      serverId,
+      serverId: relayServerId,
     }),
+    daemonCapability,
   );
-  await expect(waitForMessage(data)).resolves.toBe(rawHandshake);
-  const rawAtDaemon = await waitForMessage(data);
+  await expect(waitForMessage(data, "roundtrip handshake")).resolves.toBe(
+    rawHandshake,
+  );
+  const rawAtDaemon = await waitForMessage(data, "roundtrip first cipher");
   expect(rawAtDaemon).toBe(rawFirstCipherFrame);
   expect(rawAtDaemon).not.toContain(plaintextFromClient);
 
@@ -94,7 +116,7 @@ async function runRelayRoundtripScenario(
   const rawServerCipherFrame = JSON.stringify(serverCipherFrame);
   expect(rawServerCipherFrame).not.toContain(plaintextFromServer);
   data.send(rawServerCipherFrame);
-  const rawAtClient = await waitForMessage(client);
+  const rawAtClient = await waitForMessage(client, "roundtrip server cipher");
   expect(rawAtClient).toBe(rawServerCipherFrame);
   expect(rawAtClient).not.toContain(plaintextFromServer);
   await expect(
@@ -112,12 +134,17 @@ async function runRelayRoundtripScenario(
   client.send(rawReconnectFrame);
   const dataReconnect = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
+      capability: daemonCapability,
       connectionId,
       role: "server",
-      serverId,
+      serverId: relayServerId,
     }),
+    daemonCapability,
   );
-  const rawReconnectAtDaemon = await waitForMessage(dataReconnect);
+  const rawReconnectAtDaemon = await waitForMessage(
+    dataReconnect,
+    "roundtrip reconnect",
+  );
   expect(rawReconnectAtDaemon).toBe(rawReconnectFrame);
   await expect(
     daemonChannel.decryptUtf8(
@@ -136,7 +163,7 @@ async function waitForEnvelope(
   connectionId: string,
 ): Promise<void> {
   for (let attempts = 0; attempts < 6; attempts += 1) {
-    const envelope = parseRelayEnvelope(await waitForMessage(socket));
+    const envelope = parseRelayEnvelope(await waitForMessage(socket, type));
     if (envelope.type === type && envelope.connectionId === connectionId) {
       return;
     }
@@ -144,13 +171,16 @@ async function waitForEnvelope(
   throw new Error(`relay envelope ${type} for ${connectionId} not observed`);
 }
 
-function waitForMessage(socket: TestSocket): Promise<string> {
+function waitForMessage(
+  socket: TestSocket,
+  label = "relay message",
+): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const timeout = setTimeout(() => {
       if (!settled) {
         settled = true;
-        reject(new Error("timed out waiting for relay message"));
+        reject(new Error(`timed out waiting for ${label}`));
       }
     }, 5000);
     socket.addEventListener("message", (event: MessageEvent) => {
@@ -168,5 +198,14 @@ function waitForMessage(socket: TestSocket): Promise<string> {
   });
 }
 
-export { runRelayHealthCheck, runRelayRoundtripScenario, waitForMessage };
+function relayWebSocketProtocol(capability: string): string {
+  return buildRelayWebSocketProtocol(capability);
+}
+
+export {
+  relayWebSocketProtocol,
+  runRelayHealthCheck,
+  runRelayRoundtripScenario,
+  waitForMessage,
+};
 export type { RelayTestHarness, TestSocket };

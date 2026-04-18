@@ -7,7 +7,11 @@ import {
   MAX_FRAME_BYTES,
 } from "./limits.js";
 import { controlFrame, frameBytes } from "./frames.js";
-import type { WebSocketResponseInit, WorkerWebSocket } from "./workerTypes.js";
+import {
+  relayProtocolForResponse,
+  websocketResponse,
+} from "./websocketResponse.js";
+import type { WorkerWebSocket } from "./workerTypes.js";
 
 type RelayMessage = ArrayBuffer | string;
 
@@ -32,19 +36,20 @@ class RelayDurableObject {
     const url = new URL(request.url);
     const socketKind = url.searchParams.get("socketKind");
     const connectionId = url.searchParams.get("connectionId") ?? undefined;
+    const protocol = relayProtocolForResponse(request);
     if (socketKind === "control") {
-      return this.acceptControlSocket();
+      return this.acceptControlSocket(protocol);
     }
     if (socketKind === "client" && connectionId !== undefined) {
-      return this.acceptClientSocket(connectionId);
+      return this.acceptClientSocket(connectionId, protocol);
     }
     if (socketKind === "data" && connectionId !== undefined) {
-      return this.acceptDataSocket(connectionId);
+      return this.acceptDataSocket(connectionId, protocol);
     }
     return new Response("invalid relay socket", { status: 400 });
   }
 
-  private acceptControlSocket(): Response {
+  private acceptControlSocket(protocol: string): Response {
     const sockets = new WebSocketPair();
     const client = sockets[0];
     const server = sockets[1];
@@ -61,20 +66,24 @@ class RelayDurableObject {
         this.controlSocket = null;
       }
     });
-    return websocketResponse(client);
+    return websocketResponse(client, protocol);
   }
 
-  private acceptClientSocket(connectionId: string): Response {
+  private acceptClientSocket(connectionId: string, protocol: string): Response {
+    const existing = this.connections.get(connectionId);
+    if (
+      existing?.clientSocket !== null &&
+      existing?.clientSocket !== undefined
+    ) {
+      return new Response("relay client socket already connected", {
+        status: 409,
+      });
+    }
     const sockets = new WebSocketPair();
     const client = sockets[0];
     const server = sockets[1];
     server.accept();
     const connection = this.connectionFor(connectionId);
-    safeClose(
-      connection.clientSocket,
-      CLOSE_REPLACED,
-      "client socket replaced",
-    );
     connection.clientSocket = server;
     this.notifyControl("client_waiting", connectionId);
     this.armPendingTimer(connectionId, connection);
@@ -87,10 +96,10 @@ class RelayDurableObject {
     server.addEventListener("error", () => {
       this.handleClientClose(connectionId, server);
     });
-    return websocketResponse(client);
+    return websocketResponse(client, protocol);
   }
 
-  private acceptDataSocket(connectionId: string): Response {
+  private acceptDataSocket(connectionId: string, protocol: string): Response {
     const sockets = new WebSocketPair();
     const client = sockets[0];
     const server = sockets[1];
@@ -109,7 +118,7 @@ class RelayDurableObject {
     server.addEventListener("error", () => {
       this.handleDataClose(connectionId, server);
     });
-    return websocketResponse(client);
+    return websocketResponse(client, protocol);
   }
 
   private handleClientMessage(
@@ -266,11 +275,6 @@ class RelayDurableObject {
       this.connections.delete(connectionId);
     }
   }
-}
-
-function websocketResponse(webSocket: WorkerWebSocket): Response {
-  const init: WebSocketResponseInit = { status: 101, webSocket };
-  return new Response(null, init);
 }
 
 function safeSend(socket: WorkerWebSocket, message: RelayMessage): void {

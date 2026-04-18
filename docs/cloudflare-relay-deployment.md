@@ -6,7 +6,7 @@ PR 2 requires a real personal Cloudflare Workers endpoint before acceptance. The
 
 Use the Workers Free plan with SQLite-backed Durable Objects only. Do not enable Workers Paid, paid overage, KV, R2, Queues, D1, Logpush, custom domains, or dashboard-managed worker config for this relay.
 
-The relay is intentionally dumb. It accepts WebSockets, tracks role and `connectionId`, buffers short client-before-daemon data, forwards opaque frames, and never logs payload bodies.
+The relay is intentionally dumb. It accepts WebSockets, checks opaque route capabilities from `Sec-WebSocket-Protocol`, tracks role and `connectionId`, buffers short client-before-daemon data, forwards opaque frames, and never logs payload bodies or capabilities.
 
 ## Deploy
 
@@ -42,4 +42,4 @@ Run live E2E against the deployed Cloudflare endpoint:
 CONDUIT_RELAY_LIVE_ENDPOINT=https://conduit-relay.<account-subdomain>.workers.dev pnpm run relay:test:live
 ```
 
-PR 2 is not done until both commands pass and the PR summary includes the real endpoint that was verified. The live test must cover health, control socket notification, client-before-daemon buffering, encrypted roundtrip, reconnect, and peer-observed ciphertext before decrypt.
+PR 2 is not done until both commands pass and the PR summary includes the real endpoint that was verified. The live test must cover health, control socket notification, client-before-daemon buffering, encrypted roundtrip, reconnect, peer-observed ciphertext before decrypt, and adversarial rejection for fake control, fake data, duplicate client, and query-param-only capabilities.
