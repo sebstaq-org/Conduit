@@ -1,9 +1,20 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import type { Server as HttpServer, ServerResponse } from "node:http";
 
 interface E2eHarness {
   readonly frontendUrl: string;
@@ -45,10 +56,12 @@ async function startE2eHarness(): Promise<E2eHarness> {
   await mkdir(fixtureCwd, { recursive: true });
   const servicePort = await freePort();
   const frontendPort = await freePort();
+  const frontendBuildDir = join(runRoot, "frontend-web");
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
   const frontendUrl = `http://localhost:${frontendPort}`;
   const processes: ManagedProcess[] = [];
+  let frontendServer: HttpServer | null = null;
 
   try {
     processes.push(
@@ -69,31 +82,28 @@ async function startE2eHarness(): Promise<E2eHarness> {
       sessionGroupsUpdatedWithinDays: null,
     });
 
-    processes.push(
-      spawnManaged(
-        "expo-web",
-        "pnpm",
-        [
-          "--filter",
-          "@conduit/frontend",
-          "exec",
-          "expo",
-          "start",
-          "--web",
-          "--localhost",
-          "--port",
-          String(frontendPort),
-        ],
-        {
-          BROWSER: "none",
-          CI: "1",
-          EXPO_UNSTABLE_HEADLESS: "1",
-          EXPO_NO_WEB_SETUP: "0",
-          EXPO_NO_TELEMETRY: "1",
-          EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
-        },
-      ),
+    await runManaged(
+      "expo-export-web",
+      "pnpm",
+      [
+        "--filter",
+        "@conduit/frontend",
+        "exec",
+        "expo",
+        "export",
+        "--platform",
+        "web",
+        "--output-dir",
+        frontendBuildDir,
+        "--clear",
+      ],
+      {
+        CI: "1",
+        EXPO_NO_TELEMETRY: "1",
+        EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
+      },
     );
+    frontendServer = await startStaticServer(frontendBuildDir, frontendPort);
     await waitForHttp(frontendUrl, processes, frontendReadyTimeoutMs);
 
     return {
@@ -105,11 +115,13 @@ async function startE2eHarness(): Promise<E2eHarness> {
       serviceUrl,
       sessionWsUrl,
       stop: async () => {
+        await closeStaticServer(frontendServer);
         await stopProcesses(processes);
         await rm(runRoot, { force: true, recursive: true });
       },
     };
   } catch (error) {
+    await closeStaticServer(frontendServer);
     await stopProcesses(processes);
     await rm(runRoot, { force: true, recursive: true });
     throw error;
@@ -142,11 +154,146 @@ function spawnManaged(
   return { child, logs, name };
 }
 
+async function runManaged(
+  name: string,
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<void> {
+  const process = spawnManaged(name, command, args, env);
+  await waitForProcessSuccess(process);
+}
+
 function appendLogs(logs: string[], chunk: string): void {
   logs.push(...chunk.split(/\r?\n/u).filter((line) => line.length > 0));
   while (logs.length > 80) {
     logs.shift();
   }
+}
+
+async function waitForProcessSuccess(process: ManagedProcess): Promise<void> {
+  if (process.child.exitCode !== null) {
+    if (process.child.exitCode === 0) {
+      return;
+    }
+    throw new Error(`${process.name} failed\n${processLogs([process])}`);
+  }
+  await new Promise<void>((resolvePromise, reject) => {
+    process.child.once("error", reject);
+    process.child.once("exit", (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      reject(new Error(`${process.name} failed\n${processLogs([process])}`));
+    });
+  });
+}
+
+async function startStaticServer(
+  root: string,
+  port: number,
+): Promise<HttpServer> {
+  const server = createHttpServer((request, response) => {
+    void serveStaticAsset(root, request.url ?? "/", response);
+  });
+  await new Promise<void>((resolvePromise, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolvePromise();
+    });
+  });
+  return server;
+}
+
+async function closeStaticServer(server: HttpServer | null): Promise<void> {
+  if (server === null) {
+    return;
+  }
+  await new Promise<void>((resolvePromise) => {
+    server.close(() => {
+      resolvePromise();
+    });
+    server.closeAllConnections();
+  });
+}
+
+async function serveStaticAsset(
+  root: string,
+  rawUrl: string,
+  response: ServerResponse,
+): Promise<void> {
+  const requestUrl = new URL(rawUrl, "http://localhost");
+  const assetPath = await resolveStaticAsset(root, requestUrl.pathname);
+  if (assetPath === null) {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    "cache-control": "no-store",
+    "content-type": contentType(assetPath),
+  });
+  createReadStream(assetPath).pipe(response);
+}
+
+async function resolveStaticAsset(
+  root: string,
+  pathname: string,
+): Promise<string | null> {
+  const requestedPath = resolve(root, `.${decodeURIComponent(pathname)}`);
+  if (!isPathInside(root, requestedPath)) {
+    return null;
+  }
+  const filePath = await readableFilePath(requestedPath);
+  if (filePath !== null) {
+    return filePath;
+  }
+  if (extname(requestedPath) === "") {
+    return await readableFilePath(join(root, "index.html"));
+  }
+  return null;
+}
+
+async function readableFilePath(path: string): Promise<string | null> {
+  try {
+    const fileStat = await stat(path);
+    if (fileStat.isFile()) {
+      return path;
+    }
+    if (fileStat.isDirectory()) {
+      return await readableFilePath(join(path, "index.html"));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relativePath = relative(root, candidate);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith(`..${sep}`) &&
+      relativePath !== ".." &&
+      !isAbsolute(relativePath))
+  );
+}
+
+function contentType(path: string): string {
+  const contentTypes: Record<string, string> = {
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".ttf": "font/ttf",
+    ".wasm": "application/wasm",
+  };
+  return contentTypes[extname(path)] ?? "application/octet-stream";
 }
 
 async function freePort(): Promise<number> {
