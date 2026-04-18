@@ -22,6 +22,28 @@
         "sessionUpdate": "agent_message_chunk"
       },
       "variant": "agent_message_chunk"
+    },
+    {
+      "index": 1,
+      "update": {
+        "_meta": {
+          "codex": {
+            "terminalPlan": {
+              "itemId": "conduit-e2e-terminal-plan-item",
+              "source": "TurnItem::Plan",
+              "text": "# CONDUIT_E2E_TERMINAL_PLAN\n\n1. Keep the provider launcher contract as codex-acp.\n2. Use the vendored patched adapter for plan mode.",
+              "threadId": "conduit-e2e-thread",
+              "turnId": "conduit-e2e-turn"
+            }
+          }
+        },
+        "content": {
+          "text": "# CONDUIT_E2E_TERMINAL_PLAN\n\n1. Keep the provider launcher contract as codex-acp.\n2. Use the vendored patched adapter for plan mode.",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
     }
   ]
 }

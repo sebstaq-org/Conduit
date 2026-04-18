@@ -1,0 +1,10 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "cwd": "/tmp/conduit-e2e-fixture-project",
+  "manualCapture": false,
+  "operation": "session/load",
+  "provider": "codex",
+  "sessionId": "e2e-codex-new-session-0001",
+  "timestamp": "2026-01-01T00:00:00Z"
+}

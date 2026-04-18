@@ -24,6 +24,7 @@ use new::read_session_new_fixtures;
 use prompt::{SessionPromptFixture, read_session_prompt_fixtures};
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
+use set_config::{SessionSetConfigOptionFixture, read_session_set_config_option_fixtures};
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,7 @@ mod initialize;
 mod load;
 mod new;
 mod prompt;
+mod set_config;
 
 const PROVIDERS: [ProviderId; 3] = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex];
 
@@ -43,6 +45,8 @@ pub struct FixtureProviderFactory {
     session_news: HashMap<ProviderId, Value>,
     session_loads: HashMap<(ProviderId, String), SessionLoadFixture>,
     session_prompts: HashMap<(ProviderId, String), SessionPromptFixture>,
+    session_set_config_options:
+        HashMap<(ProviderId, String, String, String), SessionSetConfigOptionFixture>,
 }
 
 impl FixtureProviderFactory {
@@ -65,6 +69,7 @@ impl FixtureProviderFactory {
         let mut session_news = HashMap::new();
         let mut session_loads = HashMap::new();
         let mut session_prompts = HashMap::new();
+        let mut session_set_config_options = HashMap::new();
         for provider in PROVIDERS {
             read_initialize_fixtures(root, provider, &mut initializes)?;
             let path = session_list_path(root, provider);
@@ -75,6 +80,11 @@ impl FixtureProviderFactory {
             read_session_new_fixtures(root, provider, &mut session_news)?;
             read_session_load_fixtures(root, provider, &mut session_loads)?;
             read_session_prompt_fixtures(root, provider, &mut session_prompts)?;
+            read_session_set_config_option_fixtures(
+                root,
+                provider,
+                &mut session_set_config_options,
+            )?;
         }
         Ok(Self {
             initializes,
@@ -82,6 +92,7 @@ impl FixtureProviderFactory {
             session_news,
             session_loads,
             session_prompts,
+            session_set_config_options,
         })
     }
 }
@@ -111,6 +122,17 @@ impl ProviderFactory for FixtureProviderFactory {
                 .filter(|((fixture_provider, _), _)| *fixture_provider == provider)
                 .map(|((_, session_id), fixture)| (session_id.clone(), fixture.clone()))
                 .collect(),
+            session_set_config_options: self
+                .session_set_config_options
+                .iter()
+                .filter(|((fixture_provider, _, _, _), _)| *fixture_provider == provider)
+                .map(|((_, session_id, config_id, value), fixture)| {
+                    (
+                        (session_id.clone(), config_id.clone(), value.clone()),
+                        fixture.clone(),
+                    )
+                })
+                .collect(),
             loaded_transcripts: HashMap::new(),
         }))
     }
@@ -125,6 +147,7 @@ struct FixtureProviderPort {
     session_new: Option<Value>,
     session_loads: HashMap<String, SessionLoadFixture>,
     session_prompts: HashMap<String, SessionPromptFixture>,
+    session_set_config_options: HashMap<(String, String, String), SessionSetConfigOptionFixture>,
     loaded_transcripts: HashMap<String, LoadedTranscriptSnapshot>,
 }
 
@@ -258,11 +281,21 @@ impl ProviderPort for FixtureProviderPort {
 
     fn session_set_config_option(
         &mut self,
-        _session_id: String,
-        _config_id: String,
-        _value: String,
+        session_id: String,
+        config_id: String,
+        value: String,
     ) -> Result<Value> {
-        unsupported("session/set_config_option")
+        self.require_initialized("session/set_config_option")?;
+        let key = (session_id.clone(), config_id.clone(), value.clone());
+        self.session_set_config_options
+            .get(&key)
+            .map(|fixture| fixture.response.clone())
+            .ok_or_else(|| {
+                RuntimeError::Provider(format!(
+                    "missing session/set_config_option fixture for {} session {session_id} config {config_id} value {value}",
+                    self.provider.as_str()
+                ))
+            })
     }
 
     fn session_respond_interaction(

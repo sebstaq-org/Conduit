@@ -110,6 +110,45 @@ pub(crate) fn write_session_new_capture(
     Ok(())
 }
 
+pub(crate) struct SessionSetConfigOptionCapture<'a> {
+    pub(crate) capture: &'a str,
+    pub(crate) config_id: &'a str,
+    pub(crate) response: Value,
+    pub(crate) session_id: &'a str,
+    pub(crate) value: &'a str,
+}
+
+pub(crate) fn write_session_set_config_option_capture(
+    root: &std::path::Path,
+    capture: SessionSetConfigOptionCapture<'_>,
+) -> TestResult<()> {
+    let dir = root
+        .join("codex/session-set-config-option")
+        .join(capture.session_id)
+        .join(capture.capture);
+    create_dir_all(&dir)?;
+    write(
+        dir.join("manifest.json"),
+        serde_json::to_string(&json!({
+            "operation": "session/set_config_option",
+            "provider": "codex",
+            "sessionId": capture.session_id
+        }))?,
+    )?;
+    write(
+        dir.join("provider.raw.json"),
+        serde_json::to_string(&json!({
+            "configRequest": {
+                "sessionId": capture.session_id,
+                "configId": capture.config_id,
+                "value": capture.value
+            },
+            "configResponse": capture.response
+        }))?,
+    )?;
+    Ok(())
+}
+
 pub(crate) struct SessionPromptCapture<'a> {
     pub(crate) capture: &'a str,
     pub(crate) prompt: Vec<Value>,
@@ -162,6 +201,23 @@ pub(crate) fn transcript_update(
             "content": { "type": "text", "text": text }
         }),
     }
+}
+
+pub(crate) fn config_options(current_value: &str) -> Value {
+    json!([
+        {
+            "category": "mode",
+            "currentValue": current_value,
+            "description": "Choose collaboration behavior (Default or Plan mode)",
+            "id": "collaboration_mode",
+            "name": "Collaboration Mode",
+            "options": [
+                { "name": "Plan", "value": "plan" },
+                { "name": "Default", "value": "default" }
+            ],
+            "type": "select"
+        }
+    ])
 }
 
 pub(crate) fn command(id: &str, name: &str, provider: &str, params: Value) -> ConsumerCommand {

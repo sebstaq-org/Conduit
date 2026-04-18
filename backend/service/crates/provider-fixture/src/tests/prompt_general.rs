@@ -1,9 +1,9 @@
 use super::super::FixtureProviderFactory;
 use super::support::{
-    SessionPromptCapture, TestResult, fixture_root, initialize_port, transcript_update,
-    write_session_prompt_capture,
+    SessionPromptCapture, SessionSetConfigOptionCapture, TestResult, config_options, fixture_root,
+    initialize_port, transcript_update, write_session_prompt_capture,
+    write_session_set_config_option_capture,
 };
-use acp_core::InteractionResponse;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, RuntimeError};
@@ -107,21 +107,70 @@ fn unsupported_methods_return_unsupported_command() -> TestResult<()> {
         "session/cancel",
     )?;
     assert_unsupported(
-        port.session_set_config_option(
-            "session-1".to_owned(),
-            "mode".to_owned(),
-            "default".to_owned(),
-        ),
-        "session/set_config_option",
-    )?;
-    assert_unsupported(
         port.session_respond_interaction(
             "session-1".to_owned(),
             "interaction-1".to_owned(),
-            InteractionResponse::Cancelled,
+            acp_core::InteractionResponse::Cancelled,
         ),
         "session/respond_interaction",
     )
+}
+
+#[test]
+fn session_set_config_option_returns_matching_fixture() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_session_set_config_option_capture(
+        root.path(),
+        SessionSetConfigOptionCapture {
+            capture: "plan",
+            config_id: "collaboration_mode",
+            response: json!({ "configOptions": config_options("plan") }),
+            session_id: "session-1",
+            value: "plan",
+        },
+    )?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+
+    let response = port.session_set_config_option(
+        "session-1".to_owned(),
+        "collaboration_mode".to_owned(),
+        "plan".to_owned(),
+    )?;
+
+    if response
+        .pointer("/configOptions/0/currentValue")
+        .and_then(Value::as_str)
+        != Some("plan")
+    {
+        return Err(format!("unexpected response {response}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn session_set_config_option_fails_when_fixture_is_missing() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+    let error = port
+        .session_set_config_option(
+            "session-1".to_owned(),
+            "collaboration_mode".to_owned(),
+            "plan".to_owned(),
+        )
+        .err()
+        .ok_or("missing session/set_config_option unexpectedly succeeded")?;
+
+    if !error
+        .to_string()
+        .contains("missing session/set_config_option")
+    {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
 }
 
 fn assert_unsupported(result: service_runtime::Result<Value>, command: &str) -> TestResult<()> {

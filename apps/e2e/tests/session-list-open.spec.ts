@@ -31,7 +31,9 @@ test("session list opens fixture transcript", async ({ page }) => {
   await expect(page.getByText(transcriptSentinel)).toBeVisible();
 });
 
-test("draft prompt creates fixture session", async ({ page }) => {
+test("draft prompt in plan mode shows terminal plan decision", async ({
+  page,
+}) => {
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
@@ -41,6 +43,9 @@ test("draft prompt creates fixture session", async ({ page }) => {
   await newSessionButton.click();
   await page.getByLabel("Select provider for new session").click();
   await page.getByLabel("codex").click();
+  await page.getByLabel("Select Collaboration Mode").click();
+  await page.getByLabel("Plan").click();
+  await expect(page.getByText("Collaboration Mode: plan")).toBeVisible();
   await page.getByLabel("Session message").fill(newSessionPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
@@ -48,8 +53,10 @@ test("draft prompt creates fixture session", async ({ page }) => {
   await sendButton.click();
 
   await expect(page.getByLabel("Session message")).toHaveValue("");
+  await expect(page.getByText(newSessionSentinel)).toBeVisible();
+  await expect(page.getByText("Implement this plan?")).toBeVisible();
   await expect(
-    page.getByText(newSessionSentinel, { exact: true }),
+    page.getByRole("button", { name: "1. Yes, implement this plan" }),
   ).toBeVisible();
 });
 
