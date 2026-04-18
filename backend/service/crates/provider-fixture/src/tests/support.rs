@@ -152,6 +152,7 @@ pub(crate) fn write_session_set_config_option_capture(
 pub(crate) struct SessionPromptCapture<'a> {
     pub(crate) capture: &'a str,
     pub(crate) prompt: Vec<Value>,
+    pub(crate) required_config: Option<(&'a str, &'a str)>,
     pub(crate) response: Value,
     pub(crate) session_id: &'a str,
     pub(crate) updates: Vec<acp_core::TranscriptUpdateSnapshot>,
@@ -176,16 +177,36 @@ pub(crate) fn write_session_prompt_capture(
     )?;
     write(
         dir.join("provider.raw.json"),
-        serde_json::to_string(&json!({
-            "promptRequest": {
-                "sessionId": capture.session_id,
-                "prompt": capture.prompt
-            },
-            "promptResponse": capture.response,
-            "promptUpdates": capture.updates
-        }))?,
+        serde_json::to_string(&session_prompt_raw_capture(&capture))?,
     )?;
     Ok(())
+}
+
+fn session_prompt_raw_capture(capture: &SessionPromptCapture<'_>) -> Value {
+    let config_capture = capture
+        .required_config
+        .map(|(config_id, value)| {
+            json!({
+                "configRequest": {
+                    "sessionId": capture.session_id,
+                    "configId": config_id,
+                    "value": value
+                },
+                "configResponse": {
+                    "configOptions": config_options(value)
+                }
+            })
+        })
+        .unwrap_or(Value::Null);
+    json!({
+        "configCapture": config_capture,
+        "promptRequest": {
+            "sessionId": capture.session_id,
+            "prompt": capture.prompt
+        },
+        "promptResponse": capture.response,
+        "promptUpdates": capture.updates
+    })
 }
 
 pub(crate) fn transcript_update(

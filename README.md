@@ -6,7 +6,7 @@ Conduit is an official-ACP-only workspace. The backend validates against a pinne
 
 1. `rtk pnpm install`
 2. `rtk pnpm run bootstrap`
-3. `rtk pnpm run codex-acp:build`
+3. `rtk pnpm run codex-acp:check`
 4. `rtk pnpm run check`
 
 ## Frontend Structure

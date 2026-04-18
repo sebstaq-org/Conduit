@@ -14,9 +14,16 @@ use std::path::Path;
 #[derive(Debug, Clone)]
 pub(crate) struct SessionPromptFixture {
     pub(crate) prompt: Vec<Value>,
+    pub(crate) required_config: Option<RequiredPromptConfig>,
     pub(crate) response: Value,
     pub(crate) stop_reason: String,
     pub(crate) updates: Vec<TranscriptUpdateSnapshot>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct RequiredPromptConfig {
+    pub(crate) config_id: String,
+    pub(crate) value: String,
 }
 
 impl SessionPromptFixture {
@@ -141,6 +148,7 @@ fn read_session_prompt_fixture(path: &Path) -> Result<(String, SessionPromptFixt
         .as_array()
         .cloned()
         .ok_or_else(|| invalid_fixture(path, "must contain promptRequest.prompt array"))?;
+    let required_config = required_prompt_config(path, &value)?;
     let response = value
         .get("promptResponse")
         .cloned()
@@ -168,6 +176,7 @@ fn read_session_prompt_fixture(path: &Path) -> Result<(String, SessionPromptFixt
         session_id,
         SessionPromptFixture {
             prompt,
+            required_config,
             response,
             stop_reason,
             updates,
@@ -205,6 +214,31 @@ fn manifest_session_id(path: &Path) -> Result<Option<String>> {
         .or_else(|| manifest.get("session_id"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned))
+}
+
+fn required_prompt_config(path: &Path, value: &Value) -> Result<Option<RequiredPromptConfig>> {
+    let Some(capture) = value.get("configCapture") else {
+        return Ok(None);
+    };
+    if capture.is_null() {
+        return Ok(None);
+    }
+    let config_id = capture
+        .pointer("/configRequest/configId")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            invalid_fixture(path, "must contain configCapture.configRequest.configId")
+        })?;
+    let config_value = capture
+        .pointer("/configRequest/value")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| invalid_fixture(path, "must contain configCapture.configRequest.value"))?;
+    Ok(Some(RequiredPromptConfig {
+        config_id,
+        value: config_value,
+    }))
 }
 
 fn agent_text_chunks(updates: &[TranscriptUpdateSnapshot]) -> Vec<String> {

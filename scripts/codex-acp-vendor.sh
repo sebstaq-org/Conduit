@@ -17,12 +17,24 @@ run() {
 }
 
 configure_libcap_defaults() {
-  local libcap_root="/srv/devops/repos/vendor/libcap-dev-extract"
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists libcap; then
+    return
+  fi
+
+  local libcap_root="${CONDUIT_CODEX_ACP_LIBCAP_SYSROOT:-}"
+  if [[ -z "$libcap_root" && -d "/srv/devops/repos/vendor/libcap-dev-extract" ]]; then
+    libcap_root="/srv/devops/repos/vendor/libcap-dev-extract"
+    printf "Using local Codex ACP libcap sysroot fallback: %s\n" "$libcap_root" >&2
+  fi
+  if [[ -z "$libcap_root" ]]; then
+    return
+  fi
+
   local pkgconfig_dir="$libcap_root/usr/lib/x86_64-linux-gnu/pkgconfig"
   if [[ -d "$pkgconfig_dir" && -z "${PKG_CONFIG_PATH:-}" ]]; then
     export PKG_CONFIG_PATH="$pkgconfig_dir"
   fi
-  if [[ -d "$libcap_root" && -z "${PKG_CONFIG_SYSROOT_DIR:-}" ]]; then
+  if [[ -z "${PKG_CONFIG_SYSROOT_DIR:-}" ]]; then
     export PKG_CONFIG_SYSROOT_DIR="$libcap_root"
   fi
 }
@@ -40,15 +52,31 @@ build_adapter() {
   printf "codex-acp installed: %s\n" "$BIN_PATH"
 }
 
+verify_adapter() {
+  if [[ ! -x "$BIN_PATH" ]]; then
+    printf "Missing executable managed codex-acp: %s\n" "$BIN_PATH" >&2
+    exit 1
+  fi
+  run "$BIN_PATH" --help >/dev/null
+  printf "codex-acp verified: %s\n" "$BIN_PATH"
+}
+
 case "${1:-build}" in
   build)
     build_adapter
     ;;
+  check)
+    build_adapter
+    verify_adapter
+    ;;
   print-bin)
     printf "%s\n" "$BIN_PATH"
     ;;
+  verify)
+    verify_adapter
+    ;;
   *)
-    printf "Usage: %s [build|print-bin]\n" "$0" >&2
+    printf "Usage: %s [build|check|print-bin|verify]\n" "$0" >&2
     exit 1
     ;;
 esac

@@ -56,8 +56,8 @@ const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 19] = [
     "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".jsonl", ".log", ".md",
     ".ndjson", ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
 ];
-const ALLOWED_VENDOR_EXTENSIONS: [&str; 10] = [
-    "", ".gitkeep", ".json", ".lock", ".md", ".rs", ".toml", ".txt", ".yaml", ".yml",
+const ALLOWED_VENDOR_EXTENSIONS: [&str; 11] = [
+    "", ".gitkeep", ".json", ".lock", ".md", ".patch", ".rs", ".toml", ".txt", ".yaml", ".yml",
 ];
 const ARTIFACT_RULE: files::ExtensionRule = files::ExtensionRule {
     allowed: &ALLOWED_ARTIFACT_EXTENSIONS,

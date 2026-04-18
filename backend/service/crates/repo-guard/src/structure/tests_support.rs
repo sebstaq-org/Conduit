@@ -170,6 +170,10 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     write_file(
         &repo_root.join("vendor/codex-acp/README.conduit.md"),
         "# vendor\n",
+    )?;
+    write_file(
+        &repo_root.join("vendor/codex-acp/provenance/upstream-pr195.patch"),
+        "diff --git a/src/thread.rs b/src/thread.rs\n",
     )
 }
 

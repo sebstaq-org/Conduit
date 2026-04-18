@@ -133,6 +133,7 @@ impl ProviderFactory for FixtureProviderFactory {
                     )
                 })
                 .collect(),
+            applied_config_options: HashMap::new(),
             loaded_transcripts: HashMap::new(),
         }))
     }
@@ -148,6 +149,7 @@ struct FixtureProviderPort {
     session_loads: HashMap<String, SessionLoadFixture>,
     session_prompts: HashMap<String, SessionPromptFixture>,
     session_set_config_options: HashMap<(String, String, String), SessionSetConfigOptionFixture>,
+    applied_config_options: HashMap<(String, String), String>,
     loaded_transcripts: HashMap<String, LoadedTranscriptSnapshot>,
 }
 
@@ -268,6 +270,7 @@ impl ProviderPort for FixtureProviderPort {
                 self.provider.as_str()
             )));
         }
+        self.require_prompt_config(&session_id, &fixture)?;
         for update in &fixture.updates {
             update_sink(update.clone());
         }
@@ -287,15 +290,15 @@ impl ProviderPort for FixtureProviderPort {
     ) -> Result<Value> {
         self.require_initialized("session/set_config_option")?;
         let key = (session_id.clone(), config_id.clone(), value.clone());
-        self.session_set_config_options
-            .get(&key)
-            .map(|fixture| fixture.response.clone())
-            .ok_or_else(|| {
-                RuntimeError::Provider(format!(
-                    "missing session/set_config_option fixture for {} session {session_id} config {config_id} value {value}",
-                    self.provider.as_str()
-                ))
-            })
+        let fixture = self.session_set_config_options.get(&key).ok_or_else(|| {
+            RuntimeError::Provider(format!(
+                "missing session/set_config_option fixture for {} session {session_id} config {config_id} value {value}",
+                self.provider.as_str()
+            ))
+        })?;
+        self.applied_config_options
+            .insert((session_id, config_id), value);
+        Ok(fixture.response.clone())
     }
 
     fn session_respond_interaction(
@@ -316,6 +319,26 @@ impl FixtureProviderPort {
         Err(RuntimeError::Provider(format!(
             "{operation} requires initialize fixture for {}",
             self.provider.as_str()
+        )))
+    }
+
+    fn require_prompt_config(
+        &self,
+        session_id: &str,
+        fixture: &SessionPromptFixture,
+    ) -> Result<()> {
+        let Some(required) = &fixture.required_config else {
+            return Ok(());
+        };
+        let key = (session_id.to_owned(), required.config_id.clone());
+        if self.applied_config_options.get(&key) == Some(&required.value) {
+            return Ok(());
+        }
+        Err(RuntimeError::Provider(format!(
+            "session/prompt fixture for {} session {session_id} requires prior session/set_config_option {}={}",
+            self.provider.as_str(),
+            required.config_id,
+            required.value
         )))
     }
 }
