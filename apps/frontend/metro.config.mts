@@ -1,5 +1,5 @@
 import { getDefaultConfig } from "expo/metro-config.js";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { getBundleModeMetroConfig } from "react-native-worklets/bundleMode/index.js";
@@ -55,16 +55,34 @@ function resolveTypeScriptSourceImport(
   return null;
 }
 
-metroConfig.resolver.resolveRequest = (
+const resolveTypeScriptSourceRequest = (
+  originModulePath: string,
+  requestName: string,
+): unknown => {
+  if (!requestName.startsWith(".") || !requestName.endsWith(".js")) {
+    return undefined;
+  }
+
+  const sourceRequestPath = path.resolve(
+    path.dirname(originModulePath),
+    requestName.slice(0, -".js".length),
+  );
+  const sourceFilePath = `${sourceRequestPath}.ts`;
+  const sourceFileExists: boolean = existsSync(sourceFilePath);
+
+  if (!sourceFileExists) {
+    return undefined;
+  }
+
+  return { type: "sourceFile", filePath: sourceFilePath };
+};
+
+const resolveWithTypeScriptExtensionFallback: ResolveRequest = (
   context,
   moduleName,
   platform,
-): unknown => {
+) => {
   const requestName = String(moduleName);
-
-  if (requestName.startsWith(workletsModulePath)) {
-    return bundleModeResolveRequest(context, moduleName, platform);
-  }
 
   try {
     return resolveDefault(context, requestName, platform);
@@ -79,6 +97,28 @@ metroConfig.resolver.resolveRequest = (
     }
     throw error;
   }
+};
+
+metroConfig.resolver.resolveRequest = (
+  context,
+  moduleName,
+  platform,
+): unknown => {
+  const requestName = String(moduleName);
+  const sourceRequest = resolveTypeScriptSourceRequest(
+    String(context.originModulePath),
+    requestName,
+  );
+
+  if (sourceRequest !== undefined) {
+    return sourceRequest;
+  }
+
+  if (requestName.startsWith(workletsModulePath)) {
+    return bundleModeResolveRequest(context, moduleName, platform);
+  }
+
+  return resolveWithTypeScriptExtensionFallback(context, moduleName, platform);
 };
 
 // oxlint-disable-next-line import/no-default-export -- Metro config loader requires a default config value.

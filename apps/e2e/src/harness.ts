@@ -1,9 +1,20 @@
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import type { Server as HttpServer, ServerResponse } from "node:http";
 
 interface E2eHarness {
   readonly frontendUrl: string;
@@ -38,16 +49,19 @@ const serviceBin = join(
   "service-bin",
 );
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
+const frontendReadyTimeoutMs = 180_000;
 
 async function startE2eHarness(): Promise<E2eHarness> {
   const runRoot = await mkdtemp(join(tmpdir(), "conduit-e2e-"));
   await mkdir(fixtureCwd, { recursive: true });
   const servicePort = await freePort();
   const frontendPort = await freePort();
+  const frontendBuildDir = join(runRoot, "frontend-web");
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
-  const frontendUrl = `http://127.0.0.1:${frontendPort}`;
+  const frontendUrl = `http://localhost:${frontendPort}`;
   const processes: ManagedProcess[] = [];
+  let frontendServer: HttpServer | null = null;
 
   try {
     processes.push(
@@ -68,45 +82,46 @@ async function startE2eHarness(): Promise<E2eHarness> {
       sessionGroupsUpdatedWithinDays: null,
     });
 
-    processes.push(
-      spawnManaged(
-        "expo-web",
-        "pnpm",
-        [
-          "--filter",
-          "@conduit/frontend",
-          "exec",
-          "expo",
-          "start",
-          "--web",
-          "--localhost",
-          "--port",
-          String(frontendPort),
-        ],
-        {
-          BROWSER: "none",
-          CI: "1",
-          EXPO_NO_TELEMETRY: "1",
-          EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
-        },
-      ),
+    await runManaged(
+      "expo-export-web",
+      "pnpm",
+      [
+        "--filter",
+        "@conduit/frontend",
+        "exec",
+        "expo",
+        "export",
+        "--platform",
+        "web",
+        "--output-dir",
+        frontendBuildDir,
+        "--clear",
+      ],
+      {
+        CI: "1",
+        EXPO_NO_TELEMETRY: "1",
+        EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
+      },
     );
-    await waitForHttp(frontendUrl, processes, 60_000);
+    frontendServer = await startStaticServer(frontendBuildDir, frontendPort);
+    await waitForHttp(frontendUrl, processes, frontendReadyTimeoutMs);
 
     return {
       addProject: async (cwd: string) => {
         await sendRuntimeCommand(sessionWsUrl, "projects/add", "all", { cwd });
-        await waitForIndexedSessions(sessionWsUrl, cwd, processes);
+        await waitForIndexedSessions(sessionWsUrl, cwd, processes, "all");
       },
       frontendUrl,
       serviceUrl,
       sessionWsUrl,
       stop: async () => {
+        await closeStaticServer(frontendServer);
         await stopProcesses(processes);
         await rm(runRoot, { force: true, recursive: true });
       },
     };
   } catch (error) {
+    await closeStaticServer(frontendServer);
     await stopProcesses(processes);
     await rm(runRoot, { force: true, recursive: true });
     throw error;
@@ -122,6 +137,7 @@ function spawnManaged(
   const logs: string[] = [];
   const child = spawn(command, args, {
     cwd: repoRoot,
+    detached: process.platform !== "win32",
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -138,11 +154,146 @@ function spawnManaged(
   return { child, logs, name };
 }
 
+async function runManaged(
+  name: string,
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<void> {
+  const process = spawnManaged(name, command, args, env);
+  await waitForProcessSuccess(process);
+}
+
 function appendLogs(logs: string[], chunk: string): void {
   logs.push(...chunk.split(/\r?\n/u).filter((line) => line.length > 0));
   while (logs.length > 80) {
     logs.shift();
   }
+}
+
+async function waitForProcessSuccess(process: ManagedProcess): Promise<void> {
+  if (process.child.exitCode !== null) {
+    if (process.child.exitCode === 0) {
+      return;
+    }
+    throw new Error(`${process.name} failed\n${processLogs([process])}`);
+  }
+  await new Promise<void>((resolvePromise, reject) => {
+    process.child.once("error", reject);
+    process.child.once("exit", (code) => {
+      if (code === 0) {
+        resolvePromise();
+        return;
+      }
+      reject(new Error(`${process.name} failed\n${processLogs([process])}`));
+    });
+  });
+}
+
+async function startStaticServer(
+  root: string,
+  port: number,
+): Promise<HttpServer> {
+  const server = createHttpServer((request, response) => {
+    void serveStaticAsset(root, request.url ?? "/", response);
+  });
+  await new Promise<void>((resolvePromise, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolvePromise();
+    });
+  });
+  return server;
+}
+
+async function closeStaticServer(server: HttpServer | null): Promise<void> {
+  if (server === null) {
+    return;
+  }
+  await new Promise<void>((resolvePromise) => {
+    server.close(() => {
+      resolvePromise();
+    });
+    server.closeAllConnections();
+  });
+}
+
+async function serveStaticAsset(
+  root: string,
+  rawUrl: string,
+  response: ServerResponse,
+): Promise<void> {
+  const requestUrl = new URL(rawUrl, "http://localhost");
+  const assetPath = await resolveStaticAsset(root, requestUrl.pathname);
+  if (assetPath === null) {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  response.writeHead(200, {
+    "cache-control": "no-store",
+    "content-type": contentType(assetPath),
+  });
+  createReadStream(assetPath).pipe(response);
+}
+
+async function resolveStaticAsset(
+  root: string,
+  pathname: string,
+): Promise<string | null> {
+  const requestedPath = resolve(root, `.${decodeURIComponent(pathname)}`);
+  if (!isPathInside(root, requestedPath)) {
+    return null;
+  }
+  const filePath = await readableFilePath(requestedPath);
+  if (filePath !== null) {
+    return filePath;
+  }
+  if (extname(requestedPath) === "") {
+    return await readableFilePath(join(root, "index.html"));
+  }
+  return null;
+}
+
+async function readableFilePath(path: string): Promise<string | null> {
+  try {
+    const fileStat = await stat(path);
+    if (fileStat.isFile()) {
+      return path;
+    }
+    if (fileStat.isDirectory()) {
+      return await readableFilePath(join(path, "index.html"));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isPathInside(root: string, candidate: string): boolean {
+  const relativePath = relative(root, candidate);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith(`..${sep}`) &&
+      relativePath !== ".." &&
+      !isAbsolute(relativePath))
+  );
+}
+
+function contentType(path: string): string {
+  const contentTypes: Record<string, string> = {
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".ttf": "font/ttf",
+    ".wasm": "application/wasm",
+  };
+  return contentTypes[extname(path)] ?? "application/octet-stream";
 }
 
 async function freePort(): Promise<number> {
@@ -223,6 +374,7 @@ async function waitForIndexedSessions(
   wsUrl: string,
   cwd: string,
   processes: ManagedProcess[],
+  provider: string,
 ): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15_000) {
@@ -230,7 +382,7 @@ async function waitForIndexedSessions(
     const result = await sendRuntimeCommand(
       wsUrl,
       "sessions/grouped",
-      "codex",
+      provider,
       {
         updatedWithinDays: null,
       },
@@ -312,20 +464,65 @@ async function stopProcesses(processes: ManagedProcess[]): Promise<void> {
 }
 
 async function stopProcess(process: ManagedProcess): Promise<void> {
-  if (process.child.exitCode !== null) {
+  if (hasExited(process)) {
     return;
   }
-  process.child.kill("SIGTERM");
-  await Promise.race([
-    new Promise<void>((resolveStop) => {
-      process.child.once("exit", () => resolveStop());
-    }),
-    delay(2_000).then(() => {
-      if (process.child.exitCode === null) {
-        process.child.kill("SIGKILL");
-      }
-    }),
-  ]);
+  signalProcess(process, "SIGTERM");
+  if (await waitForExit(process, 2_000)) {
+    return;
+  }
+  signalProcess(process, "SIGKILL");
+  await waitForExit(process, 2_000);
+}
+
+function hasExited(process: ManagedProcess): boolean {
+  return process.child.exitCode !== null || process.child.signalCode !== null;
+}
+
+function signalProcess(
+  process: ManagedProcess,
+  signal: "SIGKILL" | "SIGTERM",
+): void {
+  const pid = process.child.pid;
+  if (pid === undefined) {
+    return;
+  }
+  try {
+    if (globalThis.process.platform === "win32") {
+      process.child.kill(signal);
+      return;
+    }
+    globalThis.process.kill(-pid, signal);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ESRCH") {
+      return;
+    }
+    throw error;
+  }
+}
+
+function waitForExit(
+  process: ManagedProcess,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (hasExited(process)) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolveExit) => {
+    const timeout = setTimeout(() => {
+      process.child.off("exit", onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolveExit(true);
+    };
+    process.child.once("exit", onExit);
+  });
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function delay(ms: number): Promise<void> {

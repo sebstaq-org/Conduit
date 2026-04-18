@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "include": [
     "electron.vite.config.ts",
+    "forge.config.ts",
     "../../packages/app-client/src/**/*.ts",
     "../../packages/app-protocol/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",

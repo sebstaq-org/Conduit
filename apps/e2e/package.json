@@ -4,8 +4,8 @@
   "version": "0.5.0",
   "type": "module",
   "scripts": {
-    "test": "cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test",
-    "test:headed": "cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test --headed",
+    "test": "pnpm --workspace-root run build && cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test",
+    "test:headed": "pnpm --workspace-root run build && cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test --headed",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {

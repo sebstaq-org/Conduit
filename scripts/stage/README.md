@@ -1,20 +1,35 @@
 # Stage Operations
 
-Use `scripts/stage/conduit-stage.sh` to build and run an isolated browser stage
-environment outside the repo workspace.
+Use `scripts/stage/conduit-stage.sh` to build, install, and run an isolated
+local stage outside the repo workspace. Stage is a versioned tarball containing
+a Forge-packaged Electron app, exported web assets, and the release-built Rust
+`service-bin`; Electron owns the Rust process lifecycle at runtime.
 
 ## Commands
 
-- `refresh`: build tagged release from `origin/main` into
-  `/srv/devops/repos/conduit-stage/releases` and repoint `current`. If stage is
-  already running, `refresh` restarts it onto the new release automatically.
-- `start`: start stage supervisor, backend, and web; fail if readiness checks do
-  not pass.
-- `stop`: stop stage supervisor and child processes.
+- `build-artifact`: build selected ref into
+  `/srv/devops/repos/conduit-stage/artifacts/conduit-stage-*-linux-x64.tar.gz`.
+- `install-artifact PATH`: install a tarball into `releases` and repoint
+  `current`.
+- `deploy` / `refresh`: build an artifact, install it, stop old stage, and start
+  the new packaged app.
+- `start`: start packaged Electron stage, backend, and Electron-owned web
+  server; fail if readiness checks do not pass.
+- `stop`: stop Electron stage and its child backend process.
 - `status`: print release and process status.
-- `open`: start stage and open browser URL with a cache-busting query string.
-- `logs [backend|frontend|web|supervisor]`: print stage logs.
+- `verify COMMIT`: fail unless the installed manifest, running runtime status,
+  Electron process, backend process, and health checks all match `COMMIT`.
+- `open`: start stage.
+- `logs [backend|frontend|electron|web]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`.
+
+## GitHub Actions Stage Promotion
+
+The Stage workflow builds artifacts on pull request and push, but deploys only
+from a manual `workflow_dispatch` run. Use the `source_ref` input to select the
+branch, tag, or commit to promote; the workflow builds that exact ref, installs
+the uploaded artifact on a self-hosted runner, restarts stage, and runs
+`verify` against the resolved source commit before reporting success.
 
 ## Default Runtime Config
 
@@ -23,11 +38,11 @@ environment outside the repo workspace.
 - ws url for stage web build: `ws://127.0.0.1:4274/api/session`
 - stage root: `/srv/devops/repos/conduit-stage`
 - backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
-- stage static server disables browser caching and returns `204` for
-  `/favicon.ico` to avoid benign 404 noise.
-- supervisor health polling: every 5 seconds for backend `/health` and web `/`
-- restart policy: fast backoff `1s/2s/4s`, budget `3 restarts / 60s`, then
-  degraded with slow retry every `30s`
+- stage static server injects `globalThis.CONDUIT_RUNTIME_CONFIG` into HTML
+  instead of mutating `process.env` at browser runtime.
+- Electron waits for backend `/health` and web `/` before reporting readiness.
+- Closing Electron sends `SIGTERM` to the child backend process and escalates to
+  `SIGKILL` if the backend does not exit.
 
 ## Environment Overrides
 
@@ -37,3 +52,4 @@ environment outside the repo workspace.
 - `CONDUIT_STAGE_WEB_HOST`
 - `CONDUIT_STAGE_WEB_PORT`
 - `CONDUIT_STAGE_WS_URL`
+- `CONDUIT_STAGE_CLIENT_LOG_URL`

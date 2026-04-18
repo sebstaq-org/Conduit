@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   reporter: process.env.CI === "true" ? "list" : "line",
   testDir: "./tests",
-  timeout: 90_000,
+  timeout: 240_000,
   use: {
     launchOptions: {
       ...(chromiumExecutablePath === undefined
