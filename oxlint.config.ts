@@ -278,7 +278,10 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/cloudflare-relay/src/index.ts"],
+      files: [
+        "packages/cloudflare-relay/src/index.ts",
+        "packages/cloudflare-relay/src/testIndex.ts",
+      ],
       rules: {
         "import/no-default-export": "off",
         "import/no-anonymous-default-export": "off",

@@ -20,7 +20,7 @@ pub use cipher::{
 };
 pub use offers::{
     IssuedRelayOffer, IssuedRelayOfferContext, RelayOfferStoreError, issue_relay_offer,
-    lookup_relay_offer,
+    lookup_relay_offer, mark_relay_offer_accepted,
 };
 pub use route::{
     RelayControlFrame, RelayRouteError, RelayRouting, RelayUrlOptions,

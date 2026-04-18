@@ -37,6 +37,8 @@ pub struct IssuedRelayOfferContext {
     pub nonce: String,
     /// Expiration timestamp for accepting this offer.
     pub expires_at: String,
+    /// Whether the offer has completed its first relay handshake.
+    pub accepted: bool,
 }
 
 /// Errors raised by issued relay offer persistence.
@@ -76,6 +78,8 @@ struct StoredRelayOffer {
     connection_id: String,
     nonce: String,
     expires_at: String,
+    accepted_at: Option<String>,
+    last_seen_at: Option<String>,
 }
 
 /// Issues one offer-bound relay client capability and persists the daemon-side
@@ -100,6 +104,8 @@ pub fn issue_relay_offer(
         connection_id: connection_id.clone(),
         nonce: nonce.to_owned(),
         expires_at: expires_at.to_owned(),
+        accepted_at: None,
+        last_seen_at: None,
     };
     write_offer(home, &stored)?;
     Ok(IssuedRelayOffer {
@@ -127,7 +133,7 @@ pub fn lookup_relay_offer(
         Err(source) => return Err(RelayOfferStoreError::Io { path, source }),
     };
     let stored = parse_offer(&path, &raw)?;
-    if parse_expires_at(&stored.expires_at)? <= now {
+    if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
         let _ignored = fs::remove_file(&path);
         return Ok(None);
     }
@@ -135,6 +141,43 @@ pub fn lookup_relay_offer(
         connection_id: stored.connection_id,
         nonce: stored.nonce,
         expires_at: stored.expires_at,
+        accepted: stored.accepted_at.is_some(),
+    }))
+}
+
+/// Marks an issued relay offer as accepted after its first successful E2EE
+/// handshake.
+///
+/// # Errors
+///
+/// Returns an error when the offer store cannot be read, validated, or updated.
+pub fn mark_relay_offer_accepted(
+    home: &Path,
+    connection_id: &str,
+    now: OffsetDateTime,
+) -> Result<Option<IssuedRelayOfferContext>, RelayOfferStoreError> {
+    let path = offer_path(home, connection_id);
+    let raw = match fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(source) => return Err(RelayOfferStoreError::Io { path, source }),
+    };
+    let mut stored = parse_offer(&path, &raw)?;
+    if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
+        let _ignored = fs::remove_file(&path);
+        return Ok(None);
+    }
+    let now_text = format_time(now)?;
+    if stored.accepted_at.is_none() {
+        stored.accepted_at = Some(now_text.clone());
+    }
+    stored.last_seen_at = Some(now_text);
+    write_existing_offer(&path, &stored)?;
+    Ok(Some(IssuedRelayOfferContext {
+        connection_id: stored.connection_id,
+        nonce: stored.nonce,
+        expires_at: stored.expires_at,
+        accepted: true,
     }))
 }
 
@@ -164,7 +207,7 @@ fn cleanup_entry_if_expired(path: &Path, now: OffsetDateTime) -> Result<(), Rela
         source,
     })?;
     let stored = parse_offer(path, &raw)?;
-    if parse_expires_at(&stored.expires_at)? <= now {
+    if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
         let _ignored = fs::remove_file(path);
     }
     Ok(())
@@ -200,6 +243,22 @@ fn write_offer(home: &Path, stored: &StoredRelayOffer) -> Result<(), RelayOfferS
         .map_err(|source| RelayOfferStoreError::Io { path, source })
 }
 
+fn write_existing_offer(
+    path: &Path,
+    stored: &StoredRelayOffer,
+) -> Result<(), RelayOfferStoreError> {
+    let bytes = serde_json::to_vec_pretty(stored).map_err(|source| RelayOfferStoreError::Json {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut bytes_with_newline = bytes;
+    bytes_with_newline.push(b'\n');
+    fs::write(path, bytes_with_newline).map_err(|source| RelayOfferStoreError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
 fn parse_offer(path: &Path, raw: &str) -> Result<StoredRelayOffer, RelayOfferStoreError> {
     let stored: StoredRelayOffer =
         serde_json::from_str(raw).map_err(|source| RelayOfferStoreError::Json {
@@ -221,6 +280,14 @@ fn parse_expires_at(value: &str) -> Result<OffsetDateTime, RelayOfferStoreError>
     })
 }
 
+fn format_time(value: OffsetDateTime) -> Result<String, RelayOfferStoreError> {
+    value
+        .format(&Rfc3339)
+        .map_err(|source| RelayOfferStoreError::Invalid {
+            message: source.to_string(),
+        })
+}
+
 fn offers_dir(home: &Path) -> PathBuf {
     home.join(OFFERS_DIR_NAME)
 }
@@ -232,5 +299,91 @@ fn offer_path(home: &Path, connection_id: &str) -> PathBuf {
 fn invalid(message: &str) -> RelayOfferStoreError {
     RelayOfferStoreError::Invalid {
         message: message.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{issue_relay_offer, lookup_relay_offer, mark_relay_offer_accepted};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use time::format_description::well_known::Rfc3339;
+    use time::{Duration, OffsetDateTime};
+
+    type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+    #[test]
+    fn expired_unaccepted_offer_is_rejected_and_removed() -> TestResult<()> {
+        let home = test_home("expired-unaccepted")?;
+        let now = OffsetDateTime::parse("2026-04-18T00:00:00Z", &Rfc3339)?;
+        let expires_at = (now - Duration::seconds(1)).format(&Rfc3339)?;
+        let offer = issue_relay_offer(&home, "https://relay.example.test", "nonce", &expires_at)?;
+
+        let context = lookup_relay_offer(&home, &offer.connection_id, now)?;
+
+        if context.is_some() {
+            return Err("expired unaccepted offer was accepted".into());
+        }
+        if home
+            .join("relay-offers")
+            .join(format!("{}.json", offer.connection_id))
+            .exists()
+        {
+            return Err("expired unaccepted offer was not removed".into());
+        }
+        cleanup(&home);
+        Ok(())
+    }
+
+    #[test]
+    fn accepted_offer_survives_expiry_and_reload() -> TestResult<()> {
+        let home = test_home("accepted-expired")?;
+        let now = OffsetDateTime::parse("2026-04-18T00:00:00Z", &Rfc3339)?;
+        let expires_at = (now + Duration::seconds(1)).format(&Rfc3339)?;
+        let offer = issue_relay_offer(&home, "https://relay.example.test", "nonce", &expires_at)?;
+
+        let accepted = mark_relay_offer_accepted(&home, &offer.connection_id, now)?;
+        let reloaded = lookup_relay_offer(&home, &offer.connection_id, now + Duration::hours(1))?;
+
+        if !accepted.is_some_and(|context| context.accepted) {
+            return Err("offer was not marked accepted".into());
+        }
+        if !reloaded.is_some_and(|context| context.accepted) {
+            return Err("accepted expired offer did not reload".into());
+        }
+        cleanup(&home);
+        Ok(())
+    }
+
+    #[test]
+    fn cleanup_keeps_accepted_expired_offers() -> TestResult<()> {
+        let home = test_home("cleanup-accepted")?;
+        let now = OffsetDateTime::parse("2026-04-18T00:00:00Z", &Rfc3339)?;
+        let expires_at = (now + Duration::seconds(1)).format(&Rfc3339)?;
+        let offer = issue_relay_offer(&home, "https://relay.example.test", "nonce", &expires_at)?;
+        let _context = mark_relay_offer_accepted(&home, &offer.connection_id, now)?;
+
+        let _next_offer = issue_relay_offer(
+            &home,
+            "https://relay.example.test",
+            "nonce-2",
+            &(now + Duration::hours(2)).format(&Rfc3339)?,
+        )?;
+
+        if lookup_relay_offer(&home, &offer.connection_id, now + Duration::hours(1))?.is_none() {
+            return Err("cleanup removed accepted expired offer".into());
+        }
+        cleanup(&home);
+        Ok(())
+    }
+
+    fn test_home(label: &str) -> TestResult<PathBuf> {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        Ok(std::env::temp_dir().join(format!("conduit-relay-offers-{label}-{nanos}")))
+    }
+
+    fn cleanup(path: &PathBuf) {
+        let _ignored = fs::remove_dir_all(path);
     }
 }

@@ -1,0 +1,12 @@
+name = "conduit-relay-test"
+main = "src/testIndex.ts"
+compatibility_date = "2026-04-18"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "RELAY"
+class_name = "RelayDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayDurableObject"]

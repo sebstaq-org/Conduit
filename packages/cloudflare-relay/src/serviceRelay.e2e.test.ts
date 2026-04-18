@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { build } from "esbuild";
+import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  restartRelayServiceRun,
   startRelayServiceRun,
   stopRelayServiceRun,
 } from "./serviceRelayProcess.js";
@@ -13,7 +16,12 @@ import { deriveRelayConnectionId } from "@conduit/relay-transport";
 import type { RelayServiceRun } from "./serviceRelayProcess.js";
 import type { ConnectionOfferV1 } from "@conduit/app-client";
 
-const workerScriptPath = fileURLToPath(new URL("index.ts", import.meta.url));
+const productionWorkerScriptPath = fileURLToPath(
+  new URL("index.ts", import.meta.url),
+);
+const testWorkerScriptPath = fileURLToPath(
+  new URL("testIndex.ts", import.meta.url),
+);
 const require = createRequire(import.meta.url);
 const Miniflare = (require("miniflare") as { Miniflare: MiniflareConstructor })
   .Miniflare;
@@ -46,6 +54,13 @@ describe("service-bin relay runtime e2e", () => {
     await runServiceRelayScenario(relayEndpoint, adminToken);
   }, 120000);
 
+  it("keeps the production worker test-admin route unavailable", async () => {
+    const relayEndpoint = await startLocalProductionRelayServer();
+    const response = await fetch(`${relayEndpoint}/__conduit_test/close-data`);
+
+    expect(response.status).toBe(404);
+  }, 120000);
+
   const liveIt =
     liveRelayEndpoint !== undefined && liveRelayAdminToken !== undefined
       ? it
@@ -71,8 +86,10 @@ async function runServiceRelayScenario(
 
   const offer = await fetchOffer(currentRun.port);
   const telemetry: unknown[] = [];
+  const capturedSockets: WebSocket[] = [];
   const client = createRelaySessionClient({
     offer,
+    WebSocketImpl: capturingWebSocket(capturedSockets),
     onTelemetryEvent: (event) => telemetry.push(event),
   });
 
@@ -85,20 +102,40 @@ async function runServiceRelayScenario(
   });
   unsubscribe();
 
+  await expireStoredOffer(currentRun.home, offer);
+
   await closeRelayDataSocket(relayEndpoint, relayAdminToken, offer);
   await delay(300);
 
   await expect(client.getSettings()).resolves.toMatchObject({});
+  await closeCapturedSockets(capturedSockets);
+
+  currentRun = await restartRelayServiceRun(currentRun, relayEndpoint);
+  await waitForHealth(currentRun.port);
+  const restartedClient = createRelaySessionClient({ offer });
+  await expect(restartedClient.getSettings()).resolves.toMatchObject({});
+
   expect(sessionIndexEvents).toBeGreaterThanOrEqual(0);
   expect(JSON.stringify(telemetry)).not.toContain("PLAINTEXT");
 }
 
-async function startLocalRelayServer(): Promise<string> {
-  const workerScript = await bundleWorkerScript();
+function startLocalRelayServer(): Promise<string> {
+  return startMiniflareRelay(testWorkerScriptPath, {
+    CONDUIT_RELAY_TEST_ADMIN_TOKEN: adminToken,
+  });
+}
+
+function startLocalProductionRelayServer(): Promise<string> {
+  return startMiniflareRelay(productionWorkerScriptPath, {});
+}
+
+async function startMiniflareRelay(
+  scriptPath: string,
+  bindings: Record<string, string>,
+): Promise<string> {
+  const workerScript = await bundleWorkerScript(scriptPath);
   currentMiniflare = new Miniflare({
-    bindings: {
-      CONDUIT_RELAY_TEST_ADMIN_TOKEN: adminToken,
-    },
+    bindings,
     compatibilityDate: "2026-04-18",
     durableObjects: {
       RELAY: "RelayDurableObject",
@@ -142,6 +179,56 @@ async function closeRelayDataSocket(
   }
 }
 
+async function expireStoredOffer(
+  home: string,
+  offer: ConnectionOfferV1,
+): Promise<void> {
+  const connectionId = deriveRelayConnectionId(offer.relay.clientCapability);
+  const path = join(home, "relay-offers", `${connectionId}.json`);
+  const stored = JSON.parse(await readFile(path, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  stored.expiresAt = "2026-04-18T00:00:00Z";
+  await writeFile(path, `${JSON.stringify(stored, null, 2)}\n`);
+}
+
+function capturingWebSocket(captured: WebSocket[]): typeof WebSocket {
+  return class CapturingWebSocket extends WebSocket {
+    public constructor(url: string | URL, protocols?: string | string[]) {
+      super(url, protocols);
+      captured.push(this);
+    }
+  };
+}
+
+async function closeCapturedSockets(
+  captured: readonly WebSocket[],
+): Promise<void> {
+  await Promise.all(captured.map((socket) => closeSocket(socket)));
+}
+
+function closeSocket(socket: WebSocket): Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    socket.addEventListener(
+      "close",
+      () => {
+        resolve();
+      },
+      { once: true },
+    );
+    if (
+      socket.readyState === WebSocket.CONNECTING ||
+      socket.readyState === WebSocket.OPEN
+    ) {
+      socket.close();
+    }
+  });
+}
+
 async function waitForHealth(port: number): Promise<void> {
   const deadline = Date.now() + 60000;
   while (Date.now() < deadline) {
@@ -157,10 +244,10 @@ async function waitForHealth(port: number): Promise<void> {
   throw new Error("service-bin did not become healthy");
 }
 
-async function bundleWorkerScript(): Promise<string> {
+async function bundleWorkerScript(scriptPath: string): Promise<string> {
   const result = await build({
     bundle: true,
-    entryPoints: [workerScriptPath],
+    entryPoints: [scriptPath],
     format: "esm",
     platform: "browser",
     write: false,

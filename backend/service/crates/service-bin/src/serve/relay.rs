@@ -7,7 +7,8 @@ use futures_util::{SinkExt, StreamExt};
 use remote_access::{
     RelayCipherChannel, RelayCipherContext, RelayControlFrame, RelayRouting, RelayUrlOptions,
     accept_client_handshake, build_relay_websocket_protocol, build_relay_websocket_url,
-    load_or_create_relay_routing, lookup_relay_offer, parse_relay_control_frame,
+    load_or_create_relay_routing, lookup_relay_offer, mark_relay_offer_accepted,
+    parse_relay_control_frame,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,41 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 type RelaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type RelayResult<T> = std::result::Result<T, RelayConnectorError>;
+
+const CONTROL_RETRY_INITIAL_MS: u64 = 500;
+const CONTROL_RETRY_MAX_MS: u64 = 30_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RelayRetrySchedule {
+    attempt: u32,
+    delay: Duration,
+    warn: bool,
+}
+
+#[derive(Debug, Default)]
+struct RelayControlBackoff {
+    failures: u32,
+}
+
+impl RelayControlBackoff {
+    fn reset(&mut self) {
+        self.failures = 0;
+    }
+
+    fn record_failure(&mut self) -> RelayRetrySchedule {
+        self.failures = self.failures.saturating_add(1);
+        let exponent = self.failures.saturating_sub(1).min(16);
+        let multiplier = 1_u64 << exponent;
+        let delay_ms = CONTROL_RETRY_INITIAL_MS
+            .saturating_mul(multiplier)
+            .min(CONTROL_RETRY_MAX_MS);
+        RelayRetrySchedule {
+            attempt: self.failures,
+            delay: Duration::from_millis(delay_ms),
+            warn: self.failures == 1 || delay_ms == CONTROL_RETRY_MAX_MS,
+        }
+    }
+}
 
 #[derive(Default)]
 struct ConnectorState {
@@ -59,23 +95,71 @@ pub(super) fn spawn_relay_connector(endpoint: String, home: PathBuf, actor: Runt
 
 async fn run_connector(endpoint: String, home: PathBuf, actor: RuntimeActor) {
     let connector_state = Arc::new(ConnectorState::default());
+    let mut backoff = RelayControlBackoff::default();
     loop {
-        if let Err(error) = run_control_socket(
+        let result = run_control_socket(
             &endpoint,
             &home,
             actor.clone(),
             Arc::clone(&connector_state),
         )
-        .await
-        {
-            tracing::warn!(
-                event_name = "relay.control.failed",
-                source = "service-bin",
-                error = ?error
-            );
-        }
-        sleep(Duration::from_millis(500)).await;
+        .await;
+        let delay = retry_delay_for_control_result(result, &mut backoff);
+        sleep(delay).await;
     }
+}
+
+fn retry_delay_for_control_result(
+    result: RelayResult<()>,
+    backoff: &mut RelayControlBackoff,
+) -> Duration {
+    match result {
+        Ok(()) => {
+            backoff.reset();
+            Duration::from_millis(CONTROL_RETRY_INITIAL_MS)
+        }
+        Err(error) => {
+            let schedule = backoff.record_failure();
+            log_control_failure(&error, schedule);
+            schedule.delay
+        }
+    }
+}
+
+fn log_control_failure(error: &RelayConnectorError, schedule: RelayRetrySchedule) {
+    if schedule.warn {
+        log_control_failure_warn(error, schedule.attempt);
+    } else {
+        log_control_failure_debug(error, schedule.attempt);
+    }
+    log_control_retry_scheduled(schedule);
+}
+
+fn log_control_failure_warn(error: &RelayConnectorError, attempt: u32) {
+    tracing::warn!(
+        event_name = "relay.control.failed",
+        source = "service-bin",
+        attempt,
+        error = ?error
+    );
+}
+
+fn log_control_failure_debug(error: &RelayConnectorError, attempt: u32) {
+    tracing::debug!(
+        event_name = "relay.control.failed",
+        source = "service-bin",
+        attempt,
+        error = ?error
+    );
+}
+
+fn log_control_retry_scheduled(schedule: RelayRetrySchedule) {
+    tracing::info!(
+        event_name = "relay.control.retry.scheduled",
+        source = "service-bin",
+        attempt = schedule.attempt,
+        delay_ms = schedule.delay.as_millis() as u64
+    );
 }
 
 #[expect(
@@ -216,7 +300,8 @@ async fn run_data_socket(
     connector_state: Arc<ConnectorState>,
     connection_id: &str,
 ) -> RelayResult<()> {
-    let Some(offer) = lookup_relay_offer(home, connection_id, OffsetDateTime::now_utc())? else {
+    let now = OffsetDateTime::now_utc();
+    let Some(offer) = lookup_relay_offer(home, connection_id, now)? else {
         tracing::warn!(
             event_name = "relay.offer.rejected",
             source = "service-bin",
@@ -250,6 +335,15 @@ async fn run_data_socket(
             )?
         }
     };
+    if mark_relay_offer_accepted(home, connection_id, now)?.is_none() {
+        tracing::warn!(
+            event_name = "relay.offer.accept_failed",
+            source = "service-bin",
+            connection_id = %connection_id,
+            reason = "missing_or_expired_offer"
+        );
+        return Ok(());
+    }
     let (inbound_text, inbound_receiver) = mpsc::unbounded_channel();
     let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel();
     let runtime_connection_id = super::NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
@@ -323,4 +417,45 @@ fn relay_request(url: &str, capability: &str) -> RelayResult<Request<()>> {
         .headers_mut()
         .insert(SEC_WEBSOCKET_PROTOCOL, HeaderValue::from_str(&protocol)?);
     Ok(request)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CONTROL_RETRY_MAX_MS, RelayControlBackoff};
+
+    #[test]
+    fn control_backoff_grows_to_maximum() {
+        let mut backoff = RelayControlBackoff::default();
+
+        let delays: Vec<u128> = (0..8)
+            .map(|_index| backoff.record_failure().delay.as_millis())
+            .collect();
+
+        assert_eq!(
+            delays,
+            vec![500, 1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]
+        );
+    }
+
+    #[test]
+    fn control_backoff_marks_first_and_max_attempts_for_warning() {
+        let mut backoff = RelayControlBackoff::default();
+
+        assert!(backoff.record_failure().warn);
+        assert!(!backoff.record_failure().warn);
+        while backoff.record_failure().delay.as_millis() < u128::from(CONTROL_RETRY_MAX_MS) {}
+
+        assert!(backoff.record_failure().warn);
+    }
+
+    #[test]
+    fn control_backoff_resets_after_success() {
+        let mut backoff = RelayControlBackoff::default();
+        let _first = backoff.record_failure();
+        let _second = backoff.record_failure();
+
+        backoff.reset();
+
+        assert_eq!(backoff.record_failure().delay.as_millis(), 500);
+    }
 }

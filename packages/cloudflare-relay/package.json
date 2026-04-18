@@ -7,11 +7,13 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "wrangler.toml"
+    "wrangler.toml",
+    "wrangler.test.toml"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "deploy": "wrangler deploy",
+    "deploy:test": "wrangler deploy -c wrangler.test.toml",
     "dev:test": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
     "test:e2e": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
     "test:service-relay": "vitest run --root ../.. packages/cloudflare-relay/src/serviceRelay.e2e.test.ts",

@@ -27,10 +27,22 @@ async function startRelayServiceRun(
 }
 
 async function stopRelayServiceRun(run: RelayServiceRun | null): Promise<void> {
-  run?.service.kill();
+  await stopService(run?.service ?? null);
   if (run !== null) {
     await rm(run.home, { force: true, recursive: true });
   }
+}
+
+async function restartRelayServiceRun(
+  run: RelayServiceRun,
+  relayEndpoint: string,
+): Promise<RelayServiceRun> {
+  await stopService(run.service);
+  return {
+    home: run.home,
+    port: run.port,
+    service: startService(run.home, run.port, relayEndpoint),
+  };
 }
 
 function startService(
@@ -84,5 +96,22 @@ function freePort(): Promise<number> {
   });
 }
 
-export { startRelayServiceRun, stopRelayServiceRun };
+function stopService(
+  service: ChildProcessWithoutNullStreams | null,
+): Promise<void> {
+  if (service === null) {
+    return Promise.resolve();
+  }
+  if (service.exitCode !== null || service.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    service.once("exit", () => {
+      resolve();
+    });
+    service.kill();
+  });
+}
+
+export { restartRelayServiceRun, startRelayServiceRun, stopRelayServiceRun };
 export type { RelayServiceRun };
