@@ -125,6 +125,7 @@ function spawnManaged(
   const logs: string[] = [];
   const child = spawn(command, args, {
     cwd: repoRoot,
+    detached: process.platform !== "win32",
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -315,20 +316,65 @@ async function stopProcesses(processes: ManagedProcess[]): Promise<void> {
 }
 
 async function stopProcess(process: ManagedProcess): Promise<void> {
-  if (process.child.exitCode !== null) {
+  if (hasExited(process)) {
     return;
   }
-  process.child.kill("SIGTERM");
-  await Promise.race([
-    new Promise<void>((resolveStop) => {
-      process.child.once("exit", () => resolveStop());
-    }),
-    delay(2_000).then(() => {
-      if (process.child.exitCode === null) {
-        process.child.kill("SIGKILL");
-      }
-    }),
-  ]);
+  signalProcess(process, "SIGTERM");
+  if (await waitForExit(process, 2_000)) {
+    return;
+  }
+  signalProcess(process, "SIGKILL");
+  await waitForExit(process, 2_000);
+}
+
+function hasExited(process: ManagedProcess): boolean {
+  return process.child.exitCode !== null || process.child.signalCode !== null;
+}
+
+function signalProcess(
+  process: ManagedProcess,
+  signal: "SIGKILL" | "SIGTERM",
+): void {
+  const pid = process.child.pid;
+  if (pid === undefined) {
+    return;
+  }
+  try {
+    if (globalThis.process.platform === "win32") {
+      process.child.kill(signal);
+      return;
+    }
+    globalThis.process.kill(-pid, signal);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ESRCH") {
+      return;
+    }
+    throw error;
+  }
+}
+
+function waitForExit(
+  process: ManagedProcess,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (hasExited(process)) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolveExit) => {
+    const timeout = setTimeout(() => {
+      process.child.off("exit", onExit);
+      resolveExit(false);
+    }, timeoutMs);
+    const onExit = () => {
+      clearTimeout(timeout);
+      resolveExit(true);
+    };
+    process.child.once("exit", onExit);
+  });
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function delay(ms: number): Promise<void> {
