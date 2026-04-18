@@ -27,6 +27,7 @@
     "bootstrap": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
     "build": "tsc -b tsconfig.json",
     "clean": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- clean",
+    "codex-acp:build": "bash scripts/codex-acp-vendor.sh build",
     "desktop:build": "pnpm --filter @conduit/desktop run build",
     "desktop:dev": "pnpm --filter @conduit/desktop run dev",
     "desktop:lint": "pnpm --filter @conduit/desktop run lint",

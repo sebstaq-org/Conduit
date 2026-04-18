@@ -173,10 +173,13 @@ build_artifact() {
     run pnpm run build
     run pnpm --filter @conduit/desktop run build
     run pnpm --filter @conduit/frontend exec expo export --clear --platform web --output-dir "$resources_dir/web"
+    run bash scripts/codex-acp-vendor.sh build
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
     run cp backend/service/target/release/service-bin "$resources_dir/bin/service-bin"
+    run cp .conduit/bin/codex-acp "$resources_dir/bin/codex-acp"
     run cp -a vendor/agent-client-protocol "$stage_vendor_dir"
     chmod +x "$resources_dir/bin/service-bin"
+    chmod +x "$resources_dir/bin/codex-acp"
     write_manifest "$resources_dir/manifest.json" "$commit" "$timestamp"
     run pnpm --filter @conduit/desktop run package:stage
   )
@@ -231,6 +234,10 @@ validate_release_dir() {
   fi
   if [[ ! -f "$release_dir/app/resources/stage-resources/vendor/agent-client-protocol/manifest.toml" ]]; then
     printf "Stage release is missing ACP vendor manifest\n" >&2
+    exit 1
+  fi
+  if [[ ! -x "$release_dir/app/resources/stage-resources/bin/codex-acp" ]]; then
+    printf "Stage release is missing codex-acp adapter binary\n" >&2
     exit 1
   fi
 }

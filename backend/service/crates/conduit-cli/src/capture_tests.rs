@@ -1,8 +1,8 @@
-use super::{
-    create_output_dir, normalize_capture, read_prompt_blocks, validate_initialize,
-    validate_session_list, validate_session_load, validate_session_new, validate_session_prompt,
-    validate_session_set_config_option, write_json,
+use super::capture_validation::{
+    normalize_capture, validate_initialize, validate_session_list, validate_session_load,
+    validate_session_new, validate_session_prompt, validate_session_set_config_option,
 };
+use super::{create_output_dir, read_prompt_blocks, write_json};
 use crate::cli::CaptureOperation;
 use serde_json::json;
 use std::fs::{create_dir, read_to_string, write};

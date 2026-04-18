@@ -19,7 +19,11 @@ use process::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, to_value};
-use std::sync::Arc;
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 /// The initialize probe result returned by discovery.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -126,7 +130,11 @@ pub fn discover_provider_with_environment(
 /// resolved on `PATH`.
 pub fn resolve_provider_command(provider: ProviderId) -> Result<LauncherCommand> {
     let launcher_spec = provider_launcher(provider);
-    let resolved = resolve_executable(launcher_spec.program)?;
+    let resolved = if provider == ProviderId::Codex {
+        resolve_managed_codex_acp(launcher_spec.program)?
+    } else {
+        resolve_executable(launcher_spec.program)?
+    };
     let command = LauncherCommand {
         executable: resolved,
         args: launcher_spec.args.iter().map(ToString::to_string).collect(),
@@ -140,6 +148,49 @@ pub fn resolve_provider_command(provider: ProviderId) -> Result<LauncherCommand>
         display = %command.display
     );
     Ok(command)
+}
+
+fn resolve_managed_codex_acp(program: &str) -> Result<PathBuf> {
+    let candidates = managed_codex_acp_candidates();
+    for candidate in &candidates {
+        if candidate.is_file() {
+            return std::fs::canonicalize(candidate).map_err(|source| {
+                DiscoveryError::CanonicalizePath {
+                    path: candidate.clone(),
+                    source,
+                }
+            });
+        }
+    }
+
+    Err(DiscoveryError::ManagedExecutableNotFound {
+        program: program.to_owned(),
+        candidates,
+    })
+}
+
+fn managed_codex_acp_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(current_exe) = env::current_exe()
+        && let Some(parent) = current_exe.parent()
+    {
+        candidates.push(parent.join("codex-acp"));
+    }
+    if let Some(root) = repo_root() {
+        candidates.push(root.join(".conduit/bin/codex-acp"));
+        candidates.push(root.join("vendor/codex-acp/target/release/codex-acp"));
+    }
+    candidates
+}
+
+fn repo_root() -> Option<PathBuf> {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir
+        .parent()?
+        .parent()?
+        .parent()?
+        .parent()
+        .map(Path::to_path_buf)
 }
 
 fn probe_initialize(
