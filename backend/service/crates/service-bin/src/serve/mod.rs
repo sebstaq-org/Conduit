@@ -2,6 +2,7 @@
 
 mod actor;
 mod client_logs;
+mod relay;
 mod wire;
 
 use crate::error::Result;
@@ -113,6 +114,9 @@ fn router_with_actor(
     app_base_url: String,
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
+    if let Some(endpoint) = relay_endpoint.clone() {
+        relay::spawn_relay_connector(endpoint, product_home.clone(), actor.clone());
+    }
     Router::new()
         .route("/health", get(health))
         .route("/api/catalog", get(catalog))
@@ -254,45 +258,97 @@ fn is_loopback_client(client_addr: SocketAddr) -> bool {
 )]
 async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+    let (mut sender, mut receiver) = socket.split();
+    let (inbound_text, inbound_receiver) = mpsc::unbounded_channel::<String>();
+    let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel::<String>();
+    let inbound_task = tokio::spawn(async move {
+        while let Some(Ok(message)) = receiver.next().await {
+            let Ok(text) = message.to_text() else {
+                return;
+            };
+            if inbound_text.send(text.to_owned()).is_err() {
+                return;
+            }
+        }
+    });
+    let outbound_task = tokio::spawn(async move {
+        while let Some(text) = outbound_receiver.recv().await {
+            if sender.send(Message::Text(text.into())).await.is_err() {
+                return;
+            }
+        }
+    });
+    run_text_connection(
+        state.actor.clone(),
+        inbound_receiver,
+        outbound_text,
+        connection_id,
+        "direct",
+    )
+    .await;
+    inbound_task.abort();
+    outbound_task.abort();
+}
+
+#[expect(
+    clippy::cognitive_complexity,
+    clippy::too_many_lines,
+    reason = "Connection loop coordinates inbound command frames, outbound runtime frames, and lifecycle telemetry."
+)]
+pub(super) async fn run_text_connection(
+    actor: RuntimeActor,
+    mut inbound_receiver: mpsc::UnboundedReceiver<String>,
+    outbound_text: mpsc::UnboundedSender<String>,
+    connection_id: u64,
+    connection_kind: &'static str,
+) {
     tracing::info!(
         event_name = "session_socket.connection.open",
         source = "service-bin",
-        connection_id
+        connection_id,
+        connection_kind
     );
-    let (mut sender, mut receiver) = socket.split();
     let (outbound, mut outbound_receiver) = mpsc::unbounded_channel();
     let watches = Arc::new(Mutex::new(WatchState::default()));
     let event_forwarder = tokio::spawn(forward_live_events(
-        state.actor.subscribe(),
+        actor.subscribe(),
         Arc::clone(&watches),
         outbound.clone(),
         connection_id,
     ));
     loop {
         tokio::select! {
-            message = receiver.next() => {
-                let Some(Ok(message)) = message else {
+            text = inbound_receiver.recv() => {
+                let Some(text) = text else {
                     break;
                 };
-                if !handle_client_message(
-                    &state.actor,
-                    message,
+                handle_client_text(
+                    &actor,
+                    &text,
                     Arc::clone(&watches),
                     outbound.clone(),
                     connection_id
-                ) {
-                    break;
-                }
+                );
             }
             outbound = outbound_receiver.recv() => {
                 let Some(outbound) = outbound else {
                     break;
                 };
-                if send_outbound(&mut sender, outbound).await.is_err() {
+                let Ok(text) = outbound_text_frame(outbound) else {
+                    tracing::warn!(
+                        event_name = "session_socket.connection.serialize_failed",
+                        source = "service-bin",
+                        connection_id,
+                        connection_kind
+                    );
+                    break;
+                };
+                if outbound_text.send(text).is_err() {
                     tracing::warn!(
                         event_name = "session_socket.connection.send_failed",
                         source = "service-bin",
-                        connection_id
+                        connection_id,
+                        connection_kind
                     );
                     break;
                 }
@@ -303,25 +359,18 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     tracing::info!(
         event_name = "session_socket.connection.close",
         source = "service-bin",
-        connection_id
+        connection_id,
+        connection_kind
     );
 }
 
-fn handle_client_message(
+fn handle_client_text(
     actor: &RuntimeActor,
-    message: Message,
+    text: &str,
     watches: SharedWatchState,
     outbound: OutboundSender,
     connection_id: u64,
-) -> bool {
-    let Ok(text) = message.to_text() else {
-        tracing::warn!(
-            event_name = "session_socket.frame.non_text",
-            source = "service-bin",
-            connection_id
-        );
-        return false;
-    };
+) {
     let frame = ClientCommandFrame::from_text(text);
     let actor = actor.clone();
     tokio::spawn(dispatch_client_frame(
@@ -331,7 +380,6 @@ fn handle_client_message(
         outbound,
         connection_id,
     ));
-    true
 }
 
 type SharedWatchState = Arc<Mutex<WatchState>>;
@@ -470,37 +518,13 @@ async fn forward_live_events(
     }
 }
 
-async fn send_outbound(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    outbound: OutboundFrame,
-) -> std::result::Result<(), ()> {
+fn outbound_text_frame(outbound: OutboundFrame) -> std::result::Result<String, ()> {
     match outbound {
-        OutboundFrame::Event(event) => send_event(sender, event).await,
-        OutboundFrame::Response { id, response } => send_response(sender, id, *response).await,
+        OutboundFrame::Event(event) => server_event_frame_text(event).map_err(|_error| ()),
+        OutboundFrame::Response { id, response } => {
+            server_response_frame_text(id, *response).map_err(|_error| ())
+        }
     }
-}
-
-async fn send_response(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    id: String,
-    response: service_runtime::ConsumerResponse,
-) -> std::result::Result<(), ()> {
-    let text = server_response_frame_text(id, response).map_err(|_error| ())?;
-    sender
-        .send(Message::Text(text.into()))
-        .await
-        .map_err(|_error| ())
-}
-
-async fn send_event(
-    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    event: ConduitRuntimeEvent,
-) -> std::result::Result<(), ()> {
-    let text = server_event_frame_text(event).map_err(|_error| ())?;
-    sender
-        .send(Message::Text(text.into()))
-        .await
-        .map_err(|_error| ())
 }
 
 #[derive(Debug, Default)]

@@ -32,8 +32,10 @@ function buildRelayWebSocketUrl(
   const url = new URL(endpoint);
   if (url.protocol === "http:") {
     url.protocol = "ws:";
-  } else {
+  } else if (url.protocol === "https:") {
     url.protocol = "wss:";
+  } else {
+    throw new Error("relay endpoint must use http or https");
   }
   url.pathname = `/v1/relay/${encodeURIComponent(options.serverId)}`;
   url.searchParams.set("role", options.role);

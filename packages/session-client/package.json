@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@conduit/app-protocol": "workspace:*",
+    "@conduit/relay-transport": "workspace:*",
     "@conduit/session-contracts": "workspace:*",
     "@conduit/session-model": "workspace:*"
   }

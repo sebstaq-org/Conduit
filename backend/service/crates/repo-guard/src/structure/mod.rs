@@ -33,7 +33,7 @@ const APPROVED_PACKAGES: [&str; 9] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 12] = [
+const APPROVED_CRATES: [&str; 13] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -43,6 +43,7 @@ const APPROVED_CRATES: [&str; 12] = [
     "provider-codex",
     "provider-copilot",
     "repo-guard",
+    "remote-access",
     "service-bin",
     "service-runtime",
     "session-store",

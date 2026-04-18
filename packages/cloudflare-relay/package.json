@@ -14,12 +14,15 @@
     "deploy": "wrangler deploy",
     "dev:test": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
     "test:e2e": "vitest run --root ../.. packages/cloudflare-relay/src/relay.e2e.test.ts",
+    "test:service-relay": "vitest run --root ../.. packages/cloudflare-relay/src/serviceRelay.e2e.test.ts",
     "test:live": "vitest run --root ../.. packages/cloudflare-relay/src/relay.live.test.ts"
   },
   "dependencies": {
     "@conduit/relay-transport": "workspace:*"
   },
   "devDependencies": {
+    "@conduit/app-client": "workspace:*",
+    "@conduit/session-client": "workspace:*",
     "esbuild": "0.27.7",
     "miniflare": "4.20260415.0",
     "wrangler": "4.83.0"

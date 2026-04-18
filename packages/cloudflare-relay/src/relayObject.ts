@@ -7,13 +7,13 @@ import {
   MAX_FRAME_BYTES,
 } from "./limits.js";
 import { controlFrame, frameBytes } from "./frames.js";
+import { safeClose, safeSend } from "./socketSafety.js";
 import {
   relayProtocolForResponse,
   websocketResponse,
 } from "./websocketResponse.js";
 import type { WorkerWebSocket } from "./workerTypes.js";
-
-type RelayMessage = ArrayBuffer | string;
+import type { RelayMessage } from "./socketSafety.js";
 
 interface QueuedMessage {
   readonly bytes: number;
@@ -36,6 +36,9 @@ class RelayDurableObject {
     const url = new URL(request.url);
     const socketKind = url.searchParams.get("socketKind");
     const connectionId = url.searchParams.get("connectionId") ?? undefined;
+    if (socketKind === "testCloseData" && connectionId !== undefined) {
+      return this.testCloseDataSocket(connectionId);
+    }
     const protocol = relayProtocolForResponse(request);
     if (socketKind === "control") {
       return this.acceptControlSocket(protocol);
@@ -47,6 +50,16 @@ class RelayDurableObject {
       return this.acceptDataSocket(connectionId, protocol);
     }
     return new Response("invalid relay socket", { status: 400 });
+  }
+
+  private testCloseDataSocket(connectionId: string): Response {
+    const connection = this.connections.get(connectionId);
+    safeClose(
+      connection?.dataSocket ?? null,
+      CLOSE_POLICY,
+      "relay test closed data socket",
+    );
+    return Response.json({ ok: true });
   }
 
   private acceptControlSocket(protocol: string): Response {
@@ -274,26 +287,6 @@ class RelayDurableObject {
       this.clearPendingTimer(connection);
       this.connections.delete(connectionId);
     }
-  }
-}
-
-function safeSend(socket: WorkerWebSocket, message: RelayMessage): void {
-  try {
-    socket.send(message);
-  } catch {
-    safeClose(socket, CLOSE_POLICY, "relay socket send failed");
-  }
-}
-
-function safeClose(
-  socket: WorkerWebSocket | null,
-  code: number,
-  reason: string,
-): void {
-  try {
-    socket?.close(code, reason);
-  } catch {
-    // Socket is already closed; relay cleanup runs through close handlers.
   }
 }
 

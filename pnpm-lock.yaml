@@ -237,6 +237,12 @@ importers:
         specifier: workspace:*
         version: link:../relay-transport
     devDependencies:
+      '@conduit/app-client':
+        specifier: workspace:*
+        version: link:../app-client
+      '@conduit/session-client':
+        specifier: workspace:*
+        version: link:../session-client
       esbuild:
         specifier: 0.27.7
         version: 0.27.7
@@ -263,6 +269,9 @@ importers:
       '@conduit/app-protocol':
         specifier: workspace:*
         version: link:../app-protocol
+      '@conduit/relay-transport':
+        specifier: workspace:*
+        version: link:../relay-transport
       '@conduit/session-contracts':
         specifier: workspace:*
         version: link:../session-contracts

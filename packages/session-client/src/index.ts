@@ -1,4 +1,5 @@
 export { createSessionClient } from "./createSessionClient.js";
+export { createRelaySessionClient } from "./createRelaySessionClient.js";
 export { WebSocketSessionClient } from "./webSocketSessionClient.js";
 export { PROVIDERS } from "@conduit/session-model";
 
@@ -43,3 +44,4 @@ export type {
   SessionClientPort,
   SessionClientTelemetryEvent,
 } from "./sessionClientPort.js";
+export type { RelaySessionClientOptions } from "./createRelaySessionClient.js";

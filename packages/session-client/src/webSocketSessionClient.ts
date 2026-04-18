@@ -26,6 +26,7 @@ import {
   readSessionsIndexChanged,
 } from "./timelineEvent.js";
 import { WebSocketTransport } from "./transport/webSocketTransport.js";
+import type { CommandTransport } from "./transport/commandTransport.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
@@ -84,11 +85,16 @@ class WebSocketSessionClient implements SessionClientPort {
   private readonly timelineSubscriptions = new Set<TimelineSubscription>();
   private readonly sessionIndexSubscriptions =
     new Set<SessionIndexSubscription>();
-  private readonly transport: WebSocketTransport;
-  public constructor(options: SessionClientOptions = {}) {
-    this.transport = new WebSocketTransport(options, (event) => {
-      this.handleRuntimeEvent(event);
-    });
+  private readonly transport: CommandTransport;
+  public constructor(
+    options: SessionClientOptions = {},
+    transport?: CommandTransport,
+  ) {
+    this.transport =
+      transport ??
+      new WebSocketTransport(options, (event) => {
+        this.handleRuntimeEvent(event);
+      });
   }
   public async listProjects(): Promise<ProjectListView> {
     const response = await this.dispatch(
@@ -268,7 +274,7 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.transport.dispatch(command);
     return response;
   }
-  private handleRuntimeEvent(event: ConduitRuntimeEvent): void {
+  public handleRuntimeEvent(event: ConduitRuntimeEvent): void {
     this.handleTimelineEvent(event);
     this.handleSessionsIndexEvent(event);
   }
@@ -291,5 +297,4 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
-
 export { WebSocketSessionClient, confirmGeneratedSubscription };

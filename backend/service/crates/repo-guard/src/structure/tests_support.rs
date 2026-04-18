@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 12] = [
+const APPROVED_CRATES: [&str; 13] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -19,6 +19,7 @@ const APPROVED_CRATES: [&str; 12] = [
     "provider-codex",
     "provider-copilot",
     "repo-guard",
+    "remote-access",
     "service-bin",
     "service-runtime",
     "session-store",
@@ -228,7 +229,7 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 12] {
+fn local_deps() -> [LocalDeps; 13] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
@@ -239,6 +240,7 @@ fn local_deps() -> [LocalDeps; 12] {
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
         ("repo-guard", vec!["tracing", "tracing-subscriber"]),
+        ("remote-access", Vec::<&str>::new()),
         (
             "service-bin",
             vec![
@@ -247,6 +249,7 @@ fn local_deps() -> [LocalDeps; 12] {
                 "provider-claude",
                 "provider-codex",
                 "provider-copilot",
+                "remote-access",
                 "session-store",
                 "tracing",
                 "tracing-subscriber",

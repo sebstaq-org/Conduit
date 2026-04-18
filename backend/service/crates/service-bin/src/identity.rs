@@ -3,10 +3,12 @@
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use rand_core::{OsRng, RngCore};
+use remote_access::issue_relay_offer;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::Duration as StdDuration;
 use thiserror::Error;
 use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
@@ -19,6 +21,7 @@ const KEYPAIR_VERSION: u8 = 1;
 const KEYPAIR_ALGORITHM: &str = "x25519";
 const OFFER_TTL: Duration = Duration::minutes(10);
 const AUTHORIZATION_BOUNDARY: &str = "relay-handshake";
+const CONCURRENT_CREATE_RETRIES: usize = 20;
 
 /// The stable daemon identity exposed to trusted clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -60,9 +63,14 @@ pub(crate) struct OfferAuthorization {
 
 /// Relay endpoint carried by a pairing offer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct RelayOffer {
     /// Public relay endpoint as host:port.
     pub(crate) endpoint: String,
+    /// Public relay server route id derived from a daemon-only capability.
+    pub(crate) server_id: String,
+    /// Offer-bound client capability required by the relay WebSocket protocol.
+    pub(crate) client_capability: String,
 }
 
 /// JSON response returned by CLI and HTTP pairing surfaces.
@@ -129,6 +137,9 @@ pub(crate) enum DaemonIdentityError {
         /// Invalid field name.
         field: &'static str,
     },
+    /// Remote relay offer support failed.
+    #[error(transparent)]
+    RelayOffer(#[from] remote_access::RelayOfferStoreError),
 }
 
 /// Loads or creates the persistent daemon identity under `home`.
@@ -183,18 +194,22 @@ fn pairing_response_at(
                 path: home.join(IDENTITY_FILE_NAME),
                 message: source.to_string(),
             })?;
+    let nonce = generate_nonce();
+    let relay_offer = issue_relay_offer(home, relay_endpoint, &nonce, &expires_at)?;
     let offer = ConnectionOfferV1 {
         v: IDENTITY_VERSION,
         server_id: identity.server_id,
         daemon_public_key_b64: identity.daemon_public_key_b64,
-        nonce: generate_nonce(),
+        nonce,
         expires_at,
         authorization: OfferAuthorization {
             required: true,
             boundary: AUTHORIZATION_BOUNDARY.to_owned(),
         },
         relay: RelayOffer {
-            endpoint: relay_endpoint.to_owned(),
+            endpoint: relay_offer.endpoint,
+            server_id: relay_offer.server_id,
+            client_capability: relay_offer.client_capability,
         },
     };
     let encoded = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&offer).map_err(|source| {
@@ -207,6 +222,15 @@ fn pairing_response_at(
         url: format!("{}/#offer={encoded}", app_base_url.trim_end_matches('/')),
         offer,
     })
+}
+
+/// Loads the persistent daemon X25519 secret key encoded with standard base64.
+///
+/// # Errors
+///
+/// Returns an error when the daemon keypair file cannot be loaded or created.
+pub(crate) fn load_daemon_secret_key_b64(home: &Path) -> Result<String, DaemonIdentityError> {
+    Ok(load_or_create_keypair(home)?.secret_key_b64)
 }
 
 /// Builds one daemon status response.
@@ -229,7 +253,7 @@ pub(crate) fn daemon_status_response(
 fn load_or_create_identity(home: &Path) -> Result<StoredIdentity, DaemonIdentityError> {
     let path = home.join(IDENTITY_FILE_NAME);
     match fs::read_to_string(&path) {
-        Ok(raw) => parse_identity(&path, &raw),
+        Ok(raw) => parse_identity_with_retry(&path, raw),
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let identity = StoredIdentity {
                 v: IDENTITY_VERSION,
@@ -237,12 +261,7 @@ fn load_or_create_identity(home: &Path) -> Result<StoredIdentity, DaemonIdentity
             };
             if let Err(error) = write_secret_file(&path, &identity) {
                 if is_already_exists(&error) {
-                    return fs::read_to_string(&path)
-                        .map_err(|source| DaemonIdentityError::Io {
-                            path: path.clone(),
-                            source,
-                        })
-                        .and_then(|raw| parse_identity(&path, &raw));
+                    return read_identity_after_concurrent_create(&path);
                 }
                 return Err(error);
             }
@@ -270,17 +289,12 @@ fn parse_identity(path: &Path, raw: &str) -> Result<StoredIdentity, DaemonIdenti
 fn load_or_create_keypair(home: &Path) -> Result<StoredKeyPair, DaemonIdentityError> {
     let path = home.join(KEYPAIR_FILE_NAME);
     match fs::read_to_string(&path) {
-        Ok(raw) => parse_keypair(&path, &raw),
+        Ok(raw) => parse_keypair_with_retry(&path, raw),
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let keypair = generate_keypair();
             if let Err(error) = write_secret_file(&path, &keypair) {
                 if is_already_exists(&error) {
-                    return fs::read_to_string(&path)
-                        .map_err(|source| DaemonIdentityError::Io {
-                            path: path.clone(),
-                            source,
-                        })
-                        .and_then(|raw| parse_keypair(&path, &raw));
+                    return read_keypair_after_concurrent_create(&path);
                 }
                 return Err(error);
             }
@@ -288,6 +302,66 @@ fn load_or_create_keypair(home: &Path) -> Result<StoredKeyPair, DaemonIdentityEr
         }
         Err(source) => Err(DaemonIdentityError::Io { path, source }),
     }
+}
+
+fn read_identity_after_concurrent_create(
+    path: &Path,
+) -> Result<StoredIdentity, DaemonIdentityError> {
+    read_after_concurrent_create(path, parse_identity)
+}
+
+fn read_keypair_after_concurrent_create(path: &Path) -> Result<StoredKeyPair, DaemonIdentityError> {
+    read_after_concurrent_create(path, parse_keypair)
+}
+
+fn parse_identity_with_retry(
+    path: &Path,
+    raw: String,
+) -> Result<StoredIdentity, DaemonIdentityError> {
+    parse_with_retry(path, raw, parse_identity)
+}
+
+fn parse_keypair_with_retry(
+    path: &Path,
+    raw: String,
+) -> Result<StoredKeyPair, DaemonIdentityError> {
+    parse_with_retry(path, raw, parse_keypair)
+}
+
+fn read_after_concurrent_create<T>(
+    path: &Path,
+    parser: fn(&Path, &str) -> Result<T, DaemonIdentityError>,
+) -> Result<T, DaemonIdentityError> {
+    let raw = fs::read_to_string(path).map_err(|source| DaemonIdentityError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    parse_with_retry(path, raw, parser)
+}
+
+fn parse_with_retry<T>(
+    path: &Path,
+    raw: String,
+    parser: fn(&Path, &str) -> Result<T, DaemonIdentityError>,
+) -> Result<T, DaemonIdentityError> {
+    let mut current = raw;
+    for attempt in 0..=CONCURRENT_CREATE_RETRIES {
+        match parser(path, &current) {
+            Ok(value) => return Ok(value),
+            Err(error)
+                if is_probable_concurrent_create_read(&error)
+                    && attempt < CONCURRENT_CREATE_RETRIES =>
+            {
+                std::thread::sleep(StdDuration::from_millis(5));
+                current = fs::read_to_string(path).map_err(|source| DaemonIdentityError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                })?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    parser(path, &current)
 }
 
 fn parse_keypair(path: &Path, raw: &str) -> Result<StoredKeyPair, DaemonIdentityError> {
@@ -394,6 +468,14 @@ fn is_already_exists(error: &DaemonIdentityError) -> bool {
     )
 }
 
+fn is_probable_concurrent_create_read(error: &DaemonIdentityError) -> bool {
+    matches!(
+        error,
+        DaemonIdentityError::InvalidFile { message, .. }
+            if message.contains("EOF while parsing a value")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -465,6 +547,12 @@ mod tests {
         if response.offer.relay.endpoint != "relay.example.test:443" {
             return Err("unexpected relay endpoint".into());
         }
+        if !response.offer.relay.server_id.starts_with("srv_") {
+            return Err("missing relay serverId".into());
+        }
+        if response.offer.relay.client_capability.len() != 43 {
+            return Err("missing relay clientCapability".into());
+        }
         if response.offer.nonce.is_empty() {
             return Err("missing offer nonce".into());
         }
@@ -474,7 +562,13 @@ mod tests {
         if !response.offer.authorization.required {
             return Err("offer did not require later authorization".into());
         }
-        for forbidden in ["secret", "CONDUIT_HOME", "local-store", "daemon-keypair"] {
+        for forbidden in [
+            "secretKeyB64",
+            "daemonCapability",
+            "CONDUIT_HOME",
+            "local-store",
+            "daemon-keypair",
+        ] {
             if text.contains(forbidden) {
                 return Err(format!("pairing response leaked {forbidden}").into());
             }

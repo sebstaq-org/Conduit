@@ -6,5 +6,9 @@
     "tsBuildInfoFile": "tsconfig.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../relay-transport" }]
+  "references": [
+    { "path": "../app-client" },
+    { "path": "../relay-transport" },
+    { "path": "../session-client" }
+  ]
 }

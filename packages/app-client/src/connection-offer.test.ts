@@ -8,8 +8,10 @@ import {
 import type { ConnectionOfferV1, TrustedHostRecord } from "./index.js";
 
 const daemonPublicKeyB64 = "g7EHNunwYfhVBZWTysT7l3F7knCHXeAFYk4/Oo4ff3Q=";
+const relayClientCapability = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const relayJson = `"relay":{"endpoint":"https://relay.example.test","serverId":"srv_relay","clientCapability":"${relayClientCapability}"}`;
 const validNow = new Date("2026-04-18T00:00:00.000Z");
-const validOfferJson = `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"relay.example.test:443"}}`;
+const validOfferJson = `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},${relayJson}}`;
 const offer = readConnectionOffer(JSON.parse(validOfferJson), validNow);
 
 function trustedHost(publicKey: string): TrustedHostRecord {
@@ -54,7 +56,7 @@ describe("connection offer parser rejection", () => {
     expect(() =>
       readConnectionOffer(
         JSON.parse(
-          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"relay.example.test:443"},"secretKeyB64":"must-not-be-accepted"}`,
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},${relayJson},"secretKeyB64":"must-not-be-accepted"}`,
         ),
         validNow,
       ),
@@ -65,7 +67,7 @@ describe("connection offer parser rejection", () => {
     expect(() =>
       readConnectionOffer(
         JSON.parse(
-          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true},"relay":{"endpoint":"relay.example.test:443"}}`,
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true},${relayJson}}`,
         ),
         validNow,
       ),
@@ -87,7 +89,7 @@ describe("connection offer key material rejection", () => {
     expect(() =>
       readConnectionOffer(
         JSON.parse(
-          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"not-base64","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"relay.example.test:443"}}`,
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"not-base64","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},${relayJson}}`,
         ),
         validNow,
       ),
@@ -95,11 +97,41 @@ describe("connection offer key material rejection", () => {
     expect(() =>
       readConnectionOffer(
         JSON.parse(
-          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"not-base64","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"relay.example.test:443"}}`,
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"not-base64","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},${relayJson}}`,
         ),
         validNow,
       ),
     ).toThrow(/daemonPublicKeyB64/);
+  });
+
+  it("rejects relay secrets outside the relay contract", () => {
+    expect(() =>
+      readConnectionOffer(
+        JSON.parse(
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"https://relay.example.test","serverId":"srv_relay","clientCapability":"bad"}}`,
+        ),
+        validNow,
+      ),
+    ).toThrow(/clientCapability/);
+  });
+
+  it("rejects relay endpoints without an explicit http or https scheme", () => {
+    expect(() =>
+      readConnectionOffer(
+        JSON.parse(
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"relay.example.test:443","serverId":"srv_relay","clientCapability":"${relayClientCapability}"}}`,
+        ),
+        validNow,
+      ),
+    ).toThrow(/relay.endpoint/);
+    expect(() =>
+      readConnectionOffer(
+        JSON.parse(
+          `{"v":1,"serverId":"srv_test","daemonPublicKeyB64":"${daemonPublicKeyB64}","nonce":"EjRWeBI0VngSNFZ4EjRWeA","expiresAt":"2026-04-18T00:10:00Z","authorization":{"required":true,"boundary":"${AUTHORIZATION_BOUNDARY}"},"relay":{"endpoint":"ftp://relay.example.test","serverId":"srv_relay","clientCapability":"${relayClientCapability}"}}`,
+        ),
+        validNow,
+      ),
+    ).toThrow(/relay.endpoint/);
   });
 });
 

@@ -63,4 +63,16 @@ describe("relay protocol capabilities", () => {
       "capability",
     );
   });
+
+  it("rejects relay websocket URLs with unsupported endpoint protocols", () => {
+    const daemonCapability = generateRelayCapability();
+
+    expect(() =>
+      buildRelayWebSocketUrl("ftp://relay.example.test", {
+        capability: daemonCapability,
+        role: "server",
+        serverId: deriveRelayServerId(daemonCapability),
+      }),
+    ).toThrow("relay endpoint must use http or https");
+  });
 });

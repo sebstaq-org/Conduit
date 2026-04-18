@@ -1,11 +1,9 @@
+import { decodeBase64Bytes, decodeBase64UrlJson } from "./base64.js";
+
 const CONNECTION_OFFER_VERSION = 1 as const;
 const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
 const OFFER_FRAGMENT_MARKER = "#offer=";
 const AUTHORIZATION_BOUNDARY = "relay-handshake";
-const BASE64_ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const BASE64_PATTERN =
-  /^(?:[+/0-9A-Za-z]{4})*(?:[+/0-9A-Za-z]{2}==|[+/0-9A-Za-z]{3}=)?$/;
 const OFFER_KEYS =
   "v serverId daemonPublicKeyB64 nonce expiresAt authorization relay".split(
     " ",
@@ -25,6 +23,8 @@ type ConnectionOfferV1 = Record<
   };
   relay: {
     endpoint: string;
+    serverId: string;
+    clientCapability: string;
   };
 };
 
@@ -77,96 +77,6 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-function byteAt(bytes: Uint8Array, index: number): number {
-  const value = bytes[index];
-  if (value === undefined) {
-    throw new Error("pairing offer fragment must be valid bytes");
-  }
-  return value;
-}
-
-function sextet(character: string): number {
-  const value = BASE64_ALPHABET.indexOf(character);
-  if (value === -1) {
-    throw new Error("pairing offer contains invalid base64");
-  }
-  return value;
-}
-
-function normalizedBase64(
-  encoded: string,
-  label: string,
-  urlSafe: boolean,
-): string {
-  let normalized = encoded;
-  if (urlSafe) {
-    normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
-  }
-  if (normalized.length % 4 === 1) {
-    throw new Error(`${label} must be valid base64`);
-  }
-  const padded = normalized.padEnd(
-    normalized.length + ((4 - (normalized.length % 4)) % 4),
-    "=",
-  );
-  if (!BASE64_PATTERN.test(padded)) {
-    throw new Error(`${label} must be valid base64`);
-  }
-  return padded;
-}
-
-function optionalSextet(character: string): number {
-  if (character === "=") {
-    return 0;
-  }
-  return sextet(character);
-}
-
-function decodePaddedBase64Chunk(chunk: string, bytes: number[]): void {
-  const first = sextet(chunk.charAt(0));
-  const second = sextet(chunk.charAt(1));
-  const third = optionalSextet(chunk.charAt(2));
-  const fourth = optionalSextet(chunk.charAt(3));
-  bytes.push(first * 4 + Math.floor(second / 16));
-  if (chunk.charAt(2) !== "=") {
-    bytes.push((second % 16) * 16 + Math.floor(third / 4));
-  }
-  if (chunk.charAt(3) !== "=") {
-    bytes.push((third % 4) * 64 + fourth);
-  }
-}
-
-function decodeBase64Bytes(
-  encoded: string,
-  label: string,
-  urlSafe: boolean,
-): Uint8Array {
-  const padded = normalizedBase64(encoded, label, urlSafe);
-  const bytes: number[] = [];
-  for (let index = 0; index < padded.length; index += 4) {
-    decodePaddedBase64Chunk(padded.slice(index, index + 4), bytes);
-  }
-  return Uint8Array.from(bytes);
-}
-
-function decodeAscii(bytes: Uint8Array): string {
-  let result = "";
-  for (let index = 0; index < bytes.length; index += 1) {
-    const value = byteAt(bytes, index);
-    if (value > 127) {
-      throw new Error("pairing offer fragment must be ASCII JSON");
-    }
-    result += String.fromCodePoint(value);
-  }
-  return result;
-}
-
-function decodeBase64UrlJson(encoded: string): string {
-  return decodeAscii(
-    decodeBase64Bytes(encoded, "pairing offer fragment", true),
-  );
-}
-
 function requireDaemonPublicKey(value: unknown): string {
   const publicKey = requireNonEmptyString(value, "daemonPublicKeyB64");
   if (publicKey.length % 4 !== 0) {
@@ -190,6 +100,46 @@ function requireNonce(value: unknown): string {
     throw new Error("pairing offer nonce must decode to 16 bytes");
   }
   return nonce;
+}
+
+function requireRelayServerId(value: unknown): string {
+  const serverId = requireNonEmptyString(value, "relay.serverId");
+  if (!serverId.startsWith("srv_")) {
+    throw new Error("pairing offer relay.serverId is invalid");
+  }
+  return serverId;
+}
+
+function requireRelayCapability(value: unknown): string {
+  const capability = requireNonEmptyString(value, "relay.clientCapability");
+  const bytes = decodeBase64Bytes(
+    capability,
+    "pairing offer relay.clientCapability",
+    true,
+  );
+  if (bytes.length !== 32) {
+    throw new Error(
+      "pairing offer relay.clientCapability must decode to 32 bytes",
+    );
+  }
+  return capability;
+}
+
+function parseRelayEndpoint(endpoint: string): URL {
+  try {
+    return new URL(endpoint);
+  } catch {
+    throw new Error("pairing offer relay.endpoint must be an absolute URL");
+  }
+}
+
+function requireRelayEndpoint(value: unknown): string {
+  const endpoint = requireNonEmptyString(value, "relay.endpoint");
+  const parsed = parseRelayEndpoint(endpoint);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("pairing offer relay.endpoint must use http or https");
+  }
+  return endpoint;
 }
 
 function requireExpiresAt(value: unknown, now: Date): string {
@@ -229,7 +179,11 @@ function readConnectionOffer(
   const record = requireRecord(value, "pairing offer");
   assertExactKeys(record, OFFER_KEYS, "pairing offer");
   const relay = requireRecord(record.relay, "pairing offer relay");
-  assertExactKeys(relay, ["endpoint"], "pairing offer relay");
+  assertExactKeys(
+    relay,
+    ["endpoint", "serverId", "clientCapability"],
+    "pairing offer relay",
+  );
   if (record[CONNECTION_OFFER_VERSION_FIELD] !== CONNECTION_OFFER_VERSION) {
     throw new Error("unsupported pairing offer version");
   }
@@ -245,7 +199,9 @@ function readConnectionOffer(
     expiresAt: requireExpiresAt(record.expiresAt, now),
     authorization: requireAuthorization(record.authorization),
     relay: {
-      endpoint: requireNonEmptyString(relay.endpoint, "relay.endpoint"),
+      endpoint: requireRelayEndpoint(relay.endpoint),
+      serverId: requireRelayServerId(relay.serverId),
+      clientCapability: requireRelayCapability(relay.clientCapability),
     },
   };
 }

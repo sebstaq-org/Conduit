@@ -9,6 +9,7 @@ use base64::engine::general_purpose::STANDARD;
 use directories as _;
 use futures_util as _;
 use rand_core as _;
+use remote_access as _;
 use serde as _;
 use serde_json::Value;
 use service_runtime as _;
@@ -24,6 +25,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror as _;
 use time as _;
 use tokio as _;
+use tokio_tungstenite as _;
 use tower_http as _;
 use tracing as _;
 use tracing_subscriber as _;
@@ -48,6 +50,9 @@ fn cli_pairing_offer_is_stable_and_minimal() -> TestResult<()> {
     }
     if field(first_offer, "daemonPublicKeyB64") != field(second_offer, "daemonPublicKeyB64") {
         return Err("daemon public key changed across pair invocations".into());
+    }
+    if relay_field(first_offer, "serverId") != relay_field(second_offer, "serverId") {
+        return Err("relay serverId changed across pair invocations".into());
     }
     assert_offer_minimal(&first)
 }
@@ -157,6 +162,11 @@ fn serve_pairing_and_status_are_stable_and_minimal() -> TestResult<()> {
         != field(offer(&second_pairing)?, "daemonPublicKeyB64")
     {
         return Err("HTTP pairing public key changed after restart".into());
+    }
+    if relay_field(offer(&first_pairing)?, "serverId")
+        != relay_field(offer(&second_pairing)?, "serverId")
+    {
+        return Err("HTTP relay serverId changed after restart".into());
     }
     if field(&first_status, "serverId") != field(&second_status, "serverId") {
         return Err("daemon status serverId changed after restart".into());
@@ -293,6 +303,17 @@ fn field<'a>(value: &'a Value, name: &str) -> Option<&'a str> {
     value.get(name).and_then(Value::as_str)
 }
 
+fn relay_field<'a>(value: &'a Value, name: &str) -> Option<&'a str> {
+    value
+        .get("relay")
+        .and_then(|relay| relay.get(name))
+        .and_then(Value::as_str)
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "Pairing E2E assertion intentionally checks the full public offer and leak denylist in one place."
+)]
 fn assert_offer_minimal(value: &Value) -> TestResult<()> {
     let offer_value = offer(value)?;
     if offer_value.get("v") != Some(&Value::from(1)) {
@@ -338,9 +359,18 @@ fn assert_offer_minimal(value: &Value) -> TestResult<()> {
     {
         return Err("unexpected relay endpoint".into());
     }
+    if !relay_field(offer_value, "serverId").is_some_and(|server_id| server_id.starts_with("srv_"))
+    {
+        return Err("missing relay serverId".into());
+    }
+    if relay_field(offer_value, "clientCapability").is_none_or(|capability| capability.len() != 43)
+    {
+        return Err("missing relay clientCapability".into());
+    }
     let text = serde_json::to_string(value)?;
     for forbidden in [
         "secretKeyB64",
+        "daemonCapability",
         "CONDUIT_HOME",
         "daemon-keypair",
         "local-store",

@@ -308,9 +308,11 @@ export default defineConfig({
       files: [
         "packages/cloudflare-relay/src/**/*.test.ts",
         "packages/cloudflare-relay/src/relayAdversarialHarness.ts",
+        "packages/cloudflare-relay/src/serviceRelayProcess.ts",
         "packages/cloudflare-relay/src/relayTestHarness.ts",
       ],
       rules: {
+        "eslint/prefer-object-spread": "off",
         "eslint/max-lines-per-function": "off",
         "eslint/no-use-before-define": "off",
         "import/no-nodejs-modules": "off",
