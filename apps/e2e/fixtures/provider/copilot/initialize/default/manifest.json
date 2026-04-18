@@ -1,0 +1,9 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Synthetic E2E initialize fixture; no manual provider data.",
+  "manualCapture": false,
+  "operation": "initialize",
+  "provider": "copilot",
+  "timestamp": "2026-04-18T00:00:00.000000000Z"
+}

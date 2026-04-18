@@ -99,7 +99,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
     return {
       addProject: async (cwd: string) => {
         await sendRuntimeCommand(sessionWsUrl, "projects/add", "all", { cwd });
-        await waitForIndexedSessions(sessionWsUrl, cwd, processes);
+        await waitForIndexedSessions(sessionWsUrl, cwd, processes, "all");
       },
       frontendUrl,
       serviceUrl,
@@ -227,6 +227,7 @@ async function waitForIndexedSessions(
   wsUrl: string,
   cwd: string,
   processes: ManagedProcess[],
+  provider: string,
 ): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 15_000) {
@@ -234,7 +235,7 @@ async function waitForIndexedSessions(
     const result = await sendRuntimeCommand(
       wsUrl,
       "sessions/grouped",
-      "codex",
+      provider,
       {
         updatedWithinDays: null,
       },
