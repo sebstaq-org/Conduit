@@ -47,7 +47,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
   const frontendPort = await freePort();
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
-  const frontendUrl = `http://127.0.0.1:${frontendPort}`;
+  const frontendUrl = `http://localhost:${frontendPort}`;
   const processes: ManagedProcess[] = [];
 
   try {
