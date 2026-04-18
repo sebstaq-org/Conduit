@@ -42,6 +42,8 @@ pub(crate) enum CaptureOperation {
     Prompt {
         /// ACP session id returned by the provider, when reusing a session.
         session_id: Option<String>,
+        /// Optional ACP config option to set before sending the prompt.
+        config: Option<CaptureConfigOption>,
         /// JSON file containing the top-level ACP `ContentBlock[]` payload.
         prompt_path: PathBuf,
     },
@@ -54,6 +56,15 @@ pub(crate) enum CaptureOperation {
         /// ACP config option value to set.
         value: String,
     },
+}
+
+/// One ACP config option assignment used as a capture prelude.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CaptureConfigOption {
+    /// ACP config option id to set.
+    pub(crate) config_id: String,
+    /// ACP config option value to set.
+    pub(crate) value: String,
 }
 
 /// Parses top-level CLI arguments.
@@ -230,23 +241,27 @@ fn parse_session_load_capture(args: &[String]) -> Result<CaptureRequest> {
 }
 
 fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
+    let mut config_id = None;
     let mut cwd = None;
     let mut output = None;
     let mut prompt_path = None;
     let mut session_id = None;
+    let mut value = None;
     let mut index = 0;
     while index < args.len() {
         let flag = &args[index];
-        let Some(value) = args.get(index + 1) else {
+        let Some(flag_value) = args.get(index + 1) else {
             return Err(CliError::invalid_command(format!(
                 "missing value for {flag}"
             )));
         };
         match flag.as_str() {
-            "--cwd" => cwd = Some(PathBuf::from(value)),
-            "--out" => output = Some(PathBuf::from(value)),
-            "--prompt" => prompt_path = Some(PathBuf::from(value)),
-            "--session" => session_id = Some(value.to_owned()),
+            "--config" => config_id = Some(flag_value.to_owned()),
+            "--cwd" => cwd = Some(PathBuf::from(flag_value)),
+            "--out" => output = Some(PathBuf::from(flag_value)),
+            "--prompt" => prompt_path = Some(PathBuf::from(flag_value)),
+            "--session" => session_id = Some(flag_value.to_owned()),
+            "--value" => value = Some(flag_value.to_owned()),
             _ => {
                 return Err(CliError::invalid_command(format!(
                     "unsupported flag {flag}"
@@ -258,9 +273,11 @@ fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
     let prompt_path = prompt_path.ok_or_else(|| {
         CliError::invalid_command("missing required --prompt for codex session/prompt capture")
     })?;
+    let config = parse_optional_config_option(config_id, value, "codex session/prompt capture")?;
     Ok(CaptureRequest {
         operation: CaptureOperation::Prompt {
             session_id,
+            config,
             prompt_path,
         },
         cwd: provider_workspace_cwd(cwd)?,
@@ -315,6 +332,23 @@ fn parse_session_set_config_option_capture(args: &[String]) -> Result<CaptureReq
         cwd: provider_workspace_cwd(cwd)?,
         output,
     })
+}
+
+fn parse_optional_config_option(
+    config_id: Option<String>,
+    value: Option<String>,
+    command: &str,
+) -> Result<Option<CaptureConfigOption>> {
+    match (config_id, value) {
+        (Some(config_id), Some(value)) => Ok(Some(CaptureConfigOption { config_id, value })),
+        (Some(_), None) => Err(CliError::invalid_command(format!(
+            "missing required --value for {command} when --config is provided"
+        ))),
+        (None, Some(_)) => Err(CliError::invalid_command(format!(
+            "missing required --config for {command} when --value is provided"
+        ))),
+        (None, None) => Ok(None),
+    }
 }
 
 fn provider_workspace_cwd(configured: Option<PathBuf>) -> Result<PathBuf> {

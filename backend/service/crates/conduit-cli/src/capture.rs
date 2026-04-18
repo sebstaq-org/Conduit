@@ -1,6 +1,6 @@
 //! Provider capture implementation.
 
-use crate::cli::{CaptureOperation, CaptureRequest};
+use crate::cli::{CaptureConfigOption, CaptureOperation, CaptureRequest};
 use crate::error::{CliError, Result};
 use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
@@ -137,9 +137,19 @@ fn capture_provider(
             capture_session_load(service, session_id, cwd, ledger)
         }
         CaptureOperation::Prompt {
+            config,
             session_id,
             prompt_path,
-        } => capture_session_prompt(service, session_id.as_deref(), prompt_path, cwd, ledger),
+        } => capture_session_prompt(
+            service,
+            PromptCapture {
+                session_id: session_id.as_deref(),
+                config: config.as_ref(),
+                prompt_path,
+                cwd,
+            },
+            ledger,
+        ),
         CaptureOperation::SetConfigOption {
             session_id,
             config_id,
@@ -162,6 +172,19 @@ struct SetConfigCapture<'a> {
     config_id: &'a str,
     value: &'a str,
     cwd: &'a Path,
+}
+
+struct PromptCapture<'a> {
+    session_id: Option<&'a str>,
+    config: Option<&'a CaptureConfigOption>,
+    prompt_path: &'a Path,
+    cwd: &'a Path,
+}
+
+struct SetConfigRawCapture<'a> {
+    session_id: &'a str,
+    config_id: &'a str,
+    value: &'a str,
 }
 
 fn capture_initialize(service: &mut AppService, ledger: &mut Ledger) -> Result<Value> {
@@ -236,19 +259,30 @@ fn capture_session_load(
 
 fn capture_session_prompt(
     service: &mut AppService,
-    session_id: Option<&str>,
-    prompt_path: &Path,
-    cwd: &Path,
+    request: PromptCapture<'_>,
     ledger: &mut Ledger,
 ) -> Result<Value> {
-    let prompt = read_prompt_blocks(prompt_path)?;
-    let (session_new, resolved_session_id) = match session_id {
+    let prompt = read_prompt_blocks(request.prompt_path)?;
+    let (session_new, resolved_session_id) = match request.session_id {
         Some(session_id) => (Value::Null, session_id.to_owned()),
         None => {
-            let response = capture_session_new(service, cwd, ledger)?;
+            let response = capture_session_new(service, request.cwd, ledger)?;
             let session_id = extract_session_id(&response)?;
             (response, session_id)
         }
+    };
+
+    let config_capture = match request.config {
+        Some(config) => capture_session_set_config_option_raw(
+            service,
+            SetConfigRawCapture {
+                session_id: &resolved_session_id,
+                config_id: &config.config_id,
+                value: &config.value,
+            },
+            ledger,
+        )?,
+        None => Value::Null,
     };
 
     let mut prompt_updates = Vec::new();
@@ -260,6 +294,7 @@ fn capture_session_prompt(
             ledger.push("provider.session_prompt.finish", true)?;
             Ok(json!({
                 "sessionNew": session_new,
+                "configCapture": config_capture,
                 "promptRequest": {
                     "sessionId": resolved_session_id,
                     "prompt": prompt,
@@ -289,15 +324,33 @@ fn capture_session_set_config_option(
         }
     };
 
+    let mut raw = capture_session_set_config_option_raw(
+        service,
+        SetConfigRawCapture {
+            session_id: &resolved_session_id,
+            config_id: request.config_id,
+            value: request.value,
+        },
+        ledger,
+    )?;
+    if let Some(map) = raw.as_object_mut() {
+        map.insert("sessionNew".to_owned(), session_new);
+    }
+    Ok(raw)
+}
+
+fn capture_session_set_config_option_raw(
+    service: &mut AppService,
+    request: SetConfigRawCapture<'_>,
+    ledger: &mut Ledger,
+) -> Result<Value> {
     ledger.push("provider.session_set_config_option.start", true)?;
-    match service.set_session_config_option(&resolved_session_id, request.config_id, request.value)
-    {
+    match service.set_session_config_option(request.session_id, request.config_id, request.value) {
         Ok(response) => {
             ledger.push("provider.session_set_config_option.finish", true)?;
             Ok(json!({
-                "sessionNew": session_new,
                 "configRequest": {
-                    "sessionId": resolved_session_id,
+                    "sessionId": request.session_id,
                     "configId": request.config_id,
                     "value": request.value,
                 },

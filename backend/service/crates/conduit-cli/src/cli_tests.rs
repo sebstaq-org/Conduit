@@ -112,6 +112,7 @@ fn parses_codex_session_prompt_capture_with_default_workspace()
     if request.operation
         != (super::CaptureOperation::Prompt {
             session_id: None,
+            config: None,
             prompt_path: "/tmp/prompt.json".into(),
         })
     {
@@ -143,6 +144,7 @@ fn parses_codex_session_prompt_capture_with_existing_session()
     if request.operation
         != (super::CaptureOperation::Prompt {
             session_id: Some("session-1".to_owned()),
+            config: None,
             prompt_path: "/tmp/prompt.json".into(),
         })
     {
@@ -154,6 +156,36 @@ fn parses_codex_session_prompt_capture_with_existing_session()
     }
     if request.output.as_deref() != Some(Path::new("/captures/one")) {
         return Err("output did not parse".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_codex_session_prompt_capture_with_config_prelude()
+-> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&[
+        "capture",
+        "codex",
+        "session/prompt",
+        "--prompt",
+        "/tmp/prompt.json",
+        "--config",
+        "collaboration_mode",
+        "--value",
+        "plan",
+    ]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.operation
+        != (super::CaptureOperation::Prompt {
+            session_id: None,
+            config: Some(super::CaptureConfigOption {
+                config_id: "collaboration_mode".to_owned(),
+                value: "plan".to_owned(),
+            }),
+            prompt_path: "/tmp/prompt.json".into(),
+        })
+    {
+        return Err("operation did not parse".into());
     }
     Ok(())
 }
@@ -370,6 +402,40 @@ fn rejects_session_prompt_without_prompt_file() {
         .map(|error| error.to_string())
         .unwrap_or_default();
     assert!(error.contains("missing required --prompt"));
+}
+
+#[test]
+fn rejects_session_prompt_config_without_value() {
+    let error = parse_command(&args(&[
+        "capture",
+        "codex",
+        "session/prompt",
+        "--prompt",
+        "/tmp/prompt.json",
+        "--config",
+        "collaboration_mode",
+    ]))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("missing required --value"));
+}
+
+#[test]
+fn rejects_session_prompt_value_without_config() {
+    let error = parse_command(&args(&[
+        "capture",
+        "codex",
+        "session/prompt",
+        "--prompt",
+        "/tmp/prompt.json",
+        "--value",
+        "plan",
+    ]))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("missing required --config"));
 }
 
 #[test]

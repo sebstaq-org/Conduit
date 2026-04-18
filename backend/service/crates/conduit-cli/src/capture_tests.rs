@@ -271,6 +271,7 @@ fn normalizes_session_prompt_with_canonical_projection() -> Result<(), Box<dyn s
     let normalized = normalize_capture(
         &CaptureOperation::Prompt {
             session_id: None,
+            config: None,
             prompt_path: "prompt.json".into(),
         },
         &json!({
