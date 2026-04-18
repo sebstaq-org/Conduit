@@ -1,10 +1,13 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { runStageRuntimeIfConfigured } from "./stage/runtime.js";
 
 const currentDirectory = import.meta.dirname;
 const mainWindows = new Set<BrowserWindow>();
 
 app.disableHardwareAcceleration();
+
+const runningStageRuntime = runStageRuntimeIfConfigured();
 
 function createMainWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -36,18 +39,20 @@ function createMainWindow(): BrowserWindow {
   return mainWindow;
 }
 
-app.on("ready", () => {
-  createMainWindow();
-});
-
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+if (!runningStageRuntime) {
+  app.on("ready", () => {
     createMainWindow();
-  }
-});
+  });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow();
+    }
+  });
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+}

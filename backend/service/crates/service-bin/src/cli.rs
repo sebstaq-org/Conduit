@@ -3,6 +3,7 @@
 use crate::error::{Result, ServiceError};
 use serde_json::{Value, json};
 use service_runtime::ConsumerCommand;
+use std::path::PathBuf;
 
 /// The supported service commands.
 pub(crate) enum Command {
@@ -16,6 +17,10 @@ pub(crate) enum Command {
         relay_endpoint: Option<String>,
         /// Base application URL that receives pairing offer fragments.
         app_base_url: String,
+        /// Fixture provider root for deterministic provider responses.
+        provider_fixtures: Option<PathBuf>,
+        /// Explicit SQLite local-store path for isolated service runs.
+        store_path: Option<PathBuf>,
     },
     /// Emits the daemon pairing offer.
     Pair {
@@ -45,6 +50,8 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
                 .map(|value| value.trim().to_owned())
                 .filter(|value| !value.is_empty()),
             app_base_url: app_base_url(args),
+            provider_fixtures: optional_value(args, "--provider-fixtures").map(PathBuf::from),
+            store_path: optional_value(args, "--store-path").map(PathBuf::from),
         }),
         "pair" => pair_command(args),
         "runtime" => Ok(Command::Runtime {

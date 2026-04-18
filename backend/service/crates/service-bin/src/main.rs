@@ -28,7 +28,13 @@ use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    telemetry::init();
     let args = env::args().skip(1).collect::<Vec<_>>();
+    tracing::debug!(
+        event_name = "service_bin.startup",
+        source = "service-bin",
+        args = ?args
+    );
     let command = parse_command(&args)?;
     match command {
         cli::Command::Serve {
@@ -36,14 +42,18 @@ async fn main() -> Result<()> {
             port,
             relay_endpoint,
             app_base_url,
+            provider_fixtures,
+            store_path,
         } => {
-            telemetry::init();
-            tracing::debug!(
-                event_name = "service_bin.startup",
-                source = "service-bin",
-                args = ?args
-            );
-            serve::run(&host, port, relay_endpoint, app_base_url).await
+            serve::run(
+                &host,
+                port,
+                relay_endpoint,
+                app_base_url,
+                provider_fixtures,
+                store_path,
+            )
+            .await
         }
         cli::Command::Pair {
             relay_endpoint,

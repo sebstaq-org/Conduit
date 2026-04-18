@@ -203,7 +203,7 @@ where
                     .iter()
                     .map(|project| project.cwd.as_str())
                     .collect::<HashSet<_>>();
-                let provider_port = self.provider(provider)?;
+                let provider_port = self.initialized_provider(provider)?;
                 let mut entries = Vec::new();
                 for project in &projects {
                     entries.extend(paginated_index_entries(
@@ -257,7 +257,7 @@ where
     }
 
     fn refresh_project_suggestions_provider(&mut self, provider: ProviderId) -> Result<()> {
-        let provider_port = self.provider(provider)?;
+        let provider_port = self.initialized_provider(provider)?;
         let entries = paginated_index_entries(provider_port.as_mut(), provider, None)?;
         let mut cwds = entries
             .into_iter()

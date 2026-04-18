@@ -362,7 +362,7 @@ pub(super) struct ActorBootstrap {
     pub(super) launcher: LauncherCommand,
     pub(super) environment: ProcessEnvironment,
     pub(super) commands: UnboundedReceiver<HostCommand>,
-    pub(super) init: Sender<Result<ProviderSnapshot>>,
+    pub(super) init: Sender<Result<()>>,
 }
 
 pub(super) fn spawn_actor(bootstrap: ActorBootstrap) -> Result<()> {
@@ -403,7 +403,7 @@ async fn run_actor(bootstrap: ActorBootstrap) {
     .await
     {
         Ok(mut actor) => {
-            send_reply(bootstrap.init, Ok(actor.snapshot()));
+            send_reply(bootstrap.init, Ok(()));
             actor.run(bootstrap.commands).await;
         }
         Err(error) => send_reply(bootstrap.init, Err(error)),

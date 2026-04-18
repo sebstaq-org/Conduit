@@ -1,0 +1,110 @@
+name: Stage Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch, tag, or commit to build and deploy"
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conduit-stage-deploy-${{ inputs.source_ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+    outputs:
+      artifact_name: ${{ steps.stage.outputs.artifact_name }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Resolve source commit
+        id: source
+        run: echo "source_sha=$(git rev-parse --verify HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Configure pnpm store
+        run: |
+          pnpm config set store-dir "$RUNNER_TEMP/conduit-stage-pnpm-store-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+          mkdir -p "$(pnpm store path --silent)"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version-file: .nvmrc
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.1
+          components: rustfmt, clippy
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build stage artifact
+        id: stage
+        env:
+          CONDUIT_STAGE_BUILD_REF: ${{ steps.source.outputs.source_sha }}
+          CONDUIT_STAGE_ROOT: ${{ runner.temp }}/conduit-stage
+        run: pnpm run stage:build
+
+      - name: Upload stage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.stage.outputs.artifact_name }}
+          path: ${{ steps.stage.outputs.artifact_path }}
+          retention-days: 14
+
+  deploy:
+    needs: build
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.source_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download stage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: stage-artifact
+
+      - name: Install stage artifact
+        run: bash scripts/stage/conduit-stage.sh install-artifact "stage-artifact/${{ needs.build.outputs.artifact_name }}"
+
+      - name: Restart stage
+        run: |
+          bash scripts/stage/conduit-stage.sh stop
+          bash scripts/stage/conduit-stage.sh start
+
+      - name: Verify deployed stage
+        run: bash scripts/stage/conduit-stage.sh verify "${{ needs.build.outputs.source_sha }}"

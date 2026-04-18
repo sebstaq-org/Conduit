@@ -475,6 +475,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "conduit-cli"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "app-api",
+ "serde",
+ "serde_json",
+ "session-projection",
+ "tempfile",
+ "time",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1851,6 +1865,19 @@ name = "provider-copilot"
 version = "0.5.0"
 
 [[package]]
+name = "provider-fixture"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "acp-discovery",
+ "agent-client-protocol-schema",
+ "serde_json",
+ "service-runtime",
+ "session-store",
+ "tempfile",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2394,6 +2421,7 @@ dependencies = [
  "base64",
  "directories",
  "futures-util",
+ "provider-fixture",
  "rand_core 0.6.4",
  "remote-access",
  "serde",
@@ -2429,6 +2457,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "session-projection"
+version = "0.5.0"
+dependencies = [
+ "acp-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "session-store"
 version = "0.5.0"
 dependencies = [
@@ -2437,6 +2474,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "session-projection",
  "sha2",
  "thiserror 2.0.18",
  "tracing",

@@ -1,0 +1,29 @@
+{
+  "configOptions": [
+    {
+      "category": "mode",
+      "currentValue": "default",
+      "description": "Choose collaboration behavior (Default or Plan mode)",
+      "id": "collaboration_mode",
+      "name": "Collaboration Mode",
+      "options": [
+        {
+          "name": "Plan",
+          "value": "plan"
+        },
+        {
+          "name": "Default",
+          "value": "default"
+        }
+      ],
+      "type": "select"
+    }
+  ],
+  "currentModeId": null,
+  "modes": {
+    "availableModes": [],
+    "currentModeId": null
+  },
+  "models": null,
+  "sessionId": "e2e-codex-new-session-0001"
+}

@@ -6,8 +6,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
+
+const ACP_VENDOR_ROOT_ENV: &str = "CONDUIT_ACP_VENDOR_ROOT";
 
 /// The pinned upstream metadata for the vendored ACP bundle.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -77,6 +80,11 @@ pub struct ContractBundle {
     pub validator: Validator,
 }
 
+struct ContractPaths {
+    repo_root: PathBuf,
+    vendor_root: PathBuf,
+}
+
 /// Loads the pinned ACP vendor bundle from the repository.
 ///
 /// # Errors
@@ -89,8 +97,9 @@ pub fn load_contract_bundle() -> Result<ContractBundle> {
         event_name = "contract_bundle.load.start",
         source = "acp-contracts"
     );
-    let repo_root = repo_root()?;
-    let vendor_root = repo_root.join("vendor/agent-client-protocol");
+    let paths = contract_paths()?;
+    let repo_root = paths.repo_root;
+    let vendor_root = paths.vendor_root;
     let manifest_path = vendor_root.join("manifest.toml");
     let manifest_contents = read_utf8(&manifest_path)?;
     let manifest: VendorManifest =
@@ -160,6 +169,41 @@ fn repo_root() -> Result<PathBuf> {
     Ok(repo_root.to_path_buf())
 }
 
+fn contract_paths() -> Result<ContractPaths> {
+    contract_paths_from(std::env::var_os(ACP_VENDOR_ROOT_ENV).as_deref())
+}
+
+fn contract_paths_from(configured_vendor_root: Option<&OsStr>) -> Result<ContractPaths> {
+    if let Some(raw_vendor_root) = configured_vendor_root {
+        let vendor_root = PathBuf::from(raw_vendor_root);
+        if !vendor_root.is_absolute() {
+            return Err(Error::contract(format!(
+                "{ACP_VENDOR_ROOT_ENV} must be an absolute path"
+            )));
+        }
+        let repo_root = vendor_root
+            .parent()
+            .and_then(Path::parent)
+            .ok_or_else(|| {
+                Error::contract(format!(
+                    "{ACP_VENDOR_ROOT_ENV} must point to vendor/agent-client-protocol"
+                ))
+            })?
+            .to_path_buf();
+        return Ok(ContractPaths {
+            repo_root,
+            vendor_root,
+        });
+    }
+
+    let repo_root = repo_root()?;
+    let vendor_root = repo_root.join(vendor_contract_root());
+    Ok(ContractPaths {
+        repo_root,
+        vendor_root,
+    })
+}
+
 fn read_utf8(path: &Path) -> Result<String> {
     read_to_string(path).map_err(|source| Error::Io {
         path: path.to_path_buf(),
@@ -217,5 +261,47 @@ impl ContractBundle {
             methods.insert(key.clone(), value.to_owned());
         }
         Ok(methods)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ACP_VENDOR_ROOT_ENV, contract_paths_from};
+    use std::ffi::OsStr;
+    use std::path::PathBuf;
+
+    #[test]
+    fn configured_vendor_root_resolves_packaged_resource_root() {
+        let vendor_root = OsStr::new("/stage/resources/vendor/agent-client-protocol");
+        let paths = contract_paths_from(Some(vendor_root)).ok();
+
+        assert_eq!(
+            paths.as_ref().map(|paths| &paths.repo_root),
+            Some(&PathBuf::from("/stage/resources")),
+            "repo_root should be the packaged resource root"
+        );
+        assert_eq!(
+            paths.as_ref().map(|paths| &paths.vendor_root),
+            Some(&PathBuf::from(
+                "/stage/resources/vendor/agent-client-protocol"
+            )),
+            "vendor_root should use the configured packaged ACP bundle"
+        );
+    }
+
+    #[test]
+    fn configured_vendor_root_must_be_absolute() {
+        let message = contract_paths_from(Some(OsStr::new(
+            "stage-resources/vendor/agent-client-protocol",
+        )))
+        .err()
+        .map(|error| error.to_string());
+
+        assert!(
+            message
+                .as_deref()
+                .is_some_and(|message| message.contains(ACP_VENDOR_ROOT_ENV)),
+            "error should mention the configured env var"
+        );
     }
 }

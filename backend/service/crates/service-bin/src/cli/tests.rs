@@ -96,6 +96,8 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
         port,
         relay_endpoint,
         app_base_url,
+        provider_fixtures,
+        store_path,
     } = parse_command(&args)?
     else {
         return Err("expected serve command".into());
@@ -112,6 +114,12 @@ fn serve_defaults_to_product_websocket_port() -> TestResult<()> {
     if app_base_url != "https://app.conduit.local" {
         return Err(format!("unexpected app base url {app_base_url}").into());
     }
+    if provider_fixtures.is_some() {
+        return Err("unexpected provider fixtures".into());
+    }
+    if store_path.is_some() {
+        return Err("unexpected store path".into());
+    }
     Ok(())
 }
 
@@ -125,6 +133,55 @@ fn serve_accepts_app_base_url() -> TestResult<()> {
         return Ok(());
     }
     Err(format!("unexpected app base url {app_base_url}").into())
+}
+
+#[test]
+fn serve_accepts_provider_fixtures_root() -> TestResult<()> {
+    let args = strings(&[
+        "serve",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "9000",
+        "--provider-fixtures",
+        "/fixtures",
+        "--store-path",
+        "/tmp/conduit-e2e.sqlite3",
+        "--relay-endpoint",
+        "https://relay.example.test",
+        "--app-base-url",
+        "https://expo.test/app",
+    ]);
+    let Command::Serve {
+        host,
+        port,
+        relay_endpoint,
+        app_base_url,
+        provider_fixtures,
+        store_path,
+    } = parse_command(&args)?
+    else {
+        return Err("expected serve command".into());
+    };
+    if host != "0.0.0.0" {
+        return Err(format!("unexpected host {host}").into());
+    }
+    if port != 9000 {
+        return Err(format!("unexpected port {port}").into());
+    }
+    if relay_endpoint.as_deref() != Some("https://relay.example.test") {
+        return Err(format!("unexpected relay endpoint {relay_endpoint:?}").into());
+    }
+    if app_base_url != "https://expo.test/app" {
+        return Err(format!("unexpected app base url {app_base_url}").into());
+    }
+    if provider_fixtures.as_deref() != Some(std::path::Path::new("/fixtures")) {
+        return Err(format!("unexpected provider fixtures {provider_fixtures:?}").into());
+    }
+    if store_path.as_deref() != Some(std::path::Path::new("/tmp/conduit-e2e.sqlite3")) {
+        return Err(format!("unexpected store path {store_path:?}").into());
+    }
+    Ok(())
 }
 
 #[test]

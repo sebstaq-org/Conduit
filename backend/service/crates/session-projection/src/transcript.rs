@@ -75,7 +75,8 @@ pub enum MessageRole {
 }
 
 /// Projects provider transcript updates into UI transcript items.
-pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<TranscriptItem> {
+#[must_use]
+pub fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<TranscriptItem> {
     let mut updates = updates.to_vec();
     updates.sort_by_key(|update| update.index);
     let mut items = Vec::new();
@@ -99,7 +100,8 @@ pub(crate) fn project_items(updates: &[TranscriptUpdateSnapshot]) -> Vec<Transcr
 }
 
 /// Projects live prompt-turn updates into UI transcript items.
-pub(crate) fn project_prompt_turn_items(
+#[must_use]
+pub fn project_prompt_turn_items(
     turn_id: &str,
     updates: &[TranscriptUpdateSnapshot],
     status: TranscriptItemStatus,
@@ -268,12 +270,50 @@ fn terminal_plan_data(update: &TranscriptUpdateSnapshot) -> Option<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{MessageRole, TranscriptItem, TranscriptItemStatus, project_prompt_turn_items};
+    use super::{
+        MessageRole, TranscriptItem, TranscriptItemStatus, project_items, project_prompt_turn_items,
+    };
     use acp_core::{ConduitTerminalPlanData, TranscriptUpdateSnapshot};
     use serde_json::{Value, json};
     use std::error::Error;
 
     type TestResult = Result<(), Box<dyn Error>>;
+
+    #[test]
+    fn adjacent_agent_message_chunks_project_to_one_message() -> TestResult {
+        let items = project_prompt_turn_items(
+            "turn-1",
+            &[
+                transcript_update(0, "agent_message_chunk", "fixture"),
+                transcript_update(1, "agent_message_chunk", "-ready"),
+            ],
+            TranscriptItemStatus::Complete,
+            Some("end_turn"),
+        );
+
+        ensure_eq(&items.len(), &1usize, "item count")?;
+        assert_agent_text(&items[0], "fixture-ready")
+    }
+
+    #[test]
+    fn unknown_update_projects_to_event_item() -> TestResult {
+        let items = project_items(&[TranscriptUpdateSnapshot {
+            index: 4,
+            variant: "tool_call".to_owned(),
+            update: json!({ "sessionUpdate": "tool_call", "id": "tool-1" }),
+        }]);
+
+        ensure_eq(&items.len(), &1usize, "item count")?;
+        let TranscriptItem::Event { variant, data, .. } = &items[0] else {
+            return Err(format!("expected event item, got {:?}", items[0]).into());
+        };
+        ensure_eq(variant, &"tool_call".to_owned(), "event variant")?;
+        ensure_eq(
+            &data.get("id").and_then(Value::as_str),
+            &Some("tool-1"),
+            "event id",
+        )
+    }
 
     #[test]
     fn terminal_plan_meta_projects_agent_message_and_terminal_plan_event() -> TestResult {
@@ -347,6 +387,17 @@ mod tests {
         assert_eq!(items.len(), 1);
     }
 
+    fn transcript_update(index: usize, variant: &str, text: &str) -> TranscriptUpdateSnapshot {
+        TranscriptUpdateSnapshot {
+            index,
+            variant: variant.to_owned(),
+            update: json!({
+                "sessionUpdate": variant,
+                "content": { "type": "text", "text": text }
+            }),
+        }
+    }
+
     fn ensure_eq<T>(actual: &T, expected: &T, label: &str) -> TestResult
     where
         T: std::fmt::Debug + PartialEq,
@@ -381,6 +432,18 @@ mod tests {
                 }
             }),
         }
+    }
+
+    fn assert_agent_text(item: &TranscriptItem, expected: &str) -> TestResult {
+        let TranscriptItem::Message { content, role, .. } = item else {
+            return Err(format!("expected message item, got {item:?}").into());
+        };
+        ensure_eq(role, &MessageRole::Agent, "message role")?;
+        let text = content
+            .iter()
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .collect::<String>();
+        ensure_eq(&text, &expected.to_owned(), "message text")
     }
 
     fn assert_agent_message(item: &TranscriptItem) -> TestResult {

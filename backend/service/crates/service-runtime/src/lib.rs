@@ -30,6 +30,7 @@ use criterion as _;
 #[cfg(test)]
 use tracing_subscriber as _;
 
+pub use acp_core::{ProviderInitializeRequest, ProviderInitializeResult};
 pub use app_service::AppServiceFactory;
 pub use command::{ConsumerCommand, ConsumerError, ConsumerResponse};
 pub use error::{Result, RuntimeError};

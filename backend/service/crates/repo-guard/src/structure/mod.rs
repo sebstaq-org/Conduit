@@ -21,7 +21,7 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
     "vendor",
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
-const APPROVED_APPS: [&str; 2] = ["desktop", "frontend"];
+const APPROVED_APPS: [&str; 3] = ["desktop", "e2e", "frontend"];
 const APPROVED_PACKAGES: [&str; 9] = [
     "app-client",
     "app-core",
@@ -33,12 +33,14 @@ const APPROVED_PACKAGES: [&str; 9] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 13] = [
+const APPROVED_CRATES: [&str; 16] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
     "app-api",
     "app-protocol-export",
+    "conduit-cli",
+    "provider-fixture",
     "provider-claude",
     "provider-codex",
     "provider-copilot",
@@ -46,18 +48,19 @@ const APPROVED_CRATES: [&str; 13] = [
     "remote-access",
     "service-bin",
     "service-runtime",
+    "session-projection",
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
-const APPROVED_VENDOR_ROOTS: [&str; 1] = ["agent-client-protocol"];
+const APPROVED_VENDOR_ROOTS: [&str; 2] = ["agent-client-protocol", "codex-acp"];
 const APPROVED_TESTDATA_ROOTS: [&str; 3] = ["failures", "golden", "providers"];
 const IGNORED_TOP_LEVEL: [&str; 1] = ["node_modules"];
 const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 19] = [
     "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".jsonl", ".log", ".md",
     ".ndjson", ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
 ];
-const ALLOWED_VENDOR_EXTENSIONS: [&str; 9] = [
-    "", ".gitkeep", ".json", ".lock", ".md", ".toml", ".txt", ".yaml", ".yml",
+const ALLOWED_VENDOR_EXTENSIONS: [&str; 11] = [
+    "", ".gitkeep", ".json", ".lock", ".md", ".patch", ".rs", ".toml", ".txt", ".yaml", ".yml",
 ];
 const ARTIFACT_RULE: files::ExtensionRule = files::ExtensionRule {
     allowed: &ALLOWED_ARTIFACT_EXTENSIONS,

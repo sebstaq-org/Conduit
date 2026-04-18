@@ -55,6 +55,14 @@ pub enum AcpError {
         /// The logical operation being sent.
         operation: String,
     },
+    /// The operation requires a completed ACP `initialize` exchange.
+    #[error("{operation} requires initialized ACP connection for {provider}")]
+    NotInitialized {
+        /// The provider whose connection is not initialized.
+        provider: ProviderId,
+        /// The logical operation being sent.
+        operation: String,
+    },
     /// The provider returned invalid JSON.
     #[error("failed to parse JSON from {provider}")]
     Json {

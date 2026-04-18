@@ -1,9 +1,13 @@
 use super::RuntimeActor;
 use acp_core::{
-    ConnectionState, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind, WireStream,
+    ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,
+    ProviderInitializeResult, ProviderSnapshot, RawWireEvent, TranscriptUpdateSnapshot, WireKind,
+    WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
-use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
+use agent_client_protocol_schema::{
+    AgentCapabilities, Implementation, InitializeResponse, ProtocolVersion,
+};
 use serde_json::{Value, json};
 use service_runtime::{ConsumerCommand, ProviderFactory, ProviderPort, Result, RuntimeError};
 use session_store::LocalStore;
@@ -152,6 +156,17 @@ impl ProviderFactory for SnapshotIsolationFactory {
 }
 
 impl ProviderPort for BlockingRefreshProvider {
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        Ok(test_initialize_result(request))
+    }
+
+    fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        Ok(None)
+    }
+
     fn snapshot(&self) -> ProviderSnapshot {
         ProviderSnapshot {
             provider: self.provider,
@@ -237,6 +252,17 @@ impl ProviderPort for BlockingRefreshProvider {
 }
 
 impl ProviderPort for SnapshotIsolationProvider {
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        Ok(test_initialize_result(request))
+    }
+
+    fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        Ok(None)
+    }
+
     fn snapshot(&self) -> ProviderSnapshot {
         ProviderSnapshot {
             provider: self.provider,
@@ -350,6 +376,18 @@ fn fake_discovery(provider: ProviderId) -> ProviderDiscovery {
             stdout_lines: Vec::new(),
             stderr_lines: Vec::new(),
             elapsed_ms: 1,
+        },
+    }
+}
+
+fn test_initialize_result(request: ProviderInitializeRequest) -> ProviderInitializeResult {
+    ProviderInitializeResult {
+        request,
+        response: ProviderInitializeResponse {
+            protocol_version: ProtocolVersion::V1,
+            agent_capabilities: AgentCapabilities::default(),
+            agent_info: Some(Implementation::new("fake-agent", "0.5.0")),
+            auth_methods: Vec::new(),
         },
     }
 }

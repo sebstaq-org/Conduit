@@ -8,6 +8,7 @@ use self::sdk_actor::{
     ActorBootstrap, HostCommand, actor_stopped, disconnected_snapshot, receive_result, spawn_actor,
 };
 use crate::error::Result;
+use crate::initialize::{ProviderInitializeRequest, ProviderInitializeResult};
 use crate::snapshot::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use crate::wire::RawWireEvent;
 use acp_contracts::load_locked_contract_bundle;
@@ -57,19 +58,18 @@ pub struct AcpHost {
 }
 
 impl AcpHost {
-    /// Connects to one official provider launcher and runs a live `initialize`.
+    /// Connects to one official provider launcher without initializing ACP.
     ///
     /// # Errors
     ///
     /// Returns an error when discovery fails, the provider process cannot be
-    /// spawned, the vendored ACP contract cannot be loaded, or the live
-    /// `initialize` exchange fails through the official ACP SDK.
+    /// spawned, or the vendored ACP contract cannot be loaded.
     pub fn connect(provider: ProviderId) -> Result<Self> {
         Self::connect_with_environment(provider, &ProcessEnvironment::empty())
     }
 
     /// Connects to one official provider launcher with explicit process
-    /// environment overrides and runs a live `initialize`.
+    /// environment overrides without initializing ACP.
     ///
     /// # Errors
     ///
@@ -91,16 +91,16 @@ impl AcpHost {
         std::mem::drop(locked_contract);
 
         let (commands, command_rx) = unbounded_channel();
-        let (init_tx, init_rx) = channel();
+        let (connect_tx, connect_rx) = channel();
         spawn_actor(ActorBootstrap {
             provider,
             discovery: discovery.clone(),
             launcher,
             environment: environment.clone(),
             commands: command_rx,
-            init: init_tx,
+            init: connect_tx,
         })?;
-        receive_result(provider, "initialize", init_rx)?;
+        receive_result(provider, "provider/connect", connect_rx)?;
         tracing::info!(
             event_name = "acp_host.connect.finish",
             source = "acp-core",
@@ -112,6 +112,33 @@ impl AcpHost {
             discovery,
             provider,
             commands,
+        })
+    }
+
+    /// Runs ACP `initialize` on the current provider connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider rejects or fails the official SDK
+    /// `initialize` call.
+    pub fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        self.request("initialize", |reply| HostCommand::Initialize {
+            request,
+            reply,
+        })
+    }
+
+    /// Returns the completed ACP `initialize` exchange when available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the provider actor cannot answer the request.
+    pub fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        self.request("initialize/result", |reply| HostCommand::InitializeResult {
+            reply,
         })
     }
 

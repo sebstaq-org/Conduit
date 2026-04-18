@@ -2,12 +2,15 @@
 
 use acp_core::{
     ConnectionState, InteractionResponse, LiveSessionIdentity, LoadedTranscriptSnapshot,
-    PromptLifecycleSnapshot, PromptLifecycleState, ProviderSnapshot, RawWireEvent,
+    PromptLifecycleSnapshot, PromptLifecycleState, ProviderInitializeRequest,
+    ProviderInitializeResponse, ProviderInitializeResult, ProviderSnapshot, RawWireEvent,
     TranscriptUpdateSnapshot, WireKind, WireStream,
 };
 use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, ProviderId};
-use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolVersion};
-use serde_json::{Value, json};
+use agent_client_protocol_schema::{
+    AgentCapabilities, Implementation, InitializeResponse, ProtocolVersion,
+};
+use serde_json::{Value, json, to_value};
 use service_runtime::{
     ConsumerCommand, ConsumerResponse, ProviderFactory, ProviderPort, Result, RuntimeError,
     ServiceRuntime,
@@ -30,6 +33,9 @@ static NEXT_TEST_DB: AtomicU64 = AtomicU64::new(1);
 #[derive(Default)]
 pub(crate) struct FakeState {
     pub(crate) connects: HashMap<ProviderId, usize>,
+    pub(crate) initialize_requests: Vec<(ProviderId, ProviderInitializeRequest)>,
+    pub(crate) initialize_results: HashMap<ProviderId, ProviderInitializeResult>,
+    pub(crate) operations: Vec<(ProviderId, String)>,
     pub(crate) session_lists: HashMap<ProviderId, Value>,
     pub(crate) session_list_pages: HashMap<SessionListKey, Value>,
     pub(crate) session_list_errors: HashMap<ProviderId, String>,
@@ -69,6 +75,7 @@ impl ProviderFactory for FakeFactory {
         let connects = state.connects.entry(provider).or_default();
         *connects += 1;
         state.disconnected = false;
+        state.initialize_results.remove(&provider);
         Ok(Box::new(FakeProvider {
             provider,
             state: Arc::clone(&self.state),
@@ -82,13 +89,60 @@ struct FakeProvider {
 }
 
 impl ProviderPort for FakeProvider {
+    fn initialize(
+        &mut self,
+        request: ProviderInitializeRequest,
+    ) -> Result<ProviderInitializeResult> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        state
+            .operations
+            .push((self.provider, "initialize".to_owned()));
+        state
+            .initialize_requests
+            .push((self.provider, request.clone()));
+        let result = ProviderInitializeResult {
+            request,
+            response: ProviderInitializeResponse {
+                protocol_version: ProtocolVersion::V1,
+                agent_capabilities: AgentCapabilities::default(),
+                agent_info: Some(Implementation::new("fake-agent", "0.5.0")),
+                auth_methods: Vec::new(),
+            },
+        };
+        state
+            .initialize_results
+            .insert(self.provider, result.clone());
+        Ok(result)
+    }
+
+    fn initialize_result(&self) -> Result<Option<ProviderInitializeResult>> {
+        Ok(self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?
+            .initialize_results
+            .get(&self.provider)
+            .cloned())
+    }
+
     fn snapshot(&self) -> ProviderSnapshot {
+        let initialize_result = self.initialize_result().ok().flatten();
         ProviderSnapshot {
             provider: self.provider,
             connection_state: self.connection_state(),
             discovery: fake_discovery(self.provider),
-            capabilities: json!({}),
-            auth_methods: Vec::new(),
+            capabilities: initialize_result
+                .as_ref()
+                .and_then(|result| to_value(&result.response.agent_capabilities).ok())
+                .unwrap_or(Value::Null),
+            auth_methods: initialize_result
+                .as_ref()
+                .and_then(|result| to_value(&result.response.auth_methods).ok())
+                .and_then(|value| serde_json::from_value(value).ok())
+                .unwrap_or_default(),
             live_sessions: Vec::new(),
             last_prompt: self
                 .state
@@ -135,6 +189,10 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/new")?;
+        state
+            .operations
+            .push((self.provider, "session/new".to_owned()));
         state.sessions += 1;
         Ok(json!({ "sessionId": format!("session-{}", state.sessions) }))
     }
@@ -146,6 +204,10 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/list")?;
+        state
+            .operations
+            .push((self.provider, "session/list".to_owned()));
         state.session_list_requests.push(key.clone());
         if let Some(error) = state.session_list_errors.get(&self.provider) {
             return Err(RuntimeError::Provider(error.to_owned()));
@@ -165,6 +227,10 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/load")?;
+        state
+            .operations
+            .push((self.provider, "session/load".to_owned()));
         state
             .session_load_requests
             .push((self.provider, session_id.clone()));
@@ -197,6 +263,10 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/prompt")?;
+        state
+            .operations
+            .push((self.provider, "session/prompt".to_owned()));
         if let Some(error) = state
             .prompt_errors
             .get(&(self.provider, session_id.clone()))
@@ -238,6 +308,14 @@ impl ProviderPort for FakeProvider {
     }
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/cancel")?;
+        state
+            .operations
+            .push((self.provider, "session/cancel".to_owned()));
         Ok(json!({ "sessionId": session_id }))
     }
 
@@ -247,6 +325,14 @@ impl ProviderPort for FakeProvider {
         _config_id: String,
         _value: String,
     ) -> Result<Value> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/set_config_option")?;
+        state
+            .operations
+            .push((self.provider, "session/set_config_option".to_owned()));
         Ok(json!({
             "sessionId": session_id,
             "configOptions": []
@@ -263,6 +349,10 @@ impl ProviderPort for FakeProvider {
             .state
             .lock()
             .map_err(|error| RuntimeError::Provider(format!("fake state poisoned: {error}")))?;
+        require_initialized(&state, self.provider, "session/respond_interaction")?;
+        state
+            .operations
+            .push((self.provider, "session/respond_interaction".to_owned()));
         if let Some(error) = state.interaction_response_errors.get(&(
             self.provider,
             session_id.clone(),
@@ -370,11 +460,27 @@ fn interaction_response_payload(response: InteractionResponse) -> Value {
     }
 }
 
+fn require_initialized(
+    state: &FakeState,
+    provider: ProviderId,
+    operation: &'static str,
+) -> Result<()> {
+    if state.initialize_results.contains_key(&provider) {
+        return Ok(());
+    }
+    Err(RuntimeError::Provider(format!(
+        "{operation} reached fake provider before initialize"
+    )))
+}
+
 impl FakeProvider {
     fn connection_state(&self) -> ConnectionState {
         match self.state.lock() {
             Ok(state) if state.disconnected => ConnectionState::Disconnected,
-            Ok(_) | Err(_) => ConnectionState::Ready,
+            Ok(state) if state.initialize_results.contains_key(&self.provider) => {
+                ConnectionState::Ready
+            }
+            Ok(_) | Err(_) => ConnectionState::Connected,
         }
     }
 }

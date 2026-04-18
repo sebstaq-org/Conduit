@@ -12,6 +12,7 @@ axum = { version = "0.8.7", features = ["ws"] }
 base64 = "0.22.1"
 directories = "6.0.0"
 futures-util = "0.3.32"
+provider-fixture = { path = "../provider-fixture" }
 rand_core = { version = "0.6.4", features = ["getrandom"] }
 remote-access = { path = "../remote-access" }
 serde = { version = "1.0.228", features = ["derive"] }

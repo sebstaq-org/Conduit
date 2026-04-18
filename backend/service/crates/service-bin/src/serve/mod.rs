@@ -8,7 +8,7 @@ mod wire;
 use crate::error::Result;
 use crate::home::product_home;
 use crate::identity::{daemon_status_response, pairing_response};
-use crate::local_store::open_product_store;
+use crate::local_store::open_store;
 use actor::RuntimeActor;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
@@ -19,6 +19,7 @@ use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
 use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
+use service_runtime::{AppServiceFactory, ProviderFactory};
 use session_store::LocalStore;
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -76,18 +77,51 @@ pub(crate) async fn run(
     port: u16,
     relay_endpoint: Option<String>,
     app_base_url: String,
+    provider_fixtures: Option<PathBuf>,
+    store_path: Option<PathBuf>,
 ) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
     let product_home = product_home()?;
-    axum::serve(
+    let local_store = open_store(store_path.clone())?;
+    let store_opener = store_opener(store_path);
+    if let Some(root) = provider_fixtures {
+        let factory = provider_fixture::FixtureProviderFactory::load(&root).map_err(|source| {
+            crate::error::ServiceError::InvalidFlagValue {
+                flag: "--provider-fixtures".to_owned(),
+                value: root.display().to_string(),
+                message: source.to_string(),
+            }
+        })?;
+        return serve_router(
+            listener,
+            router_with_factory(
+                factory,
+                local_store,
+                store_opener,
+                product_home,
+                relay_endpoint,
+                app_base_url,
+            ),
+        )
+        .await;
+    }
+    serve_router(
         listener,
         router(
-            open_product_store()?,
+            local_store,
+            store_opener,
             product_home,
             relay_endpoint,
             app_base_url,
-        )
-        .into_make_service_with_connect_info::<SocketAddr>(),
+        ),
+    )
+    .await
+}
+
+async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
@@ -95,12 +129,40 @@ pub(crate) async fn run(
 
 fn router(
     local_store: LocalStore,
+    store_opener: actor::StoreOpener,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
     app_base_url: String,
 ) -> Router {
     router_with_actor(
-        RuntimeActor::start(local_store),
+        RuntimeActor::start_with_store_opener(
+            AppServiceFactory::default(),
+            local_store,
+            store_opener,
+        ),
+        product_home,
+        relay_endpoint,
+        app_base_url,
+    )
+}
+
+fn store_opener(path: Option<PathBuf>) -> actor::StoreOpener {
+    Arc::new(move || open_store(path.clone()))
+}
+
+fn router_with_factory<F>(
+    factory: F,
+    local_store: LocalStore,
+    store_opener: actor::StoreOpener,
+    product_home: PathBuf,
+    relay_endpoint: Option<String>,
+    app_base_url: String,
+) -> Router
+where
+    F: Clone + ProviderFactory + 'static,
+{
+    router_with_actor(
+        RuntimeActor::start_with_store_opener(factory, local_store, store_opener),
         product_home,
         relay_endpoint,
         app_base_url,
