@@ -7,6 +7,7 @@ use super::support::{
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, RuntimeError};
+use std::fs::{create_dir_all, write};
 use tempfile::TempDir;
 
 #[test]
@@ -170,6 +171,85 @@ fn session_set_config_option_fails_when_fixture_is_missing() -> TestResult<()> {
     {
         return Err(format!("unexpected error {error}").into());
     }
+    Ok(())
+}
+
+#[test]
+fn malformed_session_set_config_option_without_request_fails_load() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_raw_set_config_fixture(
+        root.path(),
+        json!({
+            "configResponse": { "configOptions": config_options("plan") }
+        }),
+    )?;
+    let error = FixtureProviderFactory::load(root.path())
+        .err()
+        .ok_or("malformed session/set_config_option unexpectedly loaded")?;
+
+    if !error.to_string().contains("configRequest string fields") {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn malformed_session_set_config_option_without_options_fails_load() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_raw_set_config_fixture(
+        root.path(),
+        json!({
+            "configRequest": {
+                "sessionId": "session-1",
+                "configId": "collaboration_mode",
+                "value": "plan"
+            },
+            "configResponse": {}
+        }),
+    )?;
+    let error = FixtureProviderFactory::load(root.path())
+        .err()
+        .ok_or("malformed session/set_config_option unexpectedly loaded")?;
+
+    if !error
+        .to_string()
+        .contains("configResponse.configOptions array")
+    {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
+#[test]
+fn malformed_session_set_config_option_current_value_mismatch_fails_load() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_session_set_config_option_capture(
+        root.path(),
+        SessionSetConfigOptionCapture {
+            capture: "plan",
+            config_id: "collaboration_mode",
+            response: json!({ "configOptions": config_options("default") }),
+            session_id: "session-1",
+            value: "plan",
+        },
+    )?;
+    let error = FixtureProviderFactory::load(root.path())
+        .err()
+        .ok_or("mismatched session/set_config_option unexpectedly loaded")?;
+
+    if !error.to_string().contains("selected config currentValue") {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
+fn write_raw_set_config_fixture(root: &std::path::Path, value: Value) -> TestResult<()> {
+    let dir = root.join("codex/session-set-config-option/session-1/plan");
+    create_dir_all(&dir)?;
+    write(
+        dir.join("provider.raw.json"),
+        serde_json::to_string(&value)?,
+    )?;
     Ok(())
 }
 

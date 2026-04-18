@@ -126,12 +126,34 @@ fn read_session_set_config_option_fixture(
             "must contain configResponse.configOptions array",
         ));
     }
+    if !response_contains_selected_current_value(&response, &config_id, &config_value) {
+        return Err(invalid_fixture(
+            path,
+            "must include selected config currentValue",
+        ));
+    }
     Ok((
         session_id,
         config_id,
         config_value,
         SessionSetConfigOptionFixture { response },
     ))
+}
+
+fn response_contains_selected_current_value(
+    response: &Value,
+    config_id: &str,
+    config_value: &str,
+) -> bool {
+    response
+        .get("configOptions")
+        .and_then(Value::as_array)
+        .is_some_and(|options| {
+            options.iter().any(|option| {
+                option.get("id").and_then(Value::as_str) == Some(config_id)
+                    && option.get("currentValue").and_then(Value::as_str) == Some(config_value)
+            })
+        })
 }
 
 fn required_request_string(path: &Path, value: &Value, field: &'static str) -> Result<String> {
