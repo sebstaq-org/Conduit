@@ -3,6 +3,8 @@ dist/
 out/
 coverage/
 backend/service/target/
+vendor/codex-acp/target/
+.conduit/
 *.tsbuildinfo
 .expo/
 .expo-shared/

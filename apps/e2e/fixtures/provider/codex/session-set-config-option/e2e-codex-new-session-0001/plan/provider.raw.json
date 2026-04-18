@@ -1,0 +1,29 @@
+{
+  "configRequest": {
+    "configId": "collaboration_mode",
+    "sessionId": "e2e-codex-new-session-0001",
+    "value": "plan"
+  },
+  "configResponse": {
+    "configOptions": [
+      {
+        "category": "mode",
+        "currentValue": "plan",
+        "description": "Choose collaboration behavior (Default or Plan mode)",
+        "id": "collaboration_mode",
+        "name": "Collaboration Mode",
+        "options": [
+          {
+            "name": "Plan",
+            "value": "plan"
+          },
+          {
+            "name": "Default",
+            "value": "default"
+          }
+        ],
+        "type": "select"
+      }
+    ]
+  }
+}

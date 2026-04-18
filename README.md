@@ -6,7 +6,8 @@ Conduit is an official-ACP-only workspace. The backend validates against a pinne
 
 1. `rtk pnpm install`
 2. `rtk pnpm run bootstrap`
-3. `rtk pnpm run check`
+3. `rtk pnpm run codex-acp:check`
+4. `rtk pnpm run check`
 
 ## Frontend Structure
 
@@ -23,6 +24,7 @@ scripts/       stage operations and repository checks
 ## Rules That Matter
 
 - Official ACP only is policy: official schema/meta are the contract source and official adapter binaries are the only runtime endpoints.
+- Codex uses the vendored patched adapter in `vendor/codex-acp`; build it with `rtk pnpm run codex-acp:build` so `codex-acp` resolves to Conduit's managed binary.
 - The normal consumer transport is `rtk cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- serve`, which exposes versioned WebSocket frames at `ws://127.0.0.1:4174/api/session`.
 - `backend/` is the only backend root. Do not introduce top-level `rust`, `shared`, `core`, `utils`, `misc`, or `tmp`.
 - New JS or TS source stays in TypeScript.

@@ -110,9 +110,49 @@ pub(crate) fn write_session_new_capture(
     Ok(())
 }
 
+pub(crate) struct SessionSetConfigOptionCapture<'a> {
+    pub(crate) capture: &'a str,
+    pub(crate) config_id: &'a str,
+    pub(crate) response: Value,
+    pub(crate) session_id: &'a str,
+    pub(crate) value: &'a str,
+}
+
+pub(crate) fn write_session_set_config_option_capture(
+    root: &std::path::Path,
+    capture: SessionSetConfigOptionCapture<'_>,
+) -> TestResult<()> {
+    let dir = root
+        .join("codex/session-set-config-option")
+        .join(capture.session_id)
+        .join(capture.capture);
+    create_dir_all(&dir)?;
+    write(
+        dir.join("manifest.json"),
+        serde_json::to_string(&json!({
+            "operation": "session/set_config_option",
+            "provider": "codex",
+            "sessionId": capture.session_id
+        }))?,
+    )?;
+    write(
+        dir.join("provider.raw.json"),
+        serde_json::to_string(&json!({
+            "configRequest": {
+                "sessionId": capture.session_id,
+                "configId": capture.config_id,
+                "value": capture.value
+            },
+            "configResponse": capture.response
+        }))?,
+    )?;
+    Ok(())
+}
+
 pub(crate) struct SessionPromptCapture<'a> {
     pub(crate) capture: &'a str,
     pub(crate) prompt: Vec<Value>,
+    pub(crate) required_config: Option<(&'a str, &'a str)>,
     pub(crate) response: Value,
     pub(crate) session_id: &'a str,
     pub(crate) updates: Vec<acp_core::TranscriptUpdateSnapshot>,
@@ -137,16 +177,36 @@ pub(crate) fn write_session_prompt_capture(
     )?;
     write(
         dir.join("provider.raw.json"),
-        serde_json::to_string(&json!({
-            "promptRequest": {
-                "sessionId": capture.session_id,
-                "prompt": capture.prompt
-            },
-            "promptResponse": capture.response,
-            "promptUpdates": capture.updates
-        }))?,
+        serde_json::to_string(&session_prompt_raw_capture(&capture))?,
     )?;
     Ok(())
+}
+
+fn session_prompt_raw_capture(capture: &SessionPromptCapture<'_>) -> Value {
+    let config_capture = capture
+        .required_config
+        .map(|(config_id, value)| {
+            json!({
+                "configRequest": {
+                    "sessionId": capture.session_id,
+                    "configId": config_id,
+                    "value": value
+                },
+                "configResponse": {
+                    "configOptions": config_options(value)
+                }
+            })
+        })
+        .unwrap_or(Value::Null);
+    json!({
+        "configCapture": config_capture,
+        "promptRequest": {
+            "sessionId": capture.session_id,
+            "prompt": capture.prompt
+        },
+        "promptResponse": capture.response,
+        "promptUpdates": capture.updates
+    })
 }
 
 pub(crate) fn transcript_update(
@@ -162,6 +222,23 @@ pub(crate) fn transcript_update(
             "content": { "type": "text", "text": text }
         }),
     }
+}
+
+pub(crate) fn config_options(current_value: &str) -> Value {
+    json!([
+        {
+            "category": "mode",
+            "currentValue": current_value,
+            "description": "Choose collaboration behavior (Default or Plan mode)",
+            "id": "collaboration_mode",
+            "name": "Collaboration Mode",
+            "options": [
+                { "name": "Plan", "value": "plan" },
+                { "name": "Default", "value": "default" }
+            ],
+            "type": "select"
+        }
+    ])
 }
 
 pub(crate) fn command(id: &str, name: &str, provider: &str, params: Value) -> ConsumerCommand {

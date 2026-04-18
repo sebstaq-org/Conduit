@@ -1,18 +1,22 @@
 //! Provider capture implementation.
 
-use crate::cli::{CaptureOperation, CaptureRequest};
+use crate::cli::{CaptureConfigOption, CaptureOperation, CaptureRequest};
 use crate::error::{CliError, Result};
 use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
 use app_api::AppService;
 use serde::Serialize;
 use serde_json::{Value, json};
-use session_projection::TranscriptItemStatus;
 use std::fs::{File, create_dir, create_dir_all, read_to_string};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
+
+#[path = "capture_validation.rs"]
+mod capture_validation;
+
+use capture_validation::{normalize_capture, validate_capture};
 
 const DEFAULT_CAPTURE_ROOT: &str = "/srv/devops/repos/conduit-artifacts/manual/captures";
 
@@ -133,10 +137,54 @@ fn capture_provider(
             capture_session_load(service, session_id, cwd, ledger)
         }
         CaptureOperation::Prompt {
+            config,
             session_id,
             prompt_path,
-        } => capture_session_prompt(service, session_id.as_deref(), prompt_path, cwd, ledger),
+        } => capture_session_prompt(
+            service,
+            PromptCapture {
+                session_id: session_id.as_deref(),
+                config: config.as_ref(),
+                prompt_path,
+                cwd,
+            },
+            ledger,
+        ),
+        CaptureOperation::SetConfigOption {
+            session_id,
+            config_id,
+            value,
+        } => capture_session_set_config_option(
+            service,
+            SetConfigCapture {
+                session_id: session_id.as_deref(),
+                config_id,
+                value,
+                cwd,
+            },
+            ledger,
+        ),
     }
+}
+
+struct SetConfigCapture<'a> {
+    session_id: Option<&'a str>,
+    config_id: &'a str,
+    value: &'a str,
+    cwd: &'a Path,
+}
+
+struct PromptCapture<'a> {
+    session_id: Option<&'a str>,
+    config: Option<&'a CaptureConfigOption>,
+    prompt_path: &'a Path,
+    cwd: &'a Path,
+}
+
+struct SetConfigRawCapture<'a> {
+    session_id: &'a str,
+    config_id: &'a str,
+    value: &'a str,
 }
 
 fn capture_initialize(service: &mut AppService, ledger: &mut Ledger) -> Result<Value> {
@@ -211,19 +259,30 @@ fn capture_session_load(
 
 fn capture_session_prompt(
     service: &mut AppService,
-    session_id: Option<&str>,
-    prompt_path: &Path,
-    cwd: &Path,
+    request: PromptCapture<'_>,
     ledger: &mut Ledger,
 ) -> Result<Value> {
-    let prompt = read_prompt_blocks(prompt_path)?;
-    let (session_new, resolved_session_id) = match session_id {
+    let prompt = read_prompt_blocks(request.prompt_path)?;
+    let (session_new, resolved_session_id) = match request.session_id {
         Some(session_id) => (Value::Null, session_id.to_owned()),
         None => {
-            let response = capture_session_new(service, cwd, ledger)?;
+            let response = capture_session_new(service, request.cwd, ledger)?;
             let session_id = extract_session_id(&response)?;
             (response, session_id)
         }
+    };
+
+    let config_capture = match request.config {
+        Some(config) => capture_session_set_config_option_raw(
+            service,
+            SetConfigRawCapture {
+                session_id: &resolved_session_id,
+                config_id: &config.config_id,
+                value: &config.value,
+            },
+            ledger,
+        )?,
+        None => Value::Null,
     };
 
     let mut prompt_updates = Vec::new();
@@ -235,6 +294,7 @@ fn capture_session_prompt(
             ledger.push("provider.session_prompt.finish", true)?;
             Ok(json!({
                 "sessionNew": session_new,
+                "configCapture": config_capture,
                 "promptRequest": {
                     "sessionId": resolved_session_id,
                     "prompt": prompt,
@@ -245,6 +305,60 @@ fn capture_session_prompt(
         }
         Err(error) => {
             ledger.push("provider.session_prompt.finish", false)?;
+            Err(error.into())
+        }
+    }
+}
+
+fn capture_session_set_config_option(
+    service: &mut AppService,
+    request: SetConfigCapture<'_>,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    let (session_new, resolved_session_id) = match request.session_id {
+        Some(session_id) => (Value::Null, session_id.to_owned()),
+        None => {
+            let response = capture_session_new(service, request.cwd, ledger)?;
+            let session_id = extract_session_id(&response)?;
+            (response, session_id)
+        }
+    };
+
+    let mut raw = capture_session_set_config_option_raw(
+        service,
+        SetConfigRawCapture {
+            session_id: &resolved_session_id,
+            config_id: request.config_id,
+            value: request.value,
+        },
+        ledger,
+    )?;
+    if let Some(map) = raw.as_object_mut() {
+        map.insert("sessionNew".to_owned(), session_new);
+    }
+    Ok(raw)
+}
+
+fn capture_session_set_config_option_raw(
+    service: &mut AppService,
+    request: SetConfigRawCapture<'_>,
+    ledger: &mut Ledger,
+) -> Result<Value> {
+    ledger.push("provider.session_set_config_option.start", true)?;
+    match service.set_session_config_option(request.session_id, request.config_id, request.value) {
+        Ok(response) => {
+            ledger.push("provider.session_set_config_option.finish", true)?;
+            Ok(json!({
+                "configRequest": {
+                    "sessionId": request.session_id,
+                    "configId": request.config_id,
+                    "value": request.value,
+                },
+                "configResponse": response,
+            }))
+        }
+        Err(error) => {
+            ledger.push("provider.session_set_config_option.finish", false)?;
             Err(error.into())
         }
     }
@@ -321,7 +435,13 @@ fn create_output_dir(output: &Path) -> Result<()> {
 fn create_capture_cwd(operation: &CaptureOperation, cwd: &Path) -> Result<()> {
     if matches!(
         operation,
-        CaptureOperation::Initialize | CaptureOperation::New | CaptureOperation::Prompt { .. }
+        CaptureOperation::Initialize
+            | CaptureOperation::New
+            | CaptureOperation::Prompt { .. }
+            | CaptureOperation::SetConfigOption {
+                session_id: None,
+                ..
+            }
     ) {
         create_dir_all(cwd).map_err(|source| CliError::io(Some(cwd.to_path_buf()), source))?;
     }
@@ -348,196 +468,6 @@ fn write_manifest(
     write_json(&output.join("manifest.json"), &manifest)
 }
 
-fn validate_capture(operation: &CaptureOperation, value: &Value) -> Result<()> {
-    match operation {
-        CaptureOperation::Initialize => validate_initialize(value),
-        CaptureOperation::New => validate_session_new(value),
-        CaptureOperation::List => validate_session_list(value),
-        CaptureOperation::Load { .. } => validate_session_load(value),
-        CaptureOperation::Prompt { .. } => validate_session_prompt(value),
-    }
-}
-
-fn validate_initialize(value: &Value) -> Result<()> {
-    if value.pointer("/request/method").and_then(Value::as_str) != Some("initialize") {
-        return Err(CliError::invalid_capture(
-            "provider initialize capture must contain request.method initialize",
-        ));
-    }
-    if value.pointer("/request/protocolVersion").is_none() {
-        return Err(CliError::invalid_capture(
-            "provider initialize capture must contain request.protocolVersion",
-        ));
-    }
-    if value.pointer("/response/protocolVersion").is_none() {
-        return Err(CliError::invalid_capture(
-            "provider initialize capture must contain response.protocolVersion",
-        ));
-    }
-    if value
-        .pointer("/response/agentCapabilities")
-        .and_then(Value::as_object)
-        .is_none()
-    {
-        return Err(CliError::invalid_capture(
-            "provider initialize capture must contain response.agentCapabilities object",
-        ));
-    }
-    if value
-        .pointer("/response/authMethods")
-        .and_then(Value::as_array)
-        .is_some()
-    {
-        return Ok(());
-    }
-    Err(CliError::invalid_capture(
-        "provider initialize capture must contain response.authMethods array",
-    ))
-}
-
-fn validate_session_new(value: &Value) -> Result<()> {
-    if value.get("sessionId").and_then(Value::as_str).is_some() {
-        return Ok(());
-    }
-    Err(CliError::invalid_capture(
-        "provider session/new response must contain a sessionId string",
-    ))
-}
-
-fn validate_session_list(value: &Value) -> Result<()> {
-    if value.get("sessions").and_then(Value::as_array).is_some() {
-        return Ok(());
-    }
-    Err(CliError::invalid_capture(
-        "provider session/list response must contain a sessions array",
-    ))
-}
-
-fn validate_session_load(value: &Value) -> Result<()> {
-    if value.get("response").is_none() {
-        return Err(CliError::invalid_capture(
-            "provider session/load capture must contain a response field",
-        ));
-    }
-    if value
-        .pointer("/loadedTranscript/rawUpdateCount")
-        .and_then(Value::as_u64)
-        .is_none()
-    {
-        return Err(CliError::invalid_capture(
-            "provider session/load capture must contain loadedTranscript.rawUpdateCount number",
-        ));
-    }
-    if value
-        .pointer("/loadedTranscript/updates")
-        .and_then(Value::as_array)
-        .is_some()
-    {
-        return Ok(());
-    }
-    Err(CliError::invalid_capture(
-        "provider session/load capture must contain loadedTranscript.updates array",
-    ))
-}
-
-fn validate_session_prompt(value: &Value) -> Result<()> {
-    if value
-        .pointer("/promptRequest/sessionId")
-        .and_then(Value::as_str)
-        .is_none()
-    {
-        return Err(CliError::invalid_capture(
-            "provider session/prompt capture must contain promptRequest.sessionId string",
-        ));
-    }
-    if value
-        .pointer("/promptRequest/prompt")
-        .and_then(Value::as_array)
-        .is_none()
-    {
-        return Err(CliError::invalid_capture(
-            "provider session/prompt capture must contain promptRequest.prompt array",
-        ));
-    }
-    if value
-        .pointer("/promptResponse/stopReason")
-        .and_then(Value::as_str)
-        .is_none()
-    {
-        return Err(CliError::invalid_capture(
-            "provider session/prompt capture must contain promptResponse.stopReason string",
-        ));
-    }
-    if value
-        .get("promptUpdates")
-        .and_then(Value::as_array)
-        .is_some()
-    {
-        return Ok(());
-    }
-    Err(CliError::invalid_capture(
-        "provider session/prompt capture must contain promptUpdates array",
-    ))
-}
-
-fn normalize_capture(operation: &CaptureOperation, value: &Value) -> Result<Value> {
-    match operation {
-        CaptureOperation::Prompt { .. } => normalize_session_prompt(value),
-        CaptureOperation::Initialize
-        | CaptureOperation::New
-        | CaptureOperation::List
-        | CaptureOperation::Load { .. } => Ok(value.clone()),
-    }
-}
-
-fn normalize_session_prompt(value: &Value) -> Result<Value> {
-    let session_id = value
-        .pointer("/promptRequest/sessionId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            CliError::invalid_capture(
-                "provider session/prompt capture must contain promptRequest.sessionId string",
-            )
-        })?;
-    let prompt = value
-        .pointer("/promptRequest/prompt")
-        .and_then(Value::as_array)
-        .ok_or_else(|| {
-            CliError::invalid_capture(
-                "provider session/prompt capture must contain promptRequest.prompt array",
-            )
-        })?
-        .to_vec();
-    let stop_reason = value
-        .pointer("/promptResponse/stopReason")
-        .and_then(Value::as_str)
-        .ok_or_else(|| {
-            CliError::invalid_capture(
-                "provider session/prompt capture must contain promptResponse.stopReason string",
-            )
-        })?;
-    let updates: Vec<acp_core::TranscriptUpdateSnapshot> =
-        serde_json::from_value(value.get("promptUpdates").cloned().ok_or_else(|| {
-            CliError::invalid_capture(
-                "provider session/prompt capture must contain promptUpdates array",
-            )
-        })?)?;
-    let items = session_projection::prompt_turn_items(
-        "capture-turn",
-        &prompt,
-        &updates,
-        TranscriptItemStatus::Complete,
-        Some(stop_reason),
-    );
-    Ok(json!({
-        "operation": "session/prompt",
-        "sessionId": session_id,
-        "prompt": prompt,
-        "stopReason": stop_reason,
-        "items": items,
-    }))
-}
-
 fn operation_name(operation: &CaptureOperation) -> &'static str {
     match operation {
         CaptureOperation::Initialize => "initialize",
@@ -545,6 +475,7 @@ fn operation_name(operation: &CaptureOperation) -> &'static str {
         CaptureOperation::List => "session/list",
         CaptureOperation::Load { .. } => "session/load",
         CaptureOperation::Prompt { .. } => "session/prompt",
+        CaptureOperation::SetConfigOption { .. } => "session/set_config_option",
     }
 }
 
@@ -555,6 +486,7 @@ fn operation_slug(operation: &CaptureOperation) -> &'static str {
         CaptureOperation::List => "session-list",
         CaptureOperation::Load { .. } => "session-load",
         CaptureOperation::Prompt { .. } => "session-prompt",
+        CaptureOperation::SetConfigOption { .. } => "session-set-config-option",
     }
 }
 
@@ -563,6 +495,7 @@ fn session_id(operation: &CaptureOperation) -> Option<String> {
         CaptureOperation::Initialize | CaptureOperation::New | CaptureOperation::List => None,
         CaptureOperation::Load { session_id } => Some(session_id.clone()),
         CaptureOperation::Prompt { session_id, .. } => session_id.clone(),
+        CaptureOperation::SetConfigOption { session_id, .. } => session_id.clone(),
     }
 }
 

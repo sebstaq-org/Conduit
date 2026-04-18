@@ -24,9 +24,12 @@
     }
   },
   "scripts": {
-    "bootstrap": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
+    "bootstrap": "pnpm run codex-acp:build && cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- bootstrap",
     "build": "tsc -b tsconfig.json",
     "clean": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p repo-guard -- clean",
+    "codex-acp:build": "bash scripts/codex-acp-vendor.sh build",
+    "codex-acp:check": "bash scripts/codex-acp-vendor.sh check",
+    "codex-acp:verify": "bash scripts/codex-acp-vendor.sh verify",
     "desktop:build": "pnpm --filter @conduit/desktop run build",
     "desktop:dev": "pnpm --filter @conduit/desktop run dev",
     "desktop:lint": "pnpm --filter @conduit/desktop run lint",
@@ -67,7 +70,7 @@
     "rust:clippy": "cargo clippy --manifest-path backend/service/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
     "rust:doc": "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path backend/service/Cargo.toml --workspace --no-deps",
     "rust:metadata": "cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 > /dev/null",
-    "check": "pnpm run toolchain:check && pnpm run structure:check && pnpm run protocol:check && pnpm run fixtures:check && pnpm run frontend:types:generate && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
+    "check": "pnpm run codex-acp:check && pnpm run toolchain:check && pnpm run structure:check && pnpm run protocol:check && pnpm run fixtures:check && pnpm run frontend:types:generate && pnpm run docs:check && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm run desktop:typecheck && pnpm run desktop:lint && pnpm run desktop:test && pnpm run desktop:build && pnpm run frontend:typecheck && pnpm run frontend:lint && pnpm run frontend:test && pnpm run frontend:doctor && pnpm run rust:metadata && pnpm run rust:clippy && pnpm run rust:doc && pnpm run rust:build && pnpm run test"
   },
   "devDependencies": {
     "@types/node": "25.6.0",

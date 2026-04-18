@@ -5,8 +5,8 @@ import type { E2eHarness } from "../src/harness.js";
 
 const fixtureSessionTitle = "Conduit E2E fixture session";
 const newSessionPrompt =
-  "Reply with exactly CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT.";
-const newSessionSentinel = "CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT";
+  "Create a minimal deterministic plan for a Conduit E2E proof. Do not mention private paths, credentials, users, dates, machines, or external services. Return a short plan with the exact heading CONDUIT_E2E_CAPTURED_TERMINAL_PLAN.";
+const capturedTerminalPlanHeading = "CONDUIT_E2E_CAPTURED_TERMINAL_PLAN";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 
 let harness: E2eHarness | null = null;
@@ -31,7 +31,9 @@ test("session list opens fixture transcript", async ({ page }) => {
   await expect(page.getByText(transcriptSentinel)).toBeVisible();
 });
 
-test("draft prompt creates fixture session", async ({ page }) => {
+test("draft prompt in plan mode shows terminal plan decision", async ({
+  page,
+}) => {
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
@@ -41,15 +43,27 @@ test("draft prompt creates fixture session", async ({ page }) => {
   await newSessionButton.click();
   await page.getByLabel("Select provider for new session").click();
   await page.getByLabel("codex").click();
+  await page.getByLabel("Select Collaboration Mode").click();
+  await page.getByLabel("Plan").click();
+  await expect(page.getByText("Collaboration Mode: plan")).toBeVisible();
   await page.getByLabel("Session message").fill(newSessionPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
 
-  await expect(page.getByLabel("Session message")).toHaveValue("");
+  await expect(page.getByText(capturedTerminalPlanHeading)).toBeVisible();
+  await expect(page.getByText("Implement this plan?")).toBeVisible();
   await expect(
-    page.getByText(newSessionSentinel, { exact: true }),
+    page.getByRole("button", { name: "1. Yes, implement this plan" }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "2. No, and tell Codex what to do differently",
+    })
+    .click();
+  await expect(
+    page.getByLabel("Tell Codex what to do differently"),
   ).toBeVisible();
 });
 

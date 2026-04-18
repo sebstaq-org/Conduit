@@ -1,0 +1,911 @@
+diff --git a/src/codex_agent.rs b/src/codex_agent.rs
+index 33891c0..8252b74 100644
+--- a/src/codex_agent.rs
++++ b/src/codex_agent.rs
+@@ -118,6 +118,104 @@ impl CodexAgent {
+             .clone())
+     }
+ 
++    async fn find_session_cwd(&self, session_id: &SessionId) -> Result<Option<PathBuf>, Error> {
++        let mut cursor = None;
++        loop {
++            let page = RolloutRecorder::list_threads(
++                &self.config,
++                SESSION_LIST_PAGE_SIZE,
++                cursor.as_ref(),
++                ThreadSortKey::UpdatedAt,
++                &[
++                    SessionSource::Cli,
++                    SessionSource::VSCode,
++                    SessionSource::Unknown,
++                ],
++                None,
++                self.config.model_provider_id.as_str(),
++                None,
++            )
++            .await
++            .map_err(|err| {
++                Error::internal_error().data(format!("failed to list sessions: {err}"))
++            })?;
++
++            if let Some(cwd) = page.items.into_iter().find_map(|item| {
++                let thread_id = item.thread_id?;
++                (thread_id.to_string() == session_id.0.as_ref())
++                    .then_some(item.cwd)
++                    .flatten()
++            }) {
++                return Ok(Some(cwd));
++            }
++
++            let Some(next_cursor) = page.next_cursor else {
++                return Ok(None);
++            };
++            cursor = Some(next_cursor);
++        }
++    }
++
++    async fn restore_thread_for_session(
++        &self,
++        session_id: &SessionId,
++    ) -> Result<Rc<Thread>, Error> {
++        let rollout_path =
++            find_thread_path_by_id_str(&self.config.codex_home, session_id.0.as_ref())
++                .await
++                .map_err(|e| Error::internal_error().data(e.to_string()))?
++                .ok_or_else(|| Error::resource_not_found(None))?;
++
++        let history = RolloutRecorder::get_rollout_history(&rollout_path)
++            .await
++            .map_err(|e| Error::internal_error().data(e.to_string()))?;
++
++        let rollout_items = match &history {
++            InitialHistory::Resumed(resumed) => resumed.history.clone(),
++            InitialHistory::Forked(items) => items.clone(),
++            InitialHistory::New => Vec::new(),
++        };
++
++        let cwd = self
++            .find_session_cwd(session_id)
++            .await?
++            .ok_or_else(|| Error::resource_not_found(None))?;
++        let config = self.build_session_config(&cwd, Vec::new())?;
++
++        let NewThread {
++            thread_id: _,
++            thread,
++            session_configured: _,
++        } = Box::pin(self.thread_manager.resume_thread_from_rollout(
++            config.clone(),
++            rollout_path,
++            self.auth_manager.clone(),
++        ))
++        .await
++        .map_err(|e| Error::internal_error().data(e.to_string()))?;
++
++        let thread = Rc::new(Thread::new(
++            session_id.clone(),
++            thread,
++            self.auth_manager.clone(),
++            self.thread_manager.get_models_manager(),
++            self.client_capabilities.clone(),
++            config.clone(),
++        ));
++
++        thread.replay_history(rollout_items).await?;
++
++        self.session_roots
++            .lock()
++            .unwrap()
++            .insert(session_id.clone(), config.cwd);
++        self.sessions
++            .borrow_mut()
++            .insert(session_id.clone(), thread.clone());
++
++        Ok(thread)
++    }
++
+     async fn check_auth(&self) -> Result<(), Error> {
+         if self.config.model_provider_id == "openai" && self.auth_manager.auth().await.is_none() {
+             return Err(Error::auth_required());
+@@ -578,7 +676,10 @@ impl Agent for CodexAgent {
+             args.session_id, args.config_id.0, args.value
+         );
+ 
+-        let thread = self.get_thread(&args.session_id)?;
++        let thread = match self.get_thread(&args.session_id) {
++            Ok(thread) => thread,
++            Err(_) => self.restore_thread_for_session(&args.session_id).await?,
++        };
+ 
+         thread.set_config_option(args.config_id, args.value).await?;
+ 
+diff --git a/src/thread.rs b/src/thread.rs
+index 40c7cb1..fdaa805 100644
+--- a/src/thread.rs
++++ b/src/thread.rs
+@@ -36,7 +36,10 @@ use codex_protocol::{
+     dynamic_tools::{DynamicToolCallOutputContentItem, DynamicToolCallRequest},
+     items::TurnItem,
+     mcp::CallToolResult,
+-    models::{MacOsSeatbeltProfileExtensions, PermissionProfile, ResponseItem, WebSearchAction},
++    models::{
++        MacOsSeatbeltProfileExtensions, MessagePhase, PermissionProfile, ResponseItem,
++        WebSearchAction,
++    },
+     openai_models::{ModelPreset, ReasoningEffort},
+     parse_command::ParsedCommand,
+     plan_tool::{PlanItemArg, StepStatus, UpdatePlanArgs},
+@@ -80,6 +83,10 @@ use crate::{
+ 
+ static APPROVAL_PRESETS: LazyLock<Vec<ApprovalPreset>> = LazyLock::new(builtin_approval_presets);
+ const INIT_COMMAND_PROMPT: &str = include_str!("./prompt_for_init_command.md");
++const REQUEST_USER_INPUT_RESPONSE_META_KEY: &str = "request_user_input_response";
++const CODEX_TERMINAL_PLAN_META_KEY: &str = "terminalPlan";
++const PROPOSED_PLAN_OPEN_TAG: &str = "<proposed_plan>";
++const PROPOSED_PLAN_CLOSE_TAG: &str = "</proposed_plan>";
+ 
+ /// Trait for abstracting over the `CodexThread` to make testing easier.
+ #[async_trait::async_trait]
+@@ -363,6 +370,72 @@ enum PendingPermissionRequest {
+     },
+ }
+ 
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++enum UserInputSelectionError {
++    InvalidOptionId,
++    MissingOtherText,
++}
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++enum TerminalPlanSource {
++    TurnItemPlan,
++    AgentMessageFinalAnswerProposedPlan,
++}
++
++impl TerminalPlanSource {
++    fn as_str(self) -> &'static str {
++        match self {
++            Self::TurnItemPlan => "TurnItem::Plan",
++            Self::AgentMessageFinalAnswerProposedPlan => "AgentMessageFinalAnswerProposedPlan",
++        }
++    }
++}
++
++struct TerminalPlanUpdate {
++    source: TerminalPlanSource,
++    text: String,
++    item_id: Option<String>,
++    turn_id: Option<String>,
++    thread_id: Option<String>,
++    phase: Option<&'static str>,
++}
++
++fn terminal_plan_meta_value(update: &TerminalPlanUpdate) -> Meta {
++    let mut terminal_plan = serde_json::Map::new();
++    terminal_plan.insert("source".to_string(), json!(update.source.as_str()));
++    terminal_plan.insert("text".to_string(), json!(&update.text));
++    if let Some(item_id) = &update.item_id {
++        terminal_plan.insert("itemId".to_string(), json!(item_id));
++    }
++    if let Some(turn_id) = &update.turn_id {
++        terminal_plan.insert("turnId".to_string(), json!(turn_id));
++    }
++    if let Some(thread_id) = &update.thread_id {
++        terminal_plan.insert("threadId".to_string(), json!(thread_id));
++    }
++    if let Some(phase) = update.phase {
++        terminal_plan.insert("phase".to_string(), json!(phase));
++    }
++
++    let mut codex = serde_json::Map::new();
++    codex.insert(
++        CODEX_TERMINAL_PLAN_META_KEY.to_string(),
++        serde_json::Value::Object(terminal_plan),
++    );
++
++    let mut meta = Meta::new();
++    meta.insert("codex".to_string(), serde_json::Value::Object(codex));
++    meta
++}
++
++fn extract_proposed_plan(message: &str) -> Option<String> {
++    let start = message.find(PROPOSED_PLAN_OPEN_TAG)? + PROPOSED_PLAN_OPEN_TAG.len();
++    let remaining = &message[start..];
++    let end = remaining.find(PROPOSED_PLAN_CLOSE_TAG)?;
++    let plan = remaining[..end].trim();
++    (!plan.is_empty()).then(|| plan.to_string())
++}
++
+ struct PendingPermissionInteraction {
+     request: PendingPermissionRequest,
+     task: tokio::task::JoinHandle<()>,
+@@ -498,6 +571,7 @@ struct PromptState {
+     response_tx: Option<oneshot::Sender<Result<StopReason, Error>>>,
+     seen_message_deltas: bool,
+     seen_reasoning_deltas: bool,
++    terminal_plan_emitted: bool,
+ }
+ 
+ impl PromptState {
+@@ -518,6 +592,7 @@ impl PromptState {
+             response_tx: Some(response_tx),
+             seen_message_deltas: false,
+             seen_reasoning_deltas: false,
++            terminal_plan_emitted: false,
+         }
+     }
+ 
+@@ -802,17 +877,37 @@ impl PromptState {
+                     return Ok(());
+                 };
+ 
+-                let selected_answer = match response.outcome {
+-                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome {
+-                        option_id,
+-                        ..
+-                    }) => option_map.get(option_id.0.as_ref()).cloned(),
+-                    RequestPermissionOutcome::Cancelled | _ => None,
++                let RequestPermissionResponse { outcome, meta, .. } = response;
++                let selected_answer = match outcome {
++                    RequestPermissionOutcome::Selected(selected) => {
++                        resolve_user_input_selected_answer(
++                            question,
++                            &option_map,
++                            &selected,
++                            meta.as_ref(),
++                        )
++                    }
++                    RequestPermissionOutcome::Cancelled | _ => {
++                        Err(UserInputSelectionError::InvalidOptionId)
++                    }
+                 };
+ 
+-                let Some(answer) = selected_answer else {
+-                    self.finalize_user_input_answers(client, call_id, turn_id, answers)
+-                        .await?;
++                let Some(answer) = selected_answer.ok() else {
++                    client
++                        .send_tool_call_update(ToolCallUpdate::new(
++                            ToolCallId::new(call_id),
++                            ToolCallUpdateFields::new()
++                                .status(ToolCallStatus::Failed)
++                                .raw_output(json!({
++                                    "request_type": "request_user_input",
++                                    "outcome": "cancelled",
++                                })),
++                        ))
++                        .await;
++                    self.thread
++                        .submit(Op::Interrupt)
++                        .await
++                        .map_err(|e| Error::from(anyhow::anyhow!(e)))?;
+                     return Ok(());
+                 };
+ 
+@@ -944,8 +1039,26 @@ impl PromptState {
+                 self.seen_reasoning_deltas = true;
+                 client.send_agent_thought("\n\n").await;
+             }
+-            EventMsg::AgentMessage(AgentMessageEvent { message , phase: _ }) => {
+-                info!("Agent message (non-delta) received: {message:?}");
++            EventMsg::AgentMessage(AgentMessageEvent { message, phase }) => {
++                info!("Agent message (non-delta) received: {message:?}, phase: {phase:?}");
++                if phase == Some(MessagePhase::FinalAnswer)
++                    && let Some(plan_text) = extract_proposed_plan(&message)
++                {
++                    if !self.terminal_plan_emitted {
++                        client
++                            .send_terminal_plan(TerminalPlanUpdate {
++                                source: TerminalPlanSource::AgentMessageFinalAnswerProposedPlan,
++                                text: plan_text,
++                                item_id: None,
++                                turn_id: None,
++                                thread_id: None,
++                                phase: Some("final_answer"),
++                            })
++                            .await;
++                        self.terminal_plan_emitted = true;
++                    }
++                    return;
++                }
+                 // We didn't receive this message via streaming
+                 if !std::mem::take(&mut self.seen_message_deltas) {
+                     client.send_agent_text(message).await;
+@@ -1091,8 +1204,17 @@ impl PromptState {
+             }) => {
+                 info!("Item completed: thread_id={}, turn_id={}, item={:?}", thread_id, turn_id, item);
+                 if let TurnItem::Plan(plan_item) = item {
+-                    // Fallback for ACP clients that do not render plan items natively.
+-                    client.send_agent_text(plan_item.text).await;
++                    client
++                        .send_terminal_plan(TerminalPlanUpdate {
++                            source: TerminalPlanSource::TurnItemPlan,
++                            text: plan_item.text,
++                            item_id: Some(plan_item.id),
++                            turn_id: Some(turn_id.clone()),
++                            thread_id: Some(thread_id.to_string()),
++                            phase: None,
++                        })
++                        .await;
++                    self.terminal_plan_emitted = true;
+                 }
+             }
+             EventMsg::TurnComplete(TurnCompleteEvent { last_agent_message, turn_id }) => {
+@@ -2262,6 +2384,52 @@ fn build_user_input_permission_options(
+     (options, option_map)
+ }
+ 
++fn extract_user_input_response_answer(meta: &Meta, question_id: &str) -> Option<String> {
++    let response = meta.get(REQUEST_USER_INPUT_RESPONSE_META_KEY)?;
++    let answers = response.get("answers")?.as_object()?;
++    let question_answers = answers.get(question_id)?.get("answers")?.as_array()?;
++    question_answers
++        .iter()
++        .filter_map(|entry| entry.as_str())
++        .map(str::trim)
++        .find(|entry| !entry.is_empty())
++        .map(ToOwned::to_owned)
++}
++
++fn extract_other_user_input_answer(
++    question_id: &str,
++    selected_meta: Option<&Meta>,
++    response_meta: Option<&Meta>,
++) -> Option<String> {
++    selected_meta
++        .and_then(|meta| extract_user_input_response_answer(meta, question_id))
++        .or_else(|| {
++            response_meta.and_then(|meta| extract_user_input_response_answer(meta, question_id))
++        })
++}
++
++fn resolve_user_input_selected_answer(
++    question: &RequestUserInputQuestion,
++    option_map: &HashMap<String, String>,
++    selected: &SelectedPermissionOutcome,
++    response_meta: Option<&Meta>,
++) -> Result<String, UserInputSelectionError> {
++    let option_id = selected.option_id.0.as_ref();
++    if option_id == "answer-other" {
++        return extract_other_user_input_answer(
++            question.id.as_str(),
++            selected.meta.as_ref(),
++            response_meta,
++        )
++        .ok_or(UserInputSelectionError::MissingOtherText);
++    }
++
++    option_map
++        .get(option_id)
++        .cloned()
++        .ok_or(UserInputSelectionError::InvalidOptionId)
++}
++
+ struct ParseCommandToolCall {
+     title: String,
+     file_extension: Option<String>,
+@@ -2397,6 +2565,14 @@ impl SessionClient {
+         .await;
+     }
+ 
++    async fn send_terminal_plan(&self, update: TerminalPlanUpdate) {
++        let text = update.text.clone();
++        self.send_notification(SessionUpdate::AgentMessageChunk(
++            ContentChunk::new(text.into()).meta(terminal_plan_meta_value(&update)),
++        ))
++        .await;
++    }
++
+     async fn send_agent_thought(&self, text: impl Into<String>) {
+         self.send_notification(SessionUpdate::AgentThoughtChunk(ContentChunk::new(
+             text.into().into(),
+@@ -3384,10 +3560,12 @@ impl<A: Auth> ThreadActor<A> {
+     /// - `EventMsg` for user/agent messages and reasoning (like the TUI does)
+     /// - `ResponseItem` for tool calls only (not persisted as EventMsg)
+     async fn handle_replay_history(&mut self, history: Vec<RolloutItem>) -> Result<(), Error> {
++        let mut terminal_plan_replayed = false;
+         for item in history {
+             match item {
+                 RolloutItem::EventMsg(event_msg) => {
+-                    self.replay_event_msg(&event_msg).await;
++                    self.replay_event_msg(&event_msg, &mut terminal_plan_replayed)
++                        .await;
+                 }
+                 RolloutItem::ResponseItem(response_item) => {
+                     self.replay_response_item(&response_item).await;
+@@ -3401,14 +3579,53 @@ impl<A: Auth> ThreadActor<A> {
+ 
+     /// Convert and send an EventMsg as ACP notification(s) during replay.
+     /// Handles messages and reasoning - mirrors the live event handling in PromptState.
+-    async fn replay_event_msg(&self, msg: &EventMsg) {
++    async fn replay_event_msg(&self, msg: &EventMsg, terminal_plan_replayed: &mut bool) {
+         match msg {
+             EventMsg::UserMessage(UserMessageEvent { message, .. }) => {
+                 self.client.send_user_message(message.clone()).await;
+             }
+-            EventMsg::AgentMessage(AgentMessageEvent { message, phase: _ }) => {
++            EventMsg::AgentMessage(AgentMessageEvent { message, phase }) => {
++                if *terminal_plan_replayed
++                    && *phase == Some(MessagePhase::FinalAnswer)
++                    && extract_proposed_plan(message).is_some()
++                {
++                    return;
++                }
++                if *phase == Some(MessagePhase::FinalAnswer)
++                    && let Some(plan_text) = extract_proposed_plan(message)
++                {
++                    self.client
++                        .send_terminal_plan(TerminalPlanUpdate {
++                            source: TerminalPlanSource::AgentMessageFinalAnswerProposedPlan,
++                            text: plan_text,
++                            item_id: None,
++                            turn_id: None,
++                            thread_id: None,
++                            phase: Some("final_answer"),
++                        })
++                        .await;
++                    *terminal_plan_replayed = true;
++                    return;
++                }
+                 self.client.send_agent_text(message.clone()).await;
+             }
++            EventMsg::ItemCompleted(ItemCompletedEvent {
++                item: TurnItem::Plan(plan_item),
++                thread_id,
++                turn_id,
++            }) => {
++                self.client
++                    .send_terminal_plan(TerminalPlanUpdate {
++                        source: TerminalPlanSource::TurnItemPlan,
++                        text: plan_item.text.clone(),
++                        item_id: Some(plan_item.id.clone()),
++                        turn_id: Some(turn_id.clone()),
++                        thread_id: Some(thread_id.to_string()),
++                        phase: None,
++                    })
++                    .await;
++                *terminal_plan_replayed = true;
++            }
+             EventMsg::AgentReasoning(AgentReasoningEvent { text }) => {
+                 self.client.send_agent_thought(text.clone()).await;
+             }
+@@ -3865,6 +4082,8 @@ mod tests {
+ 
+     use super::*;
+ 
++    const TEST_THREAD_ID: &str = "019d9800-bf71-7f40-818a-fcdb9422263b";
++
+     #[tokio::test]
+     async fn test_prompt() -> anyhow::Result<()> {
+         let (session_id, client, _, message_tx, local_set) = setup(vec![]).await?;
+@@ -4361,6 +4580,101 @@ mod tests {
+         Ok(())
+     }
+ 
++    #[tokio::test]
++    async fn test_turn_item_plan_sends_terminal_plan_meta() -> anyhow::Result<()> {
++        let client = run_prompt("terminal-plan").await?;
++        let notifications = client.notifications.lock().unwrap();
++        assert_eq!(notifications.len(), 1);
++
++        let plan = terminal_plan_meta(&notifications[0], "# Test Plan");
++        assert_eq!(plan.get("source"), Some(&json!("TurnItem::Plan")));
++        assert_eq!(plan.get("text"), Some(&json!("# Test Plan")));
++        assert_eq!(plan.get("itemId"), Some(&json!("plan-item-id")));
++        assert_eq!(plan.get("turnId"), Some(&json!("0")));
++        assert_eq!(plan.get("threadId"), Some(&json!(TEST_THREAD_ID)));
++        assert!(plan.get("phase").is_none());
++
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_final_answer_proposed_plan_sends_terminal_plan_meta() -> anyhow::Result<()> {
++        let client = run_prompt("terminal-plan-fallback").await?;
++        let notifications = client.notifications.lock().unwrap();
++        assert_eq!(notifications.len(), 1);
++
++        let plan = terminal_plan_meta(&notifications[0], "# Fallback Plan");
++        assert_eq!(
++            plan.get("source"),
++            Some(&json!("AgentMessageFinalAnswerProposedPlan")),
++        );
++        assert_eq!(plan.get("text"), Some(&json!("# Fallback Plan")));
++        assert_eq!(plan.get("phase"), Some(&json!("final_answer")));
++        assert!(plan.get("itemId").is_none());
++        assert!(plan.get("turnId").is_none());
++        assert!(plan.get("threadId").is_none());
++
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_turn_item_plan_suppresses_final_answer_duplicate() -> anyhow::Result<()> {
++        let client = run_prompt("terminal-plan-with-fallback").await?;
++        let notifications = client.notifications.lock().unwrap();
++        assert_eq!(notifications.len(), 1);
++
++        let plan = terminal_plan_meta(&notifications[0], "# Test Plan");
++        assert_eq!(plan.get("source"), Some(&json!("TurnItem::Plan")));
++        assert_eq!(plan.get("text"), Some(&json!("# Test Plan")));
++
++        Ok(())
++    }
++
++    fn terminal_plan_meta<'a>(
++        notification: &'a SessionNotification,
++        expected_text: &str,
++    ) -> &'a serde_json::Map<String, serde_json::Value> {
++        let SessionUpdate::AgentMessageChunk(ContentChunk {
++            content: ContentBlock::Text(TextContent { text, .. }),
++            meta: Some(meta),
++            ..
++        }) = &notification.update
++        else {
++            panic!("expected terminal plan agent_message_chunk, got {notification:?}");
++        };
++        assert_eq!(text, expected_text);
++        meta.get("codex")
++            .and_then(serde_json::Value::as_object)
++            .and_then(|codex| codex.get(CODEX_TERMINAL_PLAN_META_KEY))
++            .and_then(serde_json::Value::as_object)
++            .unwrap_or_else(|| panic!("missing codex terminal plan meta: {meta:?}"))
++    }
++
++    async fn run_prompt(prompt: &str) -> anyhow::Result<Arc<StubClient>> {
++        let (session_id, client, _, message_tx, local_set) = setup(vec![]).await?;
++        let (prompt_response_tx, prompt_response_rx) = tokio::sync::oneshot::channel();
++
++        message_tx.send(ThreadMessage::Prompt {
++            request: PromptRequest::new(session_id, vec![prompt.into()]),
++            response_tx: prompt_response_tx,
++        })?;
++
++        tokio::try_join!(
++            async {
++                let stop_reason = prompt_response_rx.await??.await??;
++                assert_eq!(stop_reason, StopReason::EndTurn);
++                drop(message_tx);
++                anyhow::Ok(())
++            },
++            async {
++                local_set.await;
++                anyhow::Ok(())
++            }
++        )?;
++
++        Ok(client)
++    }
++
+     async fn setup(
+         custom_prompts: Vec<CustomPrompt>,
+     ) -> anyhow::Result<(
+@@ -4556,6 +4870,90 @@ mod tests {
+                             last_agent_message: None,
+                             turn_id,
+                         }));
++                    } else if prompt == "terminal-plan" {
++                        let turn_id = id.to_string();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::ItemCompleted(ItemCompletedEvent {
++                                    thread_id: codex_protocol::ThreadId::from_string(
++                                        TEST_THREAD_ID,
++                                    )
++                                    .unwrap(),
++                                    turn_id: turn_id.clone(),
++                                    item: TurnItem::Plan(codex_protocol::items::PlanItem {
++                                        id: "plan-item-id".to_string(),
++                                        text: "# Test Plan".to_string(),
++                                    }),
++                                }),
++                            })
++                            .unwrap();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::TurnComplete(TurnCompleteEvent {
++                                    last_agent_message: None,
++                                    turn_id,
++                                }),
++                            })
++                            .unwrap();
++                    } else if prompt == "terminal-plan-fallback" {
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::AgentMessage(AgentMessageEvent {
++                                    message: "<proposed_plan>\n# Fallback Plan\n</proposed_plan>"
++                                        .to_string(),
++                                    phase: Some(MessagePhase::FinalAnswer),
++                                }),
++                            })
++                            .unwrap();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::TurnComplete(TurnCompleteEvent {
++                                    last_agent_message: None,
++                                    turn_id: id.to_string(),
++                                }),
++                            })
++                            .unwrap();
++                    } else if prompt == "terminal-plan-with-fallback" {
++                        let turn_id = id.to_string();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::ItemCompleted(ItemCompletedEvent {
++                                    thread_id: codex_protocol::ThreadId::from_string(
++                                        TEST_THREAD_ID,
++                                    )
++                                    .unwrap(),
++                                    turn_id: turn_id.clone(),
++                                    item: TurnItem::Plan(codex_protocol::items::PlanItem {
++                                        id: "plan-item-id".to_string(),
++                                        text: "# Test Plan".to_string(),
++                                    }),
++                                }),
++                            })
++                            .unwrap();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::AgentMessage(AgentMessageEvent {
++                                    message: "<proposed_plan>\n# Test Plan\n</proposed_plan>"
++                                        .to_string(),
++                                    phase: Some(MessagePhase::FinalAnswer),
++                                }),
++                            })
++                            .unwrap();
++                        self.op_tx
++                            .send(Event {
++                                id: id.to_string(),
++                                msg: EventMsg::TurnComplete(TurnCompleteEvent {
++                                    last_agent_message: None,
++                                    turn_id,
++                                }),
++                            })
++                            .unwrap();
+                     } else if prompt == "approval-block" {
+                         self.op_tx
+                             .send(Event {
+@@ -4715,6 +5113,7 @@ mod tests {
+                 Op::ExecApproval { .. }
+                 | Op::ResolveElicitation { .. }
+                 | Op::RequestPermissionsResponse { .. }
++                | Op::UserInputAnswer { .. }
+                 | Op::PatchApproval { .. }
+                 | Op::Interrupt => {}
+                 Op::Shutdown => {
+@@ -5057,6 +5456,229 @@ mod tests {
+         Ok(())
+     }
+ 
++    #[tokio::test]
++    async fn test_request_user_input_other_submits_meta_text_answer() -> anyhow::Result<()> {
++        LocalSet::new()
++            .run_until(async {
++                let session_id = SessionId::new("test");
++                let mut selected_meta = Meta::new();
++                selected_meta.insert(
++                    REQUEST_USER_INPUT_RESPONSE_META_KEY.to_string(),
++                    json!({
++                        "answers": {
++                            "confirm_path": {
++                                "answers": ["custom free text"]
++                            }
++                        }
++                    }),
++                );
++                let client = Arc::new(StubClient::with_permission_responses(vec![
++                    RequestPermissionResponse::new(RequestPermissionOutcome::Selected(
++                        SelectedPermissionOutcome::new("answer-other").meta(selected_meta),
++                    )),
++                ]));
++                let session_client =
++                    SessionClient::with_client(session_id, client.clone(), Arc::default());
++                let thread = Arc::new(StubCodexThread::new());
++                let (response_tx, _response_rx) = tokio::sync::oneshot::channel();
++                let (message_tx, mut message_rx) = tokio::sync::mpsc::unbounded_channel();
++                let mut prompt_state = PromptState::new(
++                    "submission-id".to_string(),
++                    thread.clone(),
++                    message_tx,
++                    response_tx,
++                );
++
++                prompt_state
++                    .request_user_input(
++                        &session_client,
++                        RequestUserInputEvent {
++                            call_id: "call-id".to_string(),
++                            turn_id: "turn-id".to_string(),
++                            questions: vec![RequestUserInputQuestion {
++                                id: "confirm_path".to_string(),
++                                header: "Confirm".to_string(),
++                                question: "Continue?".to_string(),
++                                is_other: true,
++                                is_secret: false,
++                                options: Some(vec![
++                                    codex_protocol::request_user_input::RequestUserInputQuestionOption {
++                                        label: "yes".to_string(),
++                                        description: "Continue".to_string(),
++                                    },
++                                ]),
++                            }],
++                        },
++                    )
++                    .await?;
++
++                let ThreadMessage::PermissionRequestResolved {
++                    submission_id,
++                    request_key,
++                    response,
++                } = message_rx.recv().await.unwrap()
++                else {
++                    panic!("expected permission resolution message");
++                };
++                assert_eq!(submission_id, "submission-id");
++                prompt_state
++                    .handle_permission_request_resolved(&session_client, request_key, response)
++                    .await?;
++
++                let ops = thread.ops.lock().unwrap();
++                assert!(matches!(
++                    ops.last(),
++                    Some(Op::UserInputAnswer { id, response })
++                        if id == "turn-id"
++                            && response
++                                .answers
++                                .get("confirm_path")
++                                .is_some_and(|answer| answer.answers == vec!["custom free text".to_string()])
++                ));
++
++                anyhow::Ok(())
++            })
++            .await?;
++
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_request_user_input_cancel_interrupts_turn() -> anyhow::Result<()> {
++        LocalSet::new()
++            .run_until(async {
++                let session_id = SessionId::new("test");
++                let client = Arc::new(StubClient::with_permission_responses(vec![
++                    RequestPermissionResponse::new(RequestPermissionOutcome::Cancelled),
++                ]));
++                let session_client =
++                    SessionClient::with_client(session_id, client.clone(), Arc::default());
++                let thread = Arc::new(StubCodexThread::new());
++                let (response_tx, _response_rx) = tokio::sync::oneshot::channel();
++                let (message_tx, mut message_rx) = tokio::sync::mpsc::unbounded_channel();
++                let mut prompt_state = PromptState::new(
++                    "submission-id".to_string(),
++                    thread.clone(),
++                    message_tx,
++                    response_tx,
++                );
++
++                prompt_state
++                    .request_user_input(
++                        &session_client,
++                        RequestUserInputEvent {
++                            call_id: "call-id".to_string(),
++                            turn_id: "turn-id".to_string(),
++                            questions: vec![RequestUserInputQuestion {
++                                id: "confirm_path".to_string(),
++                                header: "Confirm".to_string(),
++                                question: "Continue?".to_string(),
++                                is_other: false,
++                                is_secret: false,
++                                options: Some(vec![
++                                    codex_protocol::request_user_input::RequestUserInputQuestionOption {
++                                        label: "yes".to_string(),
++                                        description: "Continue".to_string(),
++                                    },
++                                ]),
++                            }],
++                        },
++                    )
++                    .await?;
++
++                let ThreadMessage::PermissionRequestResolved {
++                    submission_id,
++                    request_key,
++                    response,
++                } = message_rx.recv().await.unwrap()
++                else {
++                    panic!("expected permission resolution message");
++                };
++                assert_eq!(submission_id, "submission-id");
++                prompt_state
++                    .handle_permission_request_resolved(&session_client, request_key, response)
++                    .await?;
++
++                let ops = thread.ops.lock().unwrap();
++                assert!(matches!(ops.last(), Some(Op::Interrupt)));
++                assert!(!ops.iter().any(|op| matches!(op, Op::UserInputAnswer { .. })));
++
++                anyhow::Ok(())
++            })
++            .await?;
++
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_request_user_input_invalid_option_interrupts_turn() -> anyhow::Result<()> {
++        LocalSet::new()
++            .run_until(async {
++                let session_id = SessionId::new("test");
++                let client = Arc::new(StubClient::with_permission_responses(vec![
++                    RequestPermissionResponse::new(RequestPermissionOutcome::Selected(
++                        SelectedPermissionOutcome::new("answer-invalid"),
++                    )),
++                ]));
++                let session_client =
++                    SessionClient::with_client(session_id, client.clone(), Arc::default());
++                let thread = Arc::new(StubCodexThread::new());
++                let (response_tx, _response_rx) = tokio::sync::oneshot::channel();
++                let (message_tx, mut message_rx) = tokio::sync::mpsc::unbounded_channel();
++                let mut prompt_state = PromptState::new(
++                    "submission-id".to_string(),
++                    thread.clone(),
++                    message_tx,
++                    response_tx,
++                );
++
++                prompt_state
++                    .request_user_input(
++                        &session_client,
++                        RequestUserInputEvent {
++                            call_id: "call-id".to_string(),
++                            turn_id: "turn-id".to_string(),
++                            questions: vec![RequestUserInputQuestion {
++                                id: "confirm_path".to_string(),
++                                header: "Confirm".to_string(),
++                                question: "Continue?".to_string(),
++                                is_other: false,
++                                is_secret: false,
++                                options: Some(vec![
++                                    codex_protocol::request_user_input::RequestUserInputQuestionOption {
++                                        label: "yes".to_string(),
++                                        description: "Continue".to_string(),
++                                    },
++                                ]),
++                            }],
++                        },
++                    )
++                    .await?;
++
++                let ThreadMessage::PermissionRequestResolved {
++                    submission_id,
++                    request_key,
++                    response,
++                } = message_rx.recv().await.unwrap()
++                else {
++                    panic!("expected permission resolution message");
++                };
++                assert_eq!(submission_id, "submission-id");
++                prompt_state
++                    .handle_permission_request_resolved(&session_client, request_key, response)
++                    .await?;
++
++                let ops = thread.ops.lock().unwrap();
++                assert!(matches!(ops.last(), Some(Op::Interrupt)));
++                assert!(!ops.iter().any(|op| matches!(op, Op::UserInputAnswer { .. })));
++
++                anyhow::Ok(())
++            })
++            .await?;
++
++        Ok(())
++    }
++
+     #[tokio::test]
+     async fn test_mcp_elicitation_declines_unsupported_form_requests() -> anyhow::Result<()> {
+         LocalSet::new()

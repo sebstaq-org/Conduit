@@ -16,6 +16,14 @@ pub enum DiscoveryError {
         /// The program name that could not be resolved.
         program: String,
     },
+    /// A required managed executable was not built in any repo-owned location.
+    #[error("could not resolve managed {program}; run `pnpm run codex-acp:build`")]
+    ManagedExecutableNotFound {
+        /// The program name that could not be resolved.
+        program: String,
+        /// Repo-owned candidate paths that were checked.
+        candidates: Vec<PathBuf>,
+    },
     /// Canonicalizing a resolved executable path failed.
     #[error("failed to canonicalize {path}")]
     CanonicalizePath {

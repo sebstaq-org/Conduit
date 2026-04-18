@@ -105,6 +105,7 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "packages/session-model/src",
         "scripts",
         "vendor/agent-client-protocol",
+        "vendor/codex-acp",
     ] {
         let path = repo_root.join(relative);
         create_dir_all(&path).map_err(|source| Error::io(Some(path), source))?;
@@ -165,6 +166,14 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     write_file(
         &repo_root.join("vendor/agent-client-protocol/README.md"),
         "# vendor\n",
+    )?;
+    write_file(
+        &repo_root.join("vendor/codex-acp/README.conduit.md"),
+        "# vendor\n",
+    )?;
+    write_file(
+        &repo_root.join("vendor/codex-acp/provenance/upstream-pr195.patch"),
+        "diff --git a/src/thread.rs b/src/thread.rs\n",
     )
 }
 

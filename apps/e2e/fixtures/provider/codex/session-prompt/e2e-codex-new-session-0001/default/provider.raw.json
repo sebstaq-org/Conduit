@@ -1,8 +1,37 @@
 {
+  "configCapture": {
+    "configRequest": {
+      "configId": "collaboration_mode",
+      "sessionId": "e2e-codex-new-session-0001",
+      "value": "plan"
+    },
+    "configResponse": {
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "plan",
+          "description": "Choose collaboration behavior (Default or Plan mode)",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    }
+  },
   "promptRequest": {
     "prompt": [
       {
-        "text": "Reply with exactly CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT.",
+        "text": "Create a minimal deterministic plan for a Conduit E2E proof. Do not mention private paths, credentials, users, dates, machines, or external services. Return a short plan with the exact heading CONDUIT_E2E_CAPTURED_TERMINAL_PLAN.",
         "type": "text"
       }
     ],
@@ -15,8 +44,19 @@
     {
       "index": 0,
       "update": {
+        "_meta": {
+          "codex": {
+            "terminalPlan": {
+              "itemId": "conduit-e2e-terminal-plan-item",
+              "source": "TurnItem::Plan",
+              "text": "# CONDUIT_E2E_CAPTURED_TERMINAL_PLAN\n\n**Summary:** Produce one deterministic terminal proof that shows the Conduit E2E flow from clean start to explicit success, using fixed inputs, fixed ordering, and a single canonical command sequence with no optional branches.\n\n**Implementation Changes:** Define a small capture script or command recipe that resets transient state, starts the required process set, runs the E2E scenario, waits for stable completion markers, and emits one normalized transcript whose success lines are exact-match assertions rather than human interpretation.\n\n**Test Plan:** Re-run the same capture twice in the same environment and require byte-equivalent terminal output after normalization; fail the proof if startup ordering changes, retries occur, unexpected warnings appear, or the success marker is missing.\n\n**Assumptions:** The proof is terminal-only, covers one golden-path scenario, avoids live dependencies outside the controlled test boundary, and treats determinism as more important than breadth.\n",
+              "threadId": "conduit-e2e-thread",
+              "turnId": "conduit-e2e-turn"
+            }
+          }
+        },
         "content": {
-          "text": "CONDUIT_E2E_SENTINEL_SESSION_NEW_PROMPT",
+          "text": "# CONDUIT_E2E_CAPTURED_TERMINAL_PLAN\n\n**Summary:** Produce one deterministic terminal proof that shows the Conduit E2E flow from clean start to explicit success, using fixed inputs, fixed ordering, and a single canonical command sequence with no optional branches.\n\n**Implementation Changes:** Define a small capture script or command recipe that resets transient state, starts the required process set, runs the E2E scenario, waits for stable completion markers, and emits one normalized transcript whose success lines are exact-match assertions rather than human interpretation.\n\n**Test Plan:** Re-run the same capture twice in the same environment and require byte-equivalent terminal output after normalization; fail the proof if startup ordering changes, retries occur, unexpected warnings appear, or the success marker is missing.\n\n**Assumptions:** The proof is terminal-only, covers one golden-path scenario, avoids live dependencies outside the controlled test boundary, and treats determinism as more important than breadth.\n",
           "type": "text"
         },
         "sessionUpdate": "agent_message_chunk"

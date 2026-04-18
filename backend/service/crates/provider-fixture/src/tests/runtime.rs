@@ -101,27 +101,7 @@ fn runtime_session_open_uses_session_load_fixture_transcript() -> TestResult<()>
 
 #[test]
 fn runtime_session_new_and_prompt_use_fixture_provider() -> TestResult<()> {
-    let root = fixture_root(json!({ "sessions": [] }))?;
-    write_session_new_capture(
-        root.path(),
-        "default",
-        json!({
-            "sessionId": "session-1",
-            "configOptions": [],
-            "modes": { "availableModes": [], "currentModeId": null },
-            "models": null
-        }),
-    )?;
-    write_session_prompt_capture(
-        root.path(),
-        SessionPromptCapture {
-            capture: "default",
-            prompt: vec![json!({ "type": "text", "text": "hello" })],
-            response: json!({ "stopReason": "end_turn" }),
-            session_id: "session-1",
-            updates: vec![transcript_update(0, "agent_message_chunk", "fixture-ready")],
-        },
-    )?;
+    let root = new_prompt_fixture_root()?;
     let factory = FixtureProviderFactory::load(root.path())?;
     let store = LocalStore::open_path(root.path().join("store.sqlite3"))?;
     let mut runtime = ServiceRuntime::with_factory(factory, store);
@@ -163,4 +143,30 @@ fn runtime_session_new_and_prompt_use_fixture_provider() -> TestResult<()> {
         return Err(format!("history did not expose prompt fixture {}", history.result).into());
     }
     Ok(())
+}
+
+fn new_prompt_fixture_root() -> TestResult<tempfile::TempDir> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_session_new_capture(
+        root.path(),
+        "default",
+        json!({
+            "sessionId": "session-1",
+            "configOptions": [],
+            "modes": { "availableModes": [], "currentModeId": null },
+            "models": null
+        }),
+    )?;
+    write_session_prompt_capture(
+        root.path(),
+        SessionPromptCapture {
+            capture: "default",
+            prompt: vec![json!({ "type": "text", "text": "hello" })],
+            required_config: None,
+            response: json!({ "stopReason": "end_turn" }),
+            session_id: "session-1",
+            updates: vec![transcript_update(0, "agent_message_chunk", "fixture-ready")],
+        },
+    )?;
+    Ok(root)
 }

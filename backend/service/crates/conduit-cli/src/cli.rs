@@ -42,9 +42,29 @@ pub(crate) enum CaptureOperation {
     Prompt {
         /// ACP session id returned by the provider, when reusing a session.
         session_id: Option<String>,
+        /// Optional ACP config option to set before sending the prompt.
+        config: Option<CaptureConfigOption>,
         /// JSON file containing the top-level ACP `ContentBlock[]` payload.
         prompt_path: PathBuf,
     },
+    /// Official ACP `session/set_config_option`.
+    SetConfigOption {
+        /// ACP session id returned by the provider.
+        session_id: Option<String>,
+        /// ACP config option id to set.
+        config_id: String,
+        /// ACP config option value to set.
+        value: String,
+    },
+}
+
+/// One ACP config option assignment used as a capture prelude.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CaptureConfigOption {
+    /// ACP config option id to set.
+    pub(crate) config_id: String,
+    /// ACP config option value to set.
+    pub(crate) value: String,
 }
 
 /// Parses top-level CLI arguments.
@@ -75,14 +95,23 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         {
             Ok(Command::Capture(parse_session_prompt_capture(rest)?))
         }
+        [capture, provider, operation, rest @ ..]
+            if capture == "capture"
+                && provider == "codex"
+                && operation == "session/set_config_option" =>
+        {
+            Ok(Command::Capture(parse_session_set_config_option_capture(
+                rest,
+            )?))
+        }
         [capture, ..] if capture == "capture" => Err(CliError::invalid_command(
-            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
         )),
         [] => Err(CliError::invalid_command(
-            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt",
+            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
         )),
         [command, ..] => Err(CliError::invalid_command(format!(
-            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, or conduit capture codex session/prompt"
+            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option"
         ))),
     }
 }
@@ -212,23 +241,27 @@ fn parse_session_load_capture(args: &[String]) -> Result<CaptureRequest> {
 }
 
 fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
+    let mut config_id = None;
     let mut cwd = None;
     let mut output = None;
     let mut prompt_path = None;
     let mut session_id = None;
+    let mut value = None;
     let mut index = 0;
     while index < args.len() {
         let flag = &args[index];
-        let Some(value) = args.get(index + 1) else {
+        let Some(flag_value) = args.get(index + 1) else {
             return Err(CliError::invalid_command(format!(
                 "missing value for {flag}"
             )));
         };
         match flag.as_str() {
-            "--cwd" => cwd = Some(PathBuf::from(value)),
-            "--out" => output = Some(PathBuf::from(value)),
-            "--prompt" => prompt_path = Some(PathBuf::from(value)),
-            "--session" => session_id = Some(value.to_owned()),
+            "--config" => config_id = Some(flag_value.to_owned()),
+            "--cwd" => cwd = Some(PathBuf::from(flag_value)),
+            "--out" => output = Some(PathBuf::from(flag_value)),
+            "--prompt" => prompt_path = Some(PathBuf::from(flag_value)),
+            "--session" => session_id = Some(flag_value.to_owned()),
+            "--value" => value = Some(flag_value.to_owned()),
             _ => {
                 return Err(CliError::invalid_command(format!(
                     "unsupported flag {flag}"
@@ -240,14 +273,82 @@ fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
     let prompt_path = prompt_path.ok_or_else(|| {
         CliError::invalid_command("missing required --prompt for codex session/prompt capture")
     })?;
+    let config = parse_optional_config_option(config_id, value, "codex session/prompt capture")?;
     Ok(CaptureRequest {
         operation: CaptureOperation::Prompt {
             session_id,
+            config,
             prompt_path,
         },
         cwd: provider_workspace_cwd(cwd)?,
         output,
     })
+}
+
+fn parse_session_set_config_option_capture(args: &[String]) -> Result<CaptureRequest> {
+    let mut config_id = None;
+    let mut cwd = None;
+    let mut output = None;
+    let mut session_id = None;
+    let mut value = None;
+    let mut index = 0;
+    while index < args.len() {
+        let flag = &args[index];
+        let Some(flag_value) = args.get(index + 1) else {
+            return Err(CliError::invalid_command(format!(
+                "missing value for {flag}"
+            )));
+        };
+        match flag.as_str() {
+            "--config" => config_id = Some(flag_value.to_owned()),
+            "--cwd" => cwd = Some(PathBuf::from(flag_value)),
+            "--out" => output = Some(PathBuf::from(flag_value)),
+            "--session" => session_id = Some(flag_value.to_owned()),
+            "--value" => value = Some(flag_value.to_owned()),
+            _ => {
+                return Err(CliError::invalid_command(format!(
+                    "unsupported flag {flag}"
+                )));
+            }
+        }
+        index += 2;
+    }
+    let config_id = config_id.ok_or_else(|| {
+        CliError::invalid_command(
+            "missing required --config for codex session/set_config_option capture",
+        )
+    })?;
+    let value = value.ok_or_else(|| {
+        CliError::invalid_command(
+            "missing required --value for codex session/set_config_option capture",
+        )
+    })?;
+    Ok(CaptureRequest {
+        operation: CaptureOperation::SetConfigOption {
+            session_id,
+            config_id,
+            value,
+        },
+        cwd: provider_workspace_cwd(cwd)?,
+        output,
+    })
+}
+
+fn parse_optional_config_option(
+    config_id: Option<String>,
+    value: Option<String>,
+    command: &str,
+) -> Result<Option<CaptureConfigOption>> {
+    match (config_id, value) {
+        (Some(config_id), Some(value)) => Ok(Some(CaptureConfigOption { config_id, value })),
+        (Some(_), None) => Err(CliError::invalid_command(format!(
+            "missing required --value for {command} when --config is provided"
+        ))),
+        (None, Some(_)) => Err(CliError::invalid_command(format!(
+            "missing required --config for {command} when --value is provided"
+        ))),
+        (None, None) => Ok(None),
+    }
 }
 
 fn provider_workspace_cwd(configured: Option<PathBuf>) -> Result<PathBuf> {
@@ -284,396 +385,5 @@ fn lexical_normalize(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::parse_command;
-    use std::path::Path;
-
-    fn args(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_owned()).collect()
-    }
-
-    #[test]
-    fn parses_codex_session_list_capture() -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/list",
-            "--cwd",
-            "/repo",
-            "--out",
-            "/captures/one",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation != super::CaptureOperation::List {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path() != Path::new("/repo") {
-            return Err("cwd did not parse".into());
-        }
-        if request.output.as_deref() != Some(Path::new("/captures/one")) {
-            return Err("output did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_initialize_capture_with_default_workspace()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&["capture", "codex", "initialize"]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation != super::CaptureOperation::Initialize {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_initialize_capture_with_relative_workspace_child()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "initialize",
-            "--cwd",
-            "init-smoke",
-            "--out",
-            "/captures/one",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation != super::CaptureOperation::Initialize {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path()
-            != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("init-smoke")
-        {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        if request.output.as_deref() != Some(Path::new("/captures/one")) {
-            return Err("output did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_load_capture() -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/load",
-            "--session",
-            "session-1",
-            "--cwd",
-            "/repo",
-            "--out",
-            "/captures/one",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation
-            != (super::CaptureOperation::Load {
-                session_id: "session-1".to_owned(),
-            })
-        {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path() != Path::new("/repo") {
-            return Err("cwd did not parse".into());
-        }
-        if request.output.as_deref() != Some(Path::new("/captures/one")) {
-            return Err("output did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_prompt_capture_with_default_workspace()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/prompt",
-            "--prompt",
-            "/tmp/prompt.json",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation
-            != (super::CaptureOperation::Prompt {
-                session_id: None,
-                prompt_path: "/tmp/prompt.json".into(),
-            })
-        {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_prompt_capture_with_existing_session()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/prompt",
-            "--session",
-            "session-1",
-            "--prompt",
-            "/tmp/prompt.json",
-            "--cwd",
-            "prompt-smoke",
-            "--out",
-            "/captures/one",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation
-            != (super::CaptureOperation::Prompt {
-                session_id: Some("session-1".to_owned()),
-                prompt_path: "/tmp/prompt.json".into(),
-            })
-        {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path()
-            != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("prompt-smoke")
-        {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        if request.output.as_deref() != Some(Path::new("/captures/one")) {
-            return Err("output did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_new_capture_with_default_workspace()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&["capture", "codex", "session/new"]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation != super::CaptureOperation::New {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_new_capture_with_relative_workspace_child()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/new",
-            "--cwd",
-            "prompt-smoke",
-            "--out",
-            "/captures/one",
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.operation != super::CaptureOperation::New {
-            return Err("operation did not parse".into());
-        }
-        if request.cwd.as_path()
-            != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("prompt-smoke")
-        {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        if request.output.as_deref() != Some(Path::new("/captures/one")) {
-            return Err("output did not parse".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn parses_codex_session_new_capture_with_absolute_workspace_child()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let cwd = Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("smoke");
-        let parsed = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/new",
-            "--cwd",
-            cwd.to_str().ok_or("cwd was not utf8")?,
-        ]))?;
-        let super::Command::Capture(request) = parsed;
-        if request.cwd != cwd {
-            return Err(format!("unexpected cwd {}", request.cwd.display()).into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_other_provider() {
-        let error = parse_command(&args(&["capture", "claude", "session/list"]))
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("unsupported capture command"));
-    }
-
-    #[test]
-    fn rejects_other_operation() {
-        let error = parse_command(&args(&["capture", "codex", "session/open"]))
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("unsupported capture command"));
-    }
-
-    #[test]
-    fn rejects_session_new_workspace_escape() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/new",
-            "--cwd",
-            "../outside",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("must stay under"));
-    }
-
-    #[test]
-    fn rejects_initialize_workspace_escape() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "initialize",
-            "--cwd",
-            "../outside",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("must stay under"));
-    }
-
-    #[test]
-    fn rejects_session_new_absolute_workspace_escape() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/new",
-            "--cwd",
-            "/srv/devops/repos/w3/Conduit",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("must stay under"));
-    }
-
-    #[test]
-    fn rejects_session_prompt_workspace_escape() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/prompt",
-            "--prompt",
-            "/tmp/prompt.json",
-            "--cwd",
-            "../outside",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("must stay under"));
-    }
-
-    #[test]
-    fn rejects_session_load_without_cwd() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/load",
-            "--session",
-            "session-1",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("missing required --cwd"));
-    }
-
-    #[test]
-    fn rejects_session_load_without_session_id() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/load",
-            "--cwd",
-            "/repo",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("missing required --session"));
-    }
-
-    #[test]
-    fn rejects_session_prompt_without_prompt_file() {
-        let error = parse_command(&args(&["capture", "codex", "session/prompt"]))
-            .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
-        assert!(error.contains("missing required --prompt"));
-    }
-
-    #[test]
-    fn rejects_unknown_flag() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/list",
-            "--provider",
-            "codex",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("unsupported flag --provider"));
-    }
-
-    #[test]
-    fn rejects_unknown_session_load_flag() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/load",
-            "--session",
-            "session-1",
-            "--cwd",
-            "/repo",
-            "--provider",
-            "codex",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("unsupported flag --provider"));
-    }
-
-    #[test]
-    fn rejects_unknown_session_prompt_flag() {
-        let error = parse_command(&args(&[
-            "capture",
-            "codex",
-            "session/prompt",
-            "--prompt",
-            "/tmp/prompt.json",
-            "--provider",
-            "codex",
-        ]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-        assert!(error.contains("unsupported flag --provider"));
-    }
-}
+#[path = "cli_tests.rs"]
+mod tests;

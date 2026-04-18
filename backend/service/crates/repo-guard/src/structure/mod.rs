@@ -49,15 +49,15 @@ const APPROVED_CRATES: [&str; 15] = [
     "session-store",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
-const APPROVED_VENDOR_ROOTS: [&str; 1] = ["agent-client-protocol"];
+const APPROVED_VENDOR_ROOTS: [&str; 2] = ["agent-client-protocol", "codex-acp"];
 const APPROVED_TESTDATA_ROOTS: [&str; 3] = ["failures", "golden", "providers"];
 const IGNORED_TOP_LEVEL: [&str; 1] = ["node_modules"];
 const ALLOWED_ARTIFACT_EXTENSIONS: [&str; 19] = [
     "", ".csv", ".gitkeep", ".gz", ".html", ".jpeg", ".jpg", ".json", ".jsonl", ".log", ".md",
     ".ndjson", ".pdf", ".png", ".svg", ".tgz", ".txt", ".webp", ".zip",
 ];
-const ALLOWED_VENDOR_EXTENSIONS: [&str; 9] = [
-    "", ".gitkeep", ".json", ".lock", ".md", ".toml", ".txt", ".yaml", ".yml",
+const ALLOWED_VENDOR_EXTENSIONS: [&str; 11] = [
+    "", ".gitkeep", ".json", ".lock", ".md", ".patch", ".rs", ".toml", ".txt", ".yaml", ".yml",
 ];
 const ARTIFACT_RULE: files::ExtensionRule = files::ExtensionRule {
     allowed: &ALLOWED_ARTIFACT_EXTENSIONS,
