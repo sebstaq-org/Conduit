@@ -30,7 +30,7 @@ function createToastLayoutCss(): string {
     }
 
     [data-sonner-toast][data-styled='true'] {
-      align-items: flex-start;
+      align-items: center;
       box-shadow: 0 2px 5px rgba(24, 24, 24, 0.18);
       gap: 14px;
       min-height: 68px;
@@ -48,7 +48,7 @@ function createToastIconCss(theme: Theme): string {
       color: #ffffff;
       height: 18px;
       justify-content: center;
-      margin: 1px 4px 0 0;
+      margin: 0 4px 0 0;
       position: relative;
       width: 18px;
     }
