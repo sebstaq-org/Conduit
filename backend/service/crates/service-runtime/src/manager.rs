@@ -12,7 +12,7 @@ use crate::command::ConsumerResponse;
 use crate::error::{
     RuntimeError, optional_string_param, optional_u64_param, path_param, string_param,
 };
-use crate::event::{EventBuffer, RuntimeEvent};
+use crate::event::{EventBuffer, RuntimeEvent, RuntimeEventKind};
 use crate::manager_helpers::{
     absolute_normalized_cwd, loaded_transcript_snapshot_updates, parse_provider,
 };
@@ -24,7 +24,7 @@ use crate::session_groups::providers_from_target;
 use crate::{AppServiceFactory, ProviderFactory, ProviderPort, Result};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json, to_value};
-use session_store::{HistoryLimit, LocalStore, OpenSessionKey};
+use session_store::{HistoryLimit, LocalStore, OpenSessionKey, SessionIndexEntry};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -153,10 +153,17 @@ where
             return Ok(());
         }
         let providers = providers_from_target(&command.provider)?;
+        let mut first_error = None;
         for provider in providers {
-            if self.session_index_refresh_due(provider) {
-                self.refresh_session_index_provider(provider)?;
+            if self.session_index_refresh_due(provider)
+                && let Err(error) = self.refresh_session_index_provider(provider)
+                && first_error.is_none()
+            {
+                first_error = Some(error);
             }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
         }
         Ok(())
     }
@@ -168,8 +175,16 @@ where
     /// Returns an error when the provider target is invalid or a provider
     /// refresh fails.
     pub fn force_refresh_session_index(&mut self, provider_target: &str) -> Result<()> {
+        let mut first_error = None;
         for provider in providers_from_target(provider_target)? {
-            self.refresh_session_index_provider(provider)?;
+            if let Err(error) = self.refresh_session_index_provider(provider)
+                && first_error.is_none()
+            {
+                first_error = Some(error);
+            }
+        }
+        if let Some(error) = first_error {
+            return Err(error);
         }
         Ok(())
     }
@@ -293,13 +308,31 @@ where
         let session_state = session_state_from_provider_result(&session_id, &provider_result);
         self.session_states
             .insert(key.clone(), session_state.clone());
-        let history = {
+        let (history, index_revision) = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             let history = self.local_store.open_session(key.clone(), &[], limit)?;
             self.local_store
                 .set_open_session_state(&key, &session_state)?;
-            history
+            let updated_at = self.local_store.current_timestamp()?;
+            let index_revision =
+                self.local_store
+                    .upsert_session_index_entry(&SessionIndexEntry {
+                        provider,
+                        session_id: session_id.clone(),
+                        cwd: key.cwd.clone(),
+                        title: session_new_title(&provider_result),
+                        updated_at: Some(updated_at),
+                    })?;
+            (history, index_revision)
         };
+        if let Some(revision) = index_revision {
+            self.event_buffer.emit(
+                provider,
+                RuntimeEventKind::SessionsIndexChanged,
+                None,
+                json!({ "revision": revision }),
+            );
+        }
         let history = to_value(history)?;
         let result = session_open_or_new_result(&session_state, &history);
         Ok(ConsumerResponse::success(id, result, snapshot))
@@ -632,4 +665,11 @@ where
         self.local_store.set_open_session_state(key, &state)?;
         Ok(())
     }
+}
+
+fn session_new_title(result: &Value) -> Option<String> {
+    result
+        .get("title")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
 }

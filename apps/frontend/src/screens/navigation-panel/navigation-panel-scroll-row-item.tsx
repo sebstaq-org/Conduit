@@ -1,6 +1,5 @@
-import { useSelector } from "react-redux";
-import { selectActiveSession } from "@/app-state";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
+import { DraftSessionRow } from "@/features/session-list/draft-session-row";
 import { SessionGroupHeader } from "@/features/session-list/session-group-header";
 import { SessionRowItem } from "@/features/session-list/session-row-item";
 import type { ActiveSession, useOpenSessionMutation } from "@/app-state";
@@ -14,6 +13,7 @@ import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
 import type { NavigationPanelScrollRow } from "./navigation-panel-scroll-rows";
 
 interface NavigationPanelScrollRowItemProps {
+  activeSession: ActiveSession | null;
   onSessionSelected?: (() => void) | undefined;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   row: NavigationPanelScrollRow;
@@ -23,7 +23,10 @@ const sessionRowDepth = 1;
 
 type SessionNavigationPanelRow = Extract<
   NavigationPanelScrollRow,
-  { kind: "groupEmpty" } | { kind: "groupHeader" } | { kind: "session" }
+  | { kind: "draftSession" }
+  | { kind: "groupEmpty" }
+  | { kind: "groupHeader" }
+  | { kind: "session" }
 >;
 
 interface SessionRowRenderProps {
@@ -38,6 +41,7 @@ function isSessionNavigationPanelRow(
 ): row is SessionNavigationPanelRow {
   return (
     row.kind === "groupHeader" ||
+    row.kind === "draftSession" ||
     row.kind === "groupEmpty" ||
     row.kind === "session"
   );
@@ -84,6 +88,9 @@ function renderSessionNavigationPanelRow({
   if (row.kind === "groupEmpty") {
     return <Row depth={sessionRowDepth} label="No recent sessions" muted />;
   }
+  if (row.kind === "draftSession") {
+    return <DraftSessionRow activeSession={row.activeSession} />;
+  }
   return (
     <SessionRowItem
       activeSession={activeSession}
@@ -98,7 +105,6 @@ function renderSessionNavigationPanelRow({
 function NavigationPanelScrollRowItem(
   props: NavigationPanelScrollRowItemProps,
 ): React.JSX.Element {
-  const activeSession = useSelector(selectActiveSession);
   const staticRow = renderStaticNavigationPanelRow(props.row);
   if (staticRow !== null) {
     return staticRow;
@@ -107,7 +113,7 @@ function NavigationPanelScrollRowItem(
     return <Row label="Row unavailable" muted />;
   }
   return renderSessionNavigationPanelRow({
-    activeSession,
+    activeSession: props.activeSession,
     onSessionSelected: props.onSessionSelected,
     openSession: props.openSession,
     row: props.row,

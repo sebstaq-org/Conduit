@@ -58,7 +58,7 @@ test("all-provider session list opens Claude and Copilot parity transcripts", as
   await expectNoFailureFeedback(page);
 });
 
-test("draft prompt in plan mode shows terminal plan decision", async ({
+test("new session applies selected collaboration mode before first prompt", async ({
   page,
 }) => {
   const activeHarness = requireHarness();

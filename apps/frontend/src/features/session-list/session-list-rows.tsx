@@ -56,11 +56,11 @@ function SessionListRows({
       {shouldShowGroups &&
         visibleGroups.map((group) => (
           <SessionGroupRow
+            activeSession={activeSession}
             key={group.groupId}
             group={group}
             onSessionSelected={onSessionSelected}
             openSession={openSession}
-            activeSession={activeSession}
           />
         ))}
     </List>

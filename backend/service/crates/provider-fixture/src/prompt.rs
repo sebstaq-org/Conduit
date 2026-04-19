@@ -62,7 +62,7 @@ impl SessionPromptSuccessFixture {
 pub(crate) fn read_session_prompt_fixtures(
     root: &Path,
     provider: ProviderId,
-    fixtures: &mut HashMap<(ProviderId, String), SessionPromptFixture>,
+    fixtures: &mut HashMap<(ProviderId, String), Vec<SessionPromptFixture>>,
 ) -> Result<()> {
     let root = session_prompt_root(root, provider);
     if !root.exists() {
@@ -103,7 +103,7 @@ pub(crate) fn read_session_prompt_fixtures(
 fn read_session_prompt_session_fixtures(
     provider: ProviderId,
     session_root: &Path,
-    fixtures: &mut HashMap<(ProviderId, String), SessionPromptFixture>,
+    fixtures: &mut HashMap<(ProviderId, String), Vec<SessionPromptFixture>>,
 ) -> Result<()> {
     for entry in read_dir(session_root).map_err(|source| {
         RuntimeError::Provider(format!(
@@ -133,17 +133,30 @@ fn read_session_prompt_session_fixtures(
         let Some((session_id, fixture)) = read_session_prompt_entry(&entry_path)? else {
             continue;
         };
-        if fixtures
-            .insert((provider, session_id.clone()), fixture)
-            .is_some()
-        {
+        let session_fixtures = fixtures.entry((provider, session_id)).or_default();
+        if session_fixtures.iter().any(|existing| {
+            session_prompt_fixture_duplicate_key(existing)
+                == session_prompt_fixture_duplicate_key(&fixture)
+        }) {
             return Err(invalid_fixture(
                 &entry_path,
-                "duplicate session/prompt session id",
+                "duplicate session/prompt prompt and config",
             ));
         }
+        session_fixtures.push(fixture);
     }
     Ok(())
+}
+
+fn session_prompt_fixture_duplicate_key(
+    fixture: &SessionPromptFixture,
+) -> (&[Value], Option<&RequiredPromptConfig>) {
+    match fixture {
+        SessionPromptFixture::Failure(failure) => (&failure.prompt, None),
+        SessionPromptFixture::Success(success) => {
+            (&success.prompt, success.required_config.as_ref())
+        }
+    }
 }
 
 fn read_session_prompt_entry(entry_path: &Path) -> Result<Option<(String, SessionPromptFixture)>> {
