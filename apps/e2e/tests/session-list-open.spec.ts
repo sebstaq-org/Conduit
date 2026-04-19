@@ -34,6 +34,7 @@ test("session list opens fixture transcript", async ({ page }) => {
   await sessionRow.click();
 
   await expect(page.getByText(transcriptSentinel)).toBeVisible();
+  await expectNoFailureFeedback(page);
 });
 
 test("all-provider session list opens Claude and Copilot parity transcripts", async ({
@@ -45,9 +46,11 @@ test("all-provider session list opens Claude and Copilot parity transcripts", as
 
   await openListedSession(page, activeHarness, claudeParitySessionTitle);
   await expectParityTranscript(page);
+  await expectNoFailureFeedback(page);
 
   await openListedSession(page, activeHarness, copilotParitySessionTitle);
   await expectParityTranscript(page);
+  await expectNoFailureFeedback(page);
 });
 
 test("draft prompt in plan mode shows terminal plan decision", async ({
@@ -84,6 +87,7 @@ test("draft prompt in plan mode shows terminal plan decision", async ({
   await expect(
     page.getByLabel("Tell Codex what to do differently"),
   ).toBeVisible();
+  await expectNoFailureFeedback(page);
 });
 
 test("Claude parity fixture drives configured draft prompt", async ({
@@ -110,6 +114,7 @@ test("Claude parity fixture drives configured draft prompt", async ({
   await sendButton.click();
 
   await expectParityTranscript(page);
+  await expectNoFailureFeedback(page);
 });
 
 test("Copilot parity fixture drives configured draft prompt", async ({
@@ -136,6 +141,7 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   await sendButton.click();
 
   await expectParityTranscript(page);
+  await expectNoFailureFeedback(page);
 });
 
 function requireHarness(): E2eHarness {
@@ -187,6 +193,18 @@ async function expectParityTranscript(page: Page): Promise<void> {
   await expect(
     page.getByText(providerParitySentinel, { exact: true }),
   ).toBeVisible();
+}
+
+async function expectNoFailureFeedback(page: Page): Promise<void> {
+  await expect(page.getByText("Request failed", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Session failed to open")).toHaveCount(0);
+  await expect(page.getByText(/Couldn't open .* session/)).toHaveCount(0);
+  await expect(page.getByText(/request failed\. Draft kept\./i)).toHaveCount(0);
+  await expect(
+    page.getByText("Your draft was kept. Edit it and try again."),
+  ).toHaveCount(0);
 }
 
 async function pageDiagnostics(
