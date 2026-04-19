@@ -29,3 +29,6 @@ Raw captures stay outside the repository under `conduit-artifacts/manual/capture
 
 Codex remains the reference fixture set and additionally has plan-mode fixtures.
 Plan mode is intentionally out of scope for Claude and Copilot parity.
+The default Codex `session/prompt` fixture is promoted from
+`backend/service/testdata/providers/codex/protocol/minimal-flow.events.jsonl`
+and covers the no-config new-session E2E path.

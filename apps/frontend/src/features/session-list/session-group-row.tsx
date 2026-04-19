@@ -1,5 +1,7 @@
 import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
 import { Row } from "@/ui";
+import { draftSessionMatchesCwd } from "./draft-session";
+import { DraftSessionRow } from "./draft-session-row";
 import { SessionGroupHeader } from "./session-group-header";
 import { sessionRowDepth } from "./session-list.constants";
 import { SessionRowItem } from "./session-row-item";
@@ -18,10 +20,12 @@ function SessionGroupRow({
   openSession,
   activeSession,
 }: SessionGroupRowProps): React.JSX.Element {
+  const showDraftSession = draftSessionMatchesCwd(activeSession, group.cwd);
   return (
     <>
       <SessionGroupHeader group={group} />
-      {group.sessions.length === 0 && (
+      {showDraftSession && <DraftSessionRow activeSession={activeSession} />}
+      {group.sessions.length === 0 && !showDraftSession && (
         <Row depth={sessionRowDepth} label="No recent sessions" muted />
       )}
       {group.sessions.map((session) => (

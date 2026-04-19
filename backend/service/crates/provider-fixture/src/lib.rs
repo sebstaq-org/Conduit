@@ -21,7 +21,7 @@ use agent_client_protocol_schema::{Implementation, InitializeResponse, ProtocolV
 use initialize::read_initialize_fixtures;
 use load::{SessionLoadFixture, read_session_load_fixtures};
 use new::read_session_new_fixtures;
-use prompt::{SessionPromptFixture, read_session_prompt_fixtures};
+use prompt::{RequiredPromptConfig, SessionPromptFixture, read_session_prompt_fixtures};
 use serde_json::{Value, json};
 use service_runtime::{ProviderFactory, ProviderPort, Result, RuntimeError};
 use set_config::{SessionSetConfigOptionFixture, read_session_set_config_option_fixtures};
@@ -45,7 +45,7 @@ pub struct FixtureProviderFactory {
     session_lists: HashMap<ProviderId, Value>,
     session_news: HashMap<ProviderId, Value>,
     session_loads: HashMap<(ProviderId, String), SessionLoadFixture>,
-    session_prompts: HashMap<(ProviderId, String), SessionPromptFixture>,
+    session_prompts: HashMap<(ProviderId, String), Vec<SessionPromptFixture>>,
     session_set_config_options:
         HashMap<(ProviderId, String, String, String), SessionSetConfigOptionFixture>,
 }
@@ -148,7 +148,7 @@ struct FixtureProviderPort {
     session_list: Value,
     session_new: Option<Value>,
     session_loads: HashMap<String, SessionLoadFixture>,
-    session_prompts: HashMap<String, SessionPromptFixture>,
+    session_prompts: HashMap<String, Vec<SessionPromptFixture>>,
     session_set_config_options: HashMap<(String, String, String), SessionSetConfigOptionFixture>,
     applied_config_options: HashMap<(String, String), String>,
     loaded_transcripts: HashMap<String, LoadedTranscriptSnapshot>,
@@ -260,7 +260,7 @@ impl ProviderPort for FixtureProviderPort {
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         self.require_initialized("session/prompt")?;
-        let fixture = self
+        let fixtures = self
             .session_prompts
             .get(&session_id)
             .cloned()
@@ -270,24 +270,25 @@ impl ProviderPort for FixtureProviderPort {
                     self.provider.as_str()
                 ))
             })?;
+        let matching_prompt_fixtures = fixtures
+            .into_iter()
+            .filter(|fixture| session_prompt_fixture_prompt(fixture) == prompt.as_slice())
+            .collect::<Vec<_>>();
+        if matching_prompt_fixtures.is_empty() {
+            return Err(RuntimeError::Provider(format!(
+                "session/prompt fixture prompt mismatch for {} session {session_id}",
+                self.provider.as_str()
+            )));
+        }
+        let config_error = self.prompt_config_error(&session_id, &matching_prompt_fixtures);
+        let fixture = self
+            .matching_prompt_fixture(&session_id, &matching_prompt_fixtures)
+            .ok_or(config_error)?;
         match fixture {
             SessionPromptFixture::Failure(failure) => {
-                if failure.prompt != prompt {
-                    return Err(RuntimeError::Provider(format!(
-                        "session/prompt fixture prompt mismatch for {} session {session_id}",
-                        self.provider.as_str()
-                    )));
-                }
                 Err(RuntimeError::Provider(failure.failure.message))
             }
             SessionPromptFixture::Success(success) => {
-                if success.prompt != prompt {
-                    return Err(RuntimeError::Provider(format!(
-                        "session/prompt fixture prompt mismatch for {} session {session_id}",
-                        self.provider.as_str()
-                    )));
-                }
-                self.require_prompt_config(&session_id, &success)?;
                 for update in &success.updates {
                     update_sink(update.clone());
                 }
@@ -341,24 +342,66 @@ impl FixtureProviderPort {
         )))
     }
 
-    fn require_prompt_config(
+    fn prompt_config_satisfied(&self, session_id: &str, required: &RequiredPromptConfig) -> bool {
+        let key = (session_id.to_owned(), required.config_id.clone());
+        self.applied_config_options.get(&key) == Some(&required.value)
+    }
+
+    fn matching_prompt_fixture(
         &self,
         session_id: &str,
-        fixture: &prompt::SessionPromptSuccessFixture,
-    ) -> Result<()> {
-        let Some(required) = &fixture.required_config else {
-            return Ok(());
+        fixtures: &[SessionPromptFixture],
+    ) -> Option<SessionPromptFixture> {
+        fixtures
+            .iter()
+            .find(|fixture| {
+                session_prompt_fixture_required_config(fixture)
+                    .is_some_and(|required| self.prompt_config_satisfied(session_id, required))
+            })
+            .or_else(|| {
+                fixtures
+                    .iter()
+                    .find(|fixture| session_prompt_fixture_required_config(fixture).is_none())
+            })
+            .cloned()
+    }
+
+    fn prompt_config_error(
+        &self,
+        session_id: &str,
+        fixtures: &[SessionPromptFixture],
+    ) -> RuntimeError {
+        let Some(required) = fixtures
+            .iter()
+            .find_map(session_prompt_fixture_required_config)
+        else {
+            return RuntimeError::Provider(format!(
+                "session/prompt fixture for {} session {session_id} has no matching config state",
+                self.provider.as_str()
+            ));
         };
-        let key = (session_id.to_owned(), required.config_id.clone());
-        if self.applied_config_options.get(&key) == Some(&required.value) {
-            return Ok(());
-        }
-        Err(RuntimeError::Provider(format!(
+        RuntimeError::Provider(format!(
             "session/prompt fixture for {} session {session_id} requires prior session/set_config_option {}={}",
             self.provider.as_str(),
             required.config_id,
             required.value
-        )))
+        ))
+    }
+}
+
+fn session_prompt_fixture_prompt(fixture: &SessionPromptFixture) -> &[Value] {
+    match fixture {
+        SessionPromptFixture::Failure(failure) => &failure.prompt,
+        SessionPromptFixture::Success(success) => &success.prompt,
+    }
+}
+
+fn session_prompt_fixture_required_config(
+    fixture: &SessionPromptFixture,
+) -> Option<&prompt::RequiredPromptConfig> {
+    match fixture {
+        SessionPromptFixture::Failure(_) => None,
+        SessionPromptFixture::Success(success) => success.required_config.as_ref(),
     }
 }
 

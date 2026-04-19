@@ -20,10 +20,15 @@ interface NavigationPanelScrollRowItemProps {
 }
 
 const sessionRowDepth = 1;
+const draftSessionLabel = "Draft session";
+const draftSessionNoProviderMeta = "No provider selected";
 
 type SessionNavigationPanelRow = Extract<
   NavigationPanelScrollRow,
-  { kind: "groupEmpty" } | { kind: "groupHeader" } | { kind: "session" }
+  | { kind: "draftSession" }
+  | { kind: "groupEmpty" }
+  | { kind: "groupHeader" }
+  | { kind: "session" }
 >;
 
 interface SessionRowRenderProps {
@@ -38,6 +43,7 @@ function isSessionNavigationPanelRow(
 ): row is SessionNavigationPanelRow {
   return (
     row.kind === "groupHeader" ||
+    row.kind === "draftSession" ||
     row.kind === "groupEmpty" ||
     row.kind === "session"
   );
@@ -83,6 +89,16 @@ function renderSessionNavigationPanelRow({
   }
   if (row.kind === "groupEmpty") {
     return <Row depth={sessionRowDepth} label="No recent sessions" muted />;
+  }
+  if (row.kind === "draftSession") {
+    return (
+      <Row
+        depth={sessionRowDepth}
+        label={draftSessionLabel}
+        meta={row.activeSession.provider ?? draftSessionNoProviderMeta}
+        selected
+      />
+    );
   }
   return (
     <SessionRowItem
