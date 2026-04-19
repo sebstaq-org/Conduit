@@ -18,6 +18,36 @@ fn parses_codex_session_list_capture() -> Result<(), Box<dyn std::error::Error>>
         "/captures/one",
     ]))?;
     let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Codex {
+        return Err("provider did not parse".into());
+    }
+    if request.operation != super::CaptureOperation::List {
+        return Err("operation did not parse".into());
+    }
+    if request.cwd.as_path() != Path::new("/repo") {
+        return Err("cwd did not parse".into());
+    }
+    if request.output.as_deref() != Some(Path::new("/captures/one")) {
+        return Err("output did not parse".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_claude_session_list_capture() -> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&[
+        "capture",
+        "claude",
+        "session/list",
+        "--cwd",
+        "/repo",
+        "--out",
+        "/captures/one",
+    ]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Claude {
+        return Err("provider did not parse".into());
+    }
     if request.operation != super::CaptureOperation::List {
         return Err("operation did not parse".into());
     }
@@ -363,21 +393,12 @@ fn rejects_unknown_provider() {
 }
 
 #[test]
-fn rejects_non_codex_session_capture() {
-    let error = parse_command(&args(&["capture", "claude", "session/list"]))
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
-    assert!(error.contains("only initialize is supported"));
-}
-
-#[test]
 fn rejects_other_operation() {
     let error = parse_command(&args(&["capture", "codex", "session/open"]))
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
-    assert!(error.contains("conduit capture <claude|copilot|codex> initialize"));
+    assert!(error.contains("session/set_config_option"));
 }
 
 #[test]

@@ -1,0 +1,10 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Removed absolute local capture output path; raw ACP request/response shape preserved.",
+  "manualCapture": true,
+  "operation": "session/list",
+  "provider": "claude",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-20260418T235022Z/session-list",
+  "timestamp": "2026-04-18T23:50:51.825685706Z"
+}

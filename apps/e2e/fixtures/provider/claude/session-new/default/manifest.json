@@ -1,0 +1,11 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Removed absolute local capture output path and normalized session id 8f918d0e-ca56-45f9-aa44-358899627f1f to e2e-claude-new-session-0001; raw ACP session/new shape preserved.",
+  "manualCapture": true,
+  "operation": "session/new",
+  "provider": "claude",
+  "sessionId": "e2e-claude-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-20260418T235022Z/session-new",
+  "timestamp": "2026-04-18T23:50:23.252651995Z"
+}

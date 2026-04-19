@@ -1,0 +1,11 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Removed absolute local capture output path and normalized session id aa47995e-0d93-4ef5-b4b3-c7fead67b71f to e2e-copilot-new-session-0001; raw ACP session/prompt shape preserved.",
+  "manualCapture": true,
+  "operation": "session/prompt",
+  "provider": "copilot",
+  "sessionId": "e2e-copilot-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-prompt-model-gpt41-with-new",
+  "timestamp": "2026-04-18T23:54:33.109171347Z"
+}

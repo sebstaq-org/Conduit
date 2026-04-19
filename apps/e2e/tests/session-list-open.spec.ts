@@ -7,6 +7,9 @@ const fixtureSessionTitle = "Conduit E2E fixture session";
 const newSessionPrompt =
   "Create a minimal deterministic plan for a Conduit E2E proof. Do not mention private paths, credentials, users, dates, machines, or external services. Return a short plan with the exact heading CONDUIT_E2E_CAPTURED_TERMINAL_PLAN.";
 const capturedTerminalPlanHeading = "CONDUIT_E2E_CAPTURED_TERMINAL_PLAN";
+const providerParityPrompt =
+  "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const providerParitySentinel = "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 
 let harness: E2eHarness | null = null;
@@ -65,6 +68,39 @@ test("draft prompt in plan mode shows terminal plan decision", async ({
   await expect(
     page.getByLabel("Tell Codex what to do differently"),
   ).toBeVisible();
+});
+
+test("provider parity fixtures drive Claude and Copilot draft flows", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+
+  const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
+  await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
+  await newSessionButton.click();
+
+  await page.getByLabel("Select provider for new session").click();
+  await page.getByLabel("claude").click();
+  await expect(page.getByText("Model: default")).toBeVisible();
+  await page.getByLabel("Select Model").click();
+  await page.getByLabel("Haiku").click();
+  await expect(page.getByText("Model: haiku")).toBeVisible();
+
+  await page.getByLabel("Select provider for new session").click();
+  await page.getByLabel("copilot").click();
+  await expect(page.getByText("Model: gpt-5-mini")).toBeVisible();
+  await page.getByLabel("Select Model").click();
+  await page.getByLabel("GPT-4.1").click();
+  await expect(page.getByText("Model: gpt-4.1")).toBeVisible();
+  await page.getByLabel("Session message").fill(providerParityPrompt);
+
+  const sendButton = page.getByRole("button", { name: "Send message" });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
+
+  await expect(page.getByText(providerParitySentinel)).toBeVisible();
 });
 
 function requireHarness(): E2eHarness {
