@@ -4,20 +4,13 @@ import { promptTrackedOpenSession } from "./session-prompt-turn-command";
 import { submitDraftPrompt } from "./session-commands-draft-submit";
 import type { DraftCommittedSession } from "./session-commands-draft-submit";
 import type {
-  useNewSessionMutation,
-  useOpenSessionMutation,
-  usePromptSessionMutation,
-  useSetSessionConfigOptionMutation,
-} from "./api-hooks";
+  NewSessionTrigger,
+  OpenSessionTrigger,
+  SetSessionConfigOptionTrigger,
+} from "./session-command-triggers";
+import type { PromptSessionTrigger } from "./session-prompt-turn-command";
 import type { ActiveSession } from "./session-selection";
 import { logFailure, logInfo } from "./frontend-logger";
-
-type NewSessionTrigger = ReturnType<typeof useNewSessionMutation>[0];
-type OpenSessionTrigger = ReturnType<typeof useOpenSessionMutation>[0];
-type PromptSessionTrigger = ReturnType<typeof usePromptSessionMutation>[0];
-type SetSessionConfigOptionTrigger = ReturnType<
-  typeof useSetSessionConfigOptionMutation
->[0];
 
 interface OpenSessionRowArgs {
   openSession: OpenSessionTrigger;

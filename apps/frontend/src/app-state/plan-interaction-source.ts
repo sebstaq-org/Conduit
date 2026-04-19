@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
   PLAN_INTERACTION_DEV_OPEN_SESSION_ID,
   createPlanInteractionFixtureState,
@@ -14,6 +14,8 @@ import {
   useRespondInteractionMutation,
   useSetSessionConfigOptionMutation,
 } from "./api-hooks";
+import { promptLivePlanInteractionSession } from "./plan-interaction-prompt";
+import type { PromptTurnDispatch } from "./plan-interaction-prompt";
 import { selectActiveSession } from "./session-selection";
 import { useSessionTimeline } from "./session-timeline";
 import type {
@@ -24,10 +26,6 @@ import type {
 import { COLLABORATION_MODE_CONFIG_ID } from "./plan-interaction-types";
 import type { ActiveSession } from "./session-selection";
 import type { PlanInteractionFixtureState } from "./plan-interaction-dev-fixture";
-import type {
-  SessionConfigOption,
-  SessionHistoryWindow,
-} from "@conduit/session-client";
 
 const PLAN_INTERACTION_DEV_FIXTURE_ENV =
   "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE";
@@ -78,7 +76,7 @@ function initialFixtureState(enabled: boolean): PlanInteractionFixtureState {
 function fixtureHistory(args: {
   enabled: boolean;
   state: PlanInteractionFixtureState;
-}): SessionHistoryWindow | null {
+}): PlanInteractionRuntimePort["history"] {
   if (!args.enabled) {
     return null;
   }
@@ -104,7 +102,7 @@ function isCodexOpenSession(
 }
 
 function collaborationModeFromConfigOptions(
-  configOptions: SessionConfigOption[] | null,
+  configOptions: Extract<ActiveSession, { kind: "open" }>["configOptions"],
 ): CollaborationMode {
   const option = configOptions?.find(
     (candidate) => candidate.id === COLLABORATION_MODE_CONFIG_ID,
@@ -116,7 +114,7 @@ function collaborationModeFromConfigOptions(
 }
 
 function latestResolutionStatus(
-  history: SessionHistoryWindow | undefined,
+  history: NonNullable<PlanInteractionRuntimePort["history"]> | undefined,
 ): string | null {
   if (history === undefined) {
     return null;
@@ -192,6 +190,7 @@ function useLivePortCommands(): LivePortCommands {
 function createLivePort(args: {
   activeSession: ActiveSession | null;
   commands: LivePortCommands;
+  dispatch: PromptTurnDispatch;
   enabled: boolean;
   openSessionId: string | null;
   timeline: ReturnType<typeof useSessionTimeline>;
@@ -206,15 +205,14 @@ function createLivePort(args: {
     lastResolution: latestResolutionStatus(args.timeline.history),
     openSessionId: args.openSessionId,
     promptSession: async (text): Promise<void> => {
-      if (args.openSessionId === null) {
-        return;
-      }
-      await args.commands
-        .promptSession({
-          openSessionId: args.openSessionId,
-          prompt: [{ text, type: "text" }],
-        })
-        .unwrap();
+      await promptLivePlanInteractionSession({
+        activeSession: args.activeSession,
+        dispatch: args.dispatch,
+        enabled: args.enabled,
+        openSessionId: args.openSessionId,
+        promptSession: args.commands.promptSession,
+        text,
+      });
     },
     respondInteraction: async (request): Promise<void> => {
       await args.commands.respondInteraction(request).unwrap();
@@ -236,6 +234,7 @@ function createLivePort(args: {
 }
 
 function usePlanInteractionLivePort(): PlanInteractionRuntimePort {
+  const dispatch = useDispatch();
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = openSessionIdFor(activeSession);
   const timeline = useSessionTimeline(openSessionId);
@@ -244,6 +243,7 @@ function usePlanInteractionLivePort(): PlanInteractionRuntimePort {
   return createLivePort({
     activeSession,
     commands,
+    dispatch,
     enabled,
     openSessionId,
     timeline,
