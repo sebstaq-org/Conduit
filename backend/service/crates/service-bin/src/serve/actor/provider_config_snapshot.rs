@@ -3,11 +3,11 @@
 use acp_discovery::ProviderId;
 use serde::Serialize;
 use serde_json::{Value, json};
-use service_runtime::{ProviderFactory, ProviderInitializeRequest};
+use service_runtime::{ProviderFactory, ProviderInitializeRequest, ProviderPort};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const PROVIDER_CONFIG_SNAPSHOT_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
@@ -111,12 +111,22 @@ fn refresh_provider_config_snapshot<F>(factory: &mut F, snapshots: &ProviderConf
 where
     F: ProviderFactory,
 {
+    let started_at = Instant::now();
+    tracing::debug!(
+        event_name = "provider_config_snapshot.refresh.start",
+        source = "service-bin"
+    );
     let cwd = probe_cwd();
     let entries = [ProviderId::Claude, ProviderId::Copilot, ProviderId::Codex]
         .into_iter()
         .map(|provider| probe_provider_config(factory, provider, cwd.clone()))
         .collect();
     snapshots.replace_entries(entries);
+    tracing::info!(
+        event_name = "provider_config_snapshot.refresh.finish",
+        source = "service-bin",
+        duration_ms = started_at.elapsed().as_millis()
+    );
 }
 
 fn probe_provider_config<F>(
@@ -127,24 +137,39 @@ fn probe_provider_config<F>(
 where
     F: ProviderFactory,
 {
+    let started_at = Instant::now();
+    tracing::debug!(
+        event_name = "provider_config_snapshot.provider.start",
+        source = "service-bin",
+        provider = %provider.as_str(),
+        cwd = %cwd.display()
+    );
     let fetched_at = Some(unix_timestamp_seconds());
-    let provider_port = factory.connect(provider);
-    let mut port = match provider_port {
-        Ok(port) => port,
+    let entry = match factory.connect(provider) {
+        Ok(mut port) => probe_connected_provider_config(provider, cwd, fetched_at, &mut *port),
         Err(error) => {
             let message = error.to_string();
-            return failed_entry(provider, classify_status(&message), fetched_at, message);
+            failed_entry(provider, classify_status(&message), fetched_at, message)
         }
     };
+    log_provider_config_probe_finish(&entry, started_at.elapsed());
+    entry
+}
 
+fn probe_connected_provider_config(
+    provider: ProviderId,
+    cwd: PathBuf,
+    fetched_at: Option<String>,
+    port: &mut dyn ProviderPort,
+) -> ProviderConfigSnapshotEntry {
     if let Err(error) = port.initialize(ProviderInitializeRequest::conduit_default()) {
         let _disconnect_status = port.disconnect();
         let message = error.to_string();
         return failed_entry(provider, classify_status(&message), fetched_at, message);
     }
-    let probe_result = port.session_new(cwd);
+    let result = port.session_new(cwd);
     let _disconnect_status = port.disconnect();
-    match probe_result {
+    match result {
         Ok(result) => ProviderConfigSnapshotEntry {
             provider,
             status: ProviderConfigSnapshotStatus::Ready,
@@ -159,6 +184,51 @@ where
             failed_entry(provider, classify_status(&message), fetched_at, message)
         }
     }
+}
+
+fn log_provider_config_probe_finish(entry: &ProviderConfigSnapshotEntry, duration: Duration) {
+    let config_option_count = entry.config_options.as_array().map_or(0, Vec::len);
+    match entry.status {
+        ProviderConfigSnapshotStatus::Ready => {
+            log_ready_provider_config_probe(entry, duration, config_option_count)
+        }
+        ProviderConfigSnapshotStatus::Loading
+        | ProviderConfigSnapshotStatus::Error
+        | ProviderConfigSnapshotStatus::Unavailable => {
+            log_failed_provider_config_probe(entry, duration, config_option_count)
+        }
+    }
+}
+
+fn log_ready_provider_config_probe(
+    entry: &ProviderConfigSnapshotEntry,
+    duration: Duration,
+    config_option_count: usize,
+) {
+    tracing::info!(
+        event_name = "provider_config_snapshot.provider.finish",
+        source = "service-bin",
+        provider = %entry.provider.as_str(),
+        status = ?entry.status,
+        duration_ms = duration.as_millis(),
+        config_option_count
+    );
+}
+
+fn log_failed_provider_config_probe(
+    entry: &ProviderConfigSnapshotEntry,
+    duration: Duration,
+    config_option_count: usize,
+) {
+    tracing::warn!(
+        event_name = "provider_config_snapshot.provider.finish",
+        source = "service-bin",
+        provider = %entry.provider.as_str(),
+        status = ?entry.status,
+        duration_ms = duration.as_millis(),
+        config_option_count,
+        error_message = entry.error.as_deref().unwrap_or("missing error")
+    );
 }
 
 fn loading_entry(provider: ProviderId) -> ProviderConfigSnapshotEntry {

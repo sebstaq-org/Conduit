@@ -10,7 +10,6 @@ import {
   canSubmitPrompt,
   conduitApi,
   draftSessionConfigOptionSelected,
-  draftSessionProviderSelected,
   selectActiveSession,
   submitPrompt,
   useGetProvidersConfigSnapshotQuery,
@@ -21,6 +20,7 @@ import {
 } from "@/app-state";
 import type {
   ActiveSession,
+  AppDispatch,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
 import type { Theme } from "@/theme";
@@ -31,6 +31,10 @@ import {
   resolveErrorMessage,
   resolveVisibleConfigOptions,
 } from "./session-composer-logic";
+import {
+  createHandleProviderSelect,
+  providerConfigPollingInterval,
+} from "./session-composer-provider-config-refresh";
 
 interface SessionComposerController {
   activeSession: ActiveSession | null;
@@ -47,7 +51,7 @@ interface SessionComposerController {
 
 interface SessionComposerRuntime {
   activeSession: ActiveSession | null;
-  dispatch: ReturnType<typeof useDispatch>;
+  dispatch: AppDispatch;
   newSession: ReturnType<typeof useNewSessionMutation>[0];
   newSessionError: boolean;
   newSessionLoading: boolean;
@@ -64,13 +68,9 @@ interface SessionComposerRuntime {
   setSessionConfigOptionLoading: boolean;
 }
 
-interface SessionComposerProps {
-  planInteraction: SessionComposerPlanInteractionController;
-}
-
 function createDraftCommitCallback(args: {
   activeSession: ActiveSession;
-  dispatch: ReturnType<typeof useDispatch>;
+  dispatch: AppDispatch;
 }): Parameters<typeof submitPrompt>[0]["onDraftPromptCommitted"] {
   return (session): void => {
     args.dispatch(
@@ -97,7 +97,7 @@ function createDraftCommitCallback(args: {
 function createHandleSend(args: {
   activeSession: ActiveSession | null;
   canSend: boolean;
-  dispatch: ReturnType<typeof useDispatch>;
+  dispatch: AppDispatch;
   newSession: ReturnType<typeof useNewSessionMutation>[0];
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
@@ -130,7 +130,7 @@ function createHandleSend(args: {
 
 function createHandleConfigOptionSelect(args: {
   activeSession: ActiveSession | null;
-  dispatch: ReturnType<typeof useDispatch>;
+  dispatch: AppDispatch;
   setSessionConfigOption: ReturnType<
     typeof useSetSessionConfigOptionMutation
   >[0];
@@ -161,14 +161,6 @@ function createHandleConfigOptionSelect(args: {
   };
 }
 
-function createHandleProviderSelect(
-  dispatch: ReturnType<typeof useDispatch>,
-): (provider: ProviderId) => void {
-  return (provider: ProviderId): void => {
-    dispatch(draftSessionProviderSelected(provider));
-  };
-}
-
 function buildSessionComposerController(args: {
   canSend: boolean;
   draft: string;
@@ -187,6 +179,7 @@ function buildSessionComposerController(args: {
     draft: args.draft,
     errorMessage: resolveErrorMessage({
       activeSession: args.runtime.activeSession,
+      draftSnapshotEntry: args.draftSnapshotEntry,
       newSessionError: args.runtime.newSessionError,
       promptError: args.runtime.promptSessionError,
       providersConfigSnapshotError: args.runtime.providersConfigSnapshotError,
@@ -215,7 +208,7 @@ function buildSessionComposerController(args: {
 }
 
 function useSessionComposerRuntime(): SessionComposerRuntime {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const activeSession = useSelector(selectActiveSession);
   const [newSession, newSessionState] = useNewSessionMutation();
   const [openSession] = useOpenSessionMutation();
@@ -225,7 +218,11 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
   const {
     data: providersConfigSnapshot,
     isError: providersConfigSnapshotError,
-  } = useGetProvidersConfigSnapshotQuery(null);
+  } = useGetProvidersConfigSnapshotQuery(null, {
+    pollingInterval: providerConfigPollingInterval(activeSession),
+    refetchOnMountOrArgChange: true,
+    skipPollingIfUnfocused: true,
+  });
   return {
     activeSession,
     dispatch,
@@ -276,7 +273,9 @@ function useSessionComposerController(): SessionComposerController {
 
 function SessionComposer({
   planInteraction,
-}: SessionComposerProps): React.JSX.Element {
+}: {
+  planInteraction: SessionComposerPlanInteractionController;
+}): React.JSX.Element {
   const theme = useTheme<Theme>();
   const controller = useSessionComposerController();
   return (
