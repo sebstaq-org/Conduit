@@ -23,6 +23,7 @@ test("session list opens fixture transcript", async ({ page }) => {
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   const sessionRow = page.getByRole("button", { name: fixtureSessionTitle });
   await expectVisibleWithDiagnostics(page, activeHarness, sessionRow);
@@ -37,6 +38,7 @@ test("draft prompt in plan mode shows terminal plan decision", async ({
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
   await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
@@ -67,6 +69,34 @@ test("draft prompt in plan mode shows terminal plan decision", async ({
   ).toBeVisible();
 });
 
+test("pairing UI drives session commands through relay and reconnects", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
+
+  await expect(page.getByText("Relay connected")).toBeVisible();
+  const beforeReconnect = await activeHarness.relaySnapshot();
+  expect(beforeReconnect.controlSocketCount).toBeGreaterThanOrEqual(1);
+  expect(beforeReconnect.clientSocketCount).toBeGreaterThanOrEqual(1);
+  expect(beforeReconnect.dataSocketCount).toBeGreaterThanOrEqual(1);
+  expect(beforeReconnect.clientMessageCount).toBeGreaterThanOrEqual(1);
+  expect(beforeReconnect.dataMessageCount).toBeGreaterThanOrEqual(1);
+  expect(JSON.stringify(beforeReconnect)).not.toContain("settings/get");
+  expect(JSON.stringify(beforeReconnect)).not.toContain("sessions/grouped");
+
+  await activeHarness.closeRelayDataSocket();
+  await expect
+    .poll(async () => (await activeHarness.relaySnapshot()).dataSocketCount, {
+      timeout: 15000,
+    })
+    .toBeGreaterThan(beforeReconnect.dataSocketCount);
+  await page.getByRole("button", { name: fixtureSessionTitle }).click();
+  await expect(page.getByText(transcriptSentinel)).toBeVisible({ timeout: 15000 });
+});
+
 function requireHarness(): E2eHarness {
   if (harness === null) {
     throw new Error("E2E harness did not start");
@@ -78,14 +108,18 @@ async function openFrontend(
   page: Page,
   activeHarness: E2eHarness,
 ): Promise<void> {
-  await page.addInitScript((sessionWsUrl) => {
-    (
-      globalThis as {
-        CONDUIT_RUNTIME_CONFIG?: { sessionWsUrl: string };
-      }
-    ).CONDUIT_RUNTIME_CONFIG = { sessionWsUrl };
-  }, activeHarness.sessionWsUrl);
   await page.goto(activeHarness.frontendUrl);
+}
+
+async function pairFrontend(
+  page: Page,
+  activeHarness: E2eHarness,
+): Promise<void> {
+  await page.getByLabel("Pairing link").fill(await activeHarness.pairingUrl());
+  await page.getByRole("button", { name: "Connect desktop" }).click();
+  await expect(page.getByText("Relay connected")).toBeVisible({
+    timeout: 15000,
+  });
 }
 
 async function expectVisibleWithDiagnostics(

@@ -1,3 +1,4 @@
+import { gcm } from "@noble/ciphers/aes.js";
 import { x25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -42,16 +43,16 @@ interface RelayDaemonKeyPair {
 
 class RelayCipherChannel {
   private readonly context: RelayCipherContext;
-  private readonly decryptKey: CryptoKey;
-  private readonly encryptKey: CryptoKey;
+  private readonly decryptKey: Uint8Array;
+  private readonly encryptKey: Uint8Array;
   private readonly localRole: RelayPeerRole;
   private nextInboundSequence = 0;
   private nextOutboundSequence = 0;
 
   private constructor(options: {
     readonly context: RelayCipherContext;
-    readonly decryptKey: CryptoKey;
-    readonly encryptKey: CryptoKey;
+    readonly decryptKey: Uint8Array;
+    readonly encryptKey: Uint8Array;
     readonly localRole: RelayPeerRole;
   }) {
     this.context = options.context;
@@ -83,21 +84,18 @@ class RelayCipherChannel {
   public async encryptUtf8(plaintext: string): Promise<RelayCipherFrame> {
     const sequence = this.nextOutboundSequence;
     this.nextOutboundSequence += 1;
-    const ciphertext = await crypto.subtle.encrypt(
-      {
-        additionalData: additionalData(this.context, this.localRole, sequence),
-        iv: nonceFor(this.localRole, sequence),
-        name: "AES-GCM",
-      },
+    const cipher = gcm(
       this.encryptKey,
-      bytesForCrypto(textEncoder.encode(plaintext)),
+      nonceFor(this.localRole, sequence),
+      additionalData(this.context, this.localRole, sequence),
     );
+    const ciphertext = cipher.encrypt(textEncoder.encode(plaintext));
     return {
       v: RELAY_CIPHER_VERSION,
       type: "ciphertext",
       sender: this.localRole,
       seq: sequence,
-      ciphertextB64: encodeStandardBase64(new Uint8Array(ciphertext)),
+      ciphertextB64: encodeStandardBase64(ciphertext),
     };
   }
 
@@ -110,15 +108,12 @@ class RelayCipherChannel {
       throw new Error("relay cipher frame sequence is invalid");
     }
     const ciphertext = decodeStandardBase64(frame.ciphertextB64);
-    const plaintext = await crypto.subtle.decrypt(
-      {
-        additionalData: additionalData(this.context, frame.sender, frame.seq),
-        iv: nonceFor(frame.sender, frame.seq),
-        name: "AES-GCM",
-      },
+    const cipher = gcm(
       this.decryptKey,
-      bytesForCrypto(ciphertext),
+      nonceFor(frame.sender, frame.seq),
+      additionalData(this.context, frame.sender, frame.seq),
     );
+    const plaintext = cipher.decrypt(ciphertext);
     this.nextInboundSequence += 1;
     return textDecoder.decode(plaintext);
   }
@@ -187,8 +182,8 @@ async function importCipherKeys(
   sharedSecret: Uint8Array,
   context: RelayCipherContext,
 ): Promise<{
-  readonly clientToServer: CryptoKey;
-  readonly serverToClient: CryptoKey;
+  readonly clientToServer: Uint8Array;
+  readonly serverToClient: Uint8Array;
 }> {
   const material = hkdf(
     sha256,
@@ -202,19 +197,9 @@ async function importCipherKeys(
   const clientToServer = material.slice(0, keyLength);
   const serverToClient = material.slice(keyLength, sharedMaterialLength);
   return {
-    clientToServer: await importAesKey(clientToServer),
-    serverToClient: await importAesKey(serverToClient),
+    clientToServer,
+    serverToClient,
   };
-}
-
-async function importAesKey(key: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    bytesForCrypto(key),
-    { name: "AES-GCM" },
-    false,
-    ["decrypt", "encrypt"],
-  );
 }
 
 function nonceFor(
@@ -239,17 +224,9 @@ function additionalData(
   sender: RelayPeerRole,
   sequence: number,
 ): Uint8Array<ArrayBuffer> {
-  return bytesForCrypto(
-    textEncoder.encode(
-      `conduit-relay-frame:${context.serverId}:${context.connectionId}:${context.offerNonce}:${sender}:${sequence}`,
-    ),
+  return textEncoder.encode(
+    `conduit-relay-frame:${context.serverId}:${context.connectionId}:${context.offerNonce}:${sender}:${sequence}`,
   );
-}
-
-function bytesForCrypto(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy;
 }
 
 function validateHandshakeFrame(frame: RelayHandshakeFrame): void {

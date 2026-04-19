@@ -1,3 +1,4 @@
+import { HostPairingPanel } from "@/features/host-pairing";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
 import { RuntimeStatusPanel } from "@/features/runtime-status";
 import { SessionList } from "@/features/session-list";
@@ -24,6 +25,7 @@ function NavigationPanelRows({
       >
         Conduit
       </Text>
+      <HostPairingPanel />
       <NavigationPanelProjectRows />
       <RuntimeStatusPanel />
       <Section actions={<ProjectsToolbar />} title="Threads">

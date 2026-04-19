@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   AUTHORIZATION_BOUNDARY,
+  acceptConnectionOffer,
   evaluateConnectionOfferTrust,
+  publicKeyFingerprint,
+  relayOfferFromHostProfile,
   parseConnectionOfferUrl,
   readConnectionOffer,
 } from "./index.js";
-import type { ConnectionOfferV1, TrustedHostRecord } from "./index.js";
+import type {
+  ConnectionHostProfile,
+  ConnectionOfferV1,
+  TrustedHostRecord,
+} from "./index.js";
 
 const daemonPublicKeyB64 = "g7EHNunwYfhVBZWTysT7l3F7knCHXeAFYk4/Oo4ff3Q=";
 const relayClientCapability = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -170,5 +177,64 @@ describe("connection offer trust", () => {
       offer,
       host,
     });
+  });
+});
+
+describe("connection host profiles", () => {
+  it("accepts a new offer into a relay-capable host profile", () => {
+    const result = acceptConnectionOffer(offer, [], validNow);
+
+    expect(result).toEqual({
+      host: {
+        createdAt: validNow.toISOString(),
+        lastSeenAt: validNow.toISOString(),
+        offerNonce: offer.nonce,
+        relay: offer.relay,
+        revokedAt: null,
+        serverId: offer.serverId,
+        trustedDaemonPublicKeyB64: offer.daemonPublicKeyB64,
+      },
+      kind: "accepted",
+      trust: "new_host",
+    });
+  });
+
+  it("blocks changed keys and revoked hosts", () => {
+    const changed = trustedHost("old-public-key");
+    expect(acceptConnectionOffer(offer, [changed as ConnectionHostProfile])).toEqual({
+      host: changed,
+      kind: "blocked_key_changed",
+      offer,
+    });
+
+    const revoked = Object.assign(trustedHost(daemonPublicKeyB64), {
+      revokedAt: "2026-04-18T00:00:00.000Z",
+    });
+    expect(acceptConnectionOffer(offer, [revoked as ConnectionHostProfile])).toEqual({
+      host: revoked,
+      kind: "blocked_revoked",
+      offer,
+    });
+  });
+
+  it("reconstructs a relay offer without reusing the expired QR timestamp", () => {
+    const accepted = acceptConnectionOffer(offer, [], validNow);
+    if (accepted.kind !== "accepted") {
+      throw new Error("offer was not accepted");
+    }
+
+    expect(relayOfferFromHostProfile(accepted.host)).toMatchObject({
+      daemonPublicKeyB64: offer.daemonPublicKeyB64,
+      nonce: offer.nonce,
+      relay: offer.relay,
+      serverId: offer.serverId,
+    });
+    expect(
+      Date.parse(relayOfferFromHostProfile(accepted.host).expiresAt),
+    ).toBeGreaterThan(Date.parse(offer.expiresAt));
+  });
+
+  it("shows a short non-secret public key fingerprint", () => {
+    expect(publicKeyFingerprint(daemonPublicKeyB64)).toBe("g7EHNunwYfhV");
   });
 });

@@ -9,7 +9,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@conduit/relay-transport": "workspace:*",
     "@playwright/test": "1.59.1",
+    "esbuild": "0.27.7",
+    "miniflare": "4.20260415.0",
     "typescript": "6.0.2"
   }
 }

@@ -14,6 +14,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@conduit/app-client": "workspace:*",
     "@conduit/app-protocol": "workspace:*",
     "@conduit/design-system-tokens": "workspace:*",
     "@conduit/session-client": "workspace:*",
@@ -37,6 +38,7 @@
     "react-native-drawer-layout": "4.2.2",
     "react-native-enriched-markdown": "0.5.0-nightly-20260411-ba4bccd83",
     "react-native-gesture-handler": "~2.30.0",
+    "react-native-get-random-values": "2.0.0",
     "react-native-reanimated": "4.3.0",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",

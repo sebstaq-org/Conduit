@@ -5,6 +5,7 @@ type SessionRow = SessionGroup["sessions"][number];
 
 type NavigationPanelScrollRow =
   | { kind: "heading"; key: "heading" }
+  | { kind: "hostPairing"; key: "host-pairing" }
   | { kind: "projectRows"; key: "project-rows" }
   | { kind: "threadsHeader"; key: "threads-header" }
   | {
@@ -122,6 +123,7 @@ function createNavigationPanelRows(
 ): NavigationPanelScrollRow[] {
   return [
     { kind: "heading", key: "heading" },
+    { kind: "hostPairing", key: "host-pairing" },
     { kind: "projectRows", key: "project-rows" },
     { kind: "threadsHeader", key: "threads-header" },
     ...sessionRows,

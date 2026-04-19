@@ -23,11 +23,11 @@ function testAdminAuth(request: Request, env: TestEnv): true | Response {
 
 function testAdminRoute(
   request: Request,
-): Response | { connectionId: string; serverId: string } {
+): Response | { connectionId: string | null; serverId: string } {
   const url = new URL(request.url);
   const serverId = url.searchParams.get("serverId");
   const connectionId = url.searchParams.get("connectionId");
-  if (serverId === null || connectionId === null) {
+  if (serverId === null) {
     return new Response("missing route", { status: 400 });
   }
   return { connectionId, serverId };
@@ -36,11 +36,14 @@ function testAdminRoute(
 function testAdminRelayObjectFetch(
   request: Request,
   env: TestEnv,
-  route: { connectionId: string; serverId: string },
+  route: { connectionId: string | null; serverId: string },
+  socketKind: "testCloseData" | "testSnapshot",
 ): Promise<Response> {
   const url = new URL(request.url);
-  url.searchParams.set("socketKind", "testCloseData");
-  url.searchParams.set("connectionId", route.connectionId);
+  url.searchParams.set("socketKind", socketKind);
+  if (route.connectionId !== null) {
+    url.searchParams.set("connectionId", route.connectionId);
+  }
   const id = env.RELAY.idFromName(route.serverId);
   return env.RELAY.get(id).fetch(new Request(url, request));
 }
@@ -48,6 +51,7 @@ function testAdminRelayObjectFetch(
 function routeTestAdmin(
   request: Request,
   env: TestEnv,
+  socketKind: "testCloseData" | "testSnapshot",
 ): Promise<Response> | Response {
   const auth = testAdminAuth(request, env);
   if (auth instanceof Response) {
@@ -57,7 +61,7 @@ function routeTestAdmin(
   if (route instanceof Response) {
     return route;
   }
-  return testAdminRelayObjectFetch(request, env, route);
+  return testAdminRelayObjectFetch(request, env, route, socketKind);
 }
 
 const worker = {
@@ -70,7 +74,10 @@ const worker = {
       return routeRelay(request, env);
     }
     if (url.pathname === "/__conduit_test/close-data") {
-      return routeTestAdmin(request, env);
+      return routeTestAdmin(request, env, "testCloseData");
+    }
+    if (url.pathname === "/__conduit_test/snapshot") {
+      return routeTestAdmin(request, env, "testSnapshot");
     }
     return new Response("not found", { status: 404 });
   },

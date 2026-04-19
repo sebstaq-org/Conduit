@@ -35,11 +35,22 @@ interface TrustedHostRecord {
   lastSeenAt: string | null;
 }
 
+interface ConnectionHostProfile extends TrustedHostRecord {
+  createdAt: string;
+  offerNonce: string;
+  relay: ConnectionOfferV1["relay"];
+}
+
 type ConnectionOfferTrustResult =
   | { kind: "new_host"; offer: ConnectionOfferV1 }
   | { kind: "known_host"; offer: ConnectionOfferV1; host: TrustedHostRecord }
   | { kind: "key_changed"; offer: ConnectionOfferV1; host: TrustedHostRecord }
   | { kind: "revoked_host"; offer: ConnectionOfferV1; host: TrustedHostRecord };
+
+type AcceptConnectionOfferResult =
+  | { kind: "accepted"; host: ConnectionHostProfile; trust: "new_host" | "known_host" }
+  | { kind: "blocked_key_changed"; offer: ConnectionOfferV1; host: TrustedHostRecord }
+  | { kind: "blocked_revoked"; offer: ConnectionOfferV1; host: TrustedHostRecord };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -240,15 +251,74 @@ function evaluateConnectionOfferTrust(
   return { kind: "known_host", offer, host };
 }
 
+function hostProfileFromOffer(
+  offer: ConnectionOfferV1,
+  now: Date = new Date(),
+): ConnectionHostProfile {
+  const timestamp = now.toISOString();
+  return {
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+    offerNonce: offer.nonce,
+    relay: offer.relay,
+    revokedAt: null,
+    serverId: offer.serverId,
+    trustedDaemonPublicKeyB64: offer.daemonPublicKeyB64,
+  };
+}
+
+function relayOfferFromHostProfile(
+  host: ConnectionHostProfile,
+): ConnectionOfferV1 {
+  return {
+    [CONNECTION_OFFER_VERSION_FIELD]: CONNECTION_OFFER_VERSION,
+    authorization: { boundary: AUTHORIZATION_BOUNDARY, required: true },
+    daemonPublicKeyB64: host.trustedDaemonPublicKeyB64,
+    expiresAt: new Date(8640000000000000).toISOString(),
+    nonce: host.offerNonce,
+    relay: host.relay,
+    serverId: host.serverId,
+  };
+}
+
+function acceptConnectionOffer(
+  offer: ConnectionOfferV1,
+  hosts: readonly ConnectionHostProfile[],
+  now: Date = new Date(),
+): AcceptConnectionOfferResult {
+  const trust = evaluateConnectionOfferTrust(offer, hosts);
+  if (trust.kind === "key_changed") {
+    return { kind: "blocked_key_changed", offer, host: trust.host };
+  }
+  if (trust.kind === "revoked_host") {
+    return { kind: "blocked_revoked", offer, host: trust.host };
+  }
+  return {
+    host: hostProfileFromOffer(offer, now),
+    kind: "accepted",
+    trust: trust.kind,
+  };
+}
+
+function publicKeyFingerprint(publicKeyB64: string): string {
+  return publicKeyB64.replaceAll(/[^A-Za-z0-9]/gu, "").slice(0, 12);
+}
+
 export {
   AUTHORIZATION_BOUNDARY,
   CONNECTION_OFFER_VERSION,
+  acceptConnectionOffer,
   evaluateConnectionOfferTrust,
+  hostProfileFromOffer,
   parseConnectionOfferUrl,
+  publicKeyFingerprint,
   readConnectionOffer,
+  relayOfferFromHostProfile,
 };
 
 export type {
+  AcceptConnectionOfferResult,
+  ConnectionHostProfile,
   ConnectionOfferTrustResult,
   ConnectionOfferV1,
   TrustedHostRecord,

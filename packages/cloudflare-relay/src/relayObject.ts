@@ -28,9 +28,32 @@ interface RelayConnection {
   pendingTimer: ReturnType<typeof setTimeout> | null;
 }
 
+interface RelayTestSnapshot {
+  clientMessageCount: number;
+  clientSocketCount: number;
+  controlSocketCount: number;
+  dataMessageCount: number;
+  dataSocketCount: number;
+  totalClientBytes: number;
+  totalDataBytes: number;
+}
+
+function emptySnapshot(): RelayTestSnapshot {
+  return {
+    clientMessageCount: 0,
+    clientSocketCount: 0,
+    controlSocketCount: 0,
+    dataMessageCount: 0,
+    dataSocketCount: 0,
+    totalClientBytes: 0,
+    totalDataBytes: 0,
+  };
+}
+
 class RelayDurableObject {
   private readonly connections = new Map<string, RelayConnection>();
   private controlSocket: WorkerWebSocket | null = null;
+  private readonly testSnapshot = emptySnapshot();
 
   public fetch(request: Request): Response {
     const url = new URL(request.url);
@@ -38,6 +61,9 @@ class RelayDurableObject {
     const connectionId = url.searchParams.get("connectionId") ?? undefined;
     if (socketKind === "testCloseData" && connectionId !== undefined) {
       return this.testCloseDataSocket(connectionId);
+    }
+    if (socketKind === "testSnapshot") {
+      return Response.json(this.testSnapshot);
     }
     const protocol = relayProtocolForResponse(request);
     if (socketKind === "control") {
@@ -69,6 +95,7 @@ class RelayDurableObject {
     server.accept();
     safeClose(this.controlSocket, CLOSE_REPLACED, "control socket replaced");
     this.controlSocket = server;
+    this.testSnapshot.controlSocketCount += 1;
     server.addEventListener("close", () => {
       if (this.controlSocket === server) {
         this.controlSocket = null;
@@ -98,6 +125,7 @@ class RelayDurableObject {
     server.accept();
     const connection = this.connectionFor(connectionId);
     connection.clientSocket = server;
+    this.testSnapshot.clientSocketCount += 1;
     this.notifyControl("client_waiting", connectionId);
     this.armPendingTimer(connectionId, connection);
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
@@ -120,6 +148,7 @@ class RelayDurableObject {
     const connection = this.connectionFor(connectionId);
     safeClose(connection.dataSocket, CLOSE_REPLACED, "data socket replaced");
     connection.dataSocket = server;
+    this.testSnapshot.dataSocketCount += 1;
     this.clearPendingTimer(connection);
     this.flushClientBuffer(connection);
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
@@ -140,6 +169,8 @@ class RelayDurableObject {
   ): void {
     const connection = this.connectionFor(connectionId);
     const bytes = frameBytes(message);
+    this.testSnapshot.clientMessageCount += 1;
+    this.testSnapshot.totalClientBytes += bytes;
     if (bytes > MAX_FRAME_BYTES) {
       safeClose(
         connection.clientSocket,
@@ -158,6 +189,8 @@ class RelayDurableObject {
   private handleDataMessage(connectionId: string, message: RelayMessage): void {
     const connection = this.connectionFor(connectionId);
     const bytes = frameBytes(message);
+    this.testSnapshot.dataMessageCount += 1;
+    this.testSnapshot.totalDataBytes += bytes;
     if (bytes > MAX_FRAME_BYTES) {
       safeClose(
         connection.dataSocket,

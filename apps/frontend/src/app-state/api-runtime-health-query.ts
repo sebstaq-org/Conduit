@@ -63,7 +63,11 @@ function createHealthTimeoutSignal(): {
 async function readRuntimeHealthResponse(
   signal: AbortSignal,
 ): Promise<RuntimeHealthView> {
-  const response = await fetch(configuredSessionHealthUrl(), { signal });
+  const healthUrl = configuredSessionHealthUrl();
+  if (healthUrl === null) {
+    throw new Error("No direct runtime health endpoint is configured");
+  }
+  const response = await fetch(healthUrl, { signal });
   if (!response.ok) {
     throw new Error(runtimeHealthErrorMessage(response.status));
   }

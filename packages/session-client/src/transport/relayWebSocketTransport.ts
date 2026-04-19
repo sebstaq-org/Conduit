@@ -121,7 +121,7 @@ class RelayWebSocketTransport implements CommandTransport {
   }
 
   private async openSocket(): Promise<WebSocket> {
-    if (this.socket?.readyState === WebSocket.OPEN) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.channel !== null) {
       return this.socket;
     }
     if (this.connecting) {
@@ -137,12 +137,19 @@ class RelayWebSocketTransport implements CommandTransport {
     const Socket = this.options.WebSocketImpl ?? WebSocket;
     const route = relaySocketRoute(this.options.offer);
     this.logConnectStart();
-    const socket = new Socket(route.url, route.protocol);
+    const socket = new Socket(route.url, [route.protocol]);
     this.socket = socket;
     this.bindSocketEvents(socket);
-    const openedSocket = await this.waitForOpen(socket);
-    await this.sendHandshake(openedSocket, route.connectionId);
-    return openedSocket;
+    try {
+      const openedSocket = await this.waitForOpen(socket);
+      await this.sendHandshake(openedSocket, route.connectionId);
+      this.connecting = null;
+      return openedSocket;
+    } catch (error) {
+      this.connecting = null;
+      socket.close();
+      throw error;
+    }
   }
 
   private bindSocketEvents(socket: WebSocket): void {
@@ -182,7 +189,6 @@ class RelayWebSocketTransport implements CommandTransport {
   private async waitForOpen(socket: WebSocket): Promise<WebSocket> {
     const deferred = createDeferred<WebSocket>();
     socket.addEventListener("open", () => {
-      this.connecting = null;
       this.emitTelemetry({
         event_name: "session_client.relay.socket.connect.finish",
         fields: { ok: true },
