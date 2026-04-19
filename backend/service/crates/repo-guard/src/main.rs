@@ -20,7 +20,7 @@ mod telemetry;
 mod toolchain;
 
 use crate::error::{Error, Result};
-use std::env;
+use std::env::{self, current_dir};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,10 +114,25 @@ fn parse_command(mut args: impl Iterator<Item = String>) -> Result<CommandKind> 
 }
 
 fn repo_root() -> Result<PathBuf> {
+    let cwd = current_dir().map_err(|source| Error::io(None, source))?;
+    if let Some(repo_root) = discover_repo_root(&cwd) {
+        return Ok(repo_root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let Some(repo_root) = manifest_dir.ancestors().nth(4) else {
+    let Some(repo_root) = discover_repo_root(manifest_dir) else {
         return Err(Error::invalid_args("failed to resolve the repository root"));
     };
 
-    Ok(repo_root.to_path_buf())
+    Ok(repo_root)
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }

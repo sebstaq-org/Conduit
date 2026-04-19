@@ -4,7 +4,7 @@ mod contracts;
 #[cfg(test)]
 mod contracts_tests;
 
-use std::env;
+use std::env::{self, current_dir};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -55,11 +55,26 @@ fn generated_path() -> Result<PathBuf, Box<dyn Error>> {
 }
 
 fn repo_root() -> Result<PathBuf, Box<dyn Error>> {
+    let cwd = current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let Some(root) = manifest_dir.ancestors().nth(4) else {
+    let Some(root) = discover_repo_root(manifest_dir) else {
         return Err(invalid_args("could not resolve repository root"));
     };
-    Ok(root.to_path_buf())
+    Ok(root)
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }
 
 fn invalid_args(message: &str) -> Box<dyn Error> {

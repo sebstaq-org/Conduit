@@ -175,7 +175,12 @@ build_artifact() {
     run pnpm --filter @conduit/frontend exec expo export --clear --platform web --output-dir "$resources_dir/web"
     run bash scripts/codex-acp-vendor.sh build
     run cargo build --manifest-path backend/service/Cargo.toml -p service-bin --release
-    run cp backend/service/target/release/service-bin "$resources_dir/bin/service-bin"
+    local service_bin_path
+    service_bin_path="$(
+      run cargo metadata --manifest-path backend/service/Cargo.toml --format-version 1 --no-deps |
+        node -e 'const fs = require("node:fs"); const metadata = JSON.parse(fs.readFileSync(0, "utf8")); process.stdout.write(`${metadata.target_directory}/release/service-bin`);'
+    )"
+    run cp "$service_bin_path" "$resources_dir/bin/service-bin"
     run cp .conduit/bin/codex-acp "$resources_dir/bin/codex-acp"
     run cp -a vendor/agent-client-protocol "$stage_vendor_dir"
     chmod +x "$resources_dir/bin/service-bin"
