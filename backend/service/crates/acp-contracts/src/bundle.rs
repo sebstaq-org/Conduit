@@ -161,12 +161,26 @@ pub fn vendor_contract_root() -> &'static str {
 }
 
 fn repo_root() -> Result<PathBuf> {
+    let cwd = std::env::current_dir()
+        .map_err(|source| Error::contract(format!("failed to read current directory: {source}")))?;
+    if let Some(repo_root) = discover_repo_root(&cwd) {
+        return Ok(repo_root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let repo_root = manifest_dir
-        .ancestors()
-        .nth(4)
+    let repo_root = discover_repo_root(manifest_dir)
         .ok_or_else(|| Error::contract("could not resolve the Conduit repository root"))?;
-    Ok(repo_root.to_path_buf())
+    Ok(repo_root)
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }
 
 fn contract_paths() -> Result<ContractPaths> {

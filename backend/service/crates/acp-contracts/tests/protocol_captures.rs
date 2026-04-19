@@ -89,9 +89,26 @@ fn envelope_id(envelope: &Value) -> Option<String> {
 }
 
 fn testdata_root() -> TestResult<PathBuf> {
+    let repo_root = repo_root()?;
+    Ok(repo_root.join("backend/service/testdata"))
+}
+
+fn repo_root() -> TestResult<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let Some(service_root) = manifest_dir.ancestors().nth(2) else {
-        return Err("could not resolve backend service root".into());
-    };
-    Ok(service_root.join("testdata"))
+    discover_repo_root(manifest_dir).ok_or_else(|| "could not resolve repository root".into())
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }

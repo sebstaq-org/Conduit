@@ -3,7 +3,7 @@ use super::support::{TestResult, initialize_port};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::ProviderFactory;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
 const FIXTURE_CWD: &str = "/tmp/conduit-e2e-fixture-project";
@@ -140,8 +140,28 @@ fn assert_prompt_requires_config(
 }
 
 fn parity_factory() -> TestResult<FixtureProviderFactory> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../apps/e2e/fixtures/provider");
+    let root = repo_root()?.join("apps/e2e/fixtures/provider");
     Ok(FixtureProviderFactory::load(&root)?)
+}
+
+fn repo_root() -> TestResult<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    discover_repo_root(manifest_dir).ok_or_else(|| "could not resolve repository root".into())
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }
 
 fn assert_json_string(

@@ -4,7 +4,7 @@ use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::ProviderFactory;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 #[test]
@@ -94,7 +94,7 @@ fn initialize_uses_raw_fixture_and_sets_snapshot_ready() -> TestResult<()> {
 
 #[test]
 fn committed_initialize_fixtures_replay_for_all_providers() -> TestResult<()> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../apps/e2e/fixtures/provider");
+    let root = repo_root()?.join("apps/e2e/fixtures/provider");
     let mut factory = FixtureProviderFactory::load(&root)?;
 
     for (provider, expected_name) in [
@@ -126,6 +126,26 @@ fn committed_initialize_fixtures_replay_for_all_providers() -> TestResult<()> {
     }
 
     Ok(())
+}
+
+fn repo_root() -> TestResult<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    discover_repo_root(manifest_dir).ok_or_else(|| "could not resolve repository root".into())
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }
 
 #[test]
