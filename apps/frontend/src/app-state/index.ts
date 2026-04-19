@@ -28,7 +28,7 @@ export {
   removeProjectById,
   updateProjectDisplayName,
 } from "./project-commands";
-export { pairHostFromOfferUrl } from "./host-registry-commands";
+export { forgetHost, pairHostFromOfferUrl } from "./host-registry-commands";
 export {
   hostForgotten,
   selectActiveHostProfile,
@@ -51,6 +51,7 @@ export type {
 } from "./project-commands";
 export {
   activeSessionOpened,
+  activeSessionCleared,
   activeSessionConfigOptionsUpdated,
   activeSessionConfigSyncBlocked,
   draftSessionConfigOptionSelected,

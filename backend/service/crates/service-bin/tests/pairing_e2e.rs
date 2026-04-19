@@ -8,6 +8,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use directories as _;
 use futures_util as _;
+use provider_fixture as _;
 use rand_core as _;
 use remote_access as _;
 use serde as _;

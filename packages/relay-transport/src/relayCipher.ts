@@ -82,6 +82,7 @@ class RelayCipherChannel {
   }
 
   public async encryptUtf8(plaintext: string): Promise<RelayCipherFrame> {
+    await Promise.resolve();
     const sequence = this.nextOutboundSequence;
     this.nextOutboundSequence += 1;
     const cipher = gcm(
@@ -100,6 +101,7 @@ class RelayCipherChannel {
   }
 
   public async decryptUtf8(frame: RelayCipherFrame): Promise<string> {
+    await Promise.resolve();
     validateCipherFrame(frame);
     if (frame.sender === this.localRole) {
       throw new Error("relay cipher frame came from local peer");
@@ -185,6 +187,7 @@ async function importCipherKeys(
   readonly clientToServer: Uint8Array;
   readonly serverToClient: Uint8Array;
 }> {
+  await Promise.resolve();
   const material = hkdf(
     sha256,
     sharedSecret,

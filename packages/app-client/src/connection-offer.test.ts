@@ -3,16 +3,13 @@ import {
   AUTHORIZATION_BOUNDARY,
   acceptConnectionOffer,
   evaluateConnectionOfferTrust,
+  hostProfileFromOffer,
   publicKeyFingerprint,
   relayOfferFromHostProfile,
   parseConnectionOfferUrl,
   readConnectionOffer,
 } from "./index.js";
-import type {
-  ConnectionHostProfile,
-  ConnectionOfferV1,
-  TrustedHostRecord,
-} from "./index.js";
+import type { ConnectionOfferV1, TrustedHostRecord } from "./index.js";
 
 const daemonPublicKeyB64 = "g7EHNunwYfhVBZWTysT7l3F7knCHXeAFYk4/Oo4ff3Q=";
 const relayClientCapability = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -200,23 +197,27 @@ describe("connection host profiles", () => {
   });
 
   it("blocks changed keys and revoked hosts", () => {
-    const changed = trustedHost("old-public-key");
-    expect(acceptConnectionOffer(offer, [changed as ConnectionHostProfile])).toEqual({
+    const changed = Object.assign(hostProfileFromOffer(offer, validNow), {
+      trustedDaemonPublicKeyB64: "old-public-key",
+    });
+    expect(acceptConnectionOffer(offer, [changed])).toEqual({
       host: changed,
       kind: "blocked_key_changed",
       offer,
     });
 
-    const revoked = Object.assign(trustedHost(daemonPublicKeyB64), {
+    const revoked = Object.assign(hostProfileFromOffer(offer, validNow), {
       revokedAt: "2026-04-18T00:00:00.000Z",
     });
-    expect(acceptConnectionOffer(offer, [revoked as ConnectionHostProfile])).toEqual({
+    expect(acceptConnectionOffer(offer, [revoked])).toEqual({
       host: revoked,
       kind: "blocked_revoked",
       offer,
     });
   });
+});
 
+describe("connection host profile helpers", () => {
   it("reconstructs a relay offer without reusing the expired QR timestamp", () => {
     const accepted = acceptConnectionOffer(offer, [], validNow);
     if (accepted.kind !== "accepted") {

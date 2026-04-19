@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  hostForgotten,
+  forgetHost,
   pairHostFromOfferUrl,
   selectActiveHostProfile,
   selectHostProfiles,
@@ -9,6 +9,7 @@ import {
 } from "@/app-state";
 import { Section } from "@/ui";
 import { useDispatch, useSelector } from "react-redux";
+import { connectionErrorMessage } from "./connection-error-message";
 import { HostPairingList } from "./host-pairing-list";
 import type { AppDispatch, RootState } from "@/app-state";
 import type { ConnectionHostProfile } from "@conduit/app-client";
@@ -31,13 +32,6 @@ function connectionLabel(args: {
     return "Relay reconnecting";
   }
   return "Relay idle";
-}
-
-function connectionErrorMessage(error: unknown): string | null {
-  if (typeof error === "string") {
-    return error;
-  }
-  return null;
 }
 
 function usePairingSelectors(): {
@@ -73,7 +67,7 @@ function HostPairingPanel({
 
   function handleForget(): void {
     if (activeHost !== null) {
-      dispatch(hostForgotten(activeHost.serverId));
+      forgetHost({ dispatch, serverId: activeHost.serverId });
     }
   }
 

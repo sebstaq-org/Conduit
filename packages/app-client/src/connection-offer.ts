@@ -1,4 +1,11 @@
 import { decodeBase64Bytes, decodeBase64UrlJson } from "./base64.js";
+import type {
+  AcceptConnectionOfferResult,
+  ConnectionHostProfile,
+  ConnectionOfferTrustResult,
+  ConnectionOfferV1,
+  TrustedHostRecord,
+} from "./connection-offer-types.js";
 
 const CONNECTION_OFFER_VERSION = 1 as const;
 const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
@@ -8,49 +15,6 @@ const OFFER_KEYS =
   "v serverId daemonPublicKeyB64 nonce expiresAt authorization relay".split(
     " ",
   );
-
-type ConnectionOfferV1 = Record<
-  typeof CONNECTION_OFFER_VERSION_FIELD,
-  typeof CONNECTION_OFFER_VERSION
-> & {
-  serverId: string;
-  daemonPublicKeyB64: string;
-  nonce: string;
-  expiresAt: string;
-  authorization: {
-    required: true;
-    boundary: typeof AUTHORIZATION_BOUNDARY;
-  };
-  relay: {
-    endpoint: string;
-    serverId: string;
-    clientCapability: string;
-  };
-};
-
-interface TrustedHostRecord {
-  serverId: string;
-  trustedDaemonPublicKeyB64: string;
-  revokedAt: string | null;
-  lastSeenAt: string | null;
-}
-
-interface ConnectionHostProfile extends TrustedHostRecord {
-  createdAt: string;
-  offerNonce: string;
-  relay: ConnectionOfferV1["relay"];
-}
-
-type ConnectionOfferTrustResult =
-  | { kind: "new_host"; offer: ConnectionOfferV1 }
-  | { kind: "known_host"; offer: ConnectionOfferV1; host: TrustedHostRecord }
-  | { kind: "key_changed"; offer: ConnectionOfferV1; host: TrustedHostRecord }
-  | { kind: "revoked_host"; offer: ConnectionOfferV1; host: TrustedHostRecord };
-
-type AcceptConnectionOfferResult =
-  | { kind: "accepted"; host: ConnectionHostProfile; trust: "new_host" | "known_host" }
-  | { kind: "blocked_key_changed"; offer: ConnectionOfferV1; host: TrustedHostRecord }
-  | { kind: "blocked_revoked"; offer: ConnectionOfferV1; host: TrustedHostRecord };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -274,7 +238,7 @@ function relayOfferFromHostProfile(
     [CONNECTION_OFFER_VERSION_FIELD]: CONNECTION_OFFER_VERSION,
     authorization: { boundary: AUTHORIZATION_BOUNDARY, required: true },
     daemonPublicKeyB64: host.trustedDaemonPublicKeyB64,
-    expiresAt: new Date(8640000000000000).toISOString(),
+    expiresAt: new Date(8_640_000_000_000_000).toISOString(),
     nonce: host.offerNonce,
     relay: host.relay,
     serverId: host.serverId,
@@ -322,4 +286,4 @@ export type {
   ConnectionOfferTrustResult,
   ConnectionOfferV1,
   TrustedHostRecord,
-};
+} from "./connection-offer-types.js";

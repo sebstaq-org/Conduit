@@ -7,48 +7,15 @@ import {
   MAX_FRAME_BYTES,
 } from "./limits.js";
 import { controlFrame, frameBytes } from "./frames.js";
+import { emptySnapshot } from "./relayState.js";
 import { safeClose, safeSend } from "./socketSafety.js";
 import {
   relayProtocolForResponse,
   websocketResponse,
 } from "./websocketResponse.js";
-import type { WorkerWebSocket } from "./workerTypes.js";
+import type { RelayConnection } from "./relayState.js";
 import type { RelayMessage } from "./socketSafety.js";
-
-interface QueuedMessage {
-  readonly bytes: number;
-  readonly message: RelayMessage;
-}
-
-interface RelayConnection {
-  bufferedBytes: number;
-  readonly clientBuffer: QueuedMessage[];
-  clientSocket: WorkerWebSocket | null;
-  dataSocket: WorkerWebSocket | null;
-  pendingTimer: ReturnType<typeof setTimeout> | null;
-}
-
-interface RelayTestSnapshot {
-  clientMessageCount: number;
-  clientSocketCount: number;
-  controlSocketCount: number;
-  dataMessageCount: number;
-  dataSocketCount: number;
-  totalClientBytes: number;
-  totalDataBytes: number;
-}
-
-function emptySnapshot(): RelayTestSnapshot {
-  return {
-    clientMessageCount: 0,
-    clientSocketCount: 0,
-    controlSocketCount: 0,
-    dataMessageCount: 0,
-    dataSocketCount: 0,
-    totalClientBytes: 0,
-    totalDataBytes: 0,
-  };
-}
+import type { WorkerWebSocket } from "./workerTypes.js";
 
 class RelayDurableObject {
   private readonly connections = new Map<string, RelayConnection>();

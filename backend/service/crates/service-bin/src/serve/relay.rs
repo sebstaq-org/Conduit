@@ -5,10 +5,10 @@ use super::run_text_connection;
 use crate::identity::load_daemon_secret_key_b64;
 use futures_util::{SinkExt, StreamExt};
 use remote_access::{
-    RelayCipherChannel, RelayCipherContext, RelayControlFrame, RelayRouting, RelayUrlOptions,
-    accept_client_handshake, build_relay_websocket_protocol, build_relay_websocket_url,
-    load_or_create_relay_routing, lookup_relay_offer, mark_relay_offer_accepted,
-    parse_relay_control_frame,
+    IssuedRelayOfferContext, RelayCipherChannel, RelayCipherContext, RelayControlFrame,
+    RelayRouting, RelayUrlOptions, accept_client_handshake, build_relay_websocket_protocol,
+    build_relay_websocket_url, load_or_create_relay_routing, lookup_relay_offer,
+    mark_relay_offer_accepted, parse_relay_control_frame,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -319,22 +319,15 @@ async fn run_data_socket(
     })?;
     let (socket, _response) = connect_relay_socket(&data_url, &routing.daemon_capability).await?;
     let (mut sender, mut receiver) = socket.split();
-    let mut cipher = match connector_state.channels.lock().await.remove(connection_id) {
-        Some(channel) => channel,
-        None => {
-            let handshake_text = next_text_frame(&mut receiver).await?;
-            let secret_key_b64 = load_daemon_secret_key_b64(home)?;
-            accept_client_handshake(
-                RelayCipherContext {
-                    server_id: routing.server_id,
-                    connection_id: offer.connection_id,
-                    offer_nonce: offer.nonce,
-                },
-                &secret_key_b64,
-                &handshake_text,
-            )?
-        }
-    };
+    let cached_cipher = connector_state.channels.lock().await.remove(connection_id);
+    let (mut cipher, initial_plaintext) = open_relay_cipher(
+        &mut receiver,
+        home,
+        &routing.server_id,
+        &offer,
+        cached_cipher,
+    )
+    .await?;
     if mark_relay_offer_accepted(home, connection_id, now)?.is_none() {
         tracing::warn!(
             event_name = "relay.offer.accept_failed",
@@ -354,6 +347,12 @@ async fn run_data_socket(
         runtime_connection_id,
         "relay",
     ));
+    if let Some(plaintext) = initial_plaintext
+        && inbound_text.send(plaintext).is_err()
+    {
+        runtime_task.abort();
+        return Ok(());
+    }
     loop {
         tokio::select! {
             message = receiver.next() => {
@@ -364,6 +363,15 @@ async fn run_data_socket(
                     Message::Text(text) => text,
                     _ => break,
                 };
+                if let Some(reset_cipher) = try_accept_relay_handshake(
+                    home,
+                    &routing.server_id,
+                    &offer,
+                    &text,
+                )? {
+                    cipher = reset_cipher;
+                    continue;
+                }
                 let plaintext = cipher.decrypt_utf8(&text)?;
                 if inbound_text.send(plaintext).is_err() {
                     break;
@@ -385,6 +393,53 @@ async fn run_data_socket(
         .await
         .insert(connection_id.to_owned(), cipher);
     Ok(())
+}
+
+async fn open_relay_cipher(
+    receiver: &mut futures_util::stream::SplitStream<RelaySocket>,
+    home: &Path,
+    server_id: &str,
+    offer: &IssuedRelayOfferContext,
+    cached_cipher: Option<RelayCipherChannel>,
+) -> RelayResult<(RelayCipherChannel, Option<String>)> {
+    let first_text = next_text_frame(receiver).await?;
+    if let Some(cipher) = try_accept_relay_handshake(home, server_id, offer, &first_text)? {
+        return Ok((cipher, None));
+    }
+    let Some(mut cipher) = cached_cipher else {
+        return Err(RelayConnectorError::MissingHandshake);
+    };
+    let plaintext = cipher.decrypt_utf8(&first_text)?;
+    Ok((cipher, Some(plaintext)))
+}
+
+fn try_accept_relay_handshake(
+    home: &Path,
+    server_id: &str,
+    offer: &IssuedRelayOfferContext,
+    text: &str,
+) -> RelayResult<Option<RelayCipherChannel>> {
+    if !looks_like_relay_handshake(text) {
+        return Ok(None);
+    }
+    let secret_key_b64 = load_daemon_secret_key_b64(home)?;
+    let cipher = accept_client_handshake(
+        RelayCipherContext {
+            server_id: server_id.to_owned(),
+            connection_id: offer.connection_id.clone(),
+            offer_nonce: offer.nonce.clone(),
+        },
+        &secret_key_b64,
+        text,
+    )?;
+    Ok(Some(cipher))
+}
+
+fn looks_like_relay_handshake(text: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .and_then(|value| value.get("type")?.as_str().map(str::to_owned))
+        .is_some_and(|frame_type| frame_type == "handshake")
 }
 
 async fn next_text_frame(

@@ -57,6 +57,7 @@ pub(crate) fn init() {
         .with_target(true)
         .with_thread_ids(true)
         .with_thread_names(true)
+        .with_writer(std::io::stderr)
         .with_ansi(false)
         .try_init()
         .is_ok()

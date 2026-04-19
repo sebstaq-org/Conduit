@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { Buffer } from "node:buffer";
 import type { Locator, Page } from "@playwright/test";
 import { fixtureCwd, startE2eHarness } from "../src/harness.js";
 import type { E2eHarness } from "../src/harness.js";
@@ -97,6 +98,52 @@ test("pairing UI drives session commands through relay and reconnects", async ({
   await expect(page.getByText(transcriptSentinel)).toBeVisible({ timeout: 15000 });
 });
 
+test("pairing survives reload, reconfigures, and forget clears stale data", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+  const pairingUrl = await activeHarness.pairingUrl();
+  await pairFrontendWithUrl(page, pairingUrl);
+  await expect(page.getByText(fixtureCwd)).toBeVisible();
+
+  await page.reload();
+  await expectVisibleWithDiagnostics(
+    page,
+    activeHarness,
+    page.getByText("Relay connected"),
+  );
+  await expect(page.getByText(fixtureCwd)).toBeVisible();
+
+  await submitPairingUrl(page, tamperRelayEndpoint(pairingUrl));
+  await expect(
+    page.getByText(/relay websocket failed to connect/u).first(),
+  ).toBeVisible({ timeout: 15000 });
+
+  await pairFrontendWithUrl(page, await activeHarness.pairingUrl());
+  await page.getByRole("button", { name: "Forget desktop" }).click();
+  await expect(page.getByText("No desktop paired")).toBeVisible();
+  await expect(page.getByText(fixtureCwd)).not.toBeVisible();
+});
+
+test("pair route refreshes the offer field for a new deep link", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  const firstOffer = offerFragmentValue(await activeHarness.pairingUrl());
+  const secondOffer = offerFragmentValue(await activeHarness.pairingUrl());
+
+  await page.goto(`${activeHarness.frontendUrl}/pair?offer=${firstOffer}`);
+  await expect(page.getByLabel("Pairing link")).toHaveValue(
+    `conduit://pair#offer=${firstOffer}`,
+  );
+  await page.goto(`${activeHarness.frontendUrl}/pair?offer=${secondOffer}`);
+  await expect(page.getByLabel("Pairing link")).toHaveValue(
+    `conduit://pair#offer=${secondOffer}`,
+  );
+});
+
 function requireHarness(): E2eHarness {
   if (harness === null) {
     throw new Error("E2E harness did not start");
@@ -115,11 +162,41 @@ async function pairFrontend(
   page: Page,
   activeHarness: E2eHarness,
 ): Promise<void> {
-  await page.getByLabel("Pairing link").fill(await activeHarness.pairingUrl());
-  await page.getByRole("button", { name: "Connect desktop" }).click();
+  await pairFrontendWithUrl(page, await activeHarness.pairingUrl());
+}
+
+async function pairFrontendWithUrl(
+  page: Page,
+  pairingUrl: string,
+): Promise<void> {
+  await submitPairingUrl(page, pairingUrl);
   await expect(page.getByText("Relay connected")).toBeVisible({
     timeout: 15000,
   });
+}
+
+async function submitPairingUrl(page: Page, pairingUrl: string): Promise<void> {
+  await page.getByLabel("Pairing link").fill(pairingUrl);
+  await page.getByRole("button", { name: "Connect desktop" }).click();
+}
+
+function tamperRelayEndpoint(pairingUrl: string): string {
+  const encodedOffer = offerFragmentValue(pairingUrl);
+  const prefix = pairingUrl.slice(0, pairingUrl.indexOf(encodedOffer));
+  const payload = JSON.parse(
+    Buffer.from(encodedOffer, "base64url").toString("utf8"),
+  ) as { relay: { endpoint: string } };
+  payload.relay.endpoint = "http://127.0.0.1:9";
+  return `${prefix}${Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")}`;
+}
+
+function offerFragmentValue(pairingUrl: string): string {
+  const marker = "#offer=";
+  const markerIndex = pairingUrl.indexOf(marker);
+  if (markerIndex === -1) {
+    throw new Error("pairing URL did not contain offer fragment");
+  }
+  return pairingUrl.slice(markerIndex + marker.length);
 }
 
 async function expectVisibleWithDiagnostics(
@@ -154,10 +231,12 @@ async function pageDiagnostics(
       .catch(String),
     readBrowserSessionGroups(page, activeHarness.sessionWsUrl).catch(String),
   ]);
+  const relaySnapshot = await activeHarness.relaySnapshot().catch(String);
   return JSON.stringify(
     {
       bodyText,
       browserSessionGroups,
+      relaySnapshot,
       runtimeConfig,
       sessionWsUrl: activeHarness.sessionWsUrl,
       url: page.url(),

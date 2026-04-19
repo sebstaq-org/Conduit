@@ -72,6 +72,10 @@ const CATALOG_COMMANDS: [&str; 20] = [
 ///
 /// Returns an error when the TCP listener cannot bind or the server exits with
 /// an I/O failure.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Serve keeps CLI-owned configuration explicit at the executable boundary."
+)]
 pub(crate) async fn run(
     host: &str,
     port: u16,
@@ -150,6 +154,10 @@ fn store_opener(path: Option<PathBuf>) -> actor::StoreOpener {
     Arc::new(move || open_store(path.clone()))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Router tests inject provider factories while preserving the production serve configuration shape."
+)]
 fn router_with_factory<F>(
     factory: F,
     local_store: LocalStore,

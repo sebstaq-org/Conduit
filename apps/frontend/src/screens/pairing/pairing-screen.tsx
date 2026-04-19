@@ -13,10 +13,14 @@ function offerUrl(offer: string | undefined): string | undefined {
 }
 
 function PairingScreen({ offer }: PairingScreenProps): React.JSX.Element {
+  const pairingOfferUrl = offerUrl(offer);
   return (
     <Box flex={1} gap="md" p="contentX">
       <Text variant="panelHeading">Conduit</Text>
-      <HostPairingPanel initialOfferUrl={offerUrl(offer)} />
+      <HostPairingPanel
+        key={pairingOfferUrl ?? "manual-pairing"}
+        initialOfferUrl={pairingOfferUrl}
+      />
     </Box>
   );
 }

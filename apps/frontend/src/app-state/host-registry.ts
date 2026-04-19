@@ -6,8 +6,11 @@ const HOST_REGISTRY_STORAGE_KEY = "conduit.hostRegistry.v1";
 
 interface HostRegistryState {
   activeHostId: string | null;
+  hydrated: boolean;
   hosts: ConnectionHostProfile[];
   pairingError: string | null;
+  persistenceError: string | null;
+  storageAvailable: boolean;
 }
 
 interface PersistedHostRegistryState {
@@ -16,14 +19,14 @@ interface PersistedHostRegistryState {
 }
 
 function emptyHostRegistryState(): HostRegistryState {
-  return { activeHostId: null, hosts: [], pairingError: null };
-}
-
-function storage(): Storage | null {
-  if (globalThis.localStorage === undefined) {
-    return null;
-  }
-  return globalThis.localStorage;
+  return {
+    activeHostId: null,
+    hosts: [],
+    hydrated: false,
+    pairingError: null,
+    persistenceError: null,
+    storageAvailable: false,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,46 +94,47 @@ function readActiveHostId(
   return value;
 }
 
-function readPersistedHostRegistryState(value: unknown): HostRegistryState {
+function emptyPersistedHostRegistryState(): PersistedHostRegistryState {
+  return { activeHostId: null, hosts: [] };
+}
+
+function readPersistedHostRegistryState(
+  value: unknown,
+): PersistedHostRegistryState {
   if (!isRecord(value)) {
-    return emptyHostRegistryState();
+    return emptyPersistedHostRegistryState();
   }
   const hosts = readPersistedHosts(value.hosts);
   const activeHostId = readActiveHostId(value.activeHostId, hosts);
-  return { activeHostId, hosts, pairingError: null };
+  return { activeHostId, hosts };
 }
 
-function readInitialHostRegistryState(): HostRegistryState {
-  const currentStorage = storage();
-  if (currentStorage === null) {
-    return emptyHostRegistryState();
-  }
-  const raw = currentStorage.getItem(HOST_REGISTRY_STORAGE_KEY);
-  if (raw === null) {
-    return emptyHostRegistryState();
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return readPersistedHostRegistryState(parsed);
-  } catch {
-    return emptyHostRegistryState();
-  }
+function hostRegistryPersistedState(
+  state: HostRegistryState,
+): PersistedHostRegistryState {
+  return { activeHostId: state.activeHostId, hosts: state.hosts };
 }
 
-function persistHostRegistryState(state: HostRegistryState): void {
-  const currentStorage = storage();
-  if (currentStorage === null) {
-    return;
+function hostRegistryPersistenceKey(state: HostRegistryState): string {
+  return JSON.stringify(hostRegistryPersistedState(state));
+}
+
+function hostProfileTransportKey(host: ConnectionHostProfile | null): string {
+  if (host === null) {
+    return "__direct__";
   }
-  const persisted: PersistedHostRegistryState = {
-    activeHostId: state.activeHostId,
-    hosts: state.hosts,
-  };
-  currentStorage.setItem(HOST_REGISTRY_STORAGE_KEY, JSON.stringify(persisted));
+  return JSON.stringify({
+    clientCapability: host.relay.clientCapability,
+    daemonPublicKeyB64: host.trustedDaemonPublicKeyB64,
+    endpoint: host.relay.endpoint,
+    offerNonce: host.offerNonce,
+    relayServerId: host.relay.serverId,
+    serverId: host.serverId,
+  });
 }
 
 const hostRegistrySlice = createSlice({
-  initialState: readInitialHostRegistryState(),
+  initialState: emptyHostRegistryState(),
   name: "hostRegistry",
   reducers: {
     hostAccepted(state, action: PayloadAction<ConnectionHostProfile>) {
@@ -157,6 +161,34 @@ const hostRegistrySlice = createSlice({
     hostPairingFailed(state, action: PayloadAction<string>) {
       state.pairingError = action.payload;
     },
+    hostRegistryHydrated(
+      state,
+      action: PayloadAction<PersistedHostRegistryState>,
+    ) {
+      if (state.activeHostId !== null || state.hosts.length > 0) {
+        state.hydrated = true;
+        state.persistenceError = null;
+        state.storageAvailable = true;
+        return;
+      }
+      state.activeHostId = action.payload.activeHostId;
+      state.hosts = action.payload.hosts;
+      state.hydrated = true;
+      state.persistenceError = null;
+      state.storageAvailable = true;
+    },
+    hostRegistryHydrationFailed(state, action: PayloadAction<string>) {
+      state.hydrated = true;
+      state.persistenceError = action.payload;
+      state.storageAvailable = false;
+    },
+    hostRegistryPersisted(state) {
+      state.persistenceError = null;
+      state.storageAvailable = true;
+    },
+    hostRegistryPersistenceFailed(state, action: PayloadAction<string>) {
+      state.persistenceError = action.payload;
+    },
   },
 });
 
@@ -175,21 +207,36 @@ function selectActiveHostProfile(
 }
 
 function selectPairingError(state: { hostRegistry: HostRegistryState }): string | null {
-  return state.hostRegistry.pairingError;
+  return state.hostRegistry.pairingError ?? state.hostRegistry.persistenceError;
 }
 
-const { hostAccepted, hostForgotten, hostPairingFailed } =
-  hostRegistrySlice.actions;
-const hostRegistryReducer = hostRegistrySlice.reducer;
-
-export {
+const {
   hostAccepted,
   hostForgotten,
   hostPairingFailed,
+  hostRegistryHydrated,
+  hostRegistryHydrationFailed,
+  hostRegistryPersisted,
+  hostRegistryPersistenceFailed,
+} = hostRegistrySlice.actions;
+const hostRegistryReducer = hostRegistrySlice.reducer;
+
+export {
+  HOST_REGISTRY_STORAGE_KEY,
+  hostAccepted,
+  hostForgotten,
+  hostProfileTransportKey,
+  hostPairingFailed,
+  hostRegistryHydrated,
+  hostRegistryHydrationFailed,
+  hostRegistryPersisted,
+  hostRegistryPersistenceFailed,
+  hostRegistryPersistedState,
+  hostRegistryPersistenceKey,
   hostRegistryReducer,
-  persistHostRegistryState,
+  readPersistedHostRegistryState,
   selectActiveHostProfile,
   selectHostProfiles,
   selectPairingError,
 };
-export type { HostRegistryState };
+export type { HostRegistryState, PersistedHostRegistryState };

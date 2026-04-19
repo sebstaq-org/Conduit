@@ -33,12 +33,19 @@ function testAdminRoute(
   return { connectionId, serverId };
 }
 
-function testAdminRelayObjectFetch(
-  request: Request,
-  env: TestEnv,
-  route: { connectionId: string | null; serverId: string },
-  socketKind: "testCloseData" | "testSnapshot",
-): Promise<Response> {
+interface TestAdminRelayObjectFetchOptions {
+  readonly env: TestEnv;
+  readonly request: Request;
+  readonly route: { connectionId: string | null; serverId: string };
+  readonly socketKind: "testCloseData" | "testSnapshot";
+}
+
+function testAdminRelayObjectFetch({
+  env,
+  request,
+  route,
+  socketKind,
+}: TestAdminRelayObjectFetchOptions): Promise<Response> {
   const url = new URL(request.url);
   url.searchParams.set("socketKind", socketKind);
   if (route.connectionId !== null) {
@@ -61,7 +68,7 @@ function routeTestAdmin(
   if (route instanceof Response) {
     return route;
   }
-  return testAdminRelayObjectFetch(request, env, route, socketKind);
+  return testAdminRelayObjectFetch({ env, request, route, socketKind });
 }
 
 const worker = {
