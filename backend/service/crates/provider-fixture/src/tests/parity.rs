@@ -5,7 +5,10 @@ use serde_json::{Value, json};
 use service_runtime::ProviderFactory;
 use std::path::{Path, PathBuf};
 
-const PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const CLAUDE_PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_CLAUDE_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const CLAUDE_PARITY_SENTINEL: &str = "CONDUIT_E2E_CLAUDE_PARITY_RESPONSE";
+const COPILOT_PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_COPILOT_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const COPILOT_PARITY_SENTINEL: &str = "CONDUIT_E2E_COPILOT_PARITY_RESPONSE";
 const FIXTURE_CWD: &str = "/tmp/conduit-e2e-fixture-project";
 
 #[test]
@@ -30,7 +33,11 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
         "claude session/list",
     )?;
 
-    assert_prompt_requires_config(port.as_mut(), "e2e-claude-new-session-0001")?;
+    assert_prompt_requires_config(
+        port.as_mut(),
+        "e2e-claude-new-session-0001",
+        CLAUDE_PARITY_PROMPT,
+    )?;
 
     let configured = port.session_set_config_option(
         "e2e-claude-new-session-0001".to_owned(),
@@ -42,15 +49,11 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
     let mut updates = Vec::new();
     let prompted = port.session_prompt(
         "e2e-claude-new-session-0001".to_owned(),
-        vec![json!({ "type": "text", "text": PARITY_PROMPT })],
+        vec![json!({ "type": "text", "text": CLAUDE_PARITY_PROMPT })],
         &mut |update| updates.push(update),
     )?;
     assert_json_string(&prompted, "/stopReason", "end_turn", "claude prompt")?;
-    assert_agent_text(
-        &updates,
-        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
-        "claude prompt",
-    )?;
+    assert_agent_text(&updates, CLAUDE_PARITY_SENTINEL, "claude prompt")?;
 
     let loaded = port.session_load(
         "e2e-claude-new-session-0001".to_owned(),
@@ -60,7 +63,7 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
     assert_loaded_agent_text(
         &port.snapshot().loaded_transcripts,
         "e2e-claude-new-session-0001",
-        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+        CLAUDE_PARITY_SENTINEL,
         "claude load",
     )?;
     Ok(())
@@ -98,15 +101,11 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
     let mut updates = Vec::new();
     let prompted = port.session_prompt(
         "e2e-copilot-new-session-0001".to_owned(),
-        vec![json!({ "type": "text", "text": PARITY_PROMPT })],
+        vec![json!({ "type": "text", "text": COPILOT_PARITY_PROMPT })],
         &mut |update| updates.push(update),
     )?;
     assert_json_string(&prompted, "/stopReason", "end_turn", "copilot prompt")?;
-    assert_agent_text(
-        &updates,
-        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
-        "copilot prompt",
-    )?;
+    assert_agent_text(&updates, COPILOT_PARITY_SENTINEL, "copilot prompt")?;
 
     let loaded = port.session_load(
         "e2e-copilot-new-session-0001".to_owned(),
@@ -119,12 +118,13 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
 fn assert_prompt_requires_config(
     port: &mut dyn service_runtime::ProviderPort,
     session_id: &str,
+    prompt: &str,
 ) -> TestResult<()> {
     let mut updates = Vec::new();
     let error = port
         .session_prompt(
             session_id.to_owned(),
-            vec![json!({ "type": "text", "text": PARITY_PROMPT })],
+            vec![json!({ "type": "text", "text": prompt })],
             &mut |update| updates.push(update),
         )
         .err()

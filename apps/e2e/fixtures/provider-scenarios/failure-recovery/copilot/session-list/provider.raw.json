@@ -1,0 +1,16 @@
+{
+  "sessions": [
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-copilot-load-fails-0001",
+      "title": "Copilot load failure session",
+      "updatedAt": "9999-01-01T00:00:00Z"
+    },
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-copilot-load-healthy-0001",
+      "title": "Copilot recovery session",
+      "updatedAt": "9999-01-01T00:00:01Z"
+    }
+  ]
+}

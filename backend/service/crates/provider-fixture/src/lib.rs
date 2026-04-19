@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
+mod failure;
 mod initialize;
 mod load;
 mod new;
@@ -242,9 +243,14 @@ impl ProviderPort for FixtureProviderPort {
                     self.provider.as_str()
                 ))
             })?;
-        self.loaded_transcripts
-            .insert(session_id, fixture.loaded_transcript);
-        Ok(fixture.response)
+        match fixture {
+            SessionLoadFixture::Failure(failure) => Err(RuntimeError::Provider(failure.message)),
+            SessionLoadFixture::Success(success) => {
+                self.loaded_transcripts
+                    .insert(session_id, success.loaded_transcript);
+                Ok(success.response)
+            }
+        }
     }
 
     fn session_prompt(
@@ -264,18 +270,31 @@ impl ProviderPort for FixtureProviderPort {
                     self.provider.as_str()
                 ))
             })?;
-        if fixture.prompt != prompt {
-            return Err(RuntimeError::Provider(format!(
-                "session/prompt fixture prompt mismatch for {} session {session_id}",
-                self.provider.as_str()
-            )));
+        match fixture {
+            SessionPromptFixture::Failure(failure) => {
+                if failure.prompt != prompt {
+                    return Err(RuntimeError::Provider(format!(
+                        "session/prompt fixture prompt mismatch for {} session {session_id}",
+                        self.provider.as_str()
+                    )));
+                }
+                Err(RuntimeError::Provider(failure.failure.message))
+            }
+            SessionPromptFixture::Success(success) => {
+                if success.prompt != prompt {
+                    return Err(RuntimeError::Provider(format!(
+                        "session/prompt fixture prompt mismatch for {} session {session_id}",
+                        self.provider.as_str()
+                    )));
+                }
+                self.require_prompt_config(&session_id, &success)?;
+                for update in &success.updates {
+                    update_sink(update.clone());
+                }
+                self.last_prompt = Some(success.lifecycle(self.provider, session_id));
+                Ok(success.response)
+            }
         }
-        self.require_prompt_config(&session_id, &fixture)?;
-        for update in &fixture.updates {
-            update_sink(update.clone());
-        }
-        self.last_prompt = Some(fixture.lifecycle(self.provider, session_id));
-        Ok(fixture.response)
     }
 
     fn session_cancel(&mut self, _session_id: String) -> Result<Value> {
@@ -325,7 +344,7 @@ impl FixtureProviderPort {
     fn require_prompt_config(
         &self,
         session_id: &str,
-        fixture: &SessionPromptFixture,
+        fixture: &prompt::SessionPromptSuccessFixture,
     ) -> Result<()> {
         let Some(required) = &fixture.required_config else {
             return Ok(());

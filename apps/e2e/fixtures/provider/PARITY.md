@@ -12,7 +12,7 @@ Raw captures stay outside the repository under `conduit-artifacts/manual/capture
 | `session/list`              | yes     | yes      | `conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-list-after-config-prompt`    | List after prompt returns the materialized parity session.                          |
 | `session/set_config_option` | yes     | yes      | `conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new` | Extracted real `model=haiku` prelude; prompt fixture requires this config.          |
 | `session/load`              | yes     | yes      | `conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-load-after-config-prompt`    | Load succeeds and returns transcript history; Claude reports default model on load. |
-| `session/prompt`            | yes     | yes      | `conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new` | Real response contains `CONDUIT_E2E_PROVIDER_PARITY_RESPONSE`.                      |
+| `session/prompt`            | yes     | yes      | `conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new` | Real response is normalized to `CONDUIT_E2E_CLAUDE_PARITY_RESPONSE`.                |
 
 ## Copilot
 
@@ -22,7 +22,7 @@ Raw captures stay outside the repository under `conduit-artifacts/manual/capture
 | `session/new`               | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-prompt-model-gpt41-with-new` | Extracted from real prompt capture; session id normalized to `e2e-copilot-new-session-0001`. |
 | `session/list`              | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-list-after-config-prompt`    | List after prompt returns the materialized parity session.                                   |
 | `session/set_config_option` | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-prompt-model-gpt41-with-new` | Extracted real `model=gpt-4.1` prelude; prompt fixture requires this config.                 |
-| `session/prompt`            | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-prompt-model-gpt41-with-new` | Real response contains `CONDUIT_E2E_PROVIDER_PARITY_RESPONSE`.                               |
+| `session/prompt`            | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-prompt-model-gpt41-with-new` | Real response is normalized to `CONDUIT_E2E_COPILOT_PARITY_RESPONSE`.                        |
 | `session/load`              | yes     | yes      | `conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-load-after-config-prompt`    | Load succeeds after the real prompt materializes transcript history.                         |
 
 ## Codex

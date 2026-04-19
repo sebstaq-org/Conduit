@@ -24,6 +24,10 @@ interface E2eHarness {
   stop(): Promise<void>;
 }
 
+interface E2eHarnessOptions {
+  readonly fixtureRoot?: string | undefined;
+}
+
 interface ManagedProcess {
   readonly name: string;
   readonly child: ReturnType<typeof spawn>;
@@ -39,7 +43,7 @@ interface RuntimeCommandResponse {
 const sourceDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(sourceDir, "..");
 const repoRoot = resolve(appRoot, "..", "..");
-const fixtureRoot = join(appRoot, "fixtures", "provider");
+const defaultFixtureRoot = join(appRoot, "fixtures", "provider");
 const serviceBin = join(
   cargoTargetDirectory(),
   "debug",
@@ -48,7 +52,9 @@ const serviceBin = join(
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
 const frontendReadyTimeoutMs = 180_000;
 
-async function startE2eHarness(): Promise<E2eHarness> {
+async function startE2eHarness(
+  options: E2eHarnessOptions = {},
+): Promise<E2eHarness> {
   const runRoot = await mkdtemp(join(tmpdir(), "conduit-e2e-"));
   await mkdir(fixtureCwd, { recursive: true });
   const servicePort = await freePort();
@@ -57,6 +63,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
   const frontendUrl = `http://localhost:${frontendPort}`;
+  const providerFixtureRoot = options.fixtureRoot ?? defaultFixtureRoot;
   const processes: ManagedProcess[] = [];
   let frontendServer: HttpServer | null = null;
 
@@ -69,7 +76,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
         "--port",
         String(servicePort),
         "--provider-fixtures",
-        fixtureRoot,
+        providerFixtureRoot,
         "--store-path",
         join(runRoot, "local-store.sqlite3"),
       ]),

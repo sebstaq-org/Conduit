@@ -50,5 +50,6 @@ export type {
 export { Section } from "./section";
 export { TextButton } from "./text-button";
 export { TextField } from "./text-field";
+export { showErrorToast, ToastHost } from "./toast";
 export { VirtualList } from "./flash-list";
 export type { VirtualListProps } from "./flash-list";

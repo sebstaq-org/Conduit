@@ -1,0 +1,16 @@
+{
+  "sessions": [
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-claude-load-fails-0001",
+      "title": "Claude load failure session",
+      "updatedAt": "9999-01-01T00:00:00Z"
+    },
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-claude-load-healthy-0001",
+      "title": "Claude recovery session",
+      "updatedAt": "9999-01-01T00:00:01Z"
+    }
+  ]
+}

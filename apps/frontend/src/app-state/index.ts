@@ -23,6 +23,7 @@ export {
   openSessionRow,
   submitPrompt,
 } from "./session-commands";
+export type { OpenSessionFailure, PromptFailure } from "./session-commands";
 export {
   addProjectPath,
   removeProjectById,

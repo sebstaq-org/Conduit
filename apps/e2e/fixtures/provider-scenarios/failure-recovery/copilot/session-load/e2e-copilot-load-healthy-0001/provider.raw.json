@@ -1,0 +1,31 @@
+{
+  "loadedTranscript": {
+    "identity": {
+      "acpSessionId": "e2e-copilot-load-healthy-0001",
+      "provider": "copilot"
+    },
+    "rawUpdateCount": 1,
+    "updates": [
+      {
+        "index": 0,
+        "update": {
+          "content": {
+            "text": "CONDUIT_E2E_RECOVERY_TRANSCRIPT_copilot",
+            "type": "text"
+          },
+          "sessionUpdate": "agent_message_chunk"
+        },
+        "variant": "agent_message_chunk"
+      }
+    ]
+  },
+  "response": {
+    "configOptions": [],
+    "modes": {
+      "availableModes": [],
+      "currentModeId": null
+    },
+    "models": null,
+    "sessionId": "e2e-copilot-load-healthy-0001"
+  }
+}
