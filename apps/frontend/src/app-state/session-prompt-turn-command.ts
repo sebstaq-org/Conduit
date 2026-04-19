@@ -42,3 +42,4 @@ async function promptTrackedOpenSession({
 }
 
 export { promptTrackedOpenSession };
+export type { PromptSessionTrigger };

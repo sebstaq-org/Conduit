@@ -7,11 +7,11 @@ import type { NewSessionMutationArg } from "./api";
 import type { SessionPromptTurnIdentity } from "./session-prompt-turns";
 import { promptTrackedOpenSession } from "./session-prompt-turn-command";
 import type {
-  useNewSessionMutation,
-  useOpenSessionMutation,
-  usePromptSessionMutation,
-  useSetSessionConfigOptionMutation,
-} from "./api-hooks";
+  NewSessionTrigger,
+  OpenSessionTrigger,
+  SetSessionConfigOptionTrigger,
+} from "./session-command-triggers";
+import type { PromptSessionTrigger } from "./session-prompt-turn-command";
 import type { ActiveSession } from "./session-selection";
 import {
   initialDraftConfigSyncState,
@@ -19,13 +19,6 @@ import {
 } from "./session-commands-draft";
 
 const NEW_SESSION_HISTORY_LIMIT = 100;
-
-type NewSessionTrigger = ReturnType<typeof useNewSessionMutation>[0];
-type OpenSessionTrigger = ReturnType<typeof useOpenSessionMutation>[0];
-type PromptSessionTrigger = ReturnType<typeof usePromptSessionMutation>[0];
-type SetSessionConfigOptionTrigger = ReturnType<
-  typeof useSetSessionConfigOptionMutation
->[0];
 
 interface DraftCommittedSession {
   configOptions: SessionConfigOption[] | null;
