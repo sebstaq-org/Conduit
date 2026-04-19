@@ -7,10 +7,13 @@ const fixtureSessionTitle = "Conduit E2E fixture session";
 const newSessionPrompt =
   "Create a minimal deterministic plan for a Conduit E2E proof. Do not mention private paths, credentials, users, dates, machines, or external services. Return a short plan with the exact heading CONDUIT_E2E_CAPTURED_TERMINAL_PLAN.";
 const capturedTerminalPlanHeading = "CONDUIT_E2E_CAPTURED_TERMINAL_PLAN";
-const providerParityPrompt =
-  "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
-const providerParitySentinel = "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE";
+const claudeParityPrompt =
+  "Reply with exactly CONDUIT_E2E_CLAUDE_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const claudeParitySentinel = "CONDUIT_E2E_CLAUDE_PARITY_RESPONSE";
 const claudeParitySessionTitle = "Claude E2E parity session";
+const copilotParityPrompt =
+  "Reply with exactly CONDUIT_E2E_COPILOT_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const copilotParitySentinel = "CONDUIT_E2E_COPILOT_PARITY_RESPONSE";
 const copilotParitySessionTitle = "Copilot E2E parity session";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 
@@ -45,11 +48,13 @@ test("all-provider session list opens Claude and Copilot parity transcripts", as
   await openFrontend(page, activeHarness);
 
   await openListedSession(page, activeHarness, claudeParitySessionTitle);
-  await expectParityTranscript(page);
+  await expectParityTranscript(page, claudeParitySentinel);
+  await expectNoParityTranscript(page, copilotParitySentinel);
   await expectNoFailureFeedback(page);
 
   await openListedSession(page, activeHarness, copilotParitySessionTitle);
-  await expectParityTranscript(page);
+  await expectParityTranscript(page, copilotParitySentinel);
+  await expectNoParityTranscript(page, claudeParitySentinel);
   await expectNoFailureFeedback(page);
 });
 
@@ -107,13 +112,14 @@ test("Claude parity fixture drives configured draft prompt", async ({
   await page.getByLabel("Select Model").click();
   await page.getByLabel("Haiku").click();
   await expect(page.getByText("Model: haiku")).toBeVisible();
-  await page.getByLabel("Session message").fill(providerParityPrompt);
+  await page.getByLabel("Session message").fill(claudeParityPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
 
-  await expectParityTranscript(page);
+  await expectParityTranscript(page, claudeParitySentinel);
+  await expectNoParityTranscript(page, copilotParitySentinel);
   await expectNoFailureFeedback(page);
 });
 
@@ -134,13 +140,14 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   await page.getByLabel("Select Model").click();
   await page.getByLabel("GPT-4.1").click();
   await expect(page.getByText("Model: gpt-4.1")).toBeVisible();
-  await page.getByLabel("Session message").fill(providerParityPrompt);
+  await page.getByLabel("Session message").fill(copilotParityPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
 
-  await expectParityTranscript(page);
+  await expectParityTranscript(page, copilotParitySentinel);
+  await expectNoParityTranscript(page, claudeParitySentinel);
   await expectNoFailureFeedback(page);
 });
 
@@ -189,10 +196,18 @@ async function openListedSession(
   await sessionRow.click();
 }
 
-async function expectParityTranscript(page: Page): Promise<void> {
-  await expect(
-    page.getByText(providerParitySentinel, { exact: true }),
-  ).toBeVisible();
+async function expectParityTranscript(
+  page: Page,
+  sentinel: string,
+): Promise<void> {
+  await expect(page.getByText(sentinel, { exact: true })).toBeVisible();
+}
+
+async function expectNoParityTranscript(
+  page: Page,
+  sentinel: string,
+): Promise<void> {
+  await expect(page.getByText(sentinel, { exact: true })).toHaveCount(0);
 }
 
 async function expectNoFailureFeedback(page: Page): Promise<void> {

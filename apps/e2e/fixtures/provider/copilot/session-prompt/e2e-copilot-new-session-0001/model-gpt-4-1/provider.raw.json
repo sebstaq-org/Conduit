@@ -55,7 +55,7 @@
   "promptRequest": {
     "prompt": [
       {
-        "text": "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.",
+        "text": "Reply with exactly CONDUIT_E2E_COPILOT_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.",
         "type": "text"
       }
     ],
@@ -135,7 +135,7 @@
       "index": 6,
       "update": {
         "content": {
-          "text": "_PROVIDER",
+          "text": "_COPILOT",
           "type": "text"
         },
         "sessionUpdate": "agent_message_chunk"
