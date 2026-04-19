@@ -6,12 +6,10 @@ import type {
 } from "@conduit/session-client";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  activeSessionOpened,
   canSubmitPrompt,
-  conduitApi,
   draftSessionConfigOptionSelected,
   selectActiveSession,
-  submitPrompt,
+  selectSessionPromptTurnStreaming,
   useGetProvidersConfigSnapshotQuery,
   useNewSessionMutation,
   useOpenSessionMutation,
@@ -21,9 +19,9 @@ import {
 import type {
   ActiveSession,
   AppDispatch,
+  RootState,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
-import { showPromptFailureToast } from "@/features/session-notifications";
 import type { Theme } from "@/theme";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
@@ -36,6 +34,7 @@ import {
   createHandleProviderSelect,
   providerConfigPollingInterval,
 } from "./session-composer-provider-config-refresh";
+import { createSessionComposerSendHandler } from "./session-composer-submit";
 
 interface SessionComposerController {
   activeSession: ActiveSession | null;
@@ -47,6 +46,7 @@ interface SessionComposerController {
   handleProviderSelect: (provider: ProviderId) => void;
   handleSend: () => void;
   isConfigUpdating: boolean;
+  isWorking: boolean;
   setDraft: (draft: string) => void;
 }
 interface SessionComposerRuntime {
@@ -59,6 +59,7 @@ interface SessionComposerRuntime {
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   promptSessionError: boolean;
   promptSessionLoading: boolean;
+  promptTurnWorking: boolean;
   providersConfigSnapshot: ProvidersConfigSnapshotResult | undefined;
   providersConfigSnapshotError: boolean;
   setSessionConfigOption: ReturnType<
@@ -66,67 +67,6 @@ interface SessionComposerRuntime {
   >[0];
   setSessionConfigOptionError: boolean;
   setSessionConfigOptionLoading: boolean;
-}
-
-function createDraftCommitCallback(args: {
-  activeSession: ActiveSession;
-  dispatch: AppDispatch;
-}): Parameters<typeof submitPrompt>[0]["onDraftPromptCommitted"] {
-  return (session): void => {
-    args.dispatch(
-      activeSessionOpened({
-        configOptions: session.configOptions,
-        configSyncBlocked: session.configSyncBlocked,
-        configSyncError: session.configSyncError,
-        cwd: args.activeSession.cwd,
-        kind: "open",
-        modes: session.modes,
-        models: session.models,
-        openSessionId: session.openSessionId,
-        provider: session.provider,
-        sessionId: session.sessionId,
-        title: null,
-      }),
-    );
-    void args.dispatch(
-      conduitApi.util.invalidateTags([{ id: "LIST", type: "SessionGroups" }]),
-    );
-  };
-}
-
-function createHandleSend(args: {
-  activeSession: ActiveSession | null;
-  canSend: boolean;
-  dispatch: AppDispatch;
-  newSession: ReturnType<typeof useNewSessionMutation>[0];
-  openSession: ReturnType<typeof useOpenSessionMutation>[0];
-  promptSession: ReturnType<typeof usePromptSessionMutation>[0];
-  setDraft: (draft: string) => void;
-  setSessionConfigOption: ReturnType<
-    typeof useSetSessionConfigOptionMutation
-  >[0];
-  text: string;
-}): () => void {
-  return (): void => {
-    if (!args.canSend || args.activeSession === null) {
-      return;
-    }
-    const activeSession = args.activeSession;
-    void submitPrompt({
-      activeSession,
-      newSession: args.newSession,
-      openSession: args.openSession,
-      onDraftPromptCommitted: createDraftCommitCallback({
-        activeSession,
-        dispatch: args.dispatch,
-      }),
-      onFailure: showPromptFailureToast,
-      promptSession: args.promptSession,
-      setSessionConfigOption: args.setSessionConfigOption,
-      setDraft: args.setDraft,
-      text: args.text,
-    });
-  };
 }
 
 function createHandleConfigOptionSelect(args: {
@@ -162,6 +102,14 @@ function createHandleConfigOptionSelect(args: {
   };
 }
 
+function isSessionPromptBusy(runtime: SessionComposerRuntime): boolean {
+  if (runtime.activeSession?.kind === "draft") {
+    return runtime.newSessionLoading || runtime.promptSessionLoading;
+  }
+
+  return runtime.promptTurnWorking;
+}
+
 function buildSessionComposerController(args: {
   canSend: boolean;
   draft: string;
@@ -192,7 +140,7 @@ function buildSessionComposerController(args: {
       setSessionConfigOption: args.runtime.setSessionConfigOption,
     }),
     handleProviderSelect: createHandleProviderSelect(args.runtime.dispatch),
-    handleSend: createHandleSend({
+    handleSend: createSessionComposerSendHandler({
       activeSession: args.runtime.activeSession,
       canSend: args.canSend,
       dispatch: args.runtime.dispatch,
@@ -204,6 +152,7 @@ function buildSessionComposerController(args: {
       text: args.trimmedDraft,
     }),
     isConfigUpdating: args.runtime.setSessionConfigOptionLoading,
+    isWorking: isSessionPromptBusy(args.runtime),
     setDraft: args.setDraft,
   };
 }
@@ -211,6 +160,15 @@ function buildSessionComposerController(args: {
 function useSessionComposerRuntime(): SessionComposerRuntime {
   const dispatch = useDispatch<AppDispatch>();
   const activeSession = useSelector(selectActiveSession);
+  const promptTurnWorking = useSelector((state: RootState) => {
+    if (activeSession?.kind !== "open") {
+      return false;
+    }
+    return selectSessionPromptTurnStreaming(state, {
+      provider: activeSession.provider,
+      sessionId: activeSession.sessionId,
+    });
+  });
   const [newSession, newSessionState] = useNewSessionMutation();
   const [openSession] = useOpenSessionMutation();
   const [promptSession, promptSessionState] = usePromptSessionMutation();
@@ -234,6 +192,7 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
     promptSession,
     promptSessionError: promptSessionState.isError,
     promptSessionLoading: promptSessionState.isLoading,
+    promptTurnWorking,
     providersConfigSnapshot,
     providersConfigSnapshotError,
     setSessionConfigOption,
@@ -256,7 +215,7 @@ function useSessionComposerController(): SessionComposerController {
       runtime.activeSession,
       draftSnapshotEntry,
     ),
-    isLoading: runtime.promptSessionLoading || runtime.newSessionLoading,
+    isLoading: isSessionPromptBusy(runtime),
     openSessionConfigSyncBlocked:
       runtime.activeSession?.kind === "open" &&
       runtime.activeSession.configSyncBlocked,
@@ -292,6 +251,7 @@ function SessionComposer({
       isConfigUpdating={controller.isConfigUpdating}
       planInteractionActions={planInteraction.actions}
       planInteractionView={planInteraction.view}
+      isWorking={controller.isWorking}
       setDraft={controller.setDraft}
       theme={theme}
     />
