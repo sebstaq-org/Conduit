@@ -1,7 +1,7 @@
 {
   "captureKind": "provider",
   "contractBoundary": "provider-acp",
-  "curation": "Extracted sessionNew from a real session/prompt capture, removed absolute local capture output path, and normalized session id aa47995e-0d93-4ef5-b4b3-c7fead67b71f to e2e-copilot-new-session-0001; raw ACP session/new shape preserved.",
+  "curation": "Extracted sessionNew from a real session/prompt capture, removed absolute local capture output path, and normalized session id to e2e-copilot-new-session-0001; raw ACP session/new shape preserved.",
   "manualCapture": true,
   "operation": "session/new",
   "provider": "copilot",

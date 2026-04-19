@@ -6,6 +6,7 @@ use service_runtime::ProviderFactory;
 use std::path::Path;
 
 const PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
+const FIXTURE_CWD: &str = "/tmp/conduit-e2e-fixture-project";
 
 #[test]
 fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResult<()> {
@@ -22,9 +23,12 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
     )?;
 
     let listed = port.session_list(None, None)?;
-    if listed != json!({ "sessions": [] }) {
-        return Err(format!("unexpected claude session/list fixture: {listed}").into());
-    }
+    assert_listed_session(
+        &listed,
+        "e2e-claude-new-session-0001",
+        "Claude E2E parity session",
+        "claude session/list",
+    )?;
 
     assert_prompt_requires_config(port.as_mut(), "e2e-claude-new-session-0001")?;
 
@@ -50,7 +54,7 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
 
     let loaded = port.session_load(
         "e2e-claude-new-session-0001".to_owned(),
-        Path::new("/repo").to_path_buf(),
+        Path::new(FIXTURE_CWD).to_path_buf(),
     )?;
     assert_config_current_value(&loaded, "model", "default", "claude load")?;
     assert_loaded_agent_text(
@@ -76,6 +80,14 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
         "copilot session/new",
     )?;
 
+    let listed = port.session_list(None, None)?;
+    assert_listed_session(
+        &listed,
+        "e2e-copilot-new-session-0001",
+        "Copilot E2E parity session",
+        "copilot session/list",
+    )?;
+
     let configured = port.session_set_config_option(
         "e2e-copilot-new-session-0001".to_owned(),
         "model".to_owned(),
@@ -98,7 +110,7 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
 
     let loaded = port.session_load(
         "e2e-copilot-new-session-0001".to_owned(),
-        Path::new("/repo").to_path_buf(),
+        Path::new(FIXTURE_CWD).to_path_buf(),
     )?;
     assert_config_current_value(&loaded, "model", "gpt-4.1", "copilot load")?;
     Ok(())
@@ -141,6 +153,39 @@ fn assert_json_string(
     let actual = value.pointer(pointer).and_then(Value::as_str);
     if actual != Some(expected) {
         return Err(format!("{context} expected {pointer}={expected}, got {value}").into());
+    }
+    Ok(())
+}
+
+fn assert_listed_session(
+    value: &Value,
+    expected_session_id: &str,
+    expected_title: &str,
+    context: &str,
+) -> TestResult<()> {
+    let sessions = value
+        .get("sessions")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{context} missing sessions array: {value}"))?;
+    if sessions.len() != 1 {
+        return Err(format!("{context} expected exactly one session, got {value}").into());
+    }
+    let session = &sessions[0];
+    assert_json_string(
+        session,
+        "/sessionId",
+        expected_session_id,
+        &format!("{context} session id"),
+    )?;
+    assert_json_string(session, "/cwd", FIXTURE_CWD, &format!("{context} cwd"))?;
+    assert_json_string(
+        session,
+        "/title",
+        expected_title,
+        &format!("{context} title"),
+    )?;
+    if session.get("updatedAt").and_then(Value::as_str).is_none() {
+        return Err(format!("{context} missing updatedAt: {value}").into());
     }
     Ok(())
 }

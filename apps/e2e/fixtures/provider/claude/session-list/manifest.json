@@ -1,10 +1,8 @@
 {
   "captureKind": "provider",
-  "contractBoundary": "provider-acp",
-  "curation": "Removed absolute local capture output path; raw ACP request/response shape preserved.",
-  "manualCapture": true,
+  "curation": "Removed absolute local cwd, normalized session id to e2e-claude-new-session-0001, and replaced provider prompt title with stable public title \"Claude E2E parity session\"; raw ACP session/list shape preserved.",
   "operation": "session/list",
   "provider": "claude",
-  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-20260418T235022Z/session-list",
-  "timestamp": "2026-04-18T23:50:51.825685706Z"
+  "sessionId": "e2e-claude-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-list-after-config-prompt"
 }

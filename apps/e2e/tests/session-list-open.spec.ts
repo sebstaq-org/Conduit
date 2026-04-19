@@ -10,6 +10,8 @@ const capturedTerminalPlanHeading = "CONDUIT_E2E_CAPTURED_TERMINAL_PLAN";
 const providerParityPrompt =
   "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
 const providerParitySentinel = "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE";
+const claudeParitySessionTitle = "Claude E2E parity session";
+const copilotParitySessionTitle = "Copilot E2E parity session";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 
 let harness: E2eHarness | null = null;
@@ -32,6 +34,20 @@ test("session list opens fixture transcript", async ({ page }) => {
   await sessionRow.click();
 
   await expect(page.getByText(transcriptSentinel)).toBeVisible();
+});
+
+test("all-provider session list opens Claude and Copilot parity transcripts", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+
+  await openListedSession(page, activeHarness, claudeParitySessionTitle);
+  await expectParityTranscript(page);
+
+  await openListedSession(page, activeHarness, copilotParitySessionTitle);
+  await expectParityTranscript(page);
 });
 
 test("draft prompt in plan mode shows terminal plan decision", async ({
@@ -82,7 +98,7 @@ test("Claude parity fixture drives configured draft prompt", async ({
   await newSessionButton.click();
 
   await page.getByLabel("Select provider for new session").click();
-  await page.getByLabel("claude").click();
+  await page.getByRole("menuitem", { name: "claude" }).click();
   await expect(page.getByText("Model: default")).toBeVisible();
   await page.getByLabel("Select Model").click();
   await page.getByLabel("Haiku").click();
@@ -93,7 +109,7 @@ test("Claude parity fixture drives configured draft prompt", async ({
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
 
-  await expect(page.getByText(providerParitySentinel)).toBeVisible();
+  await expectParityTranscript(page);
 });
 
 test("Copilot parity fixture drives configured draft prompt", async ({
@@ -108,7 +124,7 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   await newSessionButton.click();
 
   await page.getByLabel("Select provider for new session").click();
-  await page.getByLabel("copilot").click();
+  await page.getByRole("menuitem", { name: "copilot" }).click();
   await expect(page.getByText("Model: gpt-5-mini")).toBeVisible();
   await page.getByLabel("Select Model").click();
   await page.getByLabel("GPT-4.1").click();
@@ -119,7 +135,7 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   await expect(sendButton).toBeEnabled();
   await sendButton.click();
 
-  await expect(page.getByText(providerParitySentinel)).toBeVisible();
+  await expectParityTranscript(page);
 });
 
 function requireHarness(): E2eHarness {
@@ -155,6 +171,22 @@ async function expectVisibleWithDiagnostics(
       `${String(error)}\n\nE2E diagnostics:\n${await pageDiagnostics(page, activeHarness)}`,
     );
   }
+}
+
+async function openListedSession(
+  page: Page,
+  activeHarness: E2eHarness,
+  title: string,
+): Promise<void> {
+  const sessionRow = page.getByRole("button", { name: title });
+  await expectVisibleWithDiagnostics(page, activeHarness, sessionRow);
+  await sessionRow.click();
+}
+
+async function expectParityTranscript(page: Page): Promise<void> {
+  await expect(
+    page.getByText(providerParitySentinel, { exact: true }),
+  ).toBeVisible();
 }
 
 async function pageDiagnostics(
