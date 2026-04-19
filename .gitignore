@@ -4,6 +4,8 @@ out/
 coverage/
 backend/service/target/
 vendor/codex-acp/target/
+.cargo-target
+.cargo-target/
 .conduit/
 *.tsbuildinfo
 .expo/
