@@ -1,0 +1,5 @@
+{
+  "message": "fixture forced copilot session/load failure",
+  "operation": "session/load",
+  "sessionId": "e2e-copilot-load-fails-0001"
+}

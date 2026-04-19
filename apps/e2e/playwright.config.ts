@@ -6,6 +6,8 @@ const systemChromium = existsSync("/snap/bin/chromium")
   : undefined;
 const chromiumExecutablePath =
   process.env.CONDUIT_CHROMIUM_BIN ?? systemChromium;
+const videoMode =
+  process.env.CONDUIT_E2E_RECORD_VIDEO === "1" ? "on" : "retain-on-failure";
 
 export default defineConfig({
   expect: { timeout: 15_000 },
@@ -28,7 +30,7 @@ export default defineConfig({
     },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
+    video: videoMode,
   },
   workers: 1,
 });

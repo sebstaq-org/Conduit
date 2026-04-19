@@ -1,0 +1,28 @@
+{
+  "request": {
+    "clientCapabilities": {
+      "fs": {
+        "readTextFile": false,
+        "writeTextFile": false
+      },
+      "terminal": false
+    },
+    "clientInfo": {
+      "name": "conduit",
+      "title": "Conduit",
+      "version": "0.5.0"
+    },
+    "method": "initialize",
+    "protocolVersion": 1
+  },
+  "response": {
+    "agentCapabilities": {},
+    "agentInfo": {
+      "name": "fixture-agent",
+      "title": "Fixture Agent",
+      "version": "0.5.0"
+    },
+    "authMethods": [],
+    "protocolVersion": 1
+  }
+}

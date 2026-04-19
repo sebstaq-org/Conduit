@@ -1,0 +1,5 @@
+{
+  "message": "fixture forced codex session/load failure",
+  "operation": "session/load",
+  "sessionId": "e2e-codex-load-fails-0001"
+}

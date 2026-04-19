@@ -86,6 +86,43 @@ fn session_prompt_rejects_prompt_mismatch() -> TestResult<()> {
 }
 
 #[test]
+fn session_prompt_failure_fixture_returns_provider_error() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    let dir = root.path().join("codex/session-prompt/session-1/default");
+    create_dir_all(&dir)?;
+    write(
+        dir.join("failure.json"),
+        serde_json::to_string(&json!({
+            "message": "fixture forced session/prompt failure",
+            "operation": "session/prompt",
+            "promptRequest": {
+                "prompt": [{ "type": "text", "text": "hello" }],
+                "sessionId": "session-1"
+            }
+        }))?,
+    )?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+    let error = port
+        .session_prompt(
+            "session-1".to_owned(),
+            vec![json!({ "type": "text", "text": "hello" })],
+            &mut |_| {},
+        )
+        .err()
+        .ok_or("session/prompt failure fixture unexpectedly succeeded")?;
+
+    if !error
+        .to_string()
+        .contains("fixture forced session/prompt failure")
+    {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
+#[test]
 fn session_prompt_requires_config_prelude_when_fixture_declares_it() -> TestResult<()> {
     let root = fixture_root(json!({ "sessions": [] }))?;
     write_session_prompt_capture(

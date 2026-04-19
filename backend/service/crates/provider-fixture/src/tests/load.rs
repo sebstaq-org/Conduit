@@ -120,6 +120,36 @@ fn missing_session_load_fixture_fails_explicitly() -> TestResult<()> {
 }
 
 #[test]
+fn session_load_failure_fixture_returns_provider_error() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    let dir = root.path().join("codex/session-load/session-1");
+    create_dir_all(&dir)?;
+    write(
+        dir.join("failure.json"),
+        serde_json::to_string(&json!({
+            "message": "fixture forced session/load failure",
+            "operation": "session/load",
+            "sessionId": "session-1"
+        }))?,
+    )?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+    let error = port
+        .session_load("session-1".to_owned(), "/repo".into())
+        .err()
+        .ok_or("session/load failure fixture unexpectedly succeeded")?;
+
+    if !error
+        .to_string()
+        .contains("fixture forced session/load failure")
+    {
+        return Err(format!("unexpected error {error}").into());
+    }
+    Ok(())
+}
+
+#[test]
 fn malformed_session_load_fixture_fails_load() -> TestResult<()> {
     let root = fixture_root(json!({ "sessions": [] }))?;
     let dir = root.path().join("codex/session-load/capture-1");
