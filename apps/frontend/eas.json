@@ -1,0 +1,18 @@
+{
+  "cli": {
+    "version": ">=16.24.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "stage": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "stage"
+      },
+      "ios": {
+        "simulator": false
+      }
+    }
+  }
+}

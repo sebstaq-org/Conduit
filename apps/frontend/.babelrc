@@ -4,7 +4,7 @@
     [
       "react-native-worklets/plugin",
       {
-        "bundleMode": true,
+        "bundleMode": false,
         "strictGlobal": true,
         "workletizableModules": ["remend"]
       }
