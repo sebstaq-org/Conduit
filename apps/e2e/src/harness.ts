@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
@@ -41,12 +41,9 @@ const appRoot = resolve(sourceDir, "..");
 const repoRoot = resolve(appRoot, "..", "..");
 const fixtureRoot = join(appRoot, "fixtures", "provider");
 const serviceBin = join(
-  repoRoot,
-  "backend",
-  "service",
-  "target",
+  cargoTargetDirectory(),
   "debug",
-  "service-bin",
+  executableName("service-bin"),
 );
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
 const frontendReadyTimeoutMs = 180_000;
@@ -152,6 +149,36 @@ function spawnManaged(
     );
   });
   return { child, logs, name };
+}
+
+function cargoTargetDirectory(): string {
+  const result = spawnSync(
+    "cargo",
+    [
+      "metadata",
+      "--manifest-path",
+      join(repoRoot, "backend", "service", "Cargo.toml"),
+      "--format-version",
+      "1",
+      "--no-deps",
+    ],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(`cargo metadata failed\n${result.stderr}`);
+  }
+  const metadata = JSON.parse(result.stdout) as { target_directory?: unknown };
+  if (typeof metadata.target_directory !== "string") {
+    throw new Error("cargo metadata did not include target_directory");
+  }
+  return metadata.target_directory;
+}
+
+function executableName(name: string): string {
+  return process.platform === "win32" ? `${name}.exe` : name;
 }
 
 async function runManaged(

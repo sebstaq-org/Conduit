@@ -48,8 +48,21 @@ build_adapter() {
   configure_libcap_defaults
   run cargo build --locked --manifest-path "$ADAPTER_DIR/Cargo.toml" --release
   run mkdir -p "$BIN_DIR"
-  run install -m 0755 "$ADAPTER_DIR/target/release/codex-acp" "$BIN_PATH"
+  run install -m 0755 "$(adapter_target_dir)/release/codex-acp" "$BIN_PATH"
   printf "codex-acp installed: %s\n" "$BIN_PATH"
+}
+
+adapter_target_dir() {
+  local metadata
+  metadata="$(cargo metadata --locked --manifest-path "$ADAPTER_DIR/Cargo.toml" --format-version 1 --no-deps)"
+  node -e '
+const fs = require("node:fs");
+const metadata = JSON.parse(fs.readFileSync(0, "utf8"));
+if (typeof metadata.target_directory !== "string") {
+  throw new Error("cargo metadata did not include target_directory");
+}
+process.stdout.write(metadata.target_directory);
+' <<<"$metadata"
 }
 
 verify_adapter() {
