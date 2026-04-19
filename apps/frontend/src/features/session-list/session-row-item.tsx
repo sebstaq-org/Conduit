@@ -1,5 +1,6 @@
 import { openSessionRow } from "@/app-state";
 import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
+import { showOpenSessionFailureToast } from "@/features/session-notifications";
 import { Row } from "@/ui";
 import { sessionRowDepth } from "./session-list.constants";
 import type { SessionGroup, SessionRow } from "./session-list.types";
@@ -59,6 +60,7 @@ function SessionRowItem({
       meta={formatSessionMeta(session.provider, session.updatedAt)}
       onPress={() => {
         void openSessionRow({
+          onFailure: showOpenSessionFailureToast,
           onSessionSelected,
           openSession,
           request: {

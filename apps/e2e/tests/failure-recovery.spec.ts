@@ -39,6 +39,14 @@ for (const provider of providers) {
     );
 
     await expect(page.getByText("Session failed to open")).toBeVisible();
+    await expect(
+      page.getByText(`Couldn't open ${titleCase(provider)} session`),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        `${titleCase(provider)} load failure session did not open.`,
+      ),
+    ).toBeVisible();
     await expect(page.getByText("Select a session")).toBeVisible();
 
     await openListedSession(
@@ -71,7 +79,15 @@ for (const provider of providers) {
     await expect(sendButton).toBeEnabled();
     await sendButton.click();
 
-    await expect(page.getByText("Request failed")).toBeVisible();
+    await expect(
+      page.getByText("Request failed", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`${titleCase(provider)} request failed. Draft kept.`),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Your draft was kept. Edit it and try again."),
+    ).toBeVisible();
     await expect(messageInput).toHaveValue(draftText);
     await expect(messageInput).toBeEditable();
     await expect(sendButton).toBeEnabled();

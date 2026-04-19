@@ -23,6 +23,7 @@ import type {
   AppDispatch,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
+import { showPromptFailureToast } from "@/features/session-notifications";
 import type { Theme } from "@/theme";
 import { SessionComposerSurface } from "./session-composer-surface";
 import {
@@ -48,7 +49,6 @@ interface SessionComposerController {
   isConfigUpdating: boolean;
   setDraft: (draft: string) => void;
 }
-
 interface SessionComposerRuntime {
   activeSession: ActiveSession | null;
   dispatch: AppDispatch;
@@ -120,6 +120,7 @@ function createHandleSend(args: {
         activeSession,
         dispatch: args.dispatch,
       }),
+      onFailure: showPromptFailureToast,
       promptSession: args.promptSession,
       setSessionConfigOption: args.setSessionConfigOption,
       setDraft: args.setDraft,

@@ -28,6 +28,7 @@ type SetSessionConfigOptionTrigger = ReturnType<
 
 interface OpenSessionRowArgs {
   openSession: OpenSessionTrigger;
+  onFailure?: ((failure: OpenSessionFailure) => void) | undefined;
   request: OpenSessionMutationArg;
   onSessionSelected?: (() => void) | undefined;
 }
@@ -39,6 +40,7 @@ interface SubmitPromptArgs {
   onDraftPromptCommitted?:
     | ((session: DraftCommittedSession) => void)
     | undefined;
+  onFailure?: ((failure: PromptFailure) => void) | undefined;
   promptSession: PromptSessionTrigger;
   setSessionConfigOption: SetSessionConfigOptionTrigger;
   setDraft: (draft: string) => void;
@@ -54,6 +56,17 @@ interface DraftCommittedSession {
   openSessionId: string;
   provider: ProviderId;
   sessionId: string;
+}
+
+interface OpenSessionFailure {
+  error: unknown;
+  request: OpenSessionMutationArg;
+}
+
+interface PromptFailure {
+  activeSession: ActiveSession;
+  error: unknown;
+  text: string;
 }
 
 function committedDraftSession(args: {
@@ -109,6 +122,7 @@ function canSubmitPrompt({
 }
 
 async function openSessionRow({
+  onFailure,
   onSessionSelected,
   openSession,
   request,
@@ -129,6 +143,7 @@ async function openSessionRow({
       session_id: request.sessionId,
       title: request.title,
     });
+    onFailure?.({ error, request });
   }
 }
 
@@ -243,6 +258,7 @@ async function submitPrompt({
   activeSession,
   newSession,
   onDraftPromptCommitted,
+  onFailure,
   openSession,
   promptSession,
   setSessionConfigOption,
@@ -265,9 +281,11 @@ async function submitPrompt({
     }
     await promptOpenSession(promptSession, activeSession.openSessionId, text);
     setDraft("");
-  } catch {
+  } catch (error) {
     // The mutation state renders the failure while preserving the draft.
+    onFailure?.({ activeSession, error, text });
   }
 }
 
 export { canSubmitPrompt, openSessionRow, submitPrompt };
+export type { OpenSessionFailure, PromptFailure };
