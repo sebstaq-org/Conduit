@@ -55,6 +55,7 @@ const runtimeHealthEndpoint = {
   queryFn: getRuntimeHealthQuery,
 } as const;
 const providersConfigSnapshotEndpoint = {
+  providesTags: [{ id: "CURRENT", type: "ProviderConfigSnapshot" }],
   queryFn: getProvidersConfigSnapshotQuery,
 } as const;
 
@@ -63,6 +64,7 @@ const conduitApi = createApi({
   baseQuery: fakeBaseQuery<string>(),
   tagTypes: [
     "Projects",
+    "ProviderConfigSnapshot",
     "RuntimeHealth",
     "SessionGroups",
     "SessionTimeline",
