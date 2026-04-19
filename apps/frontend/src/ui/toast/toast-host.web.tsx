@@ -24,6 +24,8 @@ function createToastStyle(theme: Theme): ToastStyle {
 }
 
 function createToastLayoutCss(): string {
+  // Burnt web renders through Sonner; verify these data attributes with a
+  // Screenshot proof before upgrading either dependency.
   return `
     [data-sonner-toaster] {
       max-width: calc(100vw - 24px);
