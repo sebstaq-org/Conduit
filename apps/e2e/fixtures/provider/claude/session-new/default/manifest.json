@@ -1,0 +1,8 @@
+{
+  "captureKind": "provider",
+  "curation": "Extracted sessionNew from a real session/prompt capture, removed absolute local capture output path, and normalized session id to e2e-claude-new-session-0001; raw ACP session/new shape preserved.",
+  "operation": "session/new",
+  "provider": "claude",
+  "sessionId": "e2e-claude-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new"
+}

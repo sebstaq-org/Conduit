@@ -1,10 +1,12 @@
 //! Argument parsing for the Conduit operator CLI.
 
 use crate::error::{CliError, Result};
+use acp_discovery::ProviderId;
 use std::path::{Component, Path, PathBuf};
+use std::str::FromStr;
 
-const CODEX_PROVIDER_WORKSPACE_ROOT: &str =
-    "/srv/devops/repos/conduit-artifacts/manual/provider-workspaces/codex";
+const PROVIDER_WORKSPACE_ROOT: &str =
+    "/srv/devops/repos/conduit-artifacts/manual/provider-workspaces";
 
 /// Parsed CLI command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +18,8 @@ pub(crate) enum Command {
 /// One provider capture request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CaptureRequest {
+    /// Provider to capture.
+    pub(crate) provider: ProviderId,
     /// Provider operation to capture.
     pub(crate) operation: CaptureOperation,
     /// Working directory sent to the provider operation.
@@ -70,53 +74,59 @@ pub(crate) struct CaptureConfigOption {
 /// Parses top-level CLI arguments.
 pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
     match args {
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture" && provider == "codex" && operation == "initialize" =>
-        {
-            Ok(Command::Capture(parse_initialize_capture(rest)?))
+        [capture, provider, operation, rest @ ..] if capture == "capture" => {
+            let provider = parse_provider(provider)?;
+            if operation == "initialize" {
+                return Ok(Command::Capture(parse_initialize_capture(provider, rest)?));
+            }
+            parse_provider_capture(provider, operation, rest)
         }
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture" && provider == "codex" && operation == "session/list" =>
-        {
-            Ok(Command::Capture(parse_session_list_capture(rest)?))
+        [capture, ..] if capture == "capture" => {
+            Err(CliError::invalid_command(expected_capture_commands()))
         }
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture" && provider == "codex" && operation == "session/new" =>
-        {
-            Ok(Command::Capture(parse_session_new_capture(rest)?))
-        }
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture" && provider == "codex" && operation == "session/load" =>
-        {
-            Ok(Command::Capture(parse_session_load_capture(rest)?))
-        }
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture" && provider == "codex" && operation == "session/prompt" =>
-        {
-            Ok(Command::Capture(parse_session_prompt_capture(rest)?))
-        }
-        [capture, provider, operation, rest @ ..]
-            if capture == "capture"
-                && provider == "codex"
-                && operation == "session/set_config_option" =>
-        {
-            Ok(Command::Capture(parse_session_set_config_option_capture(
-                rest,
-            )?))
-        }
-        [capture, ..] if capture == "capture" => Err(CliError::invalid_command(
-            "unsupported capture command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
-        )),
-        [] => Err(CliError::invalid_command(
-            "missing command; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option",
-        )),
+        [] => Err(CliError::invalid_command(format!(
+            "missing command; expected: {}",
+            expected_capture_commands()
+        ))),
         [command, ..] => Err(CliError::invalid_command(format!(
-            "unsupported command {command}; expected: conduit capture codex initialize, conduit capture codex session/new, conduit capture codex session/list, conduit capture codex session/load, conduit capture codex session/prompt, or conduit capture codex session/set_config_option"
+            "unsupported command {command}; expected: {}",
+            expected_capture_commands()
         ))),
     }
 }
 
-fn parse_initialize_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_provider_capture(
+    provider: ProviderId,
+    operation: &str,
+    args: &[String],
+) -> Result<Command> {
+    match operation {
+        "session/list" => Ok(Command::Capture(parse_session_list_capture(
+            provider, args,
+        )?)),
+        "session/new" => Ok(Command::Capture(parse_session_new_capture(provider, args)?)),
+        "session/load" => Ok(Command::Capture(parse_session_load_capture(
+            provider, args,
+        )?)),
+        "session/prompt" => Ok(Command::Capture(parse_session_prompt_capture(
+            provider, args,
+        )?)),
+        "session/set_config_option" => Ok(Command::Capture(
+            parse_session_set_config_option_capture(provider, args)?,
+        )),
+        _ => Err(CliError::invalid_command(expected_capture_commands())),
+    }
+}
+
+fn parse_provider(value: &str) -> Result<ProviderId> {
+    ProviderId::from_str(value).map_err(CliError::invalid_command)
+}
+
+fn expected_capture_commands() -> &'static str {
+    "conduit capture <claude|copilot|codex> initialize, session/new, session/list, session/load, session/prompt, or session/set_config_option"
+}
+
+fn parse_initialize_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
     let mut cwd = None;
     let mut output = None;
     let mut index = 0;
@@ -139,13 +149,14 @@ fn parse_initialize_capture(args: &[String]) -> Result<CaptureRequest> {
         index += 2;
     }
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::Initialize,
-        cwd: provider_workspace_cwd(cwd)?,
+        cwd: provider_workspace_cwd(provider, cwd)?,
         output,
     })
 }
 
-fn parse_session_new_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_session_new_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
     let mut cwd = None;
     let mut output = None;
     let mut index = 0;
@@ -168,13 +179,14 @@ fn parse_session_new_capture(args: &[String]) -> Result<CaptureRequest> {
         index += 2;
     }
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::New,
-        cwd: provider_workspace_cwd(cwd)?,
+        cwd: provider_workspace_cwd(provider, cwd)?,
         output,
     })
 }
 
-fn parse_session_list_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_session_list_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
     let mut cwd = None;
     let mut output = None;
     let mut index = 0;
@@ -197,13 +209,14 @@ fn parse_session_list_capture(args: &[String]) -> Result<CaptureRequest> {
         index += 2;
     }
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::List,
         cwd: cwd.unwrap_or(std::env::current_dir()?),
         output,
     })
 }
 
-fn parse_session_load_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_session_load_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
     let mut cwd = None;
     let mut output = None;
     let mut session_id = None;
@@ -228,19 +241,26 @@ fn parse_session_load_capture(args: &[String]) -> Result<CaptureRequest> {
         index += 2;
     }
     let cwd = cwd.ok_or_else(|| {
-        CliError::invalid_command("missing required --cwd for codex session/load capture")
+        CliError::invalid_command(format!(
+            "missing required --cwd for {} session/load capture",
+            provider.as_str()
+        ))
     })?;
     let session_id = session_id.ok_or_else(|| {
-        CliError::invalid_command("missing required --session for codex session/load capture")
+        CliError::invalid_command(format!(
+            "missing required --session for {} session/load capture",
+            provider.as_str()
+        ))
     })?;
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::Load { session_id },
         cwd,
         output,
     })
 }
 
-fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_session_prompt_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
     let mut config_id = None;
     let mut cwd = None;
     let mut output = None;
@@ -271,21 +291,32 @@ fn parse_session_prompt_capture(args: &[String]) -> Result<CaptureRequest> {
         index += 2;
     }
     let prompt_path = prompt_path.ok_or_else(|| {
-        CliError::invalid_command("missing required --prompt for codex session/prompt capture")
+        CliError::invalid_command(format!(
+            "missing required --prompt for {} session/prompt capture",
+            provider.as_str()
+        ))
     })?;
-    let config = parse_optional_config_option(config_id, value, "codex session/prompt capture")?;
+    let config = parse_optional_config_option(
+        config_id,
+        value,
+        &format!("{} session/prompt capture", provider.as_str()),
+    )?;
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::Prompt {
             session_id,
             config,
             prompt_path,
         },
-        cwd: provider_workspace_cwd(cwd)?,
+        cwd: provider_workspace_cwd(provider, cwd)?,
         output,
     })
 }
 
-fn parse_session_set_config_option_capture(args: &[String]) -> Result<CaptureRequest> {
+fn parse_session_set_config_option_capture(
+    provider: ProviderId,
+    args: &[String],
+) -> Result<CaptureRequest> {
     let mut config_id = None;
     let mut cwd = None;
     let mut output = None;
@@ -314,22 +345,25 @@ fn parse_session_set_config_option_capture(args: &[String]) -> Result<CaptureReq
         index += 2;
     }
     let config_id = config_id.ok_or_else(|| {
-        CliError::invalid_command(
-            "missing required --config for codex session/set_config_option capture",
-        )
+        CliError::invalid_command(format!(
+            "missing required --config for {} session/set_config_option capture",
+            provider.as_str()
+        ))
     })?;
     let value = value.ok_or_else(|| {
-        CliError::invalid_command(
-            "missing required --value for codex session/set_config_option capture",
-        )
+        CliError::invalid_command(format!(
+            "missing required --value for {} session/set_config_option capture",
+            provider.as_str()
+        ))
     })?;
     Ok(CaptureRequest {
+        provider,
         operation: CaptureOperation::SetConfigOption {
             session_id,
             config_id,
             value,
         },
-        cwd: provider_workspace_cwd(cwd)?,
+        cwd: provider_workspace_cwd(provider, cwd)?,
         output,
     })
 }
@@ -351,8 +385,8 @@ fn parse_optional_config_option(
     }
 }
 
-fn provider_workspace_cwd(configured: Option<PathBuf>) -> Result<PathBuf> {
-    let root = lexical_normalize(Path::new(CODEX_PROVIDER_WORKSPACE_ROOT));
+fn provider_workspace_cwd(provider: ProviderId, configured: Option<PathBuf>) -> Result<PathBuf> {
+    let root = provider_workspace_root(provider);
     let candidate = match configured {
         Some(path) if path.is_absolute() => path,
         Some(path) => root.join(path),
@@ -366,6 +400,10 @@ fn provider_workspace_cwd(configured: Option<PathBuf>) -> Result<PathBuf> {
         "capture cwd must stay under {}",
         root.display()
     )))
+}
+
+fn provider_workspace_root(provider: ProviderId) -> PathBuf {
+    lexical_normalize(&Path::new(PROVIDER_WORKSPACE_ROOT).join(provider.as_str()))
 }
 
 fn lexical_normalize(path: &Path) -> PathBuf {

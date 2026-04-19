@@ -1,0 +1,145 @@
+{
+  "loadedTranscript": {
+    "identity": {
+      "acpSessionId": "e2e-claude-new-session-0001",
+      "provider": "claude"
+    },
+    "rawUpdateCount": 2,
+    "updates": [
+      {
+        "index": 0,
+        "update": {
+          "content": {
+            "text": "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.",
+            "type": "text"
+          },
+          "sessionUpdate": "user_message_chunk"
+        },
+        "variant": "user_message_chunk"
+      },
+      {
+        "index": 1,
+        "update": {
+          "content": {
+            "text": "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+            "type": "text"
+          },
+          "sessionUpdate": "agent_message_chunk"
+        },
+        "variant": "agent_message_chunk"
+      }
+    ]
+  },
+  "response": {
+    "configOptions": [
+      {
+        "category": "mode",
+        "currentValue": "default",
+        "description": "Session permission mode",
+        "id": "mode",
+        "name": "Mode",
+        "options": [
+          {
+            "name": "Auto",
+            "value": "auto"
+          },
+          {
+            "description": "Standard behavior, prompts for dangerous operations",
+            "name": "Default",
+            "value": "default"
+          },
+          {
+            "description": "Auto-accept file edit operations",
+            "name": "Accept Edits",
+            "value": "acceptEdits"
+          },
+          {
+            "description": "Planning mode, no actual tool execution",
+            "name": "Plan Mode",
+            "value": "plan"
+          },
+          {
+            "description": "Don't prompt for permissions, deny if not pre-approved",
+            "name": "Don't Ask",
+            "value": "dontAsk"
+          },
+          {
+            "description": "Bypass all permission checks",
+            "name": "Bypass Permissions",
+            "value": "bypassPermissions"
+          }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "model",
+        "currentValue": "default",
+        "description": "AI model to use",
+        "id": "model",
+        "name": "Model",
+        "options": [
+          {
+            "description": "Sonnet 4.6 · Best for everyday tasks",
+            "name": "Default (recommended)",
+            "value": "default"
+          },
+          {
+            "description": "Sonnet 4.6 with 1M context · Billed as extra usage · $3/$15 per Mtok",
+            "name": "Sonnet (1M context)",
+            "value": "sonnet[1m]"
+          },
+          {
+            "description": "Opus 4.6 · Most capable for complex work · ~2× usage vs Sonnet",
+            "name": "Opus",
+            "value": "opus"
+          },
+          {
+            "description": "Opus 4.6 with 1M context · ~2× usage vs Sonnet · Billed as extra usage · $5/$25 per Mtok",
+            "name": "Opus (1M context)",
+            "value": "opus[1m]"
+          },
+          {
+            "description": "Haiku 4.5 · Fastest for quick answers",
+            "name": "Haiku",
+            "value": "haiku"
+          }
+        ],
+        "type": "select"
+      }
+    ],
+    "modes": {
+      "availableModes": [
+        {
+          "id": "auto",
+          "name": "Auto"
+        },
+        {
+          "description": "Standard behavior, prompts for dangerous operations",
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "description": "Auto-accept file edit operations",
+          "id": "acceptEdits",
+          "name": "Accept Edits"
+        },
+        {
+          "description": "Planning mode, no actual tool execution",
+          "id": "plan",
+          "name": "Plan Mode"
+        },
+        {
+          "description": "Don't prompt for permissions, deny if not pre-approved",
+          "id": "dontAsk",
+          "name": "Don't Ask"
+        },
+        {
+          "description": "Bypass all permission checks",
+          "id": "bypassPermissions",
+          "name": "Bypass Permissions"
+        }
+      ],
+      "currentModeId": "default"
+    }
+  }
+}

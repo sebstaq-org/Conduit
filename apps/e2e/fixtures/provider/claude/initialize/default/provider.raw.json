@@ -16,11 +16,30 @@
     "protocolVersion": 1
   },
   "response": {
-    "agentCapabilities": {},
+    "agentCapabilities": {
+      "_meta": {
+        "claudeCode": {
+          "promptQueueing": true
+        }
+      },
+      "loadSession": true,
+      "mcpCapabilities": {
+        "http": true,
+        "sse": true
+      },
+      "promptCapabilities": {
+        "audio": false,
+        "embeddedContext": true,
+        "image": true
+      },
+      "sessionCapabilities": {
+        "list": {}
+      }
+    },
     "agentInfo": {
-      "name": "fixture-claude",
-      "title": "Claude Fixture",
-      "version": "0.1.0"
+      "name": "@agentclientprotocol/claude-agent-acp",
+      "title": "Claude Agent",
+      "version": "0.26.0"
     },
     "authMethods": [],
     "protocolVersion": 1

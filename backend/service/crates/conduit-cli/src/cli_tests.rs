@@ -1,4 +1,5 @@
 use super::parse_command;
+use acp_discovery::ProviderId;
 use std::path::Path;
 
 fn args(values: &[&str]) -> Vec<String> {
@@ -17,6 +18,36 @@ fn parses_codex_session_list_capture() -> Result<(), Box<dyn std::error::Error>>
         "/captures/one",
     ]))?;
     let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Codex {
+        return Err("provider did not parse".into());
+    }
+    if request.operation != super::CaptureOperation::List {
+        return Err("operation did not parse".into());
+    }
+    if request.cwd.as_path() != Path::new("/repo") {
+        return Err("cwd did not parse".into());
+    }
+    if request.output.as_deref() != Some(Path::new("/captures/one")) {
+        return Err("output did not parse".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_claude_session_list_capture() -> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&[
+        "capture",
+        "claude",
+        "session/list",
+        "--cwd",
+        "/repo",
+        "--out",
+        "/captures/one",
+    ]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Claude {
+        return Err("provider did not parse".into());
+    }
     if request.operation != super::CaptureOperation::List {
         return Err("operation did not parse".into());
     }
@@ -34,11 +65,65 @@ fn parses_codex_initialize_capture_with_default_workspace() -> Result<(), Box<dy
 {
     let parsed = parse_command(&args(&["capture", "codex", "initialize"]))?;
     let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Codex {
+        return Err("provider did not parse".into());
+    }
     if request.operation != super::CaptureOperation::Initialize {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
+    if request.cwd.as_path() != super::provider_workspace_root(ProviderId::Codex).as_path() {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_claude_initialize_capture_with_default_workspace()
+-> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&["capture", "claude", "initialize"]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Claude {
+        return Err("provider did not parse".into());
+    }
+    if request.operation != super::CaptureOperation::Initialize {
+        return Err("operation did not parse".into());
+    }
+    if request.cwd.as_path()
+        != Path::new(super::PROVIDER_WORKSPACE_ROOT).join(ProviderId::Claude.as_str())
+    {
+        return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_copilot_initialize_capture_with_relative_workspace_child()
+-> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&[
+        "capture",
+        "copilot",
+        "initialize",
+        "--cwd",
+        "init-smoke",
+        "--out",
+        "/captures/one",
+    ]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.provider != ProviderId::Copilot {
+        return Err("provider did not parse".into());
+    }
+    if request.operation != super::CaptureOperation::Initialize {
+        return Err("operation did not parse".into());
+    }
+    if request.cwd.as_path()
+        != Path::new(super::PROVIDER_WORKSPACE_ROOT)
+            .join(ProviderId::Copilot.as_str())
+            .join("init-smoke")
+    {
+        return Err(format!("unexpected cwd {}", request.cwd.display()).into());
+    }
+    if request.output.as_deref() != Some(Path::new("/captures/one")) {
+        return Err("output did not parse".into());
     }
     Ok(())
 }
@@ -59,7 +144,11 @@ fn parses_codex_initialize_capture_with_relative_workspace_child()
     if request.operation != super::CaptureOperation::Initialize {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("init-smoke") {
+    if request.cwd.as_path()
+        != super::provider_workspace_root(ProviderId::Codex)
+            .as_path()
+            .join("init-smoke")
+    {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
     if request.output.as_deref() != Some(Path::new("/captures/one")) {
@@ -118,7 +207,7 @@ fn parses_codex_session_prompt_capture_with_default_workspace()
     {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
+    if request.cwd.as_path() != super::provider_workspace_root(ProviderId::Codex).as_path() {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
     Ok(())
@@ -150,7 +239,10 @@ fn parses_codex_session_prompt_capture_with_existing_session()
     {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("prompt-smoke")
+    if request.cwd.as_path()
+        != super::provider_workspace_root(ProviderId::Codex)
+            .as_path()
+            .join("prompt-smoke")
     {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
@@ -217,7 +309,10 @@ fn parses_codex_session_set_config_option_capture() -> Result<(), Box<dyn std::e
     {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("config-smoke")
+    if request.cwd.as_path()
+        != super::provider_workspace_root(ProviderId::Codex)
+            .as_path()
+            .join("config-smoke")
     {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
@@ -235,7 +330,7 @@ fn parses_codex_session_new_capture_with_default_workspace()
     if request.operation != super::CaptureOperation::New {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT) {
+    if request.cwd.as_path() != super::provider_workspace_root(ProviderId::Codex).as_path() {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
     Ok(())
@@ -257,7 +352,10 @@ fn parses_codex_session_new_capture_with_relative_workspace_child()
     if request.operation != super::CaptureOperation::New {
         return Err("operation did not parse".into());
     }
-    if request.cwd.as_path() != Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("prompt-smoke")
+    if request.cwd.as_path()
+        != super::provider_workspace_root(ProviderId::Codex)
+            .as_path()
+            .join("prompt-smoke")
     {
         return Err(format!("unexpected cwd {}", request.cwd.display()).into());
     }
@@ -270,7 +368,7 @@ fn parses_codex_session_new_capture_with_relative_workspace_child()
 #[test]
 fn parses_codex_session_new_capture_with_absolute_workspace_child()
 -> Result<(), Box<dyn std::error::Error>> {
-    let cwd = Path::new(super::CODEX_PROVIDER_WORKSPACE_ROOT).join("smoke");
+    let cwd = super::provider_workspace_root(ProviderId::Codex).join("smoke");
     let parsed = parse_command(&args(&[
         "capture",
         "codex",
@@ -286,12 +384,12 @@ fn parses_codex_session_new_capture_with_absolute_workspace_child()
 }
 
 #[test]
-fn rejects_other_provider() {
-    let error = parse_command(&args(&["capture", "claude", "session/list"]))
+fn rejects_unknown_provider() {
+    let error = parse_command(&args(&["capture", "other", "initialize"]))
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
-    assert!(error.contains("unsupported capture command"));
+    assert!(error.contains("provider must be one of"));
 }
 
 #[test]
@@ -300,7 +398,7 @@ fn rejects_other_operation() {
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
-    assert!(error.contains("unsupported capture command"));
+    assert!(error.contains("session/set_config_option"));
 }
 
 #[test]

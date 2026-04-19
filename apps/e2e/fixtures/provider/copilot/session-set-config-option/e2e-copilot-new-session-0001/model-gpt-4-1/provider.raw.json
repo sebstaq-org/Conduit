@@ -1,0 +1,53 @@
+{
+  "configRequest": {
+    "configId": "model",
+    "sessionId": "e2e-copilot-new-session-0001",
+    "value": "gpt-4.1"
+  },
+  "configResponse": {
+    "configOptions": [
+      {
+        "category": "mode",
+        "currentValue": "https://agentclientprotocol.com/protocol/session-modes#agent",
+        "id": "mode",
+        "name": "Mode",
+        "options": [
+          {
+            "name": "Agent",
+            "value": "https://agentclientprotocol.com/protocol/session-modes#agent"
+          },
+          {
+            "name": "Plan",
+            "value": "https://agentclientprotocol.com/protocol/session-modes#plan"
+          },
+          {
+            "name": "Autopilot",
+            "value": "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+          }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "model",
+        "currentValue": "gpt-4.1",
+        "id": "model",
+        "name": "Model",
+        "options": [
+          {
+            "name": "GPT-5 mini",
+            "value": "gpt-5-mini"
+          },
+          {
+            "name": "GPT-4.1",
+            "value": "gpt-4.1"
+          },
+          {
+            "name": "Claude Haiku 4.5",
+            "value": "claude-haiku-4.5"
+          }
+        ],
+        "type": "select"
+      }
+    ]
+  }
+}

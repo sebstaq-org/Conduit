@@ -1,0 +1,10 @@
+{
+  "sessions": [
+    {
+      "cwd": "/tmp/conduit-e2e-fixture-project",
+      "sessionId": "e2e-claude-new-session-0001",
+      "title": "Claude E2E parity session",
+      "updatedAt": "2026-04-19T10:36:43.417Z"
+    }
+  ]
+}

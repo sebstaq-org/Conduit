@@ -1,0 +1,11 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Removed absolute local capture output path and normalized session id to e2e-copilot-new-session-0001; raw ACP session/load shape preserved.",
+  "manualCapture": true,
+  "operation": "session/load",
+  "provider": "copilot",
+  "sessionId": "e2e-copilot-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-load-after-config-prompt",
+  "timestamp": "2026-04-18T23:54:47.405212418Z"
+}

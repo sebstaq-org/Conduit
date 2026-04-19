@@ -4,6 +4,7 @@ use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::ProviderFactory;
+use std::path::Path;
 use tempfile::TempDir;
 
 #[test]
@@ -88,6 +89,42 @@ fn initialize_uses_raw_fixture_and_sets_snapshot_ready() -> TestResult<()> {
     if !snapshot.capabilities.is_object() {
         return Err(format!("unexpected capabilities {}", snapshot.capabilities).into());
     }
+    Ok(())
+}
+
+#[test]
+fn committed_initialize_fixtures_replay_for_all_providers() -> TestResult<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../apps/e2e/fixtures/provider");
+    let mut factory = FixtureProviderFactory::load(&root)?;
+
+    for (provider, expected_name) in [
+        (ProviderId::Claude, "@agentclientprotocol/claude-agent-acp"),
+        (ProviderId::Copilot, "Copilot"),
+        (ProviderId::Codex, "codex-acp"),
+    ] {
+        let mut port = factory.connect(provider)?;
+        let result = initialize_port(port.as_mut())?;
+        let value = serde_json::to_value(&result)?;
+
+        if value.pointer("/request/method").and_then(Value::as_str) != Some("initialize") {
+            return Err(format!("unexpected initialize request for {provider}").into());
+        }
+        if value
+            .pointer("/response/agentInfo/name")
+            .and_then(Value::as_str)
+            != Some(expected_name)
+        {
+            return Err(format!("unexpected initialize agentInfo for {provider}: {value}").into());
+        }
+        if value
+            .pointer("/response/agentCapabilities/loadSession")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Err(format!("missing loadSession capability for {provider}: {value}").into());
+        }
+    }
+
     Ok(())
 }
 

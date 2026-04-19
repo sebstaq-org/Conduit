@@ -1,9 +1,10 @@
 {
   "captureKind": "provider",
   "contractBoundary": "provider-acp",
-  "curation": "Synthetic E2E initialize fixture; no manual provider data.",
-  "manualCapture": false,
+  "curation": "Removed absolute local capture output path; raw ACP initialize request/response preserved.",
+  "manualCapture": true,
   "operation": "initialize",
   "provider": "claude",
-  "timestamp": "2026-04-18T00:00:00.000000000Z"
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/initialize/cli-parity-20260418T233644Z",
+  "timestamp": "2026-04-18T23:36:45.558056213Z"
 }
