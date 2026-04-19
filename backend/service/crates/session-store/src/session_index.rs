@@ -101,6 +101,41 @@ impl LocalStore {
         Ok(changed.then_some(revision))
     }
 
+    /// Upserts one indexed session row and tracks index revision changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the index cannot be updated.
+    pub fn upsert_session_index_entry(&mut self, entry: &SessionIndexEntry) -> Result<Option<i64>> {
+        let current = self.session_index_entry_for(entry)?;
+        if current.as_ref() == Some(entry) {
+            return Ok(None);
+        }
+        let tx = self.connection.transaction()?;
+        tx.execute("UPDATE session_index_meta SET revision = revision + 1", [])?;
+        upsert_session_index_entry(&tx, entry)?;
+        let revision = tx.query_row(
+            "SELECT revision FROM session_index_meta WHERE id = 1",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
+        tx.commit()?;
+        Ok(Some(revision))
+    }
+
+    /// Returns the store connection's current UTC timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when SQLite cannot evaluate the timestamp.
+    pub fn current_timestamp(&self) -> Result<String> {
+        self.connection
+            .query_row("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .map_err(Error::from)
+    }
+
     /// Applies an ACP `session_info_update` to the session index.
     ///
     /// # Errors
@@ -130,27 +165,7 @@ impl LocalStore {
         }
         let tx = self.connection.transaction()?;
         tx.execute("UPDATE session_index_meta SET revision = revision + 1", [])?;
-        tx.execute(
-            "
-            INSERT INTO session_index_entries (
-                provider,
-                session_id,
-                cwd,
-                title,
-                updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5)
-            ON CONFLICT(provider, session_id, cwd) DO UPDATE SET
-                title = excluded.title,
-                updated_at = excluded.updated_at
-            ",
-            params![
-                key.provider.as_str(),
-                &key.session_id,
-                &key.cwd,
-                &entry.title,
-                &entry.updated_at
-            ],
-        )?;
+        upsert_session_index_entry(&tx, &entry)?;
         let revision = tx.query_row(
             "SELECT revision FROM session_index_meta WHERE id = 1",
             [],
@@ -205,6 +220,32 @@ impl LocalStore {
             .map_err(Error::from)
     }
 
+    fn session_index_entry_for(
+        &self,
+        entry: &SessionIndexEntry,
+    ) -> Result<Option<SessionIndexEntry>> {
+        self.connection
+            .query_row(
+                "
+                SELECT title, updated_at
+                FROM session_index_entries
+                WHERE provider = ?1 AND session_id = ?2 AND cwd = ?3
+                ",
+                params![entry.provider.as_str(), &entry.session_id, &entry.cwd],
+                |row| {
+                    Ok(SessionIndexEntry {
+                        provider: entry.provider,
+                        session_id: entry.session_id.clone(),
+                        cwd: entry.cwd.clone(),
+                        title: row.get(0)?,
+                        updated_at: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Error::from)
+    }
+
     fn session_index_revision(&self) -> Result<i64> {
         self.connection
             .query_row(
@@ -247,6 +288,31 @@ fn insert_session_index_entries(tx: &Transaction<'_>, entries: &[SessionIndexEnt
             ],
         )?;
     }
+    Ok(())
+}
+
+fn upsert_session_index_entry(tx: &Transaction<'_>, entry: &SessionIndexEntry) -> Result<()> {
+    tx.execute(
+        "
+        INSERT INTO session_index_entries (
+            provider,
+            session_id,
+            cwd,
+            title,
+            updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT(provider, session_id, cwd) DO UPDATE SET
+            title = excluded.title,
+            updated_at = excluded.updated_at
+        ",
+        params![
+            entry.provider.as_str(),
+            &entry.session_id,
+            &entry.cwd,
+            &entry.title,
+            &entry.updated_at
+        ],
+    )?;
     Ok(())
 }
 

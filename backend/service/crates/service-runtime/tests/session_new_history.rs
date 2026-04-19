@@ -66,6 +66,53 @@ fn session_new_materializes_open_session_for_prompt_history() -> TestResult<()> 
     assert_prompt_turn_status(&latest.result, "complete")
 }
 
+#[test]
+fn session_new_indexes_session_without_provider_list_refresh() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+    assert_ok(&runtime.dispatch(command(
+        "project",
+        "projects/add",
+        "all",
+        json!({ "cwd": "/repo" }),
+    )))?;
+    runtime.drain_events();
+
+    let created = runtime.dispatch(command(
+        "1",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo", "limit": 10 }),
+    ));
+    assert_ok(&created)?;
+    let session_id = string_field(&created.result, "sessionId")?;
+    let grouped = runtime.dispatch(command(
+        "2",
+        "sessions/grouped",
+        "all",
+        json!({ "updatedWithinDays": null }),
+    ));
+    assert_ok(&grouped)?;
+
+    assert_grouped_session(&grouped.result, "/repo", "codex", session_id)?;
+    let events = runtime.drain_events();
+    if !events
+        .iter()
+        .any(|event| event.kind == service_runtime::RuntimeEventKind::SessionsIndexChanged)
+    {
+        return Err("session/new did not emit sessions_index_changed".into());
+    }
+    let requests = state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .session_list_requests
+        .clone();
+    if requests.is_empty() {
+        return Ok(());
+    }
+    Err(format!("session/new unexpectedly requested session/list: {requests:?}").into())
+}
+
 fn read_history(
     runtime: &mut ServiceRuntime<FakeFactory>,
     id: &str,
@@ -88,6 +135,33 @@ fn string_field<'a>(value: &'a Value, field: &str) -> TestResult<&'a str> {
         .get(field)
         .and_then(Value::as_str)
         .ok_or_else(|| format!("missing string field {field}: {value}").into())
+}
+
+fn assert_grouped_session(
+    value: &Value,
+    cwd: &str,
+    provider: &str,
+    session_id: &str,
+) -> TestResult<()> {
+    let sessions = value
+        .get("groups")
+        .and_then(Value::as_array)
+        .and_then(|groups| {
+            groups
+                .iter()
+                .find(|group| group.get("cwd").and_then(Value::as_str) == Some(cwd))
+        })
+        .and_then(|group| group.get("sessions"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing grouped sessions for {cwd}: {value}"))?;
+    if sessions.iter().any(|session| {
+        session.get("provider").and_then(Value::as_str) == Some(provider)
+            && session.get("sessionId").and_then(Value::as_str) == Some(session_id)
+            && session.get("updatedAt").and_then(Value::as_str).is_some()
+    }) {
+        return Ok(());
+    }
+    Err(format!("missing indexed session {provider}/{session_id}: {sessions:?}").into())
 }
 
 fn assert_items(value: &Value, expected: &[(&str, &str, Option<&str>)]) -> TestResult<()> {
