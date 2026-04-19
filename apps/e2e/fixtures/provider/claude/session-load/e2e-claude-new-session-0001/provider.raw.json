@@ -1,10 +1,36 @@
 {
-  "configRequest": {
-    "configId": "model",
-    "sessionId": "e2e-claude-new-session-0001",
-    "value": "haiku"
+  "loadedTranscript": {
+    "identity": {
+      "acpSessionId": "e2e-claude-new-session-0001",
+      "provider": "claude"
+    },
+    "rawUpdateCount": 2,
+    "updates": [
+      {
+        "index": 0,
+        "update": {
+          "content": {
+            "text": "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.",
+            "type": "text"
+          },
+          "sessionUpdate": "user_message_chunk"
+        },
+        "variant": "user_message_chunk"
+      },
+      {
+        "index": 1,
+        "update": {
+          "content": {
+            "text": "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+            "type": "text"
+          },
+          "sessionUpdate": "agent_message_chunk"
+        },
+        "variant": "agent_message_chunk"
+      }
+    ]
   },
-  "configResponse": {
+  "response": {
     "configOptions": [
       {
         "category": "mode",
@@ -47,7 +73,7 @@
       },
       {
         "category": "model",
-        "currentValue": "haiku",
+        "currentValue": "default",
         "description": "AI model to use",
         "id": "model",
         "name": "Model",
@@ -80,6 +106,40 @@
         ],
         "type": "select"
       }
-    ]
+    ],
+    "modes": {
+      "availableModes": [
+        {
+          "id": "auto",
+          "name": "Auto"
+        },
+        {
+          "description": "Standard behavior, prompts for dangerous operations",
+          "id": "default",
+          "name": "Default"
+        },
+        {
+          "description": "Auto-accept file edit operations",
+          "id": "acceptEdits",
+          "name": "Accept Edits"
+        },
+        {
+          "description": "Planning mode, no actual tool execution",
+          "id": "plan",
+          "name": "Plan Mode"
+        },
+        {
+          "description": "Don't prompt for permissions, deny if not pre-approved",
+          "id": "dontAsk",
+          "name": "Don't Ask"
+        },
+        {
+          "description": "Bypass all permission checks",
+          "id": "bypassPermissions",
+          "name": "Bypass Permissions"
+        }
+      ],
+      "currentModeId": "default"
+    }
   }
 }

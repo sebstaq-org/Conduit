@@ -1,0 +1,8 @@
+{
+  "captureKind": "provider",
+  "curation": "Removed absolute local capture output path and normalized session id to e2e-claude-new-session-0001; raw ACP session/prompt shape preserved. Provider thought chunks were removed from promptUpdates; final agent message content is preserved.",
+  "operation": "session/prompt",
+  "provider": "claude",
+  "sessionId": "e2e-claude-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new"
+}

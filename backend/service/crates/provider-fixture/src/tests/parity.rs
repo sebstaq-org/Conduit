@@ -8,7 +8,7 @@ use std::path::Path;
 const PARITY_PROMPT: &str = "Reply with exactly CONDUIT_E2E_PROVIDER_PARITY_RESPONSE. Do not include private paths, credentials, account names, user names, machine names, dates, or external service details.";
 
 #[test]
-fn committed_claude_parity_fixtures_replay_session_new_and_config() -> TestResult<()> {
+fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResult<()> {
     let mut factory = parity_factory()?;
     let mut port = factory.connect(ProviderId::Claude)?;
     initialize_port(port.as_mut())?;
@@ -26,12 +26,39 @@ fn committed_claude_parity_fixtures_replay_session_new_and_config() -> TestResul
         return Err(format!("unexpected claude session/list fixture: {listed}").into());
     }
 
+    assert_prompt_requires_config(port.as_mut(), "e2e-claude-new-session-0001")?;
+
     let configured = port.session_set_config_option(
         "e2e-claude-new-session-0001".to_owned(),
         "model".to_owned(),
         "haiku".to_owned(),
     )?;
     assert_config_current_value(&configured, "model", "haiku", "claude set_config")?;
+
+    let mut updates = Vec::new();
+    let prompted = port.session_prompt(
+        "e2e-claude-new-session-0001".to_owned(),
+        vec![json!({ "type": "text", "text": PARITY_PROMPT })],
+        &mut |update| updates.push(update),
+    )?;
+    assert_json_string(&prompted, "/stopReason", "end_turn", "claude prompt")?;
+    assert_agent_text(
+        &updates,
+        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+        "claude prompt",
+    )?;
+
+    let loaded = port.session_load(
+        "e2e-claude-new-session-0001".to_owned(),
+        Path::new("/repo").to_path_buf(),
+    )?;
+    assert_config_current_value(&loaded, "model", "default", "claude load")?;
+    assert_loaded_agent_text(
+        &port.snapshot().loaded_transcripts,
+        "e2e-claude-new-session-0001",
+        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+        "claude load",
+    )?;
     Ok(())
 }
 
@@ -63,15 +90,40 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
         &mut |update| updates.push(update),
     )?;
     assert_json_string(&prompted, "/stopReason", "end_turn", "copilot prompt")?;
-    if updates.is_empty() {
-        return Err("copilot prompt fixture did not replay updates".into());
-    }
+    assert_agent_text(
+        &updates,
+        "CONDUIT_E2E_PROVIDER_PARITY_RESPONSE",
+        "copilot prompt",
+    )?;
 
     let loaded = port.session_load(
         "e2e-copilot-new-session-0001".to_owned(),
         Path::new("/repo").to_path_buf(),
     )?;
     assert_config_current_value(&loaded, "model", "gpt-4.1", "copilot load")?;
+    Ok(())
+}
+
+fn assert_prompt_requires_config(
+    port: &mut dyn service_runtime::ProviderPort,
+    session_id: &str,
+) -> TestResult<()> {
+    let mut updates = Vec::new();
+    let error = port
+        .session_prompt(
+            session_id.to_owned(),
+            vec![json!({ "type": "text", "text": PARITY_PROMPT })],
+            &mut |update| updates.push(update),
+        )
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    if !error.contains("requires prior session/set_config_option model=haiku") {
+        return Err(format!("claude prompt did not require model=haiku prelude: {error}").into());
+    }
+    if !updates.is_empty() {
+        return Err("claude prompt emitted updates before required config".into());
+    }
     Ok(())
 }
 
@@ -91,6 +143,41 @@ fn assert_json_string(
         return Err(format!("{context} expected {pointer}={expected}, got {value}").into());
     }
     Ok(())
+}
+
+fn assert_agent_text(
+    updates: &[acp_core::TranscriptUpdateSnapshot],
+    expected: &str,
+    context: &str,
+) -> TestResult<()> {
+    let actual = updates
+        .iter()
+        .filter(|update| update.variant == "agent_message_chunk")
+        .filter_map(|update| {
+            update
+                .update
+                .get("content")
+                .and_then(|content| content.get("text"))
+                .and_then(Value::as_str)
+        })
+        .collect::<String>();
+    if actual != expected {
+        return Err(format!("{context} expected agent text {expected}, got {actual}").into());
+    }
+    Ok(())
+}
+
+fn assert_loaded_agent_text(
+    transcripts: &[acp_core::LoadedTranscriptSnapshot],
+    session_id: &str,
+    expected: &str,
+    context: &str,
+) -> TestResult<()> {
+    let transcript = transcripts
+        .iter()
+        .find(|transcript| transcript.identity.acp_session_id == session_id)
+        .ok_or_else(|| format!("{context} did not load transcript {session_id}"))?;
+    assert_agent_text(&transcript.updates, expected, context)
 }
 
 fn assert_config_current_value(

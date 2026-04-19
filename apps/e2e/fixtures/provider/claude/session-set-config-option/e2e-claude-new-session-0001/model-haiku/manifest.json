@@ -1,11 +1,8 @@
 {
   "captureKind": "provider",
-  "contractBoundary": "provider-acp",
-  "curation": "Removed absolute local capture output path and normalized session id 81997108-92b4-4eab-a351-c97dfb070a69 to e2e-claude-new-session-0001; raw ACP set_config_option shape preserved.",
-  "manualCapture": true,
+  "curation": "Extracted configCapture from a real session/prompt capture, removed absolute local capture output path, and normalized session id to e2e-claude-new-session-0001; raw ACP set_config_option shape preserved.",
   "operation": "session/set_config_option",
   "provider": "claude",
   "sessionId": "e2e-claude-new-session-0001",
-  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-attempt2-20260418T235132Z/session-set-config-option-model-haiku-with-new",
-  "timestamp": "2026-04-18T23:51:51.765271878Z"
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-prompt-model-haiku-with-new"
 }

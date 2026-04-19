@@ -70,7 +70,7 @@ test("draft prompt in plan mode shows terminal plan decision", async ({
   ).toBeVisible();
 });
 
-test("provider parity fixtures drive Claude and Copilot draft flows", async ({
+test("Claude parity fixture drives configured draft prompt", async ({
   page,
 }) => {
   const activeHarness = requireHarness();
@@ -87,6 +87,25 @@ test("provider parity fixtures drive Claude and Copilot draft flows", async ({
   await page.getByLabel("Select Model").click();
   await page.getByLabel("Haiku").click();
   await expect(page.getByText("Model: haiku")).toBeVisible();
+  await page.getByLabel("Session message").fill(providerParityPrompt);
+
+  const sendButton = page.getByRole("button", { name: "Send message" });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
+
+  await expect(page.getByText(providerParitySentinel)).toBeVisible();
+});
+
+test("Copilot parity fixture drives configured draft prompt", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+
+  const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
+  await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
+  await newSessionButton.click();
 
   await page.getByLabel("Select provider for new session").click();
   await page.getByLabel("copilot").click();

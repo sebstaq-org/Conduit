@@ -47,19 +47,24 @@
       "name": "Model",
       "options": [
         {
-          "description": "Opus 4.6 with 1M context · Most capable for complex work",
+          "description": "Sonnet 4.6 · Best for everyday tasks",
           "name": "Default (recommended)",
           "value": "default"
-        },
-        {
-          "description": "Sonnet 4.6 · Best for everyday tasks",
-          "name": "Sonnet",
-          "value": "sonnet"
         },
         {
           "description": "Sonnet 4.6 with 1M context · Billed as extra usage · $3/$15 per Mtok",
           "name": "Sonnet (1M context)",
           "value": "sonnet[1m]"
+        },
+        {
+          "description": "Opus 4.6 · Most capable for complex work · ~2× usage vs Sonnet",
+          "name": "Opus",
+          "value": "opus"
+        },
+        {
+          "description": "Opus 4.6 with 1M context · ~2× usage vs Sonnet · Billed as extra usage · $5/$25 per Mtok",
+          "name": "Opus (1M context)",
+          "value": "opus[1m]"
         },
         {
           "description": "Haiku 4.5 · Fastest for quick answers",
