@@ -1,6 +1,5 @@
-import { useSelector } from "react-redux";
-import { selectActiveSession } from "@/app-state";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
+import { DraftSessionRow } from "@/features/session-list/draft-session-row";
 import { SessionGroupHeader } from "@/features/session-list/session-group-header";
 import { SessionRowItem } from "@/features/session-list/session-row-item";
 import type { ActiveSession, useOpenSessionMutation } from "@/app-state";
@@ -14,14 +13,13 @@ import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
 import type { NavigationPanelScrollRow } from "./navigation-panel-scroll-rows";
 
 interface NavigationPanelScrollRowItemProps {
+  activeSession: ActiveSession | null;
   onSessionSelected?: (() => void) | undefined;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   row: NavigationPanelScrollRow;
 }
 
 const sessionRowDepth = 1;
-const draftSessionLabel = "Draft session";
-const draftSessionNoProviderMeta = "No provider selected";
 
 type SessionNavigationPanelRow = Extract<
   NavigationPanelScrollRow,
@@ -91,14 +89,7 @@ function renderSessionNavigationPanelRow({
     return <Row depth={sessionRowDepth} label="No recent sessions" muted />;
   }
   if (row.kind === "draftSession") {
-    return (
-      <Row
-        depth={sessionRowDepth}
-        label={draftSessionLabel}
-        meta={row.activeSession.provider ?? draftSessionNoProviderMeta}
-        selected
-      />
-    );
+    return <DraftSessionRow activeSession={row.activeSession} />;
   }
   return (
     <SessionRowItem
@@ -114,7 +105,6 @@ function renderSessionNavigationPanelRow({
 function NavigationPanelScrollRowItem(
   props: NavigationPanelScrollRowItemProps,
 ): React.JSX.Element {
-  const activeSession = useSelector(selectActiveSession);
   const staticRow = renderStaticNavigationPanelRow(props.row);
   if (staticRow !== null) {
     return staticRow;
@@ -123,7 +113,7 @@ function NavigationPanelScrollRowItem(
     return <Row label="Row unavailable" muted />;
   }
   return renderSessionNavigationPanelRow({
-    activeSession,
+    activeSession: props.activeSession,
     onSessionSelected: props.onSessionSelected,
     openSession: props.openSession,
     row: props.row,

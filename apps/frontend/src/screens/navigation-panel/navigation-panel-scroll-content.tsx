@@ -54,6 +54,7 @@ function NavigationPanelScrollContent({
       keyExtractor={(row) => row.key}
       renderItem={({ item }) => (
         <NavigationPanelScrollRowItem
+          activeSession={activeSession}
           onSessionSelected={onSessionSelected}
           openSession={openSession}
           row={item}
