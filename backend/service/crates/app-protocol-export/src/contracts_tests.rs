@@ -261,10 +261,21 @@ fn read_json(path: &Path) -> Result<Value, Box<dyn Error>> {
 }
 
 fn repo_root() -> Result<PathBuf, Box<dyn Error>> {
+    let cwd = std::env::current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
+    discover_repo_root(manifest_dir).ok_or_else(|| "could not resolve repository root".into())
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
         .ancestors()
-        .nth(4)
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
         .map(Path::to_path_buf)
-        .ok_or_else(|| "could not resolve repository root".into())
 }
