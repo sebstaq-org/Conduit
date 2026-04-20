@@ -1,12 +1,13 @@
 import type { TextStyle, ViewStyle } from "react-native";
 import type { Theme } from "@/theme";
+import { webTextInputFocusReset } from "@/ui/text-input";
 
 const autocompleteDefaultLimit = 8;
 const autocompleteInputAccessibilityRole = "search" as const;
 const autocompleteStatusTextVariant = "meta" as const;
 
 function createAutocompleteInputStyle(theme: Theme): TextStyle {
-  return {
+  const inputStyle: TextStyle = {
     color: theme.colors.textPrimary,
     fontSize: 14,
     fontWeight: "600",
@@ -17,6 +18,8 @@ function createAutocompleteInputStyle(theme: Theme): TextStyle {
     paddingRight: theme.spacing.sm,
     paddingTop: theme.spacing.xs,
   };
+
+  return Object.assign(inputStyle, webTextInputFocusReset);
 }
 
 function createAutocompleteInputFrameStyle(theme: Theme): TextStyle {
