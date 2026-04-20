@@ -6,6 +6,7 @@ mod wire;
 
 use crate::error::Result;
 use crate::local_store::open_store;
+use acp_discovery::{ProviderId, resolve_provider_command};
 use actor::RuntimeActor;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
@@ -89,7 +90,25 @@ pub(crate) async fn run(
         )
         .await;
     }
+    validate_managed_codex_adapter()?;
     serve_router(listener, router(local_store, store_opener)).await
+}
+
+fn validate_managed_codex_adapter() -> Result<()> {
+    let command = resolve_provider_command(ProviderId::Codex).map_err(|error| {
+        tracing::error!(
+            event_name = "managed_codex_acp.missing",
+            source = "service-bin",
+            error_message = %error
+        );
+        error
+    })?;
+    tracing::info!(
+        event_name = "managed_codex_acp.ready",
+        source = "service-bin",
+        executable = %command.executable.display()
+    );
+    Ok(())
 }
 
 async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
