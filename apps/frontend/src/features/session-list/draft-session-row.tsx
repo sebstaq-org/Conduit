@@ -15,6 +15,7 @@ function DraftSessionRow({
       depth={sessionRowDepth}
       label={draftSessionLabel}
       meta={draftSessionMeta(activeSession)}
+      reserveLeadingSpace
       selected
     />
   );

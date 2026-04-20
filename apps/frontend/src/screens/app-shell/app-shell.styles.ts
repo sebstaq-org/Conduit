@@ -7,6 +7,8 @@ const appShellDrawerPosition = "left" as const;
 const appShellDrawerType = "front" as const;
 const appShellFlex = 1;
 const appShellFlexDirection = "row" as const;
+const appShellPanelResizeHandleWidth = 10;
+const appShellPanelResizeLineWidth = 1;
 const appShellSwipeEdgeWidth = 96;
 const appShellSwipeEnabled = true;
 
@@ -18,8 +20,8 @@ function createAppShellDrawerStyle(
     backgroundColor: theme.colors.background,
     borderColor: theme.colors.borderSubtle,
     borderRightWidth: 1,
-    maxWidth: theme.panel.maxWidth,
-    width: Math.min(windowWidth, theme.panel.maxWidth),
+    maxWidth: theme.panel.drawerMaxWidth,
+    width: Math.min(windowWidth, theme.panel.drawerMaxWidth),
   };
 }
 
@@ -35,6 +37,41 @@ function isWideAppShellLayout(theme: Theme, windowWidth: number): boolean {
   return windowWidth >= theme.breakpoints.web;
 }
 
+function clampNavigationPanelWidth(
+  panelWidth: number,
+  minWidth: number,
+  maxWidth: number,
+): number {
+  return Math.min(Math.max(panelWidth, minWidth), maxWidth);
+}
+
+function navigationPanelMaxWidth(theme: Theme, windowWidth: number): number {
+  const viewportMaxWidth = windowWidth - theme.appShell.minContentWidth;
+
+  return Math.max(
+    theme.panel.minWidth,
+    Math.min(theme.panel.maxWidth, viewportMaxWidth),
+  );
+}
+
+function createNavigationPanelResizeHandleStyle(theme: Theme): ViewStyle {
+  return {
+    alignItems: "center",
+    backgroundColor: theme.colors.background,
+    flexShrink: 0,
+    justifyContent: "center",
+    width: appShellPanelResizeHandleWidth,
+  };
+}
+
+function createNavigationPanelResizeHandleLineStyle(theme: Theme): ViewStyle {
+  return {
+    backgroundColor: theme.colors.borderSubtle,
+    height: "100%",
+    width: appShellPanelResizeLineWidth,
+  };
+}
+
 export {
   appShellBackgroundColor,
   appShellDrawerAccessibilityLabel,
@@ -44,7 +81,11 @@ export {
   appShellFlexDirection,
   appShellSwipeEdgeWidth,
   appShellSwipeEnabled,
+  clampNavigationPanelWidth,
   createAppShellDrawerStyle,
+  createNavigationPanelResizeHandleLineStyle,
+  createNavigationPanelResizeHandleStyle,
   createAppShellRootStyle,
   isWideAppShellLayout,
+  navigationPanelMaxWidth,
 };

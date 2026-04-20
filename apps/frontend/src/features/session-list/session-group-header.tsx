@@ -10,6 +10,13 @@ interface SessionGroupHeaderProps {
   group: SessionGroup;
 }
 
+function projectPathMeta(group: SessionGroup): string | undefined {
+  if (group.displayName === group.cwd) {
+    return undefined;
+  }
+  return group.cwd;
+}
+
 function SessionGroupHeader({
   group,
 }: SessionGroupHeaderProps): React.JSX.Element {
@@ -19,7 +26,7 @@ function SessionGroupHeader({
     <Row
       icon="folder"
       label={group.displayName}
-      meta={group.cwd}
+      meta={projectPathMeta(group)}
       trailing={
         <Box flexDirection="row" gap="xxs">
           <IconButton

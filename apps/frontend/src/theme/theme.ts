@@ -10,13 +10,19 @@ const baseTheme = {
     phone: 0,
     web: 768,
   },
+  appShell: {
+    minContentWidth: 360,
+  },
   panel: {
     composerInputMinHeight: 40,
     composerSurfaceMinHeight: 98,
+    defaultWidth: 414,
+    drawerMaxWidth: 414,
     icon: 18,
     iconButton: 28,
     iconGlyph: 16,
-    maxWidth: 414,
+    maxWidth: 560,
+    minWidth: 280,
     rowHeight: 34,
     topBarHeight: 54,
   },
@@ -77,6 +83,7 @@ const baseTheme = {
 } as const;
 
 const lightTheme = createTheme({
+  appShell: baseTheme.appShell,
   borderRadii: baseTheme.borderRadii,
   breakpoints: baseTheme.breakpoints,
   colors: {
@@ -108,6 +115,7 @@ const lightTheme = createTheme({
 });
 
 const darkTheme = createTheme({
+  appShell: baseTheme.appShell,
   borderRadii: baseTheme.borderRadii,
   breakpoints: baseTheme.breakpoints,
   colors: {
