@@ -80,6 +80,14 @@ feature work must not bypass or rewrite ACP semantics in local ad-hoc flows.
 If product-specific UI/state data is needed, keep ACP wire contract data intact
 and layer local metadata beside it or as explicit, documented extensions.
 
+Codex support is a managed official-ACP path, not an optional local fallback.
+The vendored `vendor/codex-acp` adapter must be built into
+`.conduit/bin/codex-acp` before any normal dev, stage, packaged, or runtime
+service flow starts. Do not bypass, stub, or silently degrade this requirement:
+use `pnpm run codex-acp:build` / `pnpm run bootstrap`, keep release packaging
+copying the managed binary beside `service-bin`, and make missing adapter states
+fail with explicit errors.
+
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 
 Rust is hard-default: workspace lints are blocking, docs warnings are errors in the root suite, broad lint suppressions are forbidden, and crate-edge violations fail structure checks. The repo guardrail crate under `backend/service/crates/repo-guard` is fully bound by the same Rust rules and gets no policy carve-outs.

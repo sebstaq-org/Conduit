@@ -11,6 +11,9 @@ pub(crate) enum ServiceError {
     /// JSON serialization failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    /// Official ACP provider discovery failed.
+    #[error(transparent)]
+    AcpDiscovery(#[from] acp_discovery::DiscoveryError),
     /// Local store operations failed.
     #[error(transparent)]
     LocalStore(#[from] session_store::Error),

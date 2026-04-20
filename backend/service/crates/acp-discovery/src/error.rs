@@ -17,7 +17,9 @@ pub enum DiscoveryError {
         program: String,
     },
     /// A required managed executable was not built in any repo-owned location.
-    #[error("could not resolve managed {program}; run `pnpm run codex-acp:build`")]
+    #[error(
+        "could not resolve managed {program}; Conduit requires the vendored Codex ACP adapter at .conduit/bin/codex-acp. Run `pnpm run codex-acp:build` or `pnpm run bootstrap` before starting service-bin"
+    )]
     ManagedExecutableNotFound {
         /// The program name that could not be resolved.
         program: String,
