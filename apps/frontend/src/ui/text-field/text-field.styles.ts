@@ -1,5 +1,6 @@
 import type { TextStyle } from "react-native";
 import type { Theme } from "@/theme";
+import { webTextInputFocusReset } from "@/ui/text-input";
 
 type TextFieldAppearance = "default" | "plain";
 
@@ -40,9 +41,15 @@ function createTextFieldStyle(
   appearance: TextFieldAppearance,
 ): TextStyle {
   if (appearance === "plain") {
-    return createPlainTextFieldStyle(theme);
+    return Object.assign(
+      createPlainTextFieldStyle(theme),
+      webTextInputFocusReset,
+    );
   }
-  return createDefaultTextFieldStyle(theme);
+  return Object.assign(
+    createDefaultTextFieldStyle(theme),
+    webTextInputFocusReset,
+  );
 }
 
 export { createTextFieldStyle };
