@@ -3,6 +3,7 @@ import { Box } from "@/theme";
 import { DropdownMenuRoot, DropdownMenuTrigger } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
 import { SessionComposerConfigOptionMenu } from "./session-composer-config-option-menu";
+import { displayProviderName } from "./session-composer-display";
 import { SessionComposerProviderMenu } from "./session-composer-provider-menu";
 import {
   sessionComposerGap,
@@ -20,12 +21,12 @@ interface SessionComposerControlsProps {
 }
 
 function renderComposerControl(
-  provider: string | null,
+  provider: ProviderId | null,
   showChevron: boolean,
 ): React.JSX.Element {
   return (
     <SessionComposerPreviewControlChip
-      control={{ label: "Provider", value: provider ?? "Select provider" }}
+      control={{ label: "Provider", value: displayProviderName(provider) }}
       key={provider ?? "select-provider"}
       showChevron={showChevron}
     />
