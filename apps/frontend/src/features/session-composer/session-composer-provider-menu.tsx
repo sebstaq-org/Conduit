@@ -1,6 +1,7 @@
 import { PROVIDERS } from "@conduit/session-client";
 import type { ProviderId } from "@conduit/session-client";
 import { DropdownMenuContent, DropdownMenuItem } from "@/ui";
+import { displayProviderName } from "./session-composer-display";
 
 interface SessionComposerProviderMenuProps {
   onProviderSelect: (provider: ProviderId) => void;
@@ -14,7 +15,7 @@ function SessionComposerProviderMenu({
       {PROVIDERS.map((provider) => (
         <DropdownMenuItem
           key={provider}
-          label={provider}
+          label={displayProviderName(provider)}
           onSelect={() => {
             onProviderSelect(provider);
           }}
