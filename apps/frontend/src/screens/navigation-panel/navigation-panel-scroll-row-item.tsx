@@ -19,8 +19,6 @@ interface NavigationPanelScrollRowItemProps {
   row: NavigationPanelScrollRow;
 }
 
-const sessionRowDepth = 1;
-
 type SessionNavigationPanelRow = Extract<
   NavigationPanelScrollRow,
   | { kind: "draftSession" }
@@ -63,9 +61,9 @@ function renderStaticNavigationPanelRow(
   if (row.kind === "projectRows") {
     return <NavigationPanelProjectRows />;
   }
-  if (row.kind === "threadsHeader") {
+  if (row.kind === "projectsHeader") {
     return (
-      <Section actions={<ProjectsToolbar />} title="Threads">
+      <Section actions={<ProjectsToolbar />} title="Projects">
         <Box />
       </Section>
     );
@@ -86,7 +84,7 @@ function renderSessionNavigationPanelRow({
     return <SessionGroupHeader group={row.group} />;
   }
   if (row.kind === "groupEmpty") {
-    return <Row depth={sessionRowDepth} label="No recent sessions" muted />;
+    return <Row label="No recent sessions" muted reserveLeadingSpace />;
   }
   if (row.kind === "draftSession") {
     return <DraftSessionRow activeSession={row.activeSession} />;

@@ -1,3 +1,3 @@
-const sessionRowDepth = 1;
+const sessionRowDepth = 0;
 
 export { sessionRowDepth };
