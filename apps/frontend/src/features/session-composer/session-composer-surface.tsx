@@ -89,7 +89,7 @@ function renderStandardComposerBody({
 }: SessionComposerStandardBodyProps): React.JSX.Element {
   return (
     <>
-      <SessionComposerInput draft={draft} setDraft={setDraft} />
+      <SessionComposerInput draft={draft} onSend={onSend} setDraft={setDraft} />
       <SessionComposerActionRow
         canSend={canSend}
         configOptions={configOptions}
