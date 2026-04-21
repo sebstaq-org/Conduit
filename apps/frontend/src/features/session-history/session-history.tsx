@@ -1,16 +1,16 @@
+import { useCallback } from "react";
 import { useSelector } from "react-redux";
-import { selectActiveSession, useSessionTimeline } from "@/app-state";
+import {
+  selectActiveSession,
+  useLoadOlderSessionTimelineMutation,
+  useSessionTimeline,
+} from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { SessionHistoryList } from "./session-history-list";
-import type { SessionHistoryWindow } from "@conduit/session-client";
 import type { ViewStyle } from "react-native";
 
 type HistoryRenderState = "loading" | "ready" | "unavailable";
-
-interface SessionHistoryProps {
-  historyOverride?: SessionHistoryWindow | null | undefined;
-}
 
 const historyStatusVariant = "rowLabelMuted" as const;
 const historyRootStyle: ViewStyle = { minHeight: 0, position: "relative" };
@@ -22,7 +22,6 @@ const historyOverlayStyle: ViewStyle = {
   top: 8,
   zIndex: 1,
 };
-const noopLoadOlder = (): void => undefined;
 
 function renderNoActiveSession(): React.JSX.Element {
   return (
@@ -91,21 +90,22 @@ function olderStatusLabel(
 function renderReadyHistory(
   timeline: Pick<
     ReturnType<typeof useSessionTimeline>,
-    "history" | "isFetchingOlder" | "isOlderError" | "loadOlderIfNeeded"
+    "history" | "isFetchingOlder" | "isOlderError"
   >,
+  onLoadOlder: () => void,
   openSessionId: string,
 ): React.JSX.Element {
   if (timeline.history === undefined) {
     return renderHistoryUnavailable();
   }
-  const handleStartReached = timeline.loadOlderIfNeeded;
   const statusLabel = olderStatusLabel(timeline);
 
   return (
     <Box flex={1} style={historyRootStyle}>
       <SessionHistoryList
+        isFetchingOlder={timeline.isFetchingOlder}
         history={timeline.history}
-        onStartReached={handleStartReached}
+        onLoadOlder={onLoadOlder}
         openSessionId={openSessionId}
       />
       {statusLabel !== null && (
@@ -126,25 +126,9 @@ function selectedOpenSessionId(
   return activeSession.openSessionId;
 }
 
-function renderHistoryOverride(
-  historyOverride: SessionHistoryWindow | null,
-): React.JSX.Element | null {
-  if (historyOverride === null) {
-    return null;
-  }
-  return renderReadyHistory(
-    {
-      history: historyOverride,
-      isFetchingOlder: false,
-      isOlderError: false,
-      loadOlderIfNeeded: noopLoadOlder,
-    },
-    historyOverride.openSessionId,
-  );
-}
-
 function renderSessionHistory(args: {
   activeSession: ActiveSession | null;
+  onLoadOlder: () => void;
   openSessionId: string | null;
   timeline: ReturnType<typeof useSessionTimeline>;
 }): React.JSX.Element {
@@ -155,21 +139,41 @@ function renderSessionHistory(args: {
   if (state !== "ready" || args.timeline.history === undefined) {
     return renderHistoryByState(state);
   }
-  return renderReadyHistory(args.timeline, args.openSessionId);
+  return renderReadyHistory(
+    args.timeline,
+    args.onLoadOlder,
+    args.openSessionId,
+  );
 }
 
-function SessionHistory({
-  historyOverride = null,
-}: SessionHistoryProps): React.JSX.Element {
+function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
-  const overrideElement = renderHistoryOverride(historyOverride);
+  const [loadOlder] = useLoadOlderSessionTimelineMutation();
+  const handleLoadOlder = useCallback((): void => {
+    if (openSessionId === null || timeline.history === undefined) {
+      return;
+    }
+    if (timeline.isFetchingOlder) {
+      return;
+    }
+    const cursor = timeline.history.nextCursor;
+    if (cursor === null) {
+      return;
+    }
+    void loadOlder({
+      cursor,
+      openSessionId,
+    });
+  }, [loadOlder, openSessionId, timeline.history, timeline.isFetchingOlder]);
 
-  if (overrideElement !== null) {
-    return overrideElement;
-  }
-  return renderSessionHistory({ activeSession, openSessionId, timeline });
+  return renderSessionHistory({
+    activeSession,
+    onLoadOlder: handleLoadOlder,
+    openSessionId,
+    timeline,
+  });
 }
 
 export { SessionHistory };

@@ -28,6 +28,8 @@ use set_config::{SessionSetConfigOptionFixture, read_session_set_config_option_f
 use std::collections::HashMap;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
+use std::thread::sleep;
+use std::time::Duration;
 
 mod failure;
 mod initialize;
@@ -290,7 +292,10 @@ impl ProviderPort for FixtureProviderPort {
             }
             SessionPromptFixture::Success(success) => {
                 for update in &success.updates {
-                    update_sink(update.clone());
+                    if update.delay_ms > 0 {
+                        sleep(Duration::from_millis(update.delay_ms));
+                    }
+                    update_sink(update.snapshot.clone());
                 }
                 self.last_prompt = Some(success.lifecycle(self.provider, session_id));
                 Ok(success.response)
