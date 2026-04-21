@@ -5,7 +5,7 @@ description: "Conduit repo PR creation and green-check workflow. Use when Codex 
 
 # Conduit PR Green
 
-Use this skill to create or update a Conduit PR and stop only when the PR is ready for merge queue handoff. If the repository uses merge queue, the agent's job is complete as soon as the PR is confirmed to be in the queue.
+Use this skill to create or update a Conduit PR and stop when the PR is ready for merge queue handoff. If the PR enters merge queue before the agent stops polling, the job is also complete.
 
 ## Hard Rules
 
@@ -14,8 +14,15 @@ Use this skill to create or update a Conduit PR and stop only when the PR is rea
 - Do not let `gh pr checks --watch` be the final authority. Re-read `statusCheckRollup` after it exits, because `gh` can return success while checks are still pending.
 - Treat `PENDING`, `QUEUED`, `IN_PROGRESS`, `FAILURE`, `CANCELLED`, `TIMED_OUT`, and `ACTION_REQUIRED` as not green.
 - If the PR is `DIRTY`, rebase or merge the latest base branch, rerun validation, push, and continue polling.
-- If merge queue is enabled for the target branch, stop as soon as the PR has been successfully added to the queue. Do not keep polling queue-owned checks after that handoff.
-- Treat GitHub GraphQL `isInMergeQueue: true` as the handoff signal. Once that field is `true`, the queue owns the remaining wait.
+- If the target branch requires merge queue, the agent is done when either:
+  - the PR is ready to be enqueued, or
+  - GitHub GraphQL reports `isInMergeQueue: true`.
+- Detect "requires merge queue" from the repository ruleset API by checking for a `merge_queue` rule on the target branch.
+- Detect "ready to be enqueued" with:
+  - `isDraft == false`
+  - `mergeable == MERGEABLE`
+  - `mergeStateStatus == CLEAN`
+  - `statusCheckRollup.state == SUCCESS`
 - If merge queue is not in use, do not stop until the PR is merge-clean and each required check run is completed with `SUCCESS`, or until an external blocker makes that impossible.
 
 ## Workflow
@@ -26,7 +33,7 @@ Use this skill to create or update a Conduit PR and stop only when the PR is rea
 4. Push the branch with `rtk git push -u origin HEAD`, or `rtk git push --force-with-lease` only after an intentional rebase.
 5. Create or update the PR with `gh`, using an explicit title and body file instead of raw `--fill` when formatting matters.
 6. Poll GitHub checks continuously: run `rtk gh pr checks <number> --watch --interval 10`, then verify with `rtk gh pr view <number> --json mergeStateStatus,statusCheckRollup`.
-7. If the branch uses merge queue, query GitHub GraphQL for `isInMergeQueue` and `mergeQueueEntry { state position }`. Stop when `isInMergeQueue` is `true`.
+7. If the branch uses merge queue, query the ruleset API to confirm the `merge_queue` rule, then use GitHub GraphQL to check `isInMergeQueue`, `mergeable`, `mergeStateStatus`, `isDraft`, and `statusCheckRollup.state`.
 8. If anything is pending, sleep and recheck. If anything fails, inspect the failing job, fix it, validate locally, commit, push, and restart the polling loop.
 
 ## PR Formatting
