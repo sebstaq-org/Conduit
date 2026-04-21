@@ -35,10 +35,16 @@ test("new default session appears in sidebar from draft", async ({ page }) => {
     "Codex",
   );
 
-  await page.getByLabel("Session message").fill(defaultPrompt);
+  const messageInput = page.getByLabel("Session message");
+  await messageInput.fill("first line");
+  await messageInput.press("Shift+Enter");
+  await messageInput.type("second line");
+  await expect(messageInput).toHaveValue("first line\nsecond line");
+
+  await messageInput.fill(defaultPrompt);
   const sendButton = page.getByRole("button", { name: "Send message" });
   await expect(sendButton).toBeEnabled();
-  await sendButton.click();
+  await messageInput.press("Enter");
 
   await expect(page.getByText("Draft session")).not.toBeVisible();
   await expect(
