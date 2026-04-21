@@ -14,6 +14,9 @@ pub(crate) enum ServiceError {
     /// Official ACP provider discovery failed.
     #[error(transparent)]
     AcpDiscovery(#[from] acp_discovery::DiscoveryError),
+    /// Telemetry initialization failed.
+    #[error(transparent)]
+    Telemetry(#[from] telemetry_support::TelemetryInitError),
     /// Local store operations failed.
     #[error(transparent)]
     LocalStore(#[from] session_store::Error),

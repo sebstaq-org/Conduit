@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+use telemetry_support::TelemetryHealth;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::cors::CorsLayer;
@@ -36,6 +37,7 @@ static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 struct ServeState {
     actor: RuntimeActor,
     client_log_sink: client_logs::ClientLogSink,
+    telemetry_health: TelemetryHealth,
 }
 
 const CATALOG_COMMANDS: [&str; 20] = [
@@ -72,6 +74,7 @@ pub(crate) async fn run(
     port: u16,
     provider_fixtures: Option<PathBuf>,
     store_path: Option<PathBuf>,
+    telemetry_health: TelemetryHealth,
 ) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
     let local_store = open_store(store_path.clone())?;
@@ -86,12 +89,16 @@ pub(crate) async fn run(
         })?;
         return serve_router(
             listener,
-            router_with_factory(factory, local_store, store_opener),
+            router_with_factory(factory, local_store, store_opener, telemetry_health),
         )
         .await;
     }
     validate_managed_codex_adapter()?;
-    serve_router(listener, router(local_store, store_opener)).await
+    serve_router(
+        listener,
+        router(local_store, store_opener, telemetry_health),
+    )
+    .await
 }
 
 fn validate_managed_codex_adapter() -> Result<()> {
@@ -124,30 +131,37 @@ fn store_opener(path: Option<PathBuf>) -> actor::StoreOpener {
     Arc::new(move || open_store(path.clone()))
 }
 
-fn router(local_store: LocalStore, store_opener: actor::StoreOpener) -> Router {
-    router_with_actor(RuntimeActor::start_with_store_opener(
-        AppServiceFactory::default(),
-        local_store,
-        store_opener,
-    ))
+fn router(
+    local_store: LocalStore,
+    store_opener: actor::StoreOpener,
+    telemetry_health: TelemetryHealth,
+) -> Router {
+    router_with_actor(
+        RuntimeActor::start_with_store_opener(
+            AppServiceFactory::default(),
+            local_store,
+            store_opener,
+        ),
+        telemetry_health,
+    )
 }
 
 fn router_with_factory<F>(
     factory: F,
     local_store: LocalStore,
     store_opener: actor::StoreOpener,
+    telemetry_health: TelemetryHealth,
 ) -> Router
 where
     F: Clone + ProviderFactory + 'static,
 {
-    router_with_actor(RuntimeActor::start_with_store_opener(
-        factory,
-        local_store,
-        store_opener,
-    ))
+    router_with_actor(
+        RuntimeActor::start_with_store_opener(factory, local_store, store_opener),
+        telemetry_health,
+    )
 }
 
-fn router_with_actor(actor: RuntimeActor) -> Router {
+fn router_with_actor(actor: RuntimeActor, telemetry_health: TelemetryHealth) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
     Router::new()
         .route("/health", get(health))
@@ -158,15 +172,40 @@ fn router_with_actor(actor: RuntimeActor) -> Router {
         .with_state(Arc::new(ServeState {
             actor,
             client_log_sink,
+            telemetry_health,
         }))
 }
 
-async fn health() -> Json<serde_json::Value> {
-    Json(json!({
-        "ok": true,
-        "service": "conduit-service",
-        "transport": "websocket",
-    }))
+async fn health(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
+    let (status, payload) = health_response(state.telemetry_health.status());
+    (status, Json(payload))
+}
+
+fn health_response(
+    telemetry_status: telemetry_support::TelemetryStatus,
+) -> (StatusCode, serde_json::Value) {
+    if telemetry_status.ok {
+        return (
+            StatusCode::OK,
+            json!({
+                "ok": true,
+                "service": "conduit-service",
+                "transport": "websocket",
+            }),
+        );
+    }
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        json!({
+            "ok": false,
+            "service": "conduit-service",
+            "transport": "websocket",
+            "error_code": telemetry_status.error_code.unwrap_or("telemetry_unavailable"),
+            "error_message": telemetry_status
+                .error_message
+                .unwrap_or_else(|| "telemetry sink unavailable".to_owned()),
+        }),
+    )
 }
 
 async fn catalog() -> Json<serde_json::Value> {

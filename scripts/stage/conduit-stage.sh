@@ -19,6 +19,8 @@ BUILD_REF="${CONDUIT_STAGE_BUILD_REF:-HEAD}"
 DATA_ROOT="$STAGE_ROOT/data"
 PID_DIR="$STAGE_ROOT/pids"
 LOG_DIR="$STAGE_ROOT/logs"
+BACKEND_LOG_BASE_PATH="$DATA_ROOT/logs/backend.log"
+FRONTEND_LOG_PATH="$LOG_DIR/frontend.log"
 RUNNER_PATH="$STAGE_ROOT/conduit-stage"
 ELECTRON_PID_FILE="$PID_DIR/electron.pid"
 BACKEND_PID_FILE="$PID_DIR/backend.pid"
@@ -482,21 +484,49 @@ show_logs() {
   local stream="${1:-all}"
   case "$stream" in
     backend)
-      tail -n 200 "$LOG_DIR/backend.log"
+      local backend_log_path
+      backend_log_path="$(latest_rotated_log_path "$BACKEND_LOG_BASE_PATH")"
+      if [[ -z "$backend_log_path" ]]; then
+        printf "No backend log file found for base path %s\n" "$BACKEND_LOG_BASE_PATH" >&2
+        exit 1
+      fi
+      tail -n 200 "$backend_log_path"
       ;;
-    electron | frontend | web)
+    electron | web)
       tail -n 200 "$LOG_DIR/electron.log"
       ;;
+    frontend)
+      tail -n 200 "$FRONTEND_LOG_PATH"
+      ;;
     all)
-      printf "Backend log: %s/backend.log\n" "$LOG_DIR"
+      printf "Backend log base: %s\n" "$BACKEND_LOG_BASE_PATH"
       printf "Electron log: %s/electron.log\n" "$LOG_DIR"
-      printf "Frontend log: %s/frontend.log\n" "$LOG_DIR"
+      printf "Frontend log: %s\n" "$FRONTEND_LOG_PATH"
       ;;
     *)
       printf "Unknown log stream: %s\n" "$stream" >&2
       exit 1
       ;;
   esac
+}
+
+latest_rotated_log_path() {
+  local base_path="$1"
+  local parent_dir
+  local file_name
+  local stem
+  local extension=""
+  parent_dir="$(dirname "$base_path")"
+  file_name="$(basename "$base_path")"
+  stem="$file_name"
+  if [[ "$file_name" == *.* ]]; then
+    extension=".${file_name##*.}"
+    stem="${file_name%.*}"
+  fi
+  find "$parent_dir" -maxdepth 1 -type f -name "${stem}-*${extension}" -printf "%T@ %p\n" 2>/dev/null |
+    sort -nr |
+    head -n 1 |
+    cut -d " " -f 2-
 }
 
 usage() {
