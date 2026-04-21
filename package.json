@@ -18,9 +18,9 @@
       "react-native-worklets": "0.8.1"
     },
     "patchedDependencies": {
-      "metro@0.83.5": "apps/frontend/patches/metro@0.83.5.patch",
       "react-native-streamdown@0.1.1": "apps/frontend/patches/react-native-streamdown@0.1.1.patch",
-      "react-native-reanimated@4.3.0": "apps/frontend/patches/react-native-reanimated@4.3.0.patch"
+      "react-native-reanimated@4.3.0": "apps/frontend/patches/react-native-reanimated@4.3.0.patch",
+      "metro@0.83.6": "apps/frontend/patches/metro@0.83.6.patch"
     }
   },
   "scripts": {
@@ -30,8 +30,8 @@
     "codex-acp:build": "bash scripts/codex-acp-vendor.sh build",
     "codex-acp:check": "bash scripts/codex-acp-vendor.sh check",
     "codex-acp:verify": "bash scripts/codex-acp-vendor.sh verify",
-    "desktop:build": "pnpm --filter @conduit/desktop run build",
-    "desktop:dev": "pnpm --filter @conduit/desktop run dev",
+    "desktop:build": "pnpm run codex-acp:build && pnpm --filter @conduit/desktop run build",
+    "desktop:dev": "pnpm run codex-acp:build && pnpm --filter @conduit/desktop run dev",
     "desktop:lint": "pnpm --filter @conduit/desktop run lint",
     "desktop:test": "pnpm --filter @conduit/desktop run test",
     "desktop:typecheck": "pnpm --filter @conduit/desktop run typecheck",
@@ -39,7 +39,7 @@
     "format:check": "prettier . --check && cargo fmt --manifest-path backend/service/Cargo.toml --all --check",
     "fixtures:check": "cargo test --manifest-path backend/service/Cargo.toml -p acp-contracts --test protocol_captures && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test golden_testdata && cargo test --manifest-path backend/service/Cargo.toml -p acp-core --test plan_mode_pr195_canonical",
     "docs:check": "vitest run scripts/docs-guardrails.test.ts",
-    "e2e": "pnpm --filter @conduit/e2e run test",
+    "e2e": "pnpm run codex-acp:build && pnpm --filter @conduit/e2e run test",
     "lint": "oxlint oxlint.config.ts vitest.config.ts scripts packages --deny-warnings",
     "protocol:generate": "cargo run --quiet --manifest-path backend/service/Cargo.toml -p app-protocol-export -- generate",
     "protocol:check": "cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p app-protocol-export -- check",
@@ -47,11 +47,12 @@
     "frontend:doctor": "pnpm --filter @conduit/frontend run doctor",
     "frontend:ios": "pnpm --filter @conduit/frontend run ios",
     "frontend:lint": "pnpm --filter @conduit/frontend run lint",
-    "frontend:start": "pnpm --filter @conduit/frontend run start",
+    "frontend:start": "pnpm run codex-acp:build && pnpm --filter @conduit/frontend run start",
     "frontend:test": "pnpm --filter @conduit/frontend run test",
     "frontend:types:generate": "pnpm --filter @conduit/frontend exec expo customize tsconfig.json",
     "frontend:typecheck": "pnpm --filter @conduit/frontend run typecheck",
-    "frontend:web": "pnpm --filter @conduit/frontend run web",
+    "frontend:web": "pnpm run codex-acp:build && pnpm --filter @conduit/frontend run web",
+    "service:dev": "pnpm run codex-acp:build && cargo run --quiet --locked --manifest-path backend/service/Cargo.toml -p service-bin -- serve",
     "stage:build": "bash scripts/stage/conduit-stage.sh build-artifact",
     "stage:deploy": "bash scripts/stage/conduit-stage.sh deploy",
     "stage:refresh": "bash scripts/stage/conduit-stage.sh refresh",

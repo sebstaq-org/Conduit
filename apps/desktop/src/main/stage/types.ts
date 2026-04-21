@@ -12,7 +12,7 @@ interface StageServiceStatus {
 
 interface StageRuntimeConfig {
   readonly backendHost: string;
-  readonly backendLogPath: string;
+  readonly backendLogBasePath: string;
   readonly backendPidPath: string;
   readonly backendPort: number;
   readonly dataRoot: string;

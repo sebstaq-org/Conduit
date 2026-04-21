@@ -31,7 +31,7 @@ const APPROVED_PACKAGES: [&str; 7] = [
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 15] = [
+const APPROVED_CRATES: [&str; 16] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -47,6 +47,7 @@ const APPROVED_CRATES: [&str; 15] = [
     "service-runtime",
     "session-projection",
     "session-store",
+    "telemetry-support",
 ];
 const APPROVED_ARTIFACT_ROOTS: [&str; 2] = ["automated", "manual"];
 const APPROVED_VENDOR_ROOTS: [&str; 2] = ["agent-client-protocol", "codex-acp"];
