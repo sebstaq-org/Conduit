@@ -64,15 +64,16 @@ function readStageRuntimeConfig(): StageRuntimeConfig | null {
   }
   const pidDir = requiredEnv("CONDUIT_STAGE_PID_DIR");
   const logDir = requiredEnv("CONDUIT_STAGE_LOG_DIR");
+  const dataRoot = requiredEnv("CONDUIT_STAGE_DATA_ROOT");
   const resourcesDir = readResourcesDir();
   const backendHost = envValue("CONDUIT_STAGE_BACKEND_HOST", "127.0.0.1");
   const backendPort = envPort("CONDUIT_STAGE_BACKEND_PORT", defaultBackendPort);
   return {
     backendHost,
-    backendLogPath: join(logDir, "backend.log"),
+    backendLogBasePath: join(dataRoot, "logs", "backend.log"),
     backendPidPath: join(pidDir, "backend.pid"),
     backendPort,
-    dataRoot: requiredEnv("CONDUIT_STAGE_DATA_ROOT"),
+    dataRoot,
     electronPidPath: join(pidDir, "electron.pid"),
     frontendLogPath: join(logDir, "frontend.log"),
     logDir,

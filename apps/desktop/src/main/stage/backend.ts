@@ -1,11 +1,11 @@
 import { app, dialog } from "electron";
 import { spawn } from "node:child_process";
-import { createWriteStream, rmSync, writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import type { ChildProcess } from "node:child_process";
-import type { WriteStream } from "node:fs";
 import type { StageRuntimeConfig } from "./types.js";
 
 const backendShutdownTimeoutMs = 3000;
+const maxBackendStderrTailLength = 8192;
 
 function backendEnvironment(config: StageRuntimeConfig): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -45,11 +45,32 @@ function stopChildProcess(child: ChildProcess, onStopped: () => void): void {
   }
 }
 
+function appendTail(current: string, chunk: string): string {
+  const next = `${current}${chunk}`;
+  if (next.length <= maxBackendStderrTailLength) {
+    return next;
+  }
+  return next.slice(next.length - maxBackendStderrTailLength);
+}
+
+function formatUnexpectedExitMessage(
+  code: number | null,
+  signal: NodeJS.Signals | null,
+  stderrTail: string,
+): string {
+  const base = `backend exited unexpectedly with code=${String(code)} signal=${String(signal)}`;
+  const detail = stderrTail.trim();
+  if (detail.length === 0) {
+    return base;
+  }
+  return `${base}\n\nstderr tail:\n${detail}`;
+}
+
 class StageBackend {
   readonly #config: StageRuntimeConfig;
   readonly #onUnexpectedExit: (message: string) => void;
   #backendProcess: ChildProcess | null = null;
-  #backendLogStream: WriteStream | null = null;
+  #backendStderrTail = "";
   #shuttingDown = false;
 
   constructor(
@@ -69,16 +90,20 @@ class StageBackend {
   }
 
   start(): void {
-    this.#backendLogStream = createWriteStream(this.#config.backendLogPath, {
-      flags: "a",
-    });
+    this.#backendStderrTail = "";
     const child = spawn(this.#config.serviceBinPath, this.#serveArgs(), {
       env: backendEnvironment(this.#config),
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["ignore", "ignore", "pipe"],
     });
     this.#backendProcess = child;
-    child.stdout?.pipe(this.#backendLogStream, { end: false });
-    child.stderr?.pipe(this.#backendLogStream, { end: false });
+    child.stderr?.setEncoding("utf8");
+    child.stderr?.on("data", (chunk: string | Buffer) => {
+      let text = chunk.toString("utf8");
+      if (typeof chunk === "string") {
+        text = chunk;
+      }
+      this.#backendStderrTail = appendTail(this.#backendStderrTail, text);
+    });
     child.once("error", (error) => {
       this.#handleUnexpectedFailure(`backend spawn failed: ${error.message}`);
     });
@@ -87,7 +112,7 @@ class StageBackend {
       rmSync(this.#config.backendPidPath, { force: true });
       if (!this.#shuttingDown) {
         this.#handleUnexpectedFailure(
-          `backend exited unexpectedly with code=${String(code)} signal=${String(signal)}`,
+          formatUnexpectedExitMessage(code, signal, this.#backendStderrTail),
         );
       }
     });
@@ -127,8 +152,7 @@ class StageBackend {
 
   #finishStop(onStopped: () => void): void {
     rmSync(this.#config.backendPidPath, { force: true });
-    this.#backendLogStream?.end();
-    this.#backendLogStream = null;
+    this.#backendStderrTail = "";
     onStopped();
   }
 }

@@ -16,12 +16,13 @@ mod clean;
 mod error;
 mod process;
 mod structure;
-mod telemetry;
 mod toolchain;
 
 use crate::error::{Error, Result};
 use std::env::{self, current_dir};
 use std::path::{Path, PathBuf};
+use telemetry_support::TelemetryBinary;
+use tracing_subscriber as _;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CommandKind {
@@ -36,7 +37,8 @@ fn main() -> Result<()> {
 }
 
 fn run() -> Result<()> {
-    telemetry::init();
+    let _telemetry =
+        telemetry_support::init(TelemetryBinary::RepoGuard).map_err(Error::telemetry)?;
     let repo_root = repo_root()?;
     let command = parse_command(env::args().skip(1))?;
     log_command_start(command);
