@@ -37,6 +37,14 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
   that service too and manually verify the target flow is not stuck in an
   unavailable/offline state before handing it over.
 
+## Frontend Hygiene
+
+- When replacing a render path, remove the old path in the same change. Do not leave parallel screen/list/layout implementations behind.
+- Avoid duplicate render paths. If two similar paths are truly required, make the reason and ownership explicit in code; otherwise consolidate.
+- Shared alignment belongs in shared UI/layout primitives, not screen-local spacing. Rows with icons, spinners, or text columns should use one slot contract.
+- Keep layout slot size separate from visual glyph size. `theme.panel.icon` is the reserved row icon slot; `theme.panel.iconGlyph` is the visual icon/indicator size.
+- Before finishing a frontend refactor, search for replaced component/type/title names and delete orphaned files, exports, and imports.
+
 ## Session View Rules
 
 The session view is expected to grow into a large product surface: transcript
@@ -71,6 +79,14 @@ feature work must not bypass or rewrite ACP semantics in local ad-hoc flows.
 
 If product-specific UI/state data is needed, keep ACP wire contract data intact
 and layer local metadata beside it or as explicit, documented extensions.
+
+Codex support is a managed official-ACP path, not an optional local fallback.
+The vendored `vendor/codex-acp` adapter must be built into
+`.conduit/bin/codex-acp` before any normal dev, stage, packaged, or runtime
+service flow starts. Do not bypass, stub, or silently degrade this requirement:
+use `pnpm run codex-acp:build` / `pnpm run bootstrap`, keep release packaging
+copying the managed binary beside `service-bin`, and make missing adapter states
+fail with explicit errors.
 
 Rust under `backend/service/` is governed by the Rust-specific policy in `backend/service/AGENTS.md`. Treat that file as authoritative for how Rust may be written in Conduit.
 

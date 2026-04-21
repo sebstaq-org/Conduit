@@ -17,7 +17,7 @@ function Spinner(): React.JSX.Element {
     >
       <ActivityIndicator
         color={theme.colors.textPrimary}
-        size={theme.panel.icon}
+        size={theme.panel.iconGlyph}
       />
     </Box>
   );

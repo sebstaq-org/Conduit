@@ -69,10 +69,12 @@ test("new session applies selected collaboration mode before first prompt", asyn
   await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
   await newSessionButton.click();
   await page.getByLabel("Select provider for new session").click();
-  await page.getByLabel("codex").click();
+  await page.getByLabel("Codex").click();
   await page.getByLabel("Select Collaboration Mode").click();
   await page.getByLabel("Plan").click();
-  await expect(page.getByText("Collaboration Mode: plan")).toBeVisible();
+  await expect(
+    page.getByLabel("Collaboration Mode", { exact: true }),
+  ).toHaveText("Plan");
   await page.getByLabel("Session message").fill(newSessionPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
@@ -107,11 +109,11 @@ test("Claude parity fixture drives configured draft prompt", async ({
   await newSessionButton.click();
 
   await page.getByLabel("Select provider for new session").click();
-  await page.getByRole("menuitem", { name: "claude" }).click();
-  await expect(page.getByText("Model: default")).toBeVisible();
+  await page.getByRole("menuitem", { name: "Claude" }).click();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText("Default");
   await page.getByLabel("Select Model").click();
   await page.getByLabel("Haiku").click();
-  await expect(page.getByText("Model: haiku")).toBeVisible();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText("Haiku");
   await page.getByLabel("Session message").fill(claudeParityPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });
@@ -135,11 +137,13 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   await newSessionButton.click();
 
   await page.getByLabel("Select provider for new session").click();
-  await page.getByRole("menuitem", { name: "copilot" }).click();
-  await expect(page.getByText("Model: gpt-5-mini")).toBeVisible();
+  await page.getByRole("menuitem", { name: "Copilot" }).click();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText(
+    "GPT-5 mini",
+  );
   await page.getByLabel("Select Model").click();
   await page.getByLabel("GPT-4.1").click();
-  await expect(page.getByText("Model: gpt-4.1")).toBeVisible();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText("GPT-4.1");
   await page.getByLabel("Session message").fill(copilotParityPrompt);
 
   const sendButton = page.getByRole("button", { name: "Send message" });

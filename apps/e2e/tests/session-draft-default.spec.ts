@@ -29,10 +29,10 @@ test("new default session appears in sidebar from draft", async ({ page }) => {
   await expect(page.getByText("No provider selected")).toBeVisible();
 
   await page.getByLabel("Select provider for new session").click();
-  await page.getByLabel("codex").click();
+  await page.getByLabel("Codex").click();
   await expect(page.getByText("No provider selected")).not.toBeVisible();
   await expect(page.getByLabel("Provider", { exact: true })).toHaveText(
-    "codex",
+    "Codex",
   );
 
   await page.getByLabel("Session message").fill(defaultPrompt);

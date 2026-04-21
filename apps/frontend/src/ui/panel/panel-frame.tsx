@@ -6,13 +6,14 @@ import { createPanelContainerStyle } from "./panel.styles";
 
 interface PanelFrameProps {
   children: ReactNode;
+  width?: number | undefined;
 }
 
-function PanelFrame({ children }: PanelFrameProps): React.JSX.Element {
+function PanelFrame({ children, width }: PanelFrameProps): React.JSX.Element {
   const theme = useTheme<Theme>();
 
   return (
-    <SafeAreaView style={createPanelContainerStyle(theme)}>
+    <SafeAreaView style={createPanelContainerStyle(theme, { width })}>
       {children}
     </SafeAreaView>
   );
