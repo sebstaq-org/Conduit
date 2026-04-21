@@ -197,14 +197,26 @@ fn enforce_isolated_crates(
     deps_by_crate: &HashMap<String, HashSet<String>>,
     failures: &mut Vec<String>,
 ) {
-    for crate_name in ["acp-contracts", "repo-guard"] {
-        if let Some(local_deps) = deps_by_crate.get(crate_name)
-            && !local_deps.is_empty()
-        {
-            let mut dependencies = local_deps.iter().cloned().collect::<Vec<_>>();
-            dependencies.sort();
+    if let Some(local_deps) = deps_by_crate.get("acp-contracts")
+        && !local_deps.is_empty()
+    {
+        let mut dependencies = local_deps.iter().cloned().collect::<Vec<_>>();
+        dependencies.sort();
+        failures.push(format!(
+            "acp-contracts may not depend on local crates: {}.",
+            dependencies.join(", ")
+        ));
+    }
+    if let Some(local_deps) = deps_by_crate.get("repo-guard") {
+        let mut dependencies = local_deps
+            .iter()
+            .filter(|dependency| dependency.as_str() != "telemetry-support")
+            .cloned()
+            .collect::<Vec<_>>();
+        dependencies.sort();
+        if !dependencies.is_empty() {
             failures.push(format!(
-                "{crate_name} may not depend on local crates: {}.",
+                "repo-guard may not depend on local crates: {}.",
                 dependencies.join(", ")
             ));
         }

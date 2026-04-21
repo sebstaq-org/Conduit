@@ -4,6 +4,7 @@ members = [
   "crates/acp-core",
   "crates/acp-discovery",
   "crates/conduit-cli",
+  "crates/telemetry-support",
   "crates/app-protocol-export",
   "crates/app-api",
   "crates/provider-fixture",

@@ -118,6 +118,7 @@ function writeRuntimeStatus(
 
 function prepareStageDirectories(config: StageRuntimeConfig): void {
   mkdirSync(config.dataRoot, { recursive: true });
+  mkdirSync(join(config.dataRoot, "logs"), { recursive: true });
   mkdirSync(config.logDir, { recursive: true });
 }
 

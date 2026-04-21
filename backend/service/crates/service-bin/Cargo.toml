@@ -16,12 +16,13 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 service-runtime = { path = "../service-runtime" }
 session-store = { path = "../session-store" }
+telemetry-support = { path = "../telemetry-support" }
 thiserror = "2.0.17"
 time = "0.3.44"
 tokio = { version = "1.51.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tower-http = { version = "0.6.8", features = ["cors"] }
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt", "json"] }
+tracing-subscriber = "0.3.23"
 
 [dev-dependencies]
 acp-core = { path = "../acp-core" }

@@ -16,15 +16,16 @@ mod error;
 mod local_store;
 mod runtime;
 mod serve;
-mod telemetry;
 
 use crate::cli::parse_command;
 use crate::error::Result;
 use std::env;
+use telemetry_support::TelemetryBinary;
+use tracing_subscriber as _;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    telemetry::init();
+    let telemetry = telemetry_support::init(TelemetryBinary::Backend)?;
     let args = env::args().skip(1).collect::<Vec<_>>();
     tracing::debug!(
         event_name = "service_bin.startup",
@@ -38,7 +39,16 @@ async fn main() -> Result<()> {
             port,
             provider_fixtures,
             store_path,
-        } => serve::run(&host, port, provider_fixtures, store_path).await,
+        } => {
+            serve::run(
+                &host,
+                port,
+                provider_fixtures,
+                store_path,
+                telemetry.health(),
+            )
+            .await
+        }
         cli::Command::Runtime { command } => runtime::run(command),
     }
 }

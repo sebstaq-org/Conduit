@@ -28,6 +28,17 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return true;
 }
 
+function readRuntimeErrorMessage(payload: unknown): string | null {
+  if (!isObjectRecord(payload)) {
+    return null;
+  }
+  const message = payload.error_message;
+  if (typeof message !== "string" || message.length === 0) {
+    return null;
+  }
+  return message;
+}
+
 function readRuntimeString(value: unknown, fallback: string): string {
   if (typeof value === "string") {
     return value;
@@ -60,18 +71,30 @@ function createHealthTimeoutSignal(): {
   return { abortController, timeoutId };
 }
 
+async function readRuntimeHealthJson(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 async function readRuntimeHealthResponse(
   signal: AbortSignal,
 ): Promise<RuntimeHealthView> {
   const response = await fetch(configuredSessionHealthUrl(), { signal });
+  const payload = await readRuntimeHealthJson(response);
   if (!response.ok) {
-    throw new Error(runtimeHealthErrorMessage(response.status));
+    throw new Error(
+      readRuntimeErrorMessage(payload) ??
+        runtimeHealthErrorMessage(response.status),
+    );
   }
-  const payload = readRuntimeHealthPayload(await response.json());
-  if (payload === null) {
+  const health = readRuntimeHealthPayload(payload);
+  if (health === null) {
     throw new Error("runtime health returned invalid payload");
   }
-  return payload;
+  return health;
 }
 
 async function getRuntimeHealthQuery(): RuntimeHealthQueryResult {

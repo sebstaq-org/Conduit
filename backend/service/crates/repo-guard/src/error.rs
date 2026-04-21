@@ -53,6 +53,11 @@ pub(crate) enum Error {
         /// Captured standard error, when available.
         stderr: String,
     },
+    /// Telemetry initialization failed.
+    Telemetry {
+        /// The underlying telemetry error.
+        source: telemetry_support::TelemetryInitError,
+    },
 }
 
 impl Error {
@@ -83,6 +88,11 @@ impl Error {
             status,
             stderr,
         }
+    }
+
+    /// Creates a telemetry initialization error.
+    pub(crate) fn telemetry(source: telemetry_support::TelemetryInitError) -> Self {
+        Self::Telemetry { source }
     }
 }
 
@@ -119,6 +129,7 @@ impl Display for Error {
                     )
                 }
             }
+            Self::Telemetry { source } => write!(formatter, "{source}"),
         }
     }
 }
@@ -130,6 +141,7 @@ impl StdError for Error {
             Self::Json { source, .. } => Some(source),
             Self::Toml { source, .. } => Some(source),
             Self::CommandIo { source, .. } => Some(source),
+            Self::Telemetry { source } => Some(source),
             Self::InvalidArgs(_) | Self::Policy(_) | Self::CommandFailed { .. } => None,
         }
     }
