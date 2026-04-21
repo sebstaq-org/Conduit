@@ -257,7 +257,8 @@ function usePlanInteractionSource(): SessionComposerPlanInteractionController {
   if (fixturePort.enabled) {
     port = fixturePort;
   }
-  return usePlanInteractionController(port);
+  const controller = usePlanInteractionController(port);
+  return controller;
 }
 
 export {

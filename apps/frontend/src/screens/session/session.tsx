@@ -41,7 +41,7 @@ function SessionScreen({
             onPress={onOpenNavigationPanel}
           />
         )}
-        <SessionHistory historyOverride={planInteraction.history} />
+        <SessionHistory />
         <SessionComposer planInteraction={planInteraction} />
       </Box>
     </KeyboardLift>

@@ -1737,6 +1737,7 @@ dependencies = [
  "acp-core",
  "acp-discovery",
  "agent-client-protocol-schema",
+ "serde",
  "serde_json",
  "service-runtime",
  "session-store",

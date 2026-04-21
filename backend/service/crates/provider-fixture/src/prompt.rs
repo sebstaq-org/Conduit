@@ -6,6 +6,7 @@ use acp_core::{
     LiveSessionIdentity, PromptLifecycleSnapshot, PromptLifecycleState, TranscriptUpdateSnapshot,
 };
 use acp_discovery::ProviderId;
+use serde::Deserialize;
 use serde_json::Value;
 use service_runtime::{Result, RuntimeError};
 use std::collections::HashMap;
@@ -24,7 +25,7 @@ pub(crate) struct SessionPromptSuccessFixture {
     pub(crate) required_config: Option<RequiredPromptConfig>,
     pub(crate) response: Value,
     pub(crate) stop_reason: String,
-    pub(crate) updates: Vec<TranscriptUpdateSnapshot>,
+    pub(crate) updates: Vec<FixtureTranscriptUpdate>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -37,6 +38,14 @@ pub(crate) struct RequiredPromptConfig {
 pub(crate) struct SessionPromptFailureFixture {
     pub(crate) failure: ProviderFailureFixture,
     pub(crate) prompt: Vec<Value>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct FixtureTranscriptUpdate {
+    #[serde(default, rename = "delayMs")]
+    pub(crate) delay_ms: u64,
+    #[serde(flatten)]
+    pub(crate) snapshot: TranscriptUpdateSnapshot,
 }
 
 impl SessionPromptSuccessFixture {
@@ -54,7 +63,7 @@ impl SessionPromptSuccessFixture {
             stop_reason: Some(self.stop_reason.clone()),
             raw_update_count: self.updates.len(),
             agent_text_chunks: agent_text_chunks(&self.updates),
-            updates: self.updates.clone(),
+            updates: prompt_update_snapshots(&self.updates),
         }
     }
 }
@@ -202,7 +211,7 @@ fn read_session_prompt_fixture(path: &Path) -> Result<(String, SessionPromptFixt
     if !updates_value.is_array() {
         return Err(invalid_fixture(path, "must contain promptUpdates array"));
     }
-    let updates: Vec<TranscriptUpdateSnapshot> =
+    let updates: Vec<FixtureTranscriptUpdate> =
         serde_json::from_value(updates_value).map_err(|source| {
             RuntimeError::Provider(format!(
                 "failed to parse fixture {} promptUpdates: {source}",
@@ -300,12 +309,22 @@ fn required_prompt_config(path: &Path, value: &Value) -> Result<Option<RequiredP
     }))
 }
 
-fn agent_text_chunks(updates: &[TranscriptUpdateSnapshot]) -> Vec<String> {
+fn prompt_update_snapshots(
+    updates: &[FixtureTranscriptUpdate],
+) -> Vec<TranscriptUpdateSnapshot> {
     updates
         .iter()
-        .filter(|update| update.variant == "agent_message_chunk")
+        .map(|update| update.snapshot.clone())
+        .collect()
+}
+
+fn agent_text_chunks(updates: &[FixtureTranscriptUpdate]) -> Vec<String> {
+    updates
+        .iter()
+        .filter(|update| update.snapshot.variant == "agent_message_chunk")
         .filter_map(|update| {
             update
+                .snapshot
                 .update
                 .get("content")
                 .and_then(|content| content.get("text"))

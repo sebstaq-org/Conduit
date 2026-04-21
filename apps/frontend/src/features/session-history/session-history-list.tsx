@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { useTheme } from "@shopify/restyle";
+import { FlatList } from "react-native";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
-import { VirtualList } from "@/ui";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
+import { useSessionHistoryScrollController } from "./session-history-scroll-controller";
 import {
   createHistoryListStyle,
   createHistoryUserBubbleStyle,
@@ -20,8 +22,9 @@ import type {
 } from "@conduit/session-client";
 
 interface SessionHistoryListProps {
+  isFetchingOlder: boolean;
   history: SessionHistoryWindow;
-  onStartReached: () => void;
+  onLoadOlder: () => void;
   openSessionId: string;
 }
 
@@ -37,14 +40,10 @@ type SessionHistoryListRow =
       key: string;
     };
 
-const historyViewportStyle = { flex: 1, minHeight: 0 } as const;
-const historyStartReachedThreshold = 2;
-const historyVisibleContentPosition = {
-  animateAutoScrollToBottom: false,
-  autoscrollToBottomThreshold: 0.2,
-  autoscrollToTopThreshold: 0.2,
-  startRenderingFromBottom: true,
-} as const;
+const historyListTestId = "session-history-list";
+const historyInitialNumToRender = 24;
+const historyWindowSize = 10;
+const historyMaxToRenderPerBatch = 12;
 
 function eventLabel(item: TranscriptItem): string {
   if (item.kind !== "event") {
@@ -117,24 +116,11 @@ function sessionHistoryRows(
   if (history.items.length === 0) {
     return [{ kind: "status", key: "status:empty", label: "No messages yet" }];
   }
-  return history.items.map((item) => ({
+  return [...history.items].reverse().map((item) => ({
     item,
     kind: "transcript",
     key: `item:${item.id}`,
   }));
-}
-
-function rowType(row: SessionHistoryListRow): string {
-  if (row.kind === "status") {
-    return "status";
-  }
-  if (row.item.kind === "event") {
-    return "event";
-  }
-  if (row.item.role === "user") {
-    return "user";
-  }
-  return "agent";
 }
 
 function renderHistoryRow(
@@ -151,6 +137,7 @@ function createHistoryContentContainerStyle(theme: Theme): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
+  paddingTop: number;
   width: "100%";
 } {
   const historyListStyle = createHistoryListStyle(theme);
@@ -158,6 +145,7 @@ function createHistoryContentContainerStyle(theme: Theme): {
     alignSelf: historyListStyle.alignSelf,
     maxWidth: historyListStyle.maxWidth,
     paddingBottom: theme.spacing.scrollBottom,
+    paddingTop: theme.spacing.scrollBottom,
     width: historyListStyle.width,
   };
 }
@@ -167,27 +155,46 @@ function historyItemSeparator(theme: Theme): React.JSX.Element {
 }
 
 function SessionHistoryList({
+  isFetchingOlder,
   history,
-  onStartReached,
+  onLoadOlder,
   openSessionId,
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
-  const rows = sessionHistoryRows(history);
+  const rows = useMemo(() => sessionHistoryRows(history), [history]);
+  const controller = useSessionHistoryScrollController<SessionHistoryListRow>({
+    hasOlder: history.nextCursor !== null,
+    isFetchingOlder,
+    onLoadOlder,
+    openSessionId,
+    olderCursor: history.nextCursor,
+    revision: history.revision,
+  });
 
   return (
-    <VirtualList
+    <FlatList
+      accessibilityLabel="Session history"
       contentContainerStyle={createHistoryContentContainerStyle(theme)}
       data={rows}
-      getItemType={rowType}
+      initialNumToRender={historyInitialNumToRender}
+      inverted
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
+      key={openSessionId}
       keyExtractor={(row) => row.key}
-      listKey={openSessionId}
-      maintainVisibleContentPosition={historyVisibleContentPosition}
-      onStartReached={onStartReached}
-      onStartReachedThreshold={historyStartReachedThreshold}
+      maintainVisibleContentPosition={
+        controller.maintainVisibleContentPosition
+      }
+      maxToRenderPerBatch={historyMaxToRenderPerBatch}
+      onContentSizeChange={controller.onContentSizeChange}
+      onLayout={controller.onLayout}
+      onScroll={controller.onScroll}
+      ref={controller.listRef}
       renderItem={({ item }) => renderHistoryRow(item, theme)}
+      scrollEventThrottle={controller.scrollEventThrottle}
       showsVerticalScrollIndicator
-      style={historyViewportStyle}
+      style={controller.contentViewportStyle}
+      testID={historyListTestId}
+      windowSize={historyWindowSize}
     />
   );
 }

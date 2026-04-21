@@ -54,6 +54,53 @@ fn session_prompt_replays_updates_and_lifecycle() -> TestResult<()> {
 }
 
 #[test]
+fn session_prompt_accepts_optional_delay_ms_on_updates() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    let dir = root.path().join("codex/session-prompt/session-1/delayed");
+    create_dir_all(&dir)?;
+    write(
+        dir.join("provider.raw.json"),
+        serde_json::to_string(&json!({
+            "promptRequest": {
+                "prompt": [{ "type": "text", "text": "hello" }],
+                "sessionId": "session-1"
+            },
+            "promptResponse": { "stopReason": "end_turn" },
+            "promptUpdates": [{
+                "delayMs": 1,
+                "index": 0,
+                "variant": "agent_message_chunk",
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": { "type": "text", "text": "delayed-ready" }
+                }
+            }]
+        }))?,
+    )?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+    let mut updates = Vec::new();
+
+    let response = port.session_prompt(
+        "session-1".to_owned(),
+        vec![json!({ "type": "text", "text": "hello" })],
+        &mut |update| updates.push(update),
+    )?;
+
+    if response.get("stopReason").and_then(Value::as_str) != Some("end_turn") {
+        return Err(format!("unexpected response {response}").into());
+    }
+    if !updates
+        .iter()
+        .any(|update| super::support::value_contains_string(&update.update, "delayed-ready"))
+    {
+        return Err(format!("expected delayed update, got {updates:?}").into());
+    }
+    Ok(())
+}
+
+#[test]
 fn session_prompt_rejects_prompt_mismatch() -> TestResult<()> {
     let root = fixture_root(json!({ "sessions": [] }))?;
     write_session_prompt_capture(
