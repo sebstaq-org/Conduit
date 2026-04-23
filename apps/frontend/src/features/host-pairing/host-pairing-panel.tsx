@@ -10,29 +10,13 @@ import {
 import { Section } from "@/ui";
 import { useDispatch, useSelector } from "react-redux";
 import { connectionErrorMessage } from "./connection-error-message";
+import { hostConnectionStatus } from "./host-connection-status";
 import { HostPairingList } from "./host-pairing-list";
 import type { AppDispatch, RootState } from "@/app-state";
 import type { ConnectionHostProfile } from "@conduit/app-client";
 import type { HostPairingPanelProps } from "./host-pairing-types";
 
 const relayPollingIntervalMs = 5000;
-
-function connectionLabel(args: {
-  isError: boolean;
-  isFetching: boolean;
-  isSuccess: boolean;
-}): string {
-  if (args.isSuccess) {
-    return "Relay connected";
-  }
-  if (args.isFetching) {
-    return "Relay connecting";
-  }
-  if (args.isError) {
-    return "Relay reconnecting";
-  }
-  return "Relay idle";
-}
 
 function usePairingSelectors(): {
   activeHost: ConnectionHostProfile | null;
@@ -59,6 +43,7 @@ function HostPairingPanel({
     pollingInterval: relayPollingIntervalMs,
     skip: activeHost === null,
   });
+  const connection = hostConnectionStatus(settings);
 
   function handleConnect(): void {
     pairHostFromOfferUrl({ dispatch, hosts, offerUrl });
@@ -76,7 +61,9 @@ function HostPairingPanel({
       <HostPairingList
         activeHost={activeHost}
         connectionError={connectionErrorMessage(settings.error)}
-        connectionStatus={connectionLabel(settings)}
+        connectionIndicator={connection.indicator}
+        connectionReason={connection.reason}
+        connectionStatus={connection.label}
         offerUrl={offerUrl}
         onConnect={handleConnect}
         onForget={handleForget}

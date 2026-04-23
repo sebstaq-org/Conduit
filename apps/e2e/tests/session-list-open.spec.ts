@@ -164,9 +164,13 @@ test("pairing UI drives session commands through relay and reconnects", async ({
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await expect(page.getByText("No desktop paired")).toBeVisible();
+  await expect(page.getByLabel("Not connected indicator")).toBeVisible();
   await pairFrontend(page, activeHarness);
 
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
   await expect(page.getByText("Relay connected")).toBeVisible();
+  await expect(page.getByLabel("Connected indicator")).toBeVisible();
   const beforeReconnect = await activeHarness.relaySnapshot();
   expect(beforeReconnect.controlSocketCount).toBeGreaterThanOrEqual(1);
   expect(beforeReconnect.clientSocketCount).toBeGreaterThanOrEqual(1);
@@ -202,18 +206,24 @@ test("pairing survives reload, reconfigures, and forget clears stale data", asyn
   await expectVisibleWithDiagnostics(
     page,
     activeHarness,
-    page.getByText("Relay connected"),
+    page.getByText("Connected", { exact: true }),
   );
   await expect(page.getByText(fixtureCwd)).toBeVisible();
 
   await submitPairingUrl(page, tamperRelayEndpoint(pairingUrl));
+  await expect(page.getByLabel("Connecting indicator")).toBeVisible({
+    timeout: 5000,
+  });
   await expect(
     page.getByText(/relay websocket failed to connect/u).first(),
   ).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Not connected indicator")).toBeVisible();
 
   await pairFrontendWithUrl(page, await activeHarness.pairingUrl());
   await page.getByRole("button", { name: "Forget desktop" }).click();
   await expect(page.getByText("No desktop paired")).toBeVisible();
+  await expect(page.getByLabel("Not connected indicator")).toBeVisible();
   await expect(page.getByText(fixtureCwd)).not.toBeVisible();
 });
 
@@ -260,9 +270,11 @@ async function pairFrontendWithUrl(
   pairingUrl: string,
 ): Promise<void> {
   await submitPairingUrl(page, pairingUrl);
-  await expect(page.getByText("Relay connected")).toBeVisible({
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible({
     timeout: 15000,
   });
+  await expect(page.getByText("Relay connected")).toBeVisible();
+  await expect(page.getByLabel("Connected indicator")).toBeVisible();
 }
 
 async function submitPairingUrl(page: Page, pairingUrl: string): Promise<void> {

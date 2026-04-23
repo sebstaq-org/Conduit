@@ -1,5 +1,5 @@
 import { publicKeyFingerprint } from "@conduit/app-client";
-import { Row } from "@/ui";
+import { ConnectionStatusIndicator, Row } from "@/ui";
 import type {
   ConnectedHostRowsArgs,
   HostStatusRowsProps,
@@ -19,6 +19,8 @@ function renderHostErrorRow(message: string | null): React.JSX.Element | null {
 function renderConnectedHostRows({
   activeHost,
   connectionError,
+  connectionIndicator,
+  connectionReason,
   connectionStatus,
   onForget,
 }: ConnectedHostRowsArgs): React.JSX.Element {
@@ -27,7 +29,17 @@ function renderConnectedHostRows({
   );
   return (
     <>
-      <Row label={connectionStatus} meta={activeHost.serverId} />
+      <Row
+        label={connectionStatus}
+        leading={
+          <ConnectionStatusIndicator
+            label={`${connectionStatus} indicator`}
+            status={connectionIndicator}
+          />
+        }
+        meta={activeHost.serverId}
+      />
+      <Row label={connectionReason} muted />
       {renderHostKeyRow(fingerprint)}
       {renderHostErrorRow(connectionError)}
       <Row label="Forget desktop" onPress={onForget} />
@@ -38,15 +50,31 @@ function renderConnectedHostRows({
 function HostStatusRows({
   activeHost,
   connectionError,
+  connectionIndicator,
+  connectionReason,
   connectionStatus,
   onForget,
 }: HostStatusRowsProps): React.JSX.Element {
   if (activeHost === null) {
-    return <Row label="No desktop paired" muted />;
+    return (
+      <Row
+        label="Not connected"
+        leading={
+          <ConnectionStatusIndicator
+            label="Not connected indicator"
+            status="disconnected"
+          />
+        }
+        meta="No desktop paired"
+        muted
+      />
+    );
   }
   return renderConnectedHostRows({
     activeHost,
     connectionError,
+    connectionIndicator,
+    connectionReason,
     connectionStatus,
     onForget,
   });

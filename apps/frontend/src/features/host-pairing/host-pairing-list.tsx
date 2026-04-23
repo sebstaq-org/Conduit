@@ -6,6 +6,8 @@ import type { HostPairingListProps } from "./host-pairing-types";
 function HostPairingList({
   activeHost,
   connectionError,
+  connectionIndicator,
+  connectionReason,
   connectionStatus,
   offerUrl,
   onConnect,
@@ -18,6 +20,8 @@ function HostPairingList({
       <HostStatusRows
         activeHost={activeHost}
         connectionError={connectionError}
+        connectionIndicator={connectionIndicator}
+        connectionReason={connectionReason}
         connectionStatus={connectionStatus}
         onForget={onForget}
       />

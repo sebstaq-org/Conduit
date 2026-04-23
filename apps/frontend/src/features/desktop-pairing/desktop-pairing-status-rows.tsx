@@ -1,20 +1,49 @@
-import { Row } from "@/ui";
+import { ConnectionStatusIndicator, Row } from "@/ui";
 import type { DesktopDaemonStatus } from "@/app-state/desktop-bridge";
+import type { ConnectionStatusKind } from "@/ui";
 
-function statusLabel(status: DesktopDaemonStatus | null): string {
+interface DesktopConnectionStatus {
+  readonly indicator: ConnectionStatusKind;
+  readonly label: "Connected" | "Connecting" | "Not connected";
+  readonly reason: string;
+}
+
+function desktopConnectionStatus(
+  status: DesktopDaemonStatus | null,
+): DesktopConnectionStatus {
   if (status === null) {
-    return "Status not loaded";
+    return {
+      indicator: "connecting",
+      label: "Connecting",
+      reason: "Status not loaded",
+    };
   }
   if (!status.running) {
-    return "Daemon stopped";
+    return {
+      indicator: "disconnected",
+      label: "Not connected",
+      reason: "Daemon stopped",
+    };
   }
   if (!status.backendHealthy) {
-    return "Daemon starting";
+    return {
+      indicator: "connecting",
+      label: "Connecting",
+      reason: "Daemon starting",
+    };
   }
   if (!status.relayConfigured) {
-    return "Relay not configured";
+    return {
+      indicator: "disconnected",
+      label: "Not connected",
+      reason: "Relay not configured",
+    };
   }
-  return "Daemon ready";
+  return {
+    indicator: "connected",
+    label: "Connected",
+    reason: "Daemon ready",
+  };
 }
 
 function statusMeta(status: DesktopDaemonStatus | null): string | undefined {
@@ -29,9 +58,20 @@ function DesktopPairingStatusRows({
 }: {
   readonly status: DesktopDaemonStatus | null;
 }): React.JSX.Element {
+  const connection = desktopConnectionStatus(status);
   return (
     <>
-      <Row label={statusLabel(status)} meta={statusMeta(status)} />
+      <Row
+        label={connection.label}
+        leading={
+          <ConnectionStatusIndicator
+            label={`${connection.label} indicator`}
+            status={connection.indicator}
+          />
+        }
+        meta={statusMeta(status)}
+      />
+      <Row label={connection.reason} muted />
       {status?.relayEndpoint !== undefined && status.relayEndpoint !== null && (
         <Row label="Relay configured" meta={status.relayEndpoint} muted />
       )}

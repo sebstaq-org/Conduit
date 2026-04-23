@@ -22,9 +22,12 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   await expect(page.getByText("Mobile pairing", { exact: true })).toBeVisible({
     timeout: 60000,
   });
+  await expect(page.getByLabel("Connecting indicator")).toBeVisible();
+  await expect(page.getByText("Status not loaded")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh status" }).click();
   await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByLabel("Connected indicator")).toBeVisible();
   const beforeStatus = await readDesktopStatus(page);
   expect(beforeStatus.running).toBe(true);
   expect(beforeStatus.backendHealthy).toBe(true);
@@ -71,6 +74,7 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
 
   await page.getByRole("button", { name: "Restart daemon" }).click();
   await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByLabel("Connected indicator")).toBeVisible();
   const afterStatus = await readDesktopStatus(page);
   expect(afterStatus.restartCount).toBeGreaterThanOrEqual(1);
 

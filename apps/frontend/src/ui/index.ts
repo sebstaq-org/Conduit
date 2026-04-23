@@ -3,6 +3,8 @@ export type {
   AutocompleteProps,
   AutocompleteRenderItemState,
 } from "./autocomplete";
+export { ConnectionStatusIndicator } from "./connection-status-indicator";
+export type { ConnectionStatusKind } from "./connection-status-indicator";
 export { IconButton } from "./icon-button";
 export { IconSlot } from "./icon-slot";
 export { GlimmerText } from "./glimmer-text";

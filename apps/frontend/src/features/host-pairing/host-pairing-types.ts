@@ -1,4 +1,5 @@
 import type { ConnectionHostProfile } from "@conduit/app-client";
+import type { ConnectionStatusKind } from "@/ui";
 
 interface HostPairingPanelProps {
   initialOfferUrl?: string | undefined;
@@ -14,6 +15,8 @@ interface PairingFormProps {
 interface HostStatusRowsProps {
   activeHost: ConnectionHostProfile | null;
   connectionError: string | null;
+  connectionIndicator: ConnectionStatusKind;
+  connectionReason: string;
   connectionStatus: string;
   onForget: () => void;
 }
@@ -21,6 +24,8 @@ interface HostStatusRowsProps {
 interface ConnectedHostRowsArgs {
   activeHost: ConnectionHostProfile;
   connectionError: string | null;
+  connectionIndicator: ConnectionStatusKind;
+  connectionReason: string;
   connectionStatus: string;
   onForget: () => void;
 }
