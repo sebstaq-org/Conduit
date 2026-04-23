@@ -2,6 +2,7 @@ import type { SessionConfigOption } from "@conduit/session-client";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from "@/ui";
@@ -12,6 +13,24 @@ interface SessionComposerConfigOptionMenuProps {
   disabled: boolean;
   onSelect: (configId: string, value: string) => void;
   option: SessionConfigOption;
+}
+
+function renderConfigOptionItems({
+  onSelect,
+  option,
+}: Pick<
+  SessionComposerConfigOptionMenuProps,
+  "onSelect" | "option"
+>): React.JSX.Element[] {
+  return option.values.map((value) => (
+    <DropdownMenuItem
+      key={`${option.id}:${value.value}`}
+      label={value.name}
+      onSelect={() => {
+        onSelect(option.id, value.value);
+      }}
+    />
+  ));
 }
 
 function SessionComposerConfigOptionMenu({
@@ -44,17 +63,11 @@ function SessionComposerConfigOptionMenu({
           }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        {values.map((value) => (
-          <DropdownMenuItem
-            key={`${option.id}:${value.value}`}
-            label={value.name}
-            onSelect={() => {
-              onSelect(option.id, value.value);
-            }}
-          />
-        ))}
-      </DropdownMenuContent>
+      <DropdownMenuPortal>
+        <DropdownMenuContent>
+          {renderConfigOptionItems({ onSelect, option })}
+        </DropdownMenuContent>
+      </DropdownMenuPortal>
     </DropdownMenuRoot>
   );
 }

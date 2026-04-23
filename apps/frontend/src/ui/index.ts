@@ -13,6 +13,7 @@ export { List } from "./list";
 export {
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
