@@ -16,12 +16,10 @@ import {
 import type { RelayConnection } from "./relayState.js";
 import type { RelayMessage } from "./socketSafety.js";
 import type { WorkerWebSocket } from "./workerTypes.js";
-
 class RelayDurableObject {
   private readonly connections = new Map<string, RelayConnection>();
   private controlSocket: WorkerWebSocket | null = null;
   private readonly testSnapshot = emptySnapshot();
-
   public fetch(request: Request): Response {
     const url = new URL(request.url);
     const socketKind = url.searchParams.get("socketKind");
@@ -44,7 +42,6 @@ class RelayDurableObject {
     }
     return new Response("invalid relay socket", { status: 400 });
   }
-
   private testCloseDataSocket(connectionId: string): Response {
     const connection = this.connections.get(connectionId);
     safeClose(
@@ -63,6 +60,7 @@ class RelayDurableObject {
     safeClose(this.controlSocket, CLOSE_REPLACED, "control socket replaced");
     this.controlSocket = server;
     this.testSnapshot.controlSocketCount += 1;
+    this.notifyPendingClients();
     server.addEventListener("close", () => {
       if (this.controlSocket === server) {
         this.controlSocket = null;
@@ -74,6 +72,15 @@ class RelayDurableObject {
       }
     });
     return websocketResponse(client, protocol);
+  }
+
+  private notifyPendingClients(): void {
+    for (const [connectionId, { clientSocket, dataSocket }] of this
+      .connections) {
+      if (clientSocket !== null && dataSocket === null) {
+        this.notifyControl("client_waiting", connectionId);
+      }
+    }
   }
 
   private acceptClientSocket(connectionId: string, protocol: string): Response {

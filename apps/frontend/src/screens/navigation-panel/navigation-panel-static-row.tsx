@@ -1,3 +1,4 @@
+import { DesktopPairingPanel } from "@/features/desktop-pairing";
 import { HostPairingPanel } from "@/features/host-pairing";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
 import { Box, Text } from "@/theme";
@@ -27,7 +28,12 @@ function renderStaticNavigationPanelRow(
       return <NavigationPanelProjectRows />;
     }
     case "hostPairing": {
-      return <HostPairingPanel />;
+      return (
+        <>
+          <DesktopPairingPanel />
+          <HostPairingPanel />
+        </>
+      );
     }
     case "threadsHeader": {
       return (

@@ -239,7 +239,9 @@ async function bundleWorkerScript(scriptPath: string): Promise<string> {
 async function fetchPairing(serviceUrl: string): Promise<PairingResponse> {
   const response = await fetch(`${serviceUrl}/api/pairing`);
   if (!response.ok) {
-    throw new Error(`pairing failed ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `pairing failed ${response.status}: ${await response.text()}`,
+    );
   }
   return (await response.json()) as PairingResponse;
 }
@@ -258,7 +260,9 @@ async function closeRelayDataSocket(
     headers: { Authorization: `Bearer ${relayAdminToken}` },
   });
   if (!response.ok) {
-    throw new Error(`close relay data failed ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `close relay data failed ${response.status}: ${await response.text()}`,
+    );
   }
 }
 
@@ -272,7 +276,9 @@ async function fetchRelaySnapshot(
     headers: { Authorization: `Bearer ${relayAdminToken}` },
   });
   if (!response.ok) {
-    throw new Error(`relay snapshot failed ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `relay snapshot failed ${response.status}: ${await response.text()}`,
+    );
   }
   return (await response.json()) as RelaySnapshot;
 }
@@ -680,5 +686,16 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-export { fixtureCwd, startE2eHarness };
-export type { E2eHarness };
+export {
+  fixtureCwd,
+  fixtureRoot,
+  freePort,
+  relayAdminToken,
+  runManaged,
+  serviceBin,
+  closeStaticServer,
+  startE2eHarness,
+  startMiniflareRelay,
+  startStaticServer,
+};
+export type { E2eHarness, MiniflareRuntime, RelaySnapshot };

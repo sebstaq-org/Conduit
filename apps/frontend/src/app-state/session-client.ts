@@ -146,7 +146,9 @@ class SessionClientManager implements SessionClientPort {
     this.client = createUnconfiguredSessionClient();
   }
 
-  public async addProject(request: ProjectAddRequest): Promise<ProjectListView> {
+  public async addProject(
+    request: ProjectAddRequest,
+  ): Promise<ProjectListView> {
     const result = await this.client.addProject(request);
     return result;
   }
@@ -246,7 +248,10 @@ class SessionClientManager implements SessionClientPort {
     openSessionId: string,
     handler: (event: SessionTimelineChanged) => void,
   ): Promise<() => void> {
-    const result = await this.client.subscribeTimelineChanges(openSessionId, handler);
+    const result = await this.client.subscribeTimelineChanges(
+      openSessionId,
+      handler,
+    );
     return result;
   }
 

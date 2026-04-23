@@ -5,6 +5,7 @@
     "../../packages/app-core/src/**/*.ts",
     "../../packages/app-protocol/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
+    "../../packages/relay-transport/src/**/*.ts",
     "../../packages/session-client/src/**/*.ts",
     "../../packages/session-contracts/src/**/*.ts",
     "../../packages/session-model/src/**/*.ts",

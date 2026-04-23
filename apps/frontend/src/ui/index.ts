@@ -41,6 +41,7 @@ export {
   usePopoverControls,
 } from "./popover";
 export { Row } from "./row";
+export { QrImage } from "./qr-image";
 export { ScrollArea } from "./scroll-area";
 export type {
   ScrollAreaContentSize,

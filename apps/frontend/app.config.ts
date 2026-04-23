@@ -52,10 +52,14 @@ function isNotDevClientPlugin(plugin: ExpoPlugin): boolean {
 }
 
 function readPlugins(config: ExpoConfig): ExpoPlugin[] {
-  return (config.plugins ?? []).filter((plugin) => isNotDevClientPlugin(plugin));
+  return (config.plugins ?? []).filter((plugin) =>
+    isNotDevClientPlugin(plugin),
+  );
 }
 
-function createAndroidConfig(config: ExpoConfig): NonNullable<ExpoConfig["android"]> {
+function createAndroidConfig(
+  config: ExpoConfig,
+): NonNullable<ExpoConfig["android"]> {
   const androidConfig: NonNullable<ExpoConfig["android"]> = {};
 
   return Object.assign(androidConfig, config.android, {
@@ -115,7 +119,10 @@ function createExtraConfig(
   variant: AppVariant,
 ): NonNullable<ExpoConfig["extra"]> {
   const easConfig = Object.assign(createEasConfigTarget(), config.extra?.eas, {
-    projectId: requireString(config.extra?.eas?.projectId, "extra.eas.projectId"),
+    projectId: requireString(
+      config.extra?.eas?.projectId,
+      "extra.eas.projectId",
+    ),
   });
   const extraConfig: NonNullable<ExpoConfig["extra"]> = {};
 
@@ -126,7 +133,9 @@ function createExtraConfig(
   });
 }
 
-export default function createExpoConfig({ config }: ConfigContext): ExpoConfig {
+export default function createExpoConfig({
+  config,
+}: ConfigContext): ExpoConfig {
   const variant = resolveVariant();
   const expoConfig: ExpoConfig = {};
 

@@ -22,7 +22,9 @@ function renderConnectedHostRows({
   connectionStatus,
   onForget,
 }: ConnectedHostRowsArgs): React.JSX.Element {
-  const fingerprint = publicKeyFingerprint(activeHost.trustedDaemonPublicKeyB64);
+  const fingerprint = publicKeyFingerprint(
+    activeHost.trustedDaemonPublicKeyB64,
+  );
   return (
     <>
       <Row label={connectionStatus} meta={activeHost.serverId} />

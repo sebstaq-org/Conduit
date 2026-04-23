@@ -17,9 +17,7 @@ import type {
   ConsumerCommand,
   ConsumerResponse,
 } from "@conduit/session-contracts";
-
 const transportVersionField = "v";
-
 class RelayWebSocketTransport implements CommandTransport {
   private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: RelaySessionClientOptions;
@@ -30,7 +28,6 @@ class RelayWebSocketTransport implements CommandTransport {
   private channel: RelayCipherChannel | null = null;
   private connecting: Promise<WebSocket> | null = null;
   private socket: WebSocket | null = null;
-
   public constructor(
     options: RelaySessionClientOptions,
     handleEvent: (event: ConduitRuntimeEvent) => void,
@@ -38,7 +35,6 @@ class RelayWebSocketTransport implements CommandTransport {
     this.options = options;
     this.handleEvent = handleEvent;
   }
-
   public async dispatch(command: ConsumerCommand): Promise<ConsumerResponse> {
     const startedAt = Date.now();
     this.emitTelemetry({
@@ -71,6 +67,11 @@ class RelayWebSocketTransport implements CommandTransport {
     }
   }
 
+  public close(): void {
+    const socket = this.socket;
+    this.handleClose();
+    socket?.close();
+  }
   private async sendCommand(
     command: ConsumerCommand,
   ): Promise<PromiseWithResolvers<ConsumerResponse>> {
@@ -91,7 +92,6 @@ class RelayWebSocketTransport implements CommandTransport {
       throw error;
     }
   }
-
   private async encryptCommand(
     command: ConsumerCommand,
   ): Promise<RelayCipherFrame> {
@@ -104,7 +104,6 @@ class RelayWebSocketTransport implements CommandTransport {
     const encrypted = await this.requireChannel().encryptUtf8(frame);
     return encrypted;
   }
-
   private async openSocket(): Promise<WebSocket> {
     if (this.socket?.readyState === WebSocket.OPEN && this.channel !== null) {
       return this.socket;
@@ -117,7 +116,6 @@ class RelayWebSocketTransport implements CommandTransport {
     const socket = await this.connecting;
     return socket;
   }
-
   private async connectSocket(): Promise<WebSocket> {
     const route = relaySocketRoute(this.options.offer);
     this.logConnectStart();
@@ -131,7 +129,6 @@ class RelayWebSocketTransport implements CommandTransport {
       throw error;
     }
   }
-
   private createSocket(url: string, protocol: string): WebSocket {
     const Socket = this.options.WebSocketImpl ?? WebSocket;
     const socket = new Socket(url, [protocol]);
@@ -139,7 +136,6 @@ class RelayWebSocketTransport implements CommandTransport {
     this.bindSocketEvents(socket);
     return socket;
   }
-
   private async openConnectedSocket(
     socket: WebSocket,
     connectionId: string,
@@ -297,4 +293,7 @@ class RelayWebSocketTransport implements CommandTransport {
 }
 
 export { RelayWebSocketTransport };
-export type { RelayConnectionOffer, RelaySessionClientOptions } from "./relaySessionClientOptions.js";
+export type {
+  RelayConnectionOffer,
+  RelaySessionClientOptions,
+} from "./relaySessionClientOptions.js";

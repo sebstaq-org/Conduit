@@ -1,3 +1,4 @@
+import { DesktopPairingPanel } from "@/features/desktop-pairing";
 import { HostPairingPanel } from "@/features/host-pairing";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
 import { RuntimeStatusPanel } from "@/features/runtime-status";
@@ -25,6 +26,7 @@ function NavigationPanelRows({
       >
         Conduit
       </Text>
+      <DesktopPairingPanel />
       <HostPairingPanel />
       <NavigationPanelProjectRows />
       <RuntimeStatusPanel />

@@ -116,6 +116,27 @@ export default defineConfig({
       ],
       rules: {
         "import/no-nodejs-modules": "off",
+        "oxc/no-async-await": "off",
+      },
+    },
+    {
+      files: [
+        "apps/desktop/src/main/stage/runtime.ts",
+        "apps/desktop/src/main/daemon/**/*.ts",
+        "src/main/stage/runtime.ts",
+        "src/main/daemon/**/*.ts",
+        "**/src/main/stage/runtime.ts",
+        "**/src/main/daemon/**/*.ts",
+        "apps/frontend/src/features/desktop-pairing/**/*.ts",
+        "apps/frontend/src/features/desktop-pairing/**/*.tsx",
+        "src/features/desktop-pairing/**/*.ts",
+        "src/features/desktop-pairing/**/*.tsx",
+        "**/src/features/desktop-pairing/**/*.ts",
+        "**/src/features/desktop-pairing/**/*.tsx",
+      ],
+      rules: {
+        "eslint/no-await-in-loop": "off",
+        "oxc/no-async-await": "off",
       },
     },
     {

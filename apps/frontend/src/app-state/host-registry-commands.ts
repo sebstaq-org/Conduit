@@ -3,7 +3,11 @@ import {
   parseConnectionOfferUrl,
 } from "@conduit/app-client";
 import { conduitApi } from "./api";
-import { hostAccepted, hostForgotten, hostPairingFailed } from "./host-registry";
+import {
+  hostAccepted,
+  hostForgotten,
+  hostPairingFailed,
+} from "./host-registry";
 import { activeSessionCleared } from "./session-selection";
 import type {
   AcceptConnectionOfferResult,
@@ -44,10 +48,14 @@ function dispatchPairingResult(
     return;
   }
   if (result.kind === "blocked_key_changed") {
-    dispatch(hostPairingFailed("Desktop identity changed. Forget the old host first."));
+    dispatch(
+      hostPairingFailed("Desktop identity changed. Forget the old host first."),
+    );
     return;
   }
-  dispatch(hostPairingFailed("Desktop is revoked. Forget it before pairing again."));
+  dispatch(
+    hostPairingFailed("Desktop is revoked. Forget it before pairing again."),
+  );
 }
 
 function pairHostFromOfferUrl({

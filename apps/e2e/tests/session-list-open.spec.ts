@@ -95,7 +95,9 @@ test("pairing UI drives session commands through relay and reconnects", async ({
     })
     .toBeGreaterThan(beforeReconnect.dataSocketCount);
   await page.getByRole("button", { name: fixtureSessionTitle }).click();
-  await expect(page.getByText(transcriptSentinel)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(transcriptSentinel)).toBeVisible({
+    timeout: 15000,
+  });
 });
 
 test("pairing survives reload, reconfigures, and forget clears stale data", async ({

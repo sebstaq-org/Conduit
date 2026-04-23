@@ -4,6 +4,7 @@ import type {
 } from "@conduit/session-contracts";
 
 interface CommandTransport {
+  close(): void;
   dispatch(command: ConsumerCommand): Promise<ConsumerResponse>;
 }
 

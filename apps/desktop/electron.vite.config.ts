@@ -19,6 +19,10 @@ const workspaceAliases = {
     import.meta.dirname,
     "../../packages/design-system-tokens/src/index.ts",
   ),
+  "@conduit/relay-transport": resolve(
+    import.meta.dirname,
+    "../../packages/relay-transport/src/index.ts",
+  ),
   "@conduit/session-client": resolve(
     import.meta.dirname,
     "../../packages/session-client/src/index.ts",
@@ -64,6 +68,8 @@ export default defineConfig({
         "@conduit/design-system-tokens":
           workspaceAliases["@conduit/design-system-tokens"],
         "@conduit/session-client": workspaceAliases["@conduit/session-client"],
+        "@conduit/relay-transport":
+          workspaceAliases["@conduit/relay-transport"],
         "@conduit/session-contracts":
           workspaceAliases["@conduit/session-contracts"],
         "@conduit/session-model": workspaceAliases["@conduit/session-model"],

@@ -5,11 +5,7 @@
     "owner": "ribboo",
     "version": "0.5.0",
     "orientation": "portrait",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
+    "platforms": ["ios", "android", "web"],
     "scheme": "conduit",
     "android": {
       "package": "org.sebstaq.conduit"
@@ -22,10 +18,7 @@
         "usesNonExemptEncryption": false
       }
     },
-    "plugins": [
-      "expo-router",
-      "expo-secure-store"
-    ],
+    "plugins": ["expo-router", "expo-secure-store"],
     "experiments": {
       "typedRoutes": true
     },

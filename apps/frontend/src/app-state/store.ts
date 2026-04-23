@@ -16,7 +16,10 @@ import {
   storageErrorMessage,
 } from "./host-registry-storage";
 import { frontendLoggingMiddleware } from "./logging-middleware";
-import { activeSessionCleared, sessionSelectionReducer } from "./session-selection";
+import {
+  activeSessionCleared,
+  sessionSelectionReducer,
+} from "./session-selection";
 import { configureSessionClientForHost } from "./session-client";
 
 const store = configureStore({

@@ -1,6 +1,10 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { DesktopDaemonController } from "./daemon/backend.js";
+import { readDesktopDaemonConfig } from "./daemon/config.js";
+import { bindDesktopDaemonIpc } from "./daemon/ipc.js";
 import { runStageRuntimeIfConfigured } from "./stage/runtime.js";
+import type { DesktopDaemonConfig } from "./daemon/types.js";
 
 const currentDirectory = import.meta.dirname;
 const mainWindows = new Set<BrowserWindow>();
@@ -8,6 +12,21 @@ const mainWindows = new Set<BrowserWindow>();
 app.disableHardwareAcceleration();
 
 const runningStageRuntime = runStageRuntimeIfConfigured();
+let desktopDaemonConfig: DesktopDaemonConfig | null = null;
+if (!runningStageRuntime) {
+  desktopDaemonConfig = readDesktopDaemonConfig();
+}
+let desktopDaemon: DesktopDaemonController | null = null;
+if (desktopDaemonConfig !== null) {
+  desktopDaemon = new DesktopDaemonController(desktopDaemonConfig);
+}
+
+if (!runningStageRuntime) {
+  bindDesktopDaemonIpc({
+    config: desktopDaemonConfig,
+    daemon: desktopDaemon,
+  });
+}
 
 function createMainWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -18,8 +37,8 @@ function createMainWindow(): BrowserWindow {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: join(currentDirectory, "../preload/index.js"),
-      sandbox: true,
+      preload: join(currentDirectory, "../preload/index.mjs"),
+      sandbox: false,
     },
   });
 
@@ -40,8 +59,13 @@ function createMainWindow(): BrowserWindow {
 }
 
 if (!runningStageRuntime) {
-  app.on("ready", () => {
+  const startDesktopRuntime = async (): Promise<void> => {
+    await desktopDaemon?.start();
     createMainWindow();
+  };
+
+  app.on("ready", () => {
+    void startDesktopRuntime();
   });
 
   app.on("activate", () => {
@@ -54,5 +78,9 @@ if (!runningStageRuntime) {
     if (process.platform !== "darwin") {
       app.quit();
     }
+  });
+
+  app.on("before-quit", () => {
+    void desktopDaemon?.stop();
   });
 }

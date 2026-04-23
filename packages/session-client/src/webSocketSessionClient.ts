@@ -57,16 +57,13 @@ import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
 } from "./timelineEvent.js";
-
 interface TimelineSubscription {
   handler: (event: SessionTimelineChanged) => void;
   openSessionId: string;
 }
-
 interface SessionIndexSubscription {
   handler: (event: SessionsIndexChanged) => void;
 }
-
 function confirmGeneratedSubscription(
   result: unknown,
   cleanup: () => void,
@@ -79,7 +76,6 @@ function confirmGeneratedSubscription(
     throw error;
   }
 }
-
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
   private readonly timelineSubscriptions = new Set<TimelineSubscription>();
@@ -95,6 +91,9 @@ class WebSocketSessionClient implements SessionClientPort {
       new WebSocketTransport(options, (event) => {
         this.handleRuntimeEvent(event);
       });
+  }
+  public close(): void {
+    this.transport.close();
   }
   public async listProjects(): Promise<ProjectListView> {
     const response = await this.dispatch(

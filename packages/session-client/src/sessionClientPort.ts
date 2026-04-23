@@ -34,6 +34,7 @@ import type { SessionClientTelemetryEvent } from "./transport/sessionClientTelem
 interface SessionClientPort {
   readonly policy: "official-acp-only";
   addProject(request: ProjectAddRequest): Promise<ProjectListView>;
+  close(): void;
   getProjectSuggestions(
     query?: ProjectSuggestionsQuery,
   ): Promise<ProjectSuggestionsView>;

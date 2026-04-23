@@ -192,13 +192,15 @@ const hostRegistrySlice = createSlice({
   },
 });
 
-function selectHostProfiles(state: { hostRegistry: HostRegistryState }): ConnectionHostProfile[] {
+function selectHostProfiles(state: {
+  hostRegistry: HostRegistryState;
+}): ConnectionHostProfile[] {
   return state.hostRegistry.hosts;
 }
 
-function selectActiveHostProfile(
-  state: { hostRegistry: HostRegistryState },
-): ConnectionHostProfile | null {
+function selectActiveHostProfile(state: {
+  hostRegistry: HostRegistryState;
+}): ConnectionHostProfile | null {
   return (
     state.hostRegistry.hosts.find(
       (host) => host.serverId === state.hostRegistry.activeHostId,
@@ -206,7 +208,9 @@ function selectActiveHostProfile(
   );
 }
 
-function selectPairingError(state: { hostRegistry: HostRegistryState }): string | null {
+function selectPairingError(state: {
+  hostRegistry: HostRegistryState;
+}): string | null {
   return state.hostRegistry.pairingError ?? state.hostRegistry.persistenceError;
 }
 

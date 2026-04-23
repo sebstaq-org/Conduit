@@ -146,6 +146,21 @@ const resolveWithTypeScriptExtensionFallback: ResolveRequest = (
   }
 };
 
+function resolveWebWorkletsMock(
+  context: Parameters<NonNullable<typeof defaultResolveRequest>>[0],
+  requestName: string,
+  platform: string | null,
+): unknown {
+  if (platform === "web" && requestName === "react-native-worklets") {
+    return resolveDefault(
+      context,
+      "react-native-worklets/lib/module/mock",
+      platform,
+    );
+  }
+  return null;
+}
+
 metroConfig.resolver.resolveRequest = (
   context,
   moduleName,
@@ -159,6 +174,14 @@ metroConfig.resolver.resolveRequest = (
 
   if (sourceRequest !== undefined) {
     return sourceRequest;
+  }
+  const webWorkletsMock = resolveWebWorkletsMock(
+    context,
+    requestName,
+    platform,
+  );
+  if (webWorkletsMock !== null) {
+    return webWorkletsMock;
   }
 
   if (
