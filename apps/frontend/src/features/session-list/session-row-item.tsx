@@ -1,8 +1,15 @@
-import { openSessionRow } from "@/app-state";
-import type { useOpenSessionMutation, ActiveSession } from "@/app-state";
-import { Row } from "@/ui";
+import { useSelector } from "react-redux";
+import { openSessionRow, selectSessionPromptTurnStreaming } from "@/app-state";
+import type {
+  ActiveSession,
+  RootState,
+  useOpenSessionMutation,
+} from "@/app-state";
+import { showOpenSessionFailureToast } from "@/features/session-notifications";
+import { Row, Spinner } from "@/ui";
 import { sessionRowDepth } from "./session-list.constants";
 import type { SessionGroup, SessionRow } from "./session-list.types";
+import type { ReactNode } from "react";
 
 function formatSessionMeta(provider: string, updatedAt: string | null): string {
   if (updatedAt === null) {
@@ -37,6 +44,13 @@ function isActiveSession(
   );
 }
 
+function sessionRowLeading(isWorking: boolean): ReactNode | undefined {
+  if (isWorking) {
+    return <Spinner />;
+  }
+  return undefined;
+}
+
 interface SessionRowItemProps {
   group: SessionGroup;
   onSessionSelected?: (() => void) | undefined;
@@ -52,13 +66,23 @@ function SessionRowItem({
   session,
   activeSession,
 }: SessionRowItemProps): React.JSX.Element {
+  const isWorking = useSelector((state: RootState) =>
+    selectSessionPromptTurnStreaming(state, {
+      provider: session.provider,
+      sessionId: session.sessionId,
+    }),
+  );
+
   return (
     <Row
       depth={sessionRowDepth}
       label={sessionTitle(session.title)}
+      leading={sessionRowLeading(isWorking)}
       meta={formatSessionMeta(session.provider, session.updatedAt)}
+      reserveLeadingSpace
       onPress={() => {
         void openSessionRow({
+          onFailure: showOpenSessionFailureToast,
           onSessionSelected,
           openSession,
           request: {

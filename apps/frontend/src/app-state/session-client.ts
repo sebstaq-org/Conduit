@@ -39,6 +39,7 @@ import type {
 } from "@conduit/session-model";
 import { frontendEnvValue } from "./frontend-env";
 import { logDebug, logError, logInfo, logWarn } from "./frontend-logger";
+import { createUnconfiguredSessionClient } from "./session-client-unconfigured";
 
 function optionalSessionClientUrl(): string | null {
   const configuredUrl = frontendEnvValue("EXPO_PUBLIC_CONDUIT_SESSION_WS_URL");
@@ -92,43 +93,12 @@ function logSessionClientTelemetry(event: SessionClientTelemetryEvent): void {
   logError(event.event_name, event.fields ?? {});
 }
 
-function unconfiguredError(): Error {
-  return new Error("Pair a desktop before using Conduit sessions.");
-}
-
-async function rejectUnconfigured<Result>(): Promise<Result> {
-  await Promise.resolve();
-  throw unconfiguredError();
-}
-
-function createUnconfiguredSessionClient(): SessionClientPort {
-  return {
-    addProject: rejectUnconfigured,
-    getProjectSuggestions: rejectUnconfigured,
-    getProvidersConfigSnapshot: rejectUnconfigured,
-    getSessionGroups: rejectUnconfigured,
-    getSettings: rejectUnconfigured,
-    listProjects: rejectUnconfigured,
-    newSession: rejectUnconfigured,
-    openSession: rejectUnconfigured,
-    policy: "official-acp-only" as const,
-    promptSession: rejectUnconfigured,
-    readSessionHistory: rejectUnconfigured,
-    removeProject: rejectUnconfigured,
-    respondInteraction: rejectUnconfigured,
-    setSessionConfigOption: rejectUnconfigured,
-    subscribeSessionIndexChanges: rejectUnconfigured,
-    subscribeTimelineChanges: rejectUnconfigured,
-    updateProject: rejectUnconfigured,
-    updateSettings: rejectUnconfigured,
-  };
-}
-
 class SessionClientManager implements SessionClientPort {
   public readonly policy = "official-acp-only" as const;
   private client: SessionClientPort = createUnconfiguredSessionClient();
 
   public configureDirect(url: string): void {
+    this.client.close();
     this.client = createSessionClient({
       onTelemetryEvent: logSessionClientTelemetry,
       url,
@@ -136,6 +106,7 @@ class SessionClientManager implements SessionClientPort {
   }
 
   public configureRelay(host: ConnectionHostProfile): void {
+    this.client.close();
     this.client = createRelaySessionClient({
       offer: relayOfferFromHostProfile(host),
       onTelemetryEvent: logSessionClientTelemetry,
@@ -143,7 +114,12 @@ class SessionClientManager implements SessionClientPort {
   }
 
   public configureUnconfigured(): void {
+    this.client.close();
     this.client = createUnconfiguredSessionClient();
+  }
+
+  public close(): void {
+    this.client.close();
   }
 
   public async addProject(

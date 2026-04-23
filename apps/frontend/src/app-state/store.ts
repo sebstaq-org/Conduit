@@ -20,12 +20,14 @@ import {
   activeSessionCleared,
   sessionSelectionReducer,
 } from "./session-selection";
+import { sessionPromptTurnsReducer } from "./session-prompt-turns";
 import { configureSessionClientForHost } from "./session-client";
 
 const store = configureStore({
   reducer: {
     [conduitApi.reducerPath]: conduitApi.reducer,
     hostRegistry: hostRegistryReducer,
+    sessionPromptTurns: sessionPromptTurnsReducer,
     sessionSelection: sessionSelectionReducer,
   },
   middleware: (getDefaultMiddleware) =>

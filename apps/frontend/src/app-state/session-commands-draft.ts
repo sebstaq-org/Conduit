@@ -1,18 +1,13 @@
 import type { SessionConfigOption } from "@conduit/session-client";
 import type { OpenSessionMutationArg } from "./api";
 import type {
-  useOpenSessionMutation,
-  useSetSessionConfigOptionMutation,
-} from "./api-hooks";
+  OpenSessionTrigger,
+  SetSessionConfigOptionTrigger,
+} from "./session-command-triggers";
 import type { ActiveSession } from "./session-selection";
 import { logFailure, logInfo } from "./frontend-logger";
 
 const NEW_SESSION_HISTORY_LIMIT = 100;
-
-type OpenSessionTrigger = ReturnType<typeof useOpenSessionMutation>[0];
-type SetSessionConfigOptionTrigger = ReturnType<
-  typeof useSetSessionConfigOptionMutation
->[0];
 
 interface DraftConfigSyncState {
   configOptions: SessionConfigOption[] | null;

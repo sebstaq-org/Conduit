@@ -1,0 +1,13 @@
+{
+  "message": "fixture forced codex session/prompt failure",
+  "operation": "session/prompt",
+  "promptRequest": {
+    "prompt": [
+      {
+        "text": "CONDUIT_E2E_PROMPT_FAILURE_DRAFT_codex",
+        "type": "text"
+      }
+    ],
+    "sessionId": "e2e-codex-prompt-fails-0001"
+  }
+}

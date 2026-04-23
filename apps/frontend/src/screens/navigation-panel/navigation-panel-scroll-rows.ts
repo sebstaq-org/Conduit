@@ -1,4 +1,6 @@
 import type { SessionGroupsView } from "@conduit/session-client";
+import type { ActiveSession } from "@/app-state";
+import { draftSessionMatchesCwd } from "@/features/session-list/draft-session";
 
 type SessionGroup = SessionGroupsView["groups"][number];
 type SessionRow = SessionGroup["sessions"][number];
@@ -7,7 +9,7 @@ type NavigationPanelScrollRow =
   | { kind: "heading"; key: "heading" }
   | { kind: "hostPairing"; key: "host-pairing" }
   | { kind: "projectRows"; key: "project-rows" }
-  | { kind: "threadsHeader"; key: "threads-header" }
+  | { kind: "projectsHeader"; key: "projects-header" }
   | {
       kind: "status";
       key: string;
@@ -25,6 +27,12 @@ type NavigationPanelScrollRow =
       key: string;
     }
   | {
+      activeSession: Extract<ActiveSession, { kind: "draft" }>;
+      group: SessionGroup;
+      kind: "draftSession";
+      key: string;
+    }
+  | {
       group: SessionGroup;
       kind: "session";
       key: string;
@@ -32,6 +40,7 @@ type NavigationPanelScrollRow =
     };
 
 interface SessionRowsInput {
+  activeSession: ActiveSession | null;
   data: SessionGroupsView | undefined;
   error: unknown;
   isError: boolean;
@@ -47,7 +56,17 @@ function sessionGroupsErrorMessage(error: unknown): string {
   return "session request failed";
 }
 
-function appendSessionGroupRows(
+function draftSessionForGroup(
+  activeSession: ActiveSession | null,
+  group: SessionGroup,
+): Extract<ActiveSession, { kind: "draft" }> | null {
+  if (draftSessionMatchesCwd(activeSession, group.cwd)) {
+    return activeSession;
+  }
+  return null;
+}
+
+function appendGroupHeaderRow(
   rows: NavigationPanelScrollRow[],
   group: SessionGroup,
 ): void {
@@ -56,16 +75,27 @@ function appendSessionGroupRows(
     kind: "groupHeader",
     key: `group:${group.groupId}`,
   });
+}
 
-  if (group.sessions.length === 0) {
+function appendDraftSessionRow(
+  rows: NavigationPanelScrollRow[],
+  group: SessionGroup,
+  draftSession: Extract<ActiveSession, { kind: "draft" }> | null,
+): void {
+  if (draftSession !== null) {
     rows.push({
+      activeSession: draftSession,
       group,
-      kind: "groupEmpty",
-      key: `group:${group.groupId}:empty`,
+      kind: "draftSession",
+      key: `group:${group.groupId}:draft`,
     });
-    return;
   }
+}
 
+function appendSessionRows(
+  rows: NavigationPanelScrollRow[],
+  group: SessionGroup,
+): void {
   for (const session of group.sessions) {
     rows.push({
       group,
@@ -74,6 +104,32 @@ function appendSessionGroupRows(
       session,
     });
   }
+}
+
+function appendGroupEmptyRow(
+  rows: NavigationPanelScrollRow[],
+  group: SessionGroup,
+): void {
+  rows.push({
+    group,
+    kind: "groupEmpty",
+    key: `group:${group.groupId}:empty`,
+  });
+}
+
+function appendSessionGroupRows(
+  rows: NavigationPanelScrollRow[],
+  group: SessionGroup,
+  activeSession: ActiveSession | null,
+): void {
+  const draftSession = draftSessionForGroup(activeSession, group);
+  appendGroupHeaderRow(rows, group);
+  appendDraftSessionRow(rows, group, draftSession);
+  if (group.sessions.length === 0 && draftSession === null) {
+    appendGroupEmptyRow(rows, group);
+    return;
+  }
+  appendSessionRows(rows, group);
 }
 
 function appendStatusRows(
@@ -113,7 +169,7 @@ function createSessionRows(
   const rows: NavigationPanelScrollRow[] = [];
   appendStatusRows(rows, input);
   for (const group of input.data?.groups ?? []) {
-    appendSessionGroupRows(rows, group);
+    appendSessionGroupRows(rows, group, input.activeSession);
   }
   return rows;
 }
@@ -125,7 +181,7 @@ function createNavigationPanelRows(
     { kind: "heading", key: "heading" },
     { kind: "hostPairing", key: "host-pairing" },
     { kind: "projectRows", key: "project-rows" },
-    { kind: "threadsHeader", key: "threads-header" },
+    { kind: "projectsHeader", key: "projects-header" },
     ...sessionRows,
   ];
 }

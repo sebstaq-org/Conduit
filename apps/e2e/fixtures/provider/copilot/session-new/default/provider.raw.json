@@ -1,0 +1,88 @@
+{
+  "configOptions": [
+    {
+      "category": "mode",
+      "currentValue": "https://agentclientprotocol.com/protocol/session-modes#agent",
+      "id": "mode",
+      "name": "Mode",
+      "options": [
+        {
+          "name": "Agent",
+          "value": "https://agentclientprotocol.com/protocol/session-modes#agent"
+        },
+        {
+          "name": "Plan",
+          "value": "https://agentclientprotocol.com/protocol/session-modes#plan"
+        },
+        {
+          "name": "Autopilot",
+          "value": "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "model",
+      "currentValue": "gpt-5-mini",
+      "id": "model",
+      "name": "Model",
+      "options": [
+        {
+          "name": "GPT-5 mini",
+          "value": "gpt-5-mini"
+        },
+        {
+          "name": "GPT-4.1",
+          "value": "gpt-4.1"
+        },
+        {
+          "name": "Claude Haiku 4.5",
+          "value": "claude-haiku-4.5"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "thought_level",
+      "currentValue": "medium",
+      "id": "reasoning_effort",
+      "name": "Reasoning Effort",
+      "options": [
+        {
+          "name": "low",
+          "value": "low"
+        },
+        {
+          "name": "medium",
+          "value": "medium"
+        },
+        {
+          "name": "high",
+          "value": "high"
+        }
+      ],
+      "type": "select"
+    }
+  ],
+  "modes": {
+    "availableModes": [
+      {
+        "description": "Default agent mode for conversational interactions",
+        "id": "https://agentclientprotocol.com/protocol/session-modes#agent",
+        "name": "Agent"
+      },
+      {
+        "description": "Plan mode for creating and executing multi-step plans",
+        "id": "https://agentclientprotocol.com/protocol/session-modes#plan",
+        "name": "Plan"
+      },
+      {
+        "description": "Autonomous mode that runs until task completion without user interaction (experimental)",
+        "id": "https://agentclientprotocol.com/protocol/session-modes#autopilot",
+        "name": "Autopilot"
+      }
+    ],
+    "currentModeId": "https://agentclientprotocol.com/protocol/session-modes#agent"
+  },
+  "sessionId": "e2e-copilot-new-session-0001"
+}

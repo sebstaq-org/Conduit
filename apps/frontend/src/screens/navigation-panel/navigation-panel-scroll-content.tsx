@@ -1,5 +1,10 @@
 import { useTheme } from "@shopify/restyle";
-import { useGetSessionGroupsQuery, useOpenSessionMutation } from "@/app-state";
+import {
+  selectActiveSession,
+  useGetSessionGroupsQuery,
+  useOpenSessionMutation,
+} from "@/app-state";
+import { useSelector } from "react-redux";
 import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
 import { NavigationPanelScrollRowItem } from "./navigation-panel-scroll-row-item";
@@ -29,9 +34,11 @@ function NavigationPanelScrollContent({
     defaultSessionGroupsQuery,
   );
   const [openSession, openSessionState] = useOpenSessionMutation();
+  const activeSession = useSelector(selectActiveSession);
   const showOpenSessionError =
     openSessionState.isError && !openSessionState.isSuccess;
   const sessionRows = createSessionRows({
+    activeSession,
     data,
     error,
     isError,
@@ -47,6 +54,7 @@ function NavigationPanelScrollContent({
       keyExtractor={(row) => row.key}
       renderItem={({ item }) => (
         <NavigationPanelScrollRowItem
+          activeSession={activeSession}
           onSessionSelected={onSessionSelected}
           openSession={openSession}
           row={item}

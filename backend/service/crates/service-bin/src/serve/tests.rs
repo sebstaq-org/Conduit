@@ -1,4 +1,4 @@
-use super::{OutboundFrame, WatchState, handle_client_text, is_loopback_client};
+use super::{OutboundFrame, WatchState, handle_client_text, health_response, is_loopback_client};
 use crate::serve::actor::RuntimeActor;
 use acp_core::{
     ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,
@@ -20,6 +20,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use telemetry_support::TelemetryStatus;
 use tokio::sync::mpsc as tokio_mpsc;
 
 type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
@@ -219,6 +220,30 @@ fn client_log_ingest_accepts_ipv6_loopback() -> TestResult<()> {
         return Ok(());
     }
     Err("ipv6 loopback client was rejected".into())
+}
+
+#[test]
+fn health_reports_telemetry_failure_details() -> TestResult<()> {
+    let (status, payload) = health_response(TelemetryStatus {
+        error_code: Some("telemetry_io_failed"),
+        error_message: Some("disk full".to_owned()),
+        ok: false,
+    });
+    if status != axum::http::StatusCode::SERVICE_UNAVAILABLE {
+        return Err("expected telemetry failure status".into());
+    }
+    if payload
+        != json!({
+            "ok": false,
+            "service": "conduit-service",
+            "transport": "websocket",
+            "error_code": "telemetry_io_failed",
+            "error_message": "disk full"
+        })
+    {
+        return Err("unexpected telemetry failure payload".into());
+    }
+    Ok(())
 }
 
 fn runtime_event(kind: RuntimeEventKind, payload: serde_json::Value) -> TestResult<RuntimeEvent> {

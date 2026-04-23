@@ -1,5 +1,6 @@
 //! Session prompt fixture indexing.
 
+use crate::failure::{ProviderFailureFixture, read_provider_failure_fixture};
 use crate::{invalid_fixture, read_json};
 use acp_core::{
     LiveSessionIdentity, PromptLifecycleSnapshot, PromptLifecycleState, TranscriptUpdateSnapshot,
@@ -12,7 +13,13 @@ use std::fs::read_dir;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
-pub(crate) struct SessionPromptFixture {
+pub(crate) enum SessionPromptFixture {
+    Failure(SessionPromptFailureFixture),
+    Success(SessionPromptSuccessFixture),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SessionPromptSuccessFixture {
     pub(crate) prompt: Vec<Value>,
     pub(crate) required_config: Option<RequiredPromptConfig>,
     pub(crate) response: Value,
@@ -26,7 +33,13 @@ pub(crate) struct RequiredPromptConfig {
     pub(crate) value: String,
 }
 
-impl SessionPromptFixture {
+#[derive(Debug, Clone)]
+pub(crate) struct SessionPromptFailureFixture {
+    pub(crate) failure: ProviderFailureFixture,
+    pub(crate) prompt: Vec<Value>,
+}
+
+impl SessionPromptSuccessFixture {
     pub(crate) fn lifecycle(
         &self,
         provider: ProviderId,
@@ -49,7 +62,7 @@ impl SessionPromptFixture {
 pub(crate) fn read_session_prompt_fixtures(
     root: &Path,
     provider: ProviderId,
-    fixtures: &mut HashMap<(ProviderId, String), SessionPromptFixture>,
+    fixtures: &mut HashMap<(ProviderId, String), Vec<SessionPromptFixture>>,
 ) -> Result<()> {
     let root = session_prompt_root(root, provider);
     if !root.exists() {
@@ -90,7 +103,7 @@ pub(crate) fn read_session_prompt_fixtures(
 fn read_session_prompt_session_fixtures(
     provider: ProviderId,
     session_root: &Path,
-    fixtures: &mut HashMap<(ProviderId, String), SessionPromptFixture>,
+    fixtures: &mut HashMap<(ProviderId, String), Vec<SessionPromptFixture>>,
 ) -> Result<()> {
     for entry in read_dir(session_root).map_err(|source| {
         RuntimeError::Provider(format!(
@@ -116,22 +129,46 @@ fn read_session_prompt_session_fixtures(
         {
             continue;
         }
-        let path = entry.path().join("provider.raw.json");
-        if !path.exists() {
+        let entry_path = entry.path();
+        let Some((session_id, fixture)) = read_session_prompt_entry(&entry_path)? else {
             continue;
-        }
-        let (session_id, fixture) = read_session_prompt_fixture(&path)?;
-        if fixtures
-            .insert((provider, session_id.clone()), fixture)
-            .is_some()
-        {
+        };
+        let session_fixtures = fixtures.entry((provider, session_id)).or_default();
+        if session_fixtures.iter().any(|existing| {
+            session_prompt_fixture_duplicate_key(existing)
+                == session_prompt_fixture_duplicate_key(&fixture)
+        }) {
             return Err(invalid_fixture(
-                &path,
-                "duplicate session/prompt session id",
+                &entry_path,
+                "duplicate session/prompt prompt and config",
             ));
         }
+        session_fixtures.push(fixture);
     }
     Ok(())
+}
+
+fn session_prompt_fixture_duplicate_key(
+    fixture: &SessionPromptFixture,
+) -> (&[Value], Option<&RequiredPromptConfig>) {
+    match fixture {
+        SessionPromptFixture::Failure(failure) => (&failure.prompt, None),
+        SessionPromptFixture::Success(success) => {
+            (&success.prompt, success.required_config.as_ref())
+        }
+    }
+}
+
+fn read_session_prompt_entry(entry_path: &Path) -> Result<Option<(String, SessionPromptFixture)>> {
+    let success_path = entry_path.join("provider.raw.json");
+    if success_path.exists() {
+        return read_session_prompt_fixture(&success_path).map(Some);
+    }
+    let failure_path = entry_path.join("failure.json");
+    if failure_path.exists() {
+        return read_session_prompt_failure(&failure_path).map(Some);
+    }
+    Ok(None)
 }
 
 fn read_session_prompt_fixture(path: &Path) -> Result<(String, SessionPromptFixture)> {
@@ -174,13 +211,34 @@ fn read_session_prompt_fixture(path: &Path) -> Result<(String, SessionPromptFixt
         })?;
     Ok((
         session_id,
-        SessionPromptFixture {
+        SessionPromptFixture::Success(SessionPromptSuccessFixture {
             prompt,
             required_config,
             response,
             stop_reason,
             updates,
-        },
+        }),
+    ))
+}
+
+fn read_session_prompt_failure(path: &Path) -> Result<(String, SessionPromptFixture)> {
+    let value = read_json(path)?;
+    if !value.is_object() {
+        return Err(invalid_fixture(path, "must be a JSON object"));
+    }
+    let failure = read_provider_failure_fixture(path, "session/prompt")?;
+    let session_id = session_prompt_session_id(path, &value)?;
+    let prompt_value = value
+        .pointer("/promptRequest/prompt")
+        .cloned()
+        .ok_or_else(|| invalid_fixture(path, "must contain promptRequest.prompt array"))?;
+    let prompt = prompt_value
+        .as_array()
+        .cloned()
+        .ok_or_else(|| invalid_fixture(path, "must contain promptRequest.prompt array"))?;
+    Ok((
+        session_id,
+        SessionPromptFixture::Failure(SessionPromptFailureFixture { failure, prompt }),
     ))
 }
 
@@ -190,6 +248,7 @@ fn session_prompt_session_id(path: &Path, value: &Value) -> Result<String> {
     }
     value
         .pointer("/promptRequest/sessionId")
+        .or_else(|| value.get("sessionId"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {

@@ -1,5 +1,6 @@
 //! Session load fixture indexing.
 
+use crate::failure::{ProviderFailureFixture, read_provider_failure_fixture};
 use crate::{invalid_fixture, read_json};
 use acp_core::{LiveSessionIdentity, LoadedTranscriptSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
@@ -10,7 +11,13 @@ use std::fs::read_dir;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
-pub(crate) struct SessionLoadFixture {
+pub(crate) enum SessionLoadFixture {
+    Failure(ProviderFailureFixture),
+    Success(SessionLoadSuccessFixture),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SessionLoadSuccessFixture {
     pub(crate) response: Value,
     pub(crate) loaded_transcript: LoadedTranscriptSnapshot,
 }
@@ -48,19 +55,36 @@ pub(crate) fn read_session_load_fixtures(
         if !file_type.is_dir() {
             continue;
         }
-        let path = entry.path().join("provider.raw.json");
-        if !path.exists() {
+        let entry_path = entry.path();
+        let Some((session_id, fixture)) = read_session_load_entry(&entry_path, provider)? else {
             continue;
-        }
-        let (session_id, fixture) = read_session_load_fixture(&path, provider)?;
+        };
         if fixtures
             .insert((provider, session_id.clone()), fixture)
             .is_some()
         {
-            return Err(invalid_fixture(&path, "duplicate session/load session id"));
+            return Err(invalid_fixture(
+                &entry_path,
+                "duplicate session/load session id",
+            ));
         }
     }
     Ok(())
+}
+
+fn read_session_load_entry(
+    entry_path: &Path,
+    provider: ProviderId,
+) -> Result<Option<(String, SessionLoadFixture)>> {
+    let success_path = entry_path.join("provider.raw.json");
+    if success_path.exists() {
+        return read_session_load_fixture(&success_path, provider).map(Some);
+    }
+    let failure_path = entry_path.join("failure.json");
+    if failure_path.exists() {
+        return read_session_load_failure(&failure_path).map(Some);
+    }
+    Ok(None)
 }
 
 fn read_session_load_fixture(
@@ -115,11 +139,21 @@ fn read_session_load_fixture(
     };
     Ok((
         session_id,
-        SessionLoadFixture {
+        SessionLoadFixture::Success(SessionLoadSuccessFixture {
             response,
             loaded_transcript,
-        },
+        }),
     ))
+}
+
+fn read_session_load_failure(path: &Path) -> Result<(String, SessionLoadFixture)> {
+    let value = read_json(path)?;
+    if !value.is_object() {
+        return Err(invalid_fixture(path, "must be a JSON object"));
+    }
+    let failure = read_provider_failure_fixture(path, "session/load")?;
+    let session_id = session_load_session_id(path, &value)?;
+    Ok((session_id, SessionLoadFixture::Failure(failure)))
 }
 
 fn session_load_session_id(path: &Path, value: &Value) -> Result<String> {
@@ -128,6 +162,7 @@ fn session_load_session_id(path: &Path, value: &Value) -> Result<String> {
     }
     value
         .pointer("/loadedTranscript/identity/acpSessionId")
+        .or_else(|| value.get("sessionId"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
         .ok_or_else(|| {

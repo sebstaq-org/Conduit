@@ -22,6 +22,7 @@ function disabledStatus(): DesktopDaemonStatus {
     relayEndpoint: null,
     restartCount: 0,
     running: false,
+    sessionWsUrl: null,
   };
 }
 

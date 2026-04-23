@@ -1,0 +1,61 @@
+{
+  "configCapture": null,
+  "promptRequest": {
+    "prompt": [
+      {
+        "text": "Reply with exactly fixture-ready.",
+        "type": "text"
+      }
+    ],
+    "sessionId": "e2e-codex-new-session-0001"
+  },
+  "promptResponse": {
+    "stopReason": "end_turn"
+  },
+  "promptUpdates": [
+    {
+      "index": 0,
+      "update": {
+        "content": {
+          "text": "fix",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 1,
+      "update": {
+        "content": {
+          "text": "ture",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 2,
+      "update": {
+        "content": {
+          "text": "-",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 3,
+      "update": {
+        "content": {
+          "text": "ready",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    }
+  ]
+}

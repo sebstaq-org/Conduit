@@ -1,0 +1,14 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Promoted from the Codex protocol minimal-flow capture; cwd and session id normalized to the deterministic E2E fixture session, prompt text and response retained as a default no-config prompt flow.",
+  "cwd": "/tmp/conduit-e2e-fixture-project",
+  "manualCapture": false,
+  "operation": "session/prompt",
+  "provider": "codex",
+  "replacedFields": ["cwd", "sessionId", "promptRequest.sessionId"],
+  "sessionId": "e2e-codex-new-session-0001",
+  "sourceCapture": "backend/service/testdata/providers/codex/protocol/minimal-flow.events.jsonl",
+  "sourceProviderRawSha256": "d883a8a46b4845a6f7efc8ffc61ae4ce4e5a59d35d7a641e595ac89c561184ff",
+  "timestamp": "2026-01-01T00:00:00Z"
+}

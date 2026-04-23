@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 16] = [
+const APPROVED_CRATES: [&str; 17] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -26,6 +26,7 @@ const APPROVED_CRATES: [&str; 16] = [
     "service-runtime",
     "session-projection",
     "session-store",
+    "telemetry-support",
 ];
 
 pub(super) struct Fixture {
@@ -243,7 +244,7 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 16] {
+fn local_deps() -> [LocalDeps; 17] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
@@ -261,7 +262,10 @@ fn local_deps() -> [LocalDeps; 16] {
         ("provider-claude", Vec::<&str>::new()),
         ("provider-codex", Vec::<&str>::new()),
         ("provider-copilot", Vec::<&str>::new()),
-        ("repo-guard", vec!["tracing", "tracing-subscriber"]),
+        (
+            "repo-guard",
+            vec!["telemetry-support", "tracing", "tracing-subscriber"],
+        ),
         ("remote-access", Vec::<&str>::new()),
         (
             "service-bin",
@@ -271,9 +275,10 @@ fn local_deps() -> [LocalDeps; 16] {
                 "provider-claude",
                 "provider-codex",
                 "provider-copilot",
-                "remote-access",
                 "provider-fixture",
+                "remote-access",
                 "session-store",
+                "telemetry-support",
                 "tracing",
                 "tracing-subscriber",
             ],
@@ -287,5 +292,6 @@ fn local_deps() -> [LocalDeps; 16] {
             "session-store",
             vec!["acp-core", "acp-discovery", "session-projection"],
         ),
+        ("telemetry-support", Vec::<&str>::new()),
     ]
 }

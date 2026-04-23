@@ -1,0 +1,8 @@
+{
+  "captureKind": "provider",
+  "curation": "Removed absolute local cwd, normalized session id to e2e-claude-new-session-0001, and replaced provider prompt title with stable public title \"Claude E2E parity session\"; raw ACP session/list shape preserved.",
+  "operation": "session/list",
+  "provider": "claude",
+  "sessionId": "e2e-claude-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/claude/parity-full-20260419T103627Z/session-list-after-config-prompt"
+}

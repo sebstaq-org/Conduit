@@ -184,12 +184,23 @@ fn managed_codex_acp_candidates() -> Vec<PathBuf> {
 }
 
 fn repo_root() -> Option<PathBuf> {
+    if let Ok(cwd) = std::env::current_dir()
+        && let Some(root) = discover_repo_root(&cwd)
+    {
+        return Some(root);
+    }
+
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir
-        .parent()?
-        .parent()?
-        .parent()?
-        .parent()
+    discover_repo_root(manifest_dir)
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
         .map(Path::to_path_buf)
 }
 

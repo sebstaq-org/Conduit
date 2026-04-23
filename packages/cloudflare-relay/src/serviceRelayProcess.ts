@@ -7,6 +7,13 @@ import { fileURLToPath } from "node:url";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
+const providerFixtureRoot = join(
+  repoRoot,
+  "apps",
+  "e2e",
+  "fixtures",
+  "provider",
+);
 
 interface RelayServiceRun {
   readonly home: string;
@@ -65,6 +72,8 @@ function startService(
       "127.0.0.1",
       "--port",
       String(port),
+      "--provider-fixtures",
+      providerFixtureRoot,
       "--app-base-url",
       "https://expo.test/app",
     ],

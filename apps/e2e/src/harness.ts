@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
@@ -28,6 +28,10 @@ interface E2eHarness {
   pairingUrl(): Promise<string>;
   relaySnapshot(): Promise<RelaySnapshot>;
   stop(): Promise<void>;
+}
+
+interface E2eHarnessOptions {
+  readonly fixtureRoot?: string | undefined;
 }
 
 interface ManagedProcess {
@@ -81,14 +85,11 @@ const relayTestWorkerScript = join(
   "src",
   "testIndex.ts",
 );
-const fixtureRoot = join(appRoot, "fixtures", "provider");
+const defaultFixtureRoot = join(appRoot, "fixtures", "provider");
 const serviceBin = join(
-  repoRoot,
-  "backend",
-  "service",
-  "target",
+  cargoTargetDirectory(),
   "debug",
-  "service-bin",
+  executableName("service-bin"),
 );
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
 const frontendReadyTimeoutMs = 180_000;
@@ -97,7 +98,9 @@ const require = createRequire(import.meta.url);
 const Miniflare = (require("miniflare") as { Miniflare: MiniflareConstructor })
   .Miniflare;
 
-async function startE2eHarness(): Promise<E2eHarness> {
+async function startE2eHarness(
+  options: E2eHarnessOptions = {},
+): Promise<E2eHarness> {
   const runRoot = await mkdtemp(join(tmpdir(), "conduit-e2e-"));
   await mkdir(fixtureCwd, { recursive: true });
   const servicePort = await freePort();
@@ -106,6 +109,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
   const frontendUrl = `http://localhost:${frontendPort}`;
+  const providerFixtureRoot = options.fixtureRoot ?? defaultFixtureRoot;
   const processes: ManagedProcess[] = [];
   let cachedPairing: PairingResponse | null = null;
   let frontendServer: HttpServer | null = null;
@@ -134,7 +138,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
         "--port",
         String(servicePort),
         "--provider-fixtures",
-        fixtureRoot,
+        providerFixtureRoot,
         "--store-path",
         join(runRoot, "local-store.sqlite3"),
         "--relay-endpoint",
@@ -166,6 +170,7 @@ async function startE2eHarness(): Promise<E2eHarness> {
       {
         CI: "1",
         EXPO_NO_TELEMETRY: "1",
+        EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
       },
     );
     frontendServer = await startStaticServer(frontendBuildDir, frontendPort);
@@ -307,6 +312,36 @@ function spawnManaged(
     );
   });
   return { child, logs, name };
+}
+
+function cargoTargetDirectory(): string {
+  const result = spawnSync(
+    "cargo",
+    [
+      "metadata",
+      "--manifest-path",
+      join(repoRoot, "backend", "service", "Cargo.toml"),
+      "--format-version",
+      "1",
+      "--no-deps",
+    ],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(`cargo metadata failed\n${result.stderr}`);
+  }
+  const metadata = JSON.parse(result.stdout) as { target_directory?: unknown };
+  if (typeof metadata.target_directory !== "string") {
+    throw new Error("cargo metadata did not include target_directory");
+  }
+  return metadata.target_directory;
+}
+
+function executableName(name: string): string {
+  return process.platform === "win32" ? `${name}.exe` : name;
 }
 
 async function runManaged(
@@ -688,7 +723,7 @@ function delay(ms: number): Promise<void> {
 
 export {
   fixtureCwd,
-  fixtureRoot,
+  defaultFixtureRoot as fixtureRoot,
   freePort,
   relayAdminToken,
   runManaged,

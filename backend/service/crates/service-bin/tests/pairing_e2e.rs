@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use telemetry_support as _;
 use thiserror as _;
 use time as _;
 use tokio as _;
@@ -247,6 +248,10 @@ fn spawn_serve(home: &Path, port: u16, relay: bool, app_base_url: &str) -> TestR
             "127.0.0.1",
             "--port",
             &port_text,
+            "--provider-fixtures",
+            provider_fixture_root()
+                .to_str()
+                .ok_or("fixture root is not utf8")?,
             "--app-base-url",
             app_base_url,
         ])
@@ -259,6 +264,10 @@ fn spawn_serve(home: &Path, port: u16, relay: bool, app_base_url: &str) -> TestR
         command.env_remove("CONDUIT_RELAY_ENDPOINT");
     }
     Ok(command.spawn()?)
+}
+
+fn provider_fixture_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../apps/e2e/fixtures/provider")
 }
 
 fn wait_for_http(port: u16) -> TestResult<()> {

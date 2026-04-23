@@ -4,6 +4,12 @@ import type { ProofSurfaceCopy } from "@conduit/design-system-tokens";
 import { createSessionClient } from "@conduit/session-client";
 import { PROVIDERS } from "@conduit/session-model";
 
+interface ConduitRuntimeConfig {
+  readonly clientLogUrl?: string;
+  readonly logProfile?: string;
+  readonly sessionWsUrl?: string;
+}
+
 const desktopIpcChannels = {
   copyText: "conduitDesktop:copyText",
   getDaemonStatus: "conduitDesktop:getDaemonStatus",
@@ -29,6 +35,27 @@ function createDesktopBootstrapPlan(): DesktopBootstrapPlan {
     lockedPolicy: sessionClient.policy,
     supportedClientMethods: [...supportedSessionClientMethods],
     supportedProviders: [...PROVIDERS],
+  };
+}
+
+function envValue(name: string): string | null {
+  const value = process.env[name]?.trim();
+  if (value === undefined || value.length === 0) {
+    return null;
+  }
+  return value;
+}
+
+function desktopRuntimeConfig(): ConduitRuntimeConfig | null {
+  if (process.env.CONDUIT_DESKTOP_DAEMON !== "1") {
+    return null;
+  }
+  const host = envValue("CONDUIT_DESKTOP_BACKEND_HOST") ?? "127.0.0.1";
+  const port = envValue("CONDUIT_DESKTOP_BACKEND_PORT") ?? "4174";
+  return {
+    clientLogUrl: `http://${host}:${port}/api/client-log`,
+    logProfile: "dev",
+    sessionWsUrl: `ws://${host}:${port}/api/session`,
   };
 }
 
@@ -58,5 +85,10 @@ contextBridge.exposeInMainWorld("conduitDesktop", {
     return status;
   },
 });
+
+const runtimeConfig = desktopRuntimeConfig();
+if (runtimeConfig !== null) {
+  contextBridge.exposeInMainWorld("CONDUIT_RUNTIME_CONFIG", runtimeConfig);
+}
 
 export { createDesktopBootstrapPlan };

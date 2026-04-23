@@ -25,6 +25,7 @@ interface DesktopDaemonStatus {
   readonly relayEndpoint: string | null;
   readonly restartCount: number;
   readonly running: boolean;
+  readonly sessionWsUrl: string | null;
 }
 
 interface DesktopPairingOffer {

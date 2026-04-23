@@ -4,6 +4,7 @@ use acp_core::ProviderInitializeRequest;
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use service_runtime::ProviderFactory;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 #[test]
@@ -89,6 +90,62 @@ fn initialize_uses_raw_fixture_and_sets_snapshot_ready() -> TestResult<()> {
         return Err(format!("unexpected capabilities {}", snapshot.capabilities).into());
     }
     Ok(())
+}
+
+#[test]
+fn committed_initialize_fixtures_replay_for_all_providers() -> TestResult<()> {
+    let root = repo_root()?.join("apps/e2e/fixtures/provider");
+    let mut factory = FixtureProviderFactory::load(&root)?;
+
+    for (provider, expected_name) in [
+        (ProviderId::Claude, "@agentclientprotocol/claude-agent-acp"),
+        (ProviderId::Copilot, "Copilot"),
+        (ProviderId::Codex, "codex-acp"),
+    ] {
+        let mut port = factory.connect(provider)?;
+        let result = initialize_port(port.as_mut())?;
+        let value = serde_json::to_value(&result)?;
+
+        if value.pointer("/request/method").and_then(Value::as_str) != Some("initialize") {
+            return Err(format!("unexpected initialize request for {provider}").into());
+        }
+        if value
+            .pointer("/response/agentInfo/name")
+            .and_then(Value::as_str)
+            != Some(expected_name)
+        {
+            return Err(format!("unexpected initialize agentInfo for {provider}: {value}").into());
+        }
+        if value
+            .pointer("/response/agentCapabilities/loadSession")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return Err(format!("missing loadSession capability for {provider}: {value}").into());
+        }
+    }
+
+    Ok(())
+}
+
+fn repo_root() -> TestResult<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    if let Some(root) = discover_repo_root(&cwd) {
+        return Ok(root);
+    }
+
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    discover_repo_root(manifest_dir).ok_or_else(|| "could not resolve repository root".into())
+}
+
+fn discover_repo_root(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .find(|candidate| {
+            candidate.join("package.json").is_file()
+                && candidate.join("backend/service/Cargo.toml").is_file()
+        })
+        .map(Path::to_path_buf)
 }
 
 #[test]

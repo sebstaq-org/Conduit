@@ -1,22 +1,19 @@
 //! Frontend client-log ingestion and JSONL persistence.
 
-use directories::ProjectDirs;
 use serde_json::{Map, Value};
 use std::env;
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-use time::{Date, Duration, Month, OffsetDateTime};
+use telemetry_support::{LogFilePolicy, conduit_log_base_path, prepare_append_path};
+use time::OffsetDateTime;
 use tokio::sync::Mutex;
 
 const CLIENT_LOG_PATH_ENV: &str = "CONDUIT_FRONTEND_LOG_PATH";
 const LOG_PROFILE_ENV: &str = "CONDUIT_LOG_PROFILE";
 const DEFAULT_FILE_NAME: &str = "frontend.log";
 const MAX_BATCH_RECORDS: usize = 256;
-const MAX_FILE_BYTES: u64 = 20 * 1024 * 1024;
-const RETENTION_DAYS: i64 = 7;
-const ROTATION_SLOT_LIMIT: u16 = 1024;
 
 #[derive(Clone)]
 pub(super) struct ClientLogSink {
@@ -99,8 +96,8 @@ impl ClientLogSink {
             event_name = "client_log_sink.enabled",
             source = "service-bin",
             path = %base_path.display(),
-            max_file_bytes = MAX_FILE_BYTES,
-            retention_days = RETENTION_DAYS
+            max_file_bytes = LogFilePolicy::standard().max_file_bytes,
+            retention_days = LogFilePolicy::standard().retention_days
         );
         Self {
             mode: SinkMode::File(FileSink {
@@ -143,10 +140,8 @@ impl FileSink {
 fn append_records(base_path: PathBuf, records: Vec<Value>) -> Result<(), ClientLogError> {
     let now = OffsetDateTime::now_utc();
     let timestamp = format_timestamp(now);
-    let parent_dir = parent_directory(&base_path);
-    fs::create_dir_all(&parent_dir)?;
-    prune_stale_files(&base_path, now.date())?;
-    let output_path = find_append_path(&base_path, now.date())?;
+    let output_path = prepare_append_path(&base_path, LogFilePolicy::standard(), now)
+        .map_err(client_log_error_from_log_file_error)?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -213,8 +208,7 @@ fn resolve_base_path() -> Option<PathBuf> {
         }
         return Some(PathBuf::from(configured_path));
     }
-    let project_dirs = ProjectDirs::from("dev", "Conduit", "Conduit")?;
-    Some(project_dirs.data_dir().join("logs").join(DEFAULT_FILE_NAME))
+    conduit_log_base_path(DEFAULT_FILE_NAME).ok()
 }
 
 fn client_log_profile_enabled() -> bool {
@@ -227,51 +221,6 @@ fn client_log_profile_enabled() -> bool {
         Some("prod") => false,
         Some(_) | None if cfg!(debug_assertions) => true,
         Some(_) | None => false,
-    }
-}
-
-fn prune_stale_files(base_path: &Path, today: Date) -> Result<(), ClientLogError> {
-    let retention_floor = today - Duration::days(RETENTION_DAYS - 1);
-    let template = FileNameTemplate::from_base_path(base_path);
-    let parent = parent_directory(base_path);
-    for entry in fs::read_dir(parent)? {
-        let entry = entry?;
-        let metadata = entry.metadata()?;
-        if !metadata.is_file() {
-            continue;
-        }
-        let Some(file_name) = entry.file_name().to_str().map(str::to_owned) else {
-            continue;
-        };
-        let Some(file_date) = template.parse_date_from_file_name(&file_name) else {
-            continue;
-        };
-        if file_date < retention_floor {
-            fs::remove_file(entry.path())?;
-        }
-    }
-    Ok(())
-}
-
-fn find_append_path(base_path: &Path, today: Date) -> Result<PathBuf, ClientLogError> {
-    let template = FileNameTemplate::from_base_path(base_path);
-    let parent = parent_directory(base_path);
-    for rotation_slot in 0..ROTATION_SLOT_LIMIT {
-        let candidate = template.daily_path(parent.as_path(), today, rotation_slot);
-        match fs::metadata(candidate.as_path()) {
-            Ok(metadata) if metadata.len() >= MAX_FILE_BYTES => continue,
-            Ok(_) => return Ok(candidate),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
-            Err(error) => return Err(ClientLogError::Io(error)),
-        }
-    }
-    Err(ClientLogError::RotationSlotsExhausted)
-}
-
-fn parent_directory(base_path: &Path) -> PathBuf {
-    match base_path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => parent.to_path_buf(),
-        _ => PathBuf::from("."),
     }
 }
 
@@ -288,112 +237,32 @@ fn format_timestamp(timestamp: OffsetDateTime) -> String {
     )
 }
 
-fn format_date(date: Date) -> String {
-    format!(
-        "{:04}-{:02}-{:02}",
-        date.year(),
-        u8::from(date.month()),
-        date.day()
-    )
-}
-
-fn parse_date_token(token: &str) -> Option<Date> {
-    let mut parts = token.split('-');
-    let year = parts.next()?.parse::<i32>().ok()?;
-    let month = parts.next()?.parse::<u8>().ok()?;
-    let day = parts.next()?.parse::<u8>().ok()?;
-    if parts.next().is_some() {
-        return None;
-    }
-    let month = Month::try_from(month).ok()?;
-    Date::from_calendar_date(year, month, day).ok()
-}
-
-#[derive(Debug)]
-struct FileNameTemplate {
-    stem: String,
-    extension: String,
-}
-
-impl FileNameTemplate {
-    fn from_base_path(base_path: &Path) -> Self {
-        let raw_name = base_path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| DEFAULT_FILE_NAME.to_owned());
-        let extension = base_path
-            .extension()
-            .map(|ext| format!(".{}", ext.to_string_lossy()))
-            .unwrap_or_default();
-        let stem = if extension.is_empty() {
-            raw_name
-        } else {
-            raw_name
-                .strip_suffix(extension.as_str())
-                .map(str::to_owned)
-                .unwrap_or(raw_name)
-        };
-        Self { stem, extension }
-    }
-
-    fn daily_path(&self, parent: &Path, day: Date, rotation_slot: u16) -> PathBuf {
-        let mut file_name = format!("{}-{}", self.stem, format_date(day));
-        if rotation_slot > 0 {
-            file_name.push('.');
-            file_name.push_str(&rotation_slot.to_string());
+fn client_log_error_from_log_file_error(error: telemetry_support::LogFileError) -> ClientLogError {
+    match error {
+        telemetry_support::LogFileError::Io(error) => ClientLogError::Io(error),
+        telemetry_support::LogFileError::RotationSlotsExhausted => {
+            ClientLogError::RotationSlotsExhausted
         }
-        file_name.push_str(self.extension.as_str());
-        parent.join(file_name)
-    }
-
-    fn parse_date_from_file_name(&self, file_name: &str) -> Option<Date> {
-        let prefix = format!("{}-", self.stem);
-        if !file_name.starts_with(prefix.as_str()) {
-            return None;
+        telemetry_support::LogFileError::DataDirectoryUnavailable => {
+            ClientLogError::InvalidPayload("client log data directory is unavailable")
         }
-        let without_extension = if self.extension.is_empty() {
-            file_name
-        } else {
-            file_name.strip_suffix(self.extension.as_str())?
-        };
-        let date_and_slot = without_extension.strip_prefix(prefix.as_str())?;
-        let date_token = date_and_slot.split('.').next()?;
-        parse_date_token(date_token)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Date, FileNameTemplate, Month, parse_date_token};
+    use super::format_timestamp;
     use std::error::Error;
-    use std::path::Path;
+    use time::{Date, Month, OffsetDateTime, Time};
 
     type TestResult<T> = std::result::Result<T, Box<dyn Error>>;
 
     #[test]
-    fn parses_date_tokens() -> TestResult<()> {
-        let date = parse_date_token("2026-04-16");
-        if date != Some(Date::from_calendar_date(2026, Month::April, 16)?) {
-            return Err("failed to parse date token".into());
-        }
-        let invalid = parse_date_token("2026-04-16-01");
-        if invalid.is_some() {
-            return Err("accepted invalid date token".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn builds_daily_paths_with_rotation_suffix() -> TestResult<()> {
-        let template = FileNameTemplate::from_base_path(Path::new("frontend.log"));
-        let day = Date::from_calendar_date(2026, Month::April, 16)?;
-        let primary = template.daily_path(Path::new("/tmp"), day, 0);
-        let rotated = template.daily_path(Path::new("/tmp"), day, 2);
-        if primary != Path::new("/tmp/frontend-2026-04-16.log") {
-            return Err("unexpected primary log path".into());
-        }
-        if rotated != Path::new("/tmp/frontend-2026-04-16.2.log") {
-            return Err("unexpected rotated log path".into());
+    fn formats_utc_timestamps() -> TestResult<()> {
+        let date = Date::from_calendar_date(2026, Month::April, 16)?;
+        let timestamp = OffsetDateTime::new_utc(date, Time::MIDNIGHT);
+        if format_timestamp(timestamp) != "2026-04-16T00:00:00.000Z" {
+            return Err("unexpected timestamp format".into());
         }
         Ok(())
     }

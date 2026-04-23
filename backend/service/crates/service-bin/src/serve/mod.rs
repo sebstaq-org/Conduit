@@ -1,6 +1,7 @@
 //! WebSocket product service for the consumer runtime API.
 
 mod actor;
+mod catalog;
 mod client_logs;
 mod relay;
 mod wire;
@@ -9,6 +10,7 @@ use crate::error::Result;
 use crate::home::product_home;
 use crate::identity::{daemon_status_response, pairing_response};
 use crate::local_store::open_store;
+use acp_discovery::{ProviderId, resolve_provider_command};
 use actor::RuntimeActor;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
@@ -27,6 +29,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+use telemetry_support::TelemetryHealth;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::cors::CorsLayer;
@@ -41,30 +44,8 @@ struct ServeState {
     product_home: PathBuf,
     relay_endpoint: Option<String>,
     app_base_url: String,
+    telemetry_health: TelemetryHealth,
 }
-
-const CATALOG_COMMANDS: [&str; 20] = [
-    "initialize",
-    "session/new",
-    "session/set_config_option",
-    "session/prompt",
-    "session/respond_interaction",
-    "session/cancel",
-    "provider/disconnect",
-    "projects/add",
-    "projects/list",
-    "projects/remove",
-    "projects/suggestions",
-    "projects/update",
-    "settings/get",
-    "settings/update",
-    "sessions/grouped",
-    "sessions/watch",
-    "providers/config_snapshot",
-    "session/open",
-    "session/history",
-    "session/watch",
-];
 
 /// Runs the versioned consumer WebSocket service.
 ///
@@ -83,6 +64,7 @@ pub(crate) async fn run(
     app_base_url: String,
     provider_fixtures: Option<PathBuf>,
     store_path: Option<PathBuf>,
+    telemetry_health: TelemetryHealth,
 ) -> Result<()> {
     let listener = TcpListener::bind((host, port)).await?;
     let product_home = product_home()?;
@@ -105,10 +87,12 @@ pub(crate) async fn run(
                 product_home,
                 relay_endpoint,
                 app_base_url,
+                telemetry_health,
             ),
         )
         .await;
     }
+    validate_managed_codex_adapter()?;
     serve_router(
         listener,
         router(
@@ -117,9 +101,27 @@ pub(crate) async fn run(
             product_home,
             relay_endpoint,
             app_base_url,
+            telemetry_health,
         ),
     )
     .await
+}
+
+fn validate_managed_codex_adapter() -> Result<()> {
+    let command = resolve_provider_command(ProviderId::Codex).map_err(|error| {
+        tracing::error!(
+            event_name = "managed_codex_acp.missing",
+            source = "service-bin",
+            error_message = %error
+        );
+        error
+    })?;
+    tracing::info!(
+        event_name = "managed_codex_acp.ready",
+        source = "service-bin",
+        executable = %command.executable.display()
+    );
+    Ok(())
 }
 
 async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
@@ -131,12 +133,17 @@ async fn serve_router(listener: TcpListener, router: Router) -> Result<()> {
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Router construction keeps injected runtime dependencies explicit for tests and serve wiring."
+)]
 fn router(
     local_store: LocalStore,
     store_opener: actor::StoreOpener,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
     app_base_url: String,
+    telemetry_health: TelemetryHealth,
 ) -> Router {
     router_with_actor(
         RuntimeActor::start_with_store_opener(
@@ -147,6 +154,7 @@ fn router(
         product_home,
         relay_endpoint,
         app_base_url,
+        telemetry_health,
     )
 }
 
@@ -165,6 +173,7 @@ fn router_with_factory<F>(
     product_home: PathBuf,
     relay_endpoint: Option<String>,
     app_base_url: String,
+    telemetry_health: TelemetryHealth,
 ) -> Router
 where
     F: Clone + ProviderFactory + 'static,
@@ -174,6 +183,7 @@ where
         product_home,
         relay_endpoint,
         app_base_url,
+        telemetry_health,
     )
 }
 
@@ -182,6 +192,7 @@ fn router_with_actor(
     product_home: PathBuf,
     relay_endpoint: Option<String>,
     app_base_url: String,
+    telemetry_health: TelemetryHealth,
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
     if let Some(endpoint) = relay_endpoint.clone() {
@@ -189,7 +200,7 @@ fn router_with_actor(
     }
     Router::new()
         .route("/health", get(health))
-        .route("/api/catalog", get(catalog))
+        .route("/api/catalog", get(catalog::catalog))
         .route("/api/daemon/status", get(daemon_status))
         .route("/api/pairing", get(pairing))
         .route("/api/session", get(session_socket))
@@ -201,22 +212,40 @@ fn router_with_actor(
             product_home,
             relay_endpoint,
             app_base_url,
+            telemetry_health,
         }))
 }
 
-async fn health() -> Json<serde_json::Value> {
-    Json(json!({
-        "ok": true,
-        "service": "conduit-service",
-        "transport": "websocket",
-    }))
+async fn health(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
+    let (status, payload) = health_response(state.telemetry_health.status());
+    (status, Json(payload))
 }
 
-async fn catalog() -> Json<serde_json::Value> {
-    Json(json!({
-        "providers": ["claude", "copilot", "codex"],
-        "commands": CATALOG_COMMANDS,
-    }))
+fn health_response(
+    telemetry_status: telemetry_support::TelemetryStatus,
+) -> (StatusCode, serde_json::Value) {
+    if telemetry_status.ok {
+        return (
+            StatusCode::OK,
+            json!({
+                "ok": true,
+                "service": "conduit-service",
+                "transport": "websocket",
+            }),
+        );
+    }
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        json!({
+            "ok": false,
+            "service": "conduit-service",
+            "transport": "websocket",
+            "error_code": telemetry_status.error_code.unwrap_or("telemetry_unavailable"),
+            "error_message": telemetry_status
+                .error_message
+                .unwrap_or_else(|| "telemetry sink unavailable".to_owned()),
+        }),
+    )
 }
 
 async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoResponse {

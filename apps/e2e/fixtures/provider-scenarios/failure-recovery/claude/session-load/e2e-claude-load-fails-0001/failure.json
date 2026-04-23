@@ -1,0 +1,5 @@
+{
+  "message": "fixture forced claude session/load failure",
+  "operation": "session/load",
+  "sessionId": "e2e-claude-load-fails-0001"
+}

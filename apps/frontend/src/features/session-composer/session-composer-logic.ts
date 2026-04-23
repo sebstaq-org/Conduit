@@ -1,11 +1,17 @@
 import type {
+  ProviderId,
   ProvidersConfigSnapshotResult,
   SessionConfigOption,
 } from "@conduit/session-client";
 import type { ActiveSession } from "@/app-state";
 
+type ProviderConfigSnapshotEntry =
+  ProvidersConfigSnapshotResult["entries"][number];
+
 interface DraftSnapshotEntry {
-  status: string;
+  error: string | null;
+  provider: ProviderId;
+  status: ProviderConfigSnapshotEntry["status"];
   configOptions: SessionConfigOption[] | null;
 }
 
@@ -92,8 +98,69 @@ function resolveVisibleConfigOptions(
   );
 }
 
+function providerDisplayName(provider: ProviderId): string {
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
+function draftProviderLoadFailureMessage(providerName: string): string {
+  return `${providerName} settings failed to load.`;
+}
+
+function resolveDraftProviderEntryMessage(args: {
+  draftSnapshotEntry: DraftSnapshotEntry;
+  providerName: string;
+}): string | null {
+  if (args.draftSnapshotEntry.status === "loading") {
+    return `Loading ${args.providerName} settings...`;
+  }
+  if (args.draftSnapshotEntry.status === "unavailable") {
+    return `${args.providerName} is unavailable.`;
+  }
+  if (args.draftSnapshotEntry.status === "error") {
+    return (
+      args.draftSnapshotEntry.error ??
+      draftProviderLoadFailureMessage(args.providerName)
+    );
+  }
+  return null;
+}
+
+function resolveDraftProviderStatusMessage(args: {
+  draftSnapshotEntry: DraftSnapshotEntry | null;
+  providerName: string;
+  providersConfigSnapshotError: boolean;
+}): string | null {
+  if (args.providersConfigSnapshotError) {
+    return draftProviderLoadFailureMessage(args.providerName);
+  }
+  if (args.draftSnapshotEntry === null) {
+    return `Loading ${args.providerName} settings...`;
+  }
+  return resolveDraftProviderEntryMessage({
+    draftSnapshotEntry: args.draftSnapshotEntry,
+    providerName: args.providerName,
+  });
+}
+
+function resolveDraftProviderMessage(args: {
+  activeSession: Extract<ActiveSession, { kind: "draft" }>;
+  draftSnapshotEntry: DraftSnapshotEntry | null;
+  providersConfigSnapshotError: boolean;
+}): string | null {
+  const provider = args.activeSession.provider;
+  if (provider === null) {
+    return null;
+  }
+  return resolveDraftProviderStatusMessage({
+    draftSnapshotEntry: args.draftSnapshotEntry,
+    providerName: providerDisplayName(provider),
+    providersConfigSnapshotError: args.providersConfigSnapshotError,
+  });
+}
+
 function resolveErrorMessage(args: {
   activeSession: ActiveSession | null;
+  draftSnapshotEntry: DraftSnapshotEntry | null;
   newSessionError: boolean;
   promptError: boolean;
   providersConfigSnapshotError: boolean;
@@ -107,6 +174,13 @@ function resolveErrorMessage(args: {
       args.activeSession.configSyncError ??
       "Session config sync failed. Update a config option before sending again."
     );
+  }
+  if (args.activeSession?.kind === "draft") {
+    return resolveDraftProviderMessage({
+      activeSession: args.activeSession,
+      draftSnapshotEntry: args.draftSnapshotEntry,
+      providersConfigSnapshotError: args.providersConfigSnapshotError,
+    });
   }
   if (
     args.promptError ||
@@ -124,5 +198,6 @@ export {
   resolveDraftProviderReady,
   resolveDraftSnapshotEntry,
   resolveErrorMessage,
+  resolveDraftProviderMessage,
   resolveVisibleConfigOptions,
 };

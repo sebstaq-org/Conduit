@@ -18,17 +18,18 @@ mod identity;
 mod local_store;
 mod runtime;
 mod serve;
-mod telemetry;
 
 use crate::cli::parse_command;
 use crate::error::Result;
 use crate::home::product_home;
 use crate::identity::pairing_response;
 use std::env;
+use telemetry_support::TelemetryBinary;
+use tracing_subscriber as _;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    telemetry::init();
+    let telemetry = telemetry_support::init(TelemetryBinary::Backend)?;
     let args = env::args().skip(1).collect::<Vec<_>>();
     tracing::debug!(
         event_name = "service_bin.startup",
@@ -52,6 +53,7 @@ async fn main() -> Result<()> {
                 app_base_url,
                 provider_fixtures,
                 store_path,
+                telemetry.health(),
             )
             .await
         }

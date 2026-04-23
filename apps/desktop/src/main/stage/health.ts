@@ -33,6 +33,32 @@ interface WebHealthRequest {
   readonly onSuccess: () => void;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  return true;
+}
+
+function readHealthErrorMessage(payload: unknown): string | null {
+  if (!isObjectRecord(payload)) {
+    return null;
+  }
+  const message = payload.error_message;
+  if (typeof message !== "string" || message.length === 0) {
+    return null;
+  }
+  return message;
+}
+
+function parseHealthErrorMessage(payload: string): string | null {
+  try {
+    return readHealthErrorMessage(JSON.parse(payload) as unknown);
+  } catch {
+    return null;
+  }
+}
+
 function responseIsOk(response: IncomingMessage): boolean {
   const statusCode = response.statusCode ?? 0;
   return statusCode >= 200 && statusCode < 300;
@@ -80,15 +106,29 @@ class HealthPoller {
   }
 
   #handleResponse(request: HealthPollRequest, response: IncomingMessage): void {
-    response.resume();
-    if (responseIsOk(response)) {
-      request.onSuccess();
-      return;
-    }
-    this.#scheduleNext(
-      request,
-      `health returned HTTP ${String(response.statusCode ?? 0)}`,
-    );
+    const chunks: Uint8Array[] = [];
+    response.on("data", (chunk: Uint8Array | string) => {
+      if (typeof chunk === "string") {
+        chunks.push(Buffer.from(chunk));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    response.once("end", () => {
+      if (responseIsOk(response)) {
+        request.onSuccess();
+        return;
+      }
+      let message: string | null = null;
+      if (chunks.length > 0) {
+        const payload = Buffer.concat(chunks).toString("utf8");
+        message = parseHealthErrorMessage(payload);
+      }
+      this.#scheduleNext(
+        request,
+        message ?? `health returned HTTP ${String(response.statusCode ?? 0)}`,
+      );
+    });
   }
 
   #scheduleNext(request: HealthPollRequest, lastError: string): void {

@@ -10,6 +10,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -29,6 +30,9 @@ class ServiceState:
     name: str
     pid_file: Path
     log_file: Path
+    stderr_tail: collections.deque[str] = dataclasses.field(
+        default_factory=lambda: collections.deque(maxlen=32)
+    )
     failure_times: collections.deque[float] = dataclasses.field(
         default_factory=collections.deque
     )
@@ -91,8 +95,15 @@ def check_backend_health(host: str, port: int) -> tuple[bool, str]:
             payload = json.loads(response.read().decode("utf-8"))
     except TimeoutError:
         return False, "health timeout"
+    except urllib.error.HTTPError as error:
+        message = parse_health_error_message(error.read())
+        if message is not None:
+            return False, message
+        return False, f"health returned HTTP {error.code}"
     except urllib.error.URLError as error:
         return False, f"health request failed: {error.reason}"
+    except OSError as error:
+        return False, f"health request failed: {error}"
     except json.JSONDecodeError:
         return False, "health payload was not JSON"
 
@@ -148,29 +159,88 @@ def mark_healthy(service: ServiceState) -> None:
     service.next_retry_at = 0.0
 
 
+def parse_health_error_message(payload_bytes: bytes) -> str | None:
+    if len(payload_bytes) == 0:
+        return None
+    try:
+        payload = json.loads(payload_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    message = payload.get("error_message")
+    if isinstance(message, str) and message != "":
+        return message
+    return None
+
+
+def stderr_tail_text(service: ServiceState) -> str:
+    return "".join(service.stderr_tail).strip()
+
+
+def append_stderr_tail(service: ServiceState, text: str) -> None:
+    if text == "":
+        return
+    service.stderr_tail.append(text)
+
+
+def read_process_stderr(service: ServiceState, stream: subprocess.PIPE) -> None:
+    while True:
+        chunk = stream.read(4096)
+        if not chunk:
+            break
+        append_stderr_tail(service, chunk.decode("utf-8", errors="replace"))
+    stream.close()
+
+
+def service_exit_reason(service: ServiceState) -> str:
+    reason = f"{service.name} process exited"
+    stderr_tail = stderr_tail_text(service)
+    if stderr_tail == "":
+        return reason
+    return f"{reason}: {stderr_tail}"
+
+
+def backend_failure_reason(service: ServiceState, fallback: str) -> str:
+    stderr_tail = stderr_tail_text(service)
+    if stderr_tail == "":
+        return fallback
+    return stderr_tail
+
+
 def start_backend(
     service: ServiceState,
     release_path: Path,
     data_root: Path,
+    frontend_log_path: Path,
     host: str,
     port: int,
 ) -> tuple[bool, str]:
     binary = release_path / "bin" / "service-bin"
     if not binary.exists():
         return False, f"missing backend binary: {binary}"
+    service.stderr_tail.clear()
     env = os.environ.copy()
     env["XDG_DATA_HOME"] = str(data_root)
     env["CONDUIT_LOG_PROFILE"] = "stage"
-    env["CONDUIT_FRONTEND_LOG_PATH"] = str(service.log_file.with_name("frontend.log"))
-    with service.log_file.open("a", encoding="utf-8") as log_stream:
+    env["CONDUIT_FRONTEND_LOG_PATH"] = str(frontend_log_path)
+    try:
         process = subprocess.Popen(
             [str(binary), "serve", "--host", host, "--port", str(port)],
             env=env,
             stdin=subprocess.DEVNULL,
-            stdout=log_stream,
-            stderr=log_stream,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             start_new_session=True,
         )
+    except OSError as error:
+        return False, f"failed to start backend: {error}"
+    if process.stderr is not None:
+        threading.Thread(
+            target=read_process_stderr,
+            args=(service, process.stderr),
+            daemon=True,
+        ).start()
     service.write_pid(process.pid)
     return True, f"started backend pid={process.pid}"
 
@@ -282,7 +352,7 @@ def main() -> None:
     backend = ServiceState(
         name="backend",
         pid_file=pid_dir / "backend.pid",
-        log_file=log_dir / "backend.log",
+        log_file=data_root / "logs" / "backend.log",
     )
     web = ServiceState(
         name="web",
@@ -315,7 +385,7 @@ def main() -> None:
             pid = service.pid()
             if pid is not None and not is_running(pid):
                 service.clear_pid()
-                mark_failure(service, f"{service.name} process exited")
+                mark_failure(service, service_exit_reason(service))
 
         backend_pid = backend.pid()
         web_pid = web.pid()
@@ -327,7 +397,7 @@ def main() -> None:
             else:
                 terminate_pid(backend_pid)
                 backend.clear_pid()
-                mark_failure(backend, backend_health[1])
+                mark_failure(backend, backend_failure_reason(backend, backend_health[1]))
 
         if web_pid is not None and is_running(web_pid):
             web_health = check_web_health(args.web_host, args.web_port)
@@ -344,6 +414,7 @@ def main() -> None:
                 backend,
                 release_path,
                 data_root,
+                log_dir / "frontend.log",
                 args.backend_host,
                 args.backend_port,
             )

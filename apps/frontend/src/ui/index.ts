@@ -5,6 +5,7 @@ export type {
 } from "./autocomplete";
 export { IconButton } from "./icon-button";
 export { IconSlot } from "./icon-slot";
+export { GlimmerText } from "./glimmer-text";
 export { KeyboardLift } from "./keyboard-lift";
 export { List } from "./list";
 export {
@@ -50,6 +51,8 @@ export type {
 } from "./scroll-area";
 export { Section } from "./section";
 export { TextButton } from "./text-button";
+export { Spinner } from "./spinner";
 export { TextField } from "./text-field";
+export { showErrorToast, ToastHost } from "./toast";
 export { VirtualList } from "./flash-list";
 export type { VirtualListProps } from "./flash-list";

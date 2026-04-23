@@ -1,3 +1,4 @@
+import { desktopBridgeAvailable } from "@/app-state/desktop-bridge";
 import { DesktopPairingPanel } from "@/features/desktop-pairing";
 import { HostPairingPanel } from "@/features/host-pairing";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
@@ -28,6 +29,9 @@ function renderStaticNavigationPanelRow(
       return <NavigationPanelProjectRows />;
     }
     case "hostPairing": {
+      if (desktopBridgeAvailable()) {
+        return <DesktopPairingPanel />;
+      }
       return (
         <>
           <DesktopPairingPanel />
@@ -35,9 +39,9 @@ function renderStaticNavigationPanelRow(
         </>
       );
     }
-    case "threadsHeader": {
+    case "projectsHeader": {
       return (
-        <Section actions={<ProjectsToolbar />} title="Threads">
+        <Section actions={<ProjectsToolbar />} title="Projects">
           <Box />
         </Section>
       );
@@ -47,6 +51,7 @@ function renderStaticNavigationPanelRow(
     }
     case "groupEmpty":
     case "groupHeader":
+    case "draftSession":
     case "session": {
       return null;
     }

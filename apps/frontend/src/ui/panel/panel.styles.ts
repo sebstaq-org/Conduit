@@ -15,16 +15,33 @@ const panelTopBarGap = "topBarGap" as const;
 const panelTopBarPaddingTop = "topBarGap" as const;
 const panelTopBarPaddingX = "contentX" as const;
 
-function createPanelContainerStyle(theme: Theme): ViewStyle {
-  return {
+interface PanelContainerStyleOptions {
+  width?: number | undefined;
+}
+
+function createPanelContainerStyle(
+  theme: Theme,
+  options: PanelContainerStyleOptions = {},
+): ViewStyle {
+  const baseStyle: ViewStyle = {
     backgroundColor: theme.colors.background,
     borderColor: theme.colors.borderSubtle,
     borderRightWidth: 1,
-    flex: 1,
     flexShrink: 0,
-    maxWidth: theme.panel.maxWidth,
-    width: "100%",
   };
+
+  if (options.width !== undefined) {
+    return Object.assign(baseStyle, {
+      flexGrow: 0,
+      width: options.width,
+    } satisfies ViewStyle);
+  }
+
+  return Object.assign(baseStyle, {
+    flex: 1,
+    maxWidth: theme.panel.defaultWidth,
+    width: "100%",
+  } satisfies ViewStyle);
 }
 
 function panelTopBarHeight(theme: Theme): number {

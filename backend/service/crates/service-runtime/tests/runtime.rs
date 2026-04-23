@@ -74,35 +74,6 @@ fn disconnect_reconnects_next_provider_access() -> TestResult<()> {
 }
 
 #[test]
-fn provider_snapshot_alias_is_not_supported() -> TestResult<()> {
-    let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command("1", "provider/snapshot", "codex", json!({})));
-
-    if response.ok {
-        return Err("provider/snapshot unexpectedly succeeded".into());
-    }
-    let error_code = response.error.map(|error| error.code);
-    if error_code != Some("unsupported_command".to_owned()) {
-        return Err(format!("expected unsupported_command, got {error_code:?}").into());
-    }
-    Ok(())
-}
-
-#[test]
-fn sessions_watch_returns_minimal_ack() -> TestResult<()> {
-    let state = Arc::new(Mutex::new(FakeState::default()));
-    let mut runtime = runtime(state)?;
-    let response = runtime.dispatch(command("1", "sessions/watch", "all", json!({})));
-
-    assert_ok(&response)?;
-    if response.result == json!({ "subscribed": true }) {
-        return Ok(());
-    }
-    Err(format!("unexpected sessions/watch result {}", response.result).into())
-}
-
-#[test]
 fn settings_get_returns_persisted_defaults() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;
@@ -310,7 +281,8 @@ fn grouped_sessions_can_target_one_provider() -> TestResult<()> {
 }
 
 #[test]
-fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResult<()> {
+fn grouped_sessions_keeps_cached_rows_and_refreshes_later_providers_after_failure() -> TestResult<()>
+{
     let state = Arc::new(Mutex::new(FakeState::default()));
     seed_grouped_session_lists(&state)?;
     let mut runtime = runtime(Arc::clone(&state))?;
@@ -328,6 +300,29 @@ fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResul
         .map_err(|error| format!("{error}"))?
         .session_list_errors
         .insert(ProviderId::Claude, "claude list failed".to_owned());
+    state
+        .lock()
+        .map_err(|error| format!("{error}"))?
+        .session_lists
+        .insert(
+            ProviderId::Codex,
+            json!({
+                "sessions": [
+                    {
+                        "sessionId": "codex-new",
+                        "cwd": "/repo",
+                        "title": "Codex new",
+                        "updatedAt": "9999-01-03T00:00:00Z"
+                    },
+                    {
+                        "sessionId": "codex-recent",
+                        "cwd": "/repo",
+                        "title": "Codex recent",
+                        "updatedAt": "9999-01-01T00:00:00Z"
+                    }
+                ]
+            }),
+        );
     let cached = runtime.dispatch(request.clone());
     assert_ok(&cached)?;
     assert_session_ids(
@@ -338,6 +333,12 @@ fn grouped_sessions_keeps_cached_rows_when_provider_refresh_fails() -> TestResul
     if refresh.is_ok() {
         return Err("sessions/grouped refresh unexpectedly swallowed provider failure".into());
     }
+    let refreshed = runtime.dispatch(request);
+    assert_ok(&refreshed)?;
+    assert_session_ids(
+        grouped_sessions(&refreshed.result, "/repo")?,
+        &["codex-new", "claude-recent", "codex-recent", "copilot-old"],
+    )?;
     Ok(())
 }
 

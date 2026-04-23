@@ -1,0 +1,8 @@
+{
+  "captureKind": "provider",
+  "curation": "Removed absolute local cwd, normalized session id to e2e-copilot-new-session-0001, and replaced provider prompt title with stable public title \"Copilot E2E parity session\"; raw ACP session/list shape preserved.",
+  "operation": "session/list",
+  "provider": "copilot",
+  "sessionId": "e2e-copilot-new-session-0001",
+  "sourceCapture": "conduit-artifacts/manual/captures/copilot/parity-config-prompt-20260418T235432Z/session-list-after-config-prompt"
+}

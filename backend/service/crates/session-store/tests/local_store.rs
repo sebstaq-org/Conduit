@@ -266,6 +266,40 @@ fn session_index_replaces_provider_rows_and_tracks_revision() -> TestResult<()> 
 }
 
 #[test]
+fn session_index_upserts_one_row_and_tracks_revision_changes() -> TestResult<()> {
+    let path = test_db_path()?;
+    let mut store = LocalStore::open_path(&path)?;
+    let first = SessionIndexEntry {
+        provider: ProviderId::Codex,
+        session_id: "codex-1".to_owned(),
+        cwd: "/repo".to_owned(),
+        title: None,
+        updated_at: Some("2026-04-19T20:00:00.000Z".to_owned()),
+    };
+    let first_revision = store
+        .upsert_session_index_entry(&first)?
+        .ok_or("expected inserted index revision")?;
+    let unchanged = store.upsert_session_index_entry(&first)?;
+    let changed = SessionIndexEntry {
+        title: Some("Codex one".to_owned()),
+        updated_at: Some("2026-04-19T20:01:00.000Z".to_owned()),
+        ..first
+    };
+    let changed_revision = store
+        .upsert_session_index_entry(&changed)?
+        .ok_or("expected changed index revision")?;
+    let snapshot = store.session_index(&[ProviderId::Codex])?;
+
+    ensure_eq(&first_revision, &1, "insert index revision")?;
+    ensure_eq(&unchanged, &None, "unchanged index upsert")?;
+    ensure_eq(&changed_revision, &2, "changed index revision")?;
+    ensure_eq(&snapshot.revision, &2, "snapshot revision")?;
+    ensure_eq(&snapshot.entries, &vec![changed], "snapshot index entries")?;
+    fs::remove_file(path)?;
+    Ok(())
+}
+
+#[test]
 fn projects_add_list_and_remove_by_project_id() -> TestResult<()> {
     let path = test_db_path()?;
     let mut store = LocalStore::open_path(&path)?;

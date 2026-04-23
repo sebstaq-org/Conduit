@@ -10,13 +10,19 @@ const baseTheme = {
     phone: 0,
     web: 768,
   },
+  appShell: {
+    minContentWidth: 360,
+  },
   panel: {
     composerInputMinHeight: 40,
     composerSurfaceMinHeight: 98,
+    defaultWidth: 414,
+    drawerMaxWidth: 414,
     icon: 18,
     iconButton: 28,
     iconGlyph: 16,
-    maxWidth: 414,
+    maxWidth: 560,
+    minWidth: 280,
     rowHeight: 34,
     topBarHeight: 54,
   },
@@ -77,6 +83,7 @@ const baseTheme = {
 } as const;
 
 const lightTheme = createTheme({
+  appShell: baseTheme.appShell,
   borderRadii: baseTheme.borderRadii,
   breakpoints: baseTheme.breakpoints,
   colors: {
@@ -84,6 +91,12 @@ const lightTheme = createTheme({
     borderSubtle: "#ececec",
     composerControlBackground: "#eeeeee",
     composerSurface: "#f6f6f6",
+    errorToastBackground: "#fde8e8",
+    errorToastBorder: "#f4c7ca",
+    errorToastClose: "#7c8a84",
+    errorToastIconBackground: "#ef6b72",
+    errorToastText: "#9f2f3e",
+    errorToastTitle: "#a93646",
     hoverBackground: "#f6f6f6",
     selectedBackground: "#f6f6f6",
     iconButtonFilledBackground: "#d8d8d8",
@@ -102,6 +115,7 @@ const lightTheme = createTheme({
 });
 
 const darkTheme = createTheme({
+  appShell: baseTheme.appShell,
   borderRadii: baseTheme.borderRadii,
   breakpoints: baseTheme.breakpoints,
   colors: {
@@ -109,6 +123,12 @@ const darkTheme = createTheme({
     borderSubtle: "#24282c",
     composerControlBackground: "#36383a",
     composerSurface: "#2a2c2e",
+    errorToastBackground: "#fde8e8",
+    errorToastBorder: "#f4c7ca",
+    errorToastClose: "#7c8a84",
+    errorToastIconBackground: "#ef6b72",
+    errorToastText: "#9f2f3e",
+    errorToastTitle: "#a93646",
     hoverBackground: "#181b1f",
     selectedBackground: "#181b1f",
     iconButtonFilledBackground: "#a7a7a7",

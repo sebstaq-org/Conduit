@@ -122,6 +122,10 @@ class DesktopDaemonController {
     return `http://${this.#config.backendHost}:${String(this.#config.backendPort)}`;
   }
 
+  get sessionWsUrl(): string {
+    return `ws://${this.#config.backendHost}:${String(this.#config.backendPort)}/api/session`;
+  }
+
   async start(): Promise<void> {
     if (this.#backendProcess !== null) {
       return;
@@ -153,6 +157,10 @@ class DesktopDaemonController {
 
   async status(): Promise<DesktopDaemonStatus> {
     const daemon = await this.#fetchDaemonStatus();
+    let sessionWsUrl: string | null = null;
+    if (daemon !== null) {
+      sessionWsUrl = this.sessionWsUrl;
+    }
     return {
       appBaseUrl: this.#config.appBaseUrl,
       backendHealthy: daemon !== null,
@@ -164,6 +172,7 @@ class DesktopDaemonController {
       relayEndpoint: this.#config.relayEndpoint,
       restartCount: this.#restartCount,
       running: this.#backendProcess !== null,
+      sessionWsUrl,
     };
   }
 

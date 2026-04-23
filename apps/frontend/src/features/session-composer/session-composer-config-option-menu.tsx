@@ -6,15 +6,12 @@ import {
   DropdownMenuTrigger,
 } from "@/ui";
 import { SessionComposerPreviewControlChip } from "./session-composer-control";
+import { displaySessionConfigOptionValue } from "./session-composer-display";
 
 interface SessionComposerConfigOptionMenuProps {
   disabled: boolean;
   onSelect: (configId: string, value: string) => void;
   option: SessionConfigOption;
-}
-
-function optionControlLabel(option: SessionConfigOption): string {
-  return `${option.name}: ${option.currentValue}`;
 }
 
 function SessionComposerConfigOptionMenu({
@@ -26,7 +23,10 @@ function SessionComposerConfigOptionMenu({
   if (values.length === 0) {
     return (
       <SessionComposerPreviewControlChip
-        control={{ label: option.name, value: optionControlLabel(option) }}
+        control={{
+          label: option.name,
+          value: displaySessionConfigOptionValue(option),
+        }}
         showChevron={false}
       />
     );
@@ -38,7 +38,10 @@ function SessionComposerConfigOptionMenu({
         disabled={disabled}
       >
         <SessionComposerPreviewControlChip
-          control={{ label: option.name, value: optionControlLabel(option) }}
+          control={{
+            label: option.name,
+            value: displaySessionConfigOptionValue(option),
+          }}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
