@@ -10,3 +10,8 @@ env = { APP_VARIANT = "stage", DEVELOPER_DIR = "/Applications/Xcode-26.3.0.app/C
 artifact_name = "Conduit-stage-simulator.tar.gz"
 upload = "none"
 env = { APP_VARIANT = "stage", DEVELOPER_DIR = "/Applications/Xcode-26.3.0.app/Contents/Developer" }
+
+[ios.profiles.stage-simulator-markdown-repro]
+artifact_name = "Conduit-stage-simulator-markdown-repro.tar.gz"
+upload = "none"
+env = { APP_VARIANT = "stage", EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE = "true", EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO = "markdown-crash-repro", DEVELOPER_DIR = "/Applications/Xcode-26.3.0.app/Contents/Developer" }

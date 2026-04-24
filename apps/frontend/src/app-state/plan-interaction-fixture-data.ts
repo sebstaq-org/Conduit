@@ -120,16 +120,35 @@ const PRODUCT_FLOW_PLAN_MODE_FIXTURE: PlanInteractionFixtureScenario = {
   ],
 };
 
+const MARKDOWN_CRASH_REPRO_FIXTURE: PlanInteractionFixtureScenario = {
+  id: "markdown-crash-repro",
+  label: "Markdown crash repro",
+  steps: [
+    {
+      kind: "agent_plan",
+      markdown: [
+        "# CONDUIT_IOS_MARKDOWN_CRASH_REPRO",
+        "",
+        "Streaming markdown updates through the native session history renderer.",
+      ].join("\n"),
+    },
+  ],
+};
+
 function resolvePlanInteractionFixtureScenario(
   scenarioId: string | null,
 ): PlanInteractionFixtureScenario | null {
   if (scenarioId === PRODUCT_FLOW_PLAN_MODE_FIXTURE.id) {
     return PRODUCT_FLOW_PLAN_MODE_FIXTURE;
   }
+  if (scenarioId === MARKDOWN_CRASH_REPRO_FIXTURE.id) {
+    return MARKDOWN_CRASH_REPRO_FIXTURE;
+  }
   return null;
 }
 
 export {
+  MARKDOWN_CRASH_REPRO_FIXTURE,
   PRODUCT_FLOW_PLAN_MODE_FIXTURE,
   resolvePlanInteractionFixtureScenario,
 };

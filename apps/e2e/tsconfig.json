@@ -4,6 +4,7 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "rootDir": "../.."
   },
