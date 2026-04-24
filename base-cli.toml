@@ -5,3 +5,8 @@ app_dir = "apps/frontend"
 artifact_name = "Conduit-stage.ipa"
 upload = "diawi"
 env = { APP_VARIANT = "stage", DEVELOPER_DIR = "/Applications/Xcode-26.3.0.app/Contents/Developer" }
+
+[ios.profiles.stage-simulator]
+artifact_name = "Conduit-stage-simulator.tar.gz"
+upload = "none"
+env = { APP_VARIANT = "stage", DEVELOPER_DIR = "/Applications/Xcode-26.3.0.app/Contents/Developer" }
