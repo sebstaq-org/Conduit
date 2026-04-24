@@ -54,6 +54,23 @@ describe("service-bin relay runtime e2e", () => {
     await runServiceRelayScenario(relayEndpoint, adminToken);
   }, 120000);
 
+  it("reports mobile peer presence only for an active relay session", async () => {
+    // Per user contract: desktop may turn Mobile pairing green only from this backend signal.
+    // Do not change without an explicit product decision.
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    await expectMobilePeerConnected(currentRun.port, false);
+
+    const offer = await fetchOffer(currentRun.port);
+    const client = createRelaySessionClient({ offer });
+    await expect(client.getSettings()).resolves.toMatchObject({});
+    await expectMobilePeerConnected(currentRun.port, true);
+
+    client.close();
+    await expectMobilePeerConnected(currentRun.port, false);
+  }, 120000);
+
   it("keeps the production worker test-admin route unavailable", async () => {
     const relayEndpoint = await startLocalProductionRelayServer();
     const response = await fetch(`${relayEndpoint}/__conduit_test/close-data`);
@@ -158,6 +175,29 @@ async function fetchOffer(port: number): Promise<ConnectionOfferV1> {
   }
   const payload = (await response.json()) as { offer: unknown };
   return readConnectionOffer(payload.offer);
+}
+
+async function expectMobilePeerConnected(
+  port: number,
+  expected: boolean,
+): Promise<void> {
+  await expect
+    .poll(async () => await fetchMobilePeerConnected(port), { timeout: 15000 })
+    .toBe(expected);
+}
+
+async function fetchMobilePeerConnected(port: number): Promise<boolean> {
+  const response = await fetch(`http://127.0.0.1:${port}/api/daemon/status`);
+  if (!response.ok) {
+    throw new Error(
+      `daemon status failed with ${response.status}: ${await response.text()}`,
+    );
+  }
+  const payload = (await response.json()) as { mobilePeerConnected?: unknown };
+  if (typeof payload.mobilePeerConnected !== "boolean") {
+    throw new Error("daemon status did not include mobilePeerConnected");
+  }
+  return payload.mobilePeerConnected;
 }
 
 async function closeRelayDataSocket(

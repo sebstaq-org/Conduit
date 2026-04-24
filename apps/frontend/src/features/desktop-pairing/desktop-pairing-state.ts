@@ -25,6 +25,9 @@ interface DesktopActionRequest {
   readonly task: () => Promise<void>;
 }
 
+const mobilePeerPollIntervalMs = 750;
+const mobilePeerPollDeadlineMs = 30_000;
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -50,6 +53,30 @@ function runDesktopAction(request: DesktopActionRequest): void {
   void executeDesktopAction(request);
 }
 
+function scheduleMobilePeerPolling(
+  bridge: ConduitDesktopBridge,
+  setStatus: (value: DesktopDaemonStatus) => void,
+): void {
+  const startedAt = Date.now();
+  const poll = async (): Promise<void> => {
+    try {
+      const next = await bridge.getDaemonStatus();
+      setStatus(next);
+      if (Date.now() - startedAt >= mobilePeerPollDeadlineMs) {
+        return;
+      }
+    } catch {
+      return;
+    }
+    setTimeout(() => {
+      void poll();
+    }, mobilePeerPollIntervalMs);
+  };
+  setTimeout(() => {
+    void poll();
+  }, mobilePeerPollIntervalMs);
+}
+
 function useDesktopPairingState(
   bridge: ConduitDesktopBridge | null,
 ): DesktopPairingState {
@@ -72,6 +99,7 @@ function useDesktopPairingState(
       run("offer", async () => {
         setOffer(await bridge.getPairingOffer());
         setStatus(await bridge.getDaemonStatus());
+        scheduleMobilePeerPolling(bridge, setStatus);
       });
     }
   };

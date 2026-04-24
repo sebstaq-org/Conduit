@@ -16,6 +16,7 @@ function disabledStatus(): DesktopDaemonStatus {
     backendHealthy: false,
     daemon: null,
     lastExit: null,
+    mobilePeerConnected: false,
     pairingConfigured: false,
     pid: null,
     relayConfigured: false,

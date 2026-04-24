@@ -33,7 +33,7 @@ function renderConnectedHostRows({
         label={connectionStatus}
         leading={
           <ConnectionStatusIndicator
-            label={`${connectionStatus} indicator`}
+            label={`${connectionStatus} ${connectionIndicator} indicator`}
             status={connectionIndicator}
           />
         }
@@ -58,11 +58,11 @@ function HostStatusRows({
   if (activeHost === null) {
     return (
       <Row
-        label="Not connected"
+        label="Desktop"
         leading={
           <ConnectionStatusIndicator
-            label="Not connected indicator"
-            status="disconnected"
+            label="Desktop idle indicator"
+            status="idle"
           />
         }
         meta="No desktop paired"

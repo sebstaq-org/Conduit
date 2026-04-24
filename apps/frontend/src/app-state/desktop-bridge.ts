@@ -2,11 +2,13 @@ interface DesktopDaemonStatus {
   readonly appBaseUrl: string;
   readonly backendHealthy: boolean;
   readonly daemon: {
+    readonly mobilePeerConnected: boolean;
     readonly pairingConfigured: boolean;
     readonly relayEndpoint: string | null;
     readonly serverId: string;
   } | null;
   readonly lastExit: string | null;
+  readonly mobilePeerConnected: boolean;
   readonly pairingConfigured: boolean;
   readonly pid: number | null;
   readonly relayConfigured: boolean;

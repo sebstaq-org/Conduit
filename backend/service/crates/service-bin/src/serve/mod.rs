@@ -27,7 +27,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 use telemetry_support::TelemetryHealth;
 use tokio::net::TcpListener;
@@ -45,6 +45,7 @@ struct ServeState {
     relay_endpoint: Option<String>,
     app_base_url: String,
     telemetry_health: TelemetryHealth,
+    mobile_peer_connections: Arc<AtomicUsize>,
 }
 
 /// Runs the versioned consumer WebSocket service.
@@ -195,8 +196,14 @@ fn router_with_actor(
     telemetry_health: TelemetryHealth,
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
+    let mobile_peer_connections = Arc::new(AtomicUsize::new(0));
     if let Some(endpoint) = relay_endpoint.clone() {
-        relay::spawn_relay_connector(endpoint, product_home.clone(), actor.clone());
+        relay::spawn_relay_connector(
+            endpoint,
+            product_home.clone(),
+            actor.clone(),
+            Arc::clone(&mobile_peer_connections),
+        );
     }
     Router::new()
         .route("/health", get(health))
@@ -213,6 +220,7 @@ fn router_with_actor(
             relay_endpoint,
             app_base_url,
             telemetry_health,
+            mobile_peer_connections,
         }))
 }
 
@@ -250,7 +258,16 @@ fn health_response(
 
 async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoResponse {
     match daemon_status_response(&state.product_home, state.relay_endpoint.clone()) {
-        Ok(status) => (StatusCode::OK, Json(json!(status))).into_response(),
+        Ok(status) => {
+            let mut payload = json!(status);
+            if let Some(object) = payload.as_object_mut() {
+                object.insert(
+                    "mobilePeerConnected".to_owned(),
+                    json!(state.mobile_peer_connections.load(Ordering::Relaxed) > 0),
+                );
+            }
+            (StatusCode::OK, Json(payload)).into_response()
+        }
         Err(error) => {
             tracing::warn!(
                 event_name = "daemon_status.failed",

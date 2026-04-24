@@ -10,6 +10,7 @@ import type { DesktopDaemonConfig, DesktopDaemonStatus } from "./types.js";
 const shutdownTimeoutMs = 3000;
 
 interface DaemonStatusPayload {
+  readonly mobilePeerConnected: boolean;
   readonly pairingConfigured: boolean;
   readonly relayEndpoint: string | null;
   readonly serverId: string;
@@ -90,9 +91,11 @@ function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
     return null;
   }
   const pairingConfigured = booleanValue(value.pairingConfigured);
+  const mobilePeerConnected = booleanValue(value.mobilePeerConnected);
   const relayEndpoint = optionalStringValue(value.relayEndpoint);
   const serverId = stringValue(value.serverId);
   if (
+    mobilePeerConnected === null ||
     pairingConfigured === null ||
     relayEndpoint === undefined ||
     serverId === null
@@ -100,6 +103,7 @@ function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
     return null;
   }
   return {
+    mobilePeerConnected,
     pairingConfigured,
     relayEndpoint,
     serverId,
@@ -166,6 +170,7 @@ class DesktopDaemonController {
       backendHealthy: daemon !== null,
       daemon,
       lastExit: this.#lastExit,
+      mobilePeerConnected: daemon?.mobilePeerConnected ?? false,
       pairingConfigured: daemon?.pairingConfigured ?? false,
       pid: this.#backendProcess?.pid ?? null,
       relayConfigured: this.#config.relayEndpoint.length > 0,

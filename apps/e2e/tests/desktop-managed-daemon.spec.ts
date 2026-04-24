@@ -24,24 +24,26 @@ test.afterAll(async () => {
 test("desktop starts daemon, exposes QR pairing, relays commands, and survives restart", async () => {
   const activeHarness = requireHarness();
   const page = activeHarness.page;
-  await expect(page.getByText("Mobile pairing", { exact: true })).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(page.getByLabel("Connecting indicator")).toBeVisible();
-  await expect(page.getByText("Status not loaded")).toBeVisible();
+  await expect(page.getByText("Mobile pairing", { exact: true }).first()).toBeVisible(
+    { timeout: 60000 },
+  );
+  // Per user contract: desktop must not say connected/connecting before it knows about a real mobile peer.
+  // Do not change without an explicit product decision.
+  await expect(page.getByText("Connected", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Connecting", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Mobile pairing idle indicator")).toBeVisible();
 
-  await page.getByRole("button", { name: "Refresh status" }).click();
-  await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
-  await expect(page.getByLabel("Connected indicator")).toBeVisible();
   const beforeStatus = await readDesktopStatus(page);
   expect(beforeStatus.running).toBe(true);
   expect(beforeStatus.backendHealthy).toBe(true);
   expect(beforeStatus.relayConfigured).toBe(true);
+  expect(beforeStatus.mobilePeerConnected).toBe(false);
 
   await page
     .getByRole("button", { name: "Create mobile pairing link" })
     .click();
   await expect(page.getByLabel("Mobile pairing QR")).toBeVisible();
+  await expect(page.getByLabel("Mobile pairing idle indicator")).toBeVisible();
   const mobileUrl = await page
     .getByRole("textbox", { name: "Mobile pairing link" })
     .inputValue();
@@ -50,6 +52,9 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   const offer = parseConnectionOfferUrl(mobileUrlAsFragment(mobileUrl));
   const client = createRelaySessionClient({ offer });
   await expectEventuallySettings(client);
+  await expect(page.getByLabel("Mobile pairing connected indicator")).toBeVisible(
+    { timeout: 15000 },
+  );
 
   const projects = await client.addProject({ cwd: fixtureCwd });
   expect(projects.projects.some((project) => project.cwd === fixtureCwd)).toBe(
@@ -77,15 +82,29 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   expect(JSON.stringify(relaySnapshot)).not.toContain("settings/get");
   expect(JSON.stringify(relaySnapshot)).not.toContain("sessions/grouped");
 
-  await page.getByRole("button", { name: "Restart daemon" }).click();
-  await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
-  await expect(page.getByLabel("Connected indicator")).toBeVisible();
+  client.close();
+  await restartDesktopDaemon(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByLabel("Mobile pairing idle indicator")).toBeVisible({
+    timeout: 60000,
+  });
   const afterStatus = await readDesktopStatus(page);
   expect(afterStatus.restartCount).toBeGreaterThanOrEqual(1);
 
-  client.close();
-  const reconnectedClient = createRelaySessionClient({ offer });
+  await page
+    .getByRole("button", { name: "Create mobile pairing link" })
+    .click();
+  const restartedMobileUrl = await page
+    .getByRole("textbox", { name: "Mobile pairing link" })
+    .inputValue();
+  const restartedOffer = parseConnectionOfferUrl(
+    mobileUrlAsFragment(restartedMobileUrl),
+  );
+  const reconnectedClient = createRelaySessionClient({ offer: restartedOffer });
   await expectEventuallySettings(reconnectedClient);
+  await expect(page.getByLabel("Mobile pairing connected indicator")).toBeVisible(
+    { timeout: 15000 },
+  );
   reconnectedClient.close();
 });
 
@@ -104,8 +123,9 @@ test("desktop renders streaming markdown through Streamdown", async () => {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Refresh status" }).click();
-  await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
+  await expect(page.getByLabel("Mobile pairing idle indicator")).toBeVisible({
+    timeout: 60000,
+  });
   await activeHarness.addProject(fixtureCwd);
   const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
   await expect(newSessionButton).toBeVisible({ timeout: 60000 });
@@ -148,8 +168,22 @@ function mobileUrlAsFragment(mobileUrl: string): string {
   return `conduit://pair#offer=${offer}`;
 }
 
+async function restartDesktopDaemon(page: Page): Promise<void> {
+  await page.evaluate(
+    async () =>
+      await (
+        globalThis as unknown as {
+          conduitDesktop: {
+            restartDaemon(): Promise<unknown>;
+          };
+        }
+      ).conduitDesktop.restartDaemon(),
+  );
+}
+
 async function readDesktopStatus(page: Page): Promise<{
   readonly backendHealthy: boolean;
+  readonly mobilePeerConnected: boolean;
   readonly relayConfigured: boolean;
   readonly restartCount: number;
   readonly running: boolean;
@@ -161,6 +195,7 @@ async function readDesktopStatus(page: Page): Promise<{
           conduitDesktop: {
             getDaemonStatus(): Promise<{
               readonly backendHealthy: boolean;
+              readonly mobilePeerConnected: boolean;
               readonly relayConfigured: boolean;
               readonly restartCount: number;
               readonly running: boolean;

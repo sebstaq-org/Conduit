@@ -3,7 +3,7 @@ import { ActivityIndicator } from "react-native";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
 
-type ConnectionStatusKind = "connected" | "connecting" | "disconnected";
+type ConnectionStatusKind = "connected" | "connecting" | "disconnected" | "idle";
 
 interface ConnectionStatusIndicatorProps {
   readonly label: string;
@@ -17,6 +17,9 @@ function dotColor(
 ): keyof Theme["colors"] {
   if (status === "connected") {
     return "connectionConnected";
+  }
+  if (status === "idle") {
+    return "connectionIdle";
   }
   return "connectionDisconnected";
 }

@@ -8,23 +8,25 @@ describe(hostConnectionStatus, () => {
   it("reports connecting only before the first verified relay command", () => {
     expect(
       hostConnectionStatus({
+        activeHostPaired: true,
         isError: false,
         isFetching: true,
         isSuccess: false,
       }),
-    ).toMatchObject({ indicator: "connecting", label: "Connecting" });
+    ).toMatchObject({ indicator: "connecting", label: "Desktop" });
   });
 
   it("keeps a verified connection green during background polling", () => {
     expect(
       hostConnectionStatus({
+        activeHostPaired: true,
         data: {},
         fulfilledTimeStamp: 1000,
         isError: false,
         isFetching: true,
         isSuccess: true,
       }),
-    ).toMatchObject({ indicator: "connected", label: "Connected" });
+    ).toMatchObject({ indicator: "connected", label: "Desktop" });
   });
 });
 
@@ -33,6 +35,7 @@ describe("transient relay failures", () => {
     expect(
       hostConnectionStatus(
         {
+          activeHostPaired: true,
           data: {},
           fulfilledTimeStamp: 1000,
           isError: true,
@@ -43,7 +46,7 @@ describe("transient relay failures", () => {
       ),
     ).toMatchObject({
       indicator: "connected",
-      label: "Connected",
+      label: "Desktop",
       reason: "Last verified moments ago",
     });
   });
@@ -52,6 +55,7 @@ describe("transient relay failures", () => {
     expect(
       hostConnectionStatus(
         {
+          activeHostPaired: true,
           data: {},
           fulfilledTimeStamp: 1000,
           isError: true,
@@ -62,7 +66,7 @@ describe("transient relay failures", () => {
       ),
     ).toMatchObject({
       indicator: "disconnected",
-      label: "Not connected",
+      label: "Desktop",
       reason: "Relay failed",
     });
   });

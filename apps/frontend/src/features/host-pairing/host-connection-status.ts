@@ -1,6 +1,7 @@
 import type { ConnectionStatusKind } from "@/ui";
 
 interface HostConnectionQuery {
+  readonly activeHostPaired?: boolean;
   readonly currentData?: unknown;
   readonly data?: unknown;
   readonly fulfilledTimeStamp?: number;
@@ -11,7 +12,7 @@ interface HostConnectionQuery {
 
 interface HostConnectionStatus {
   readonly indicator: ConnectionStatusKind;
-  readonly label: "Connected" | "Connecting" | "Not connected";
+  readonly label: "Desktop";
   readonly reason: string;
 }
 
@@ -33,45 +34,61 @@ function hasRecentSuccess(query: HostConnectionQuery, nowMs: number): boolean {
   );
 }
 
+function failedConnectionStatus(
+  query: HostConnectionQuery,
+  nowMs: number,
+): HostConnectionStatus {
+  if (hasRecentSuccess(query, nowMs)) {
+    return {
+      indicator: "connected",
+      label: "Desktop",
+      reason: "Last verified moments ago",
+    };
+  }
+  return {
+    indicator: "disconnected",
+    label: "Desktop",
+    reason: "Relay failed",
+  };
+}
+
 function hostConnectionStatus(
   query: HostConnectionQuery,
   nowMs: number = Date.now(),
 ): HostConnectionStatus {
-  if (hasVerifiedSuccess(query) && !query.isError) {
+  const verified = hasVerifiedSuccess(query);
+
+  if (query.activeHostPaired === false) {
+    return {
+      indicator: "idle",
+      label: "Desktop",
+      reason: "No desktop paired",
+    };
+  }
+
+  if (verified && !query.isError) {
     return {
       indicator: "connected",
-      label: "Connected",
+      label: "Desktop",
       reason: "Relay connected",
     };
   }
 
-  if (query.isError && hasRecentSuccess(query, nowMs)) {
-    return {
-      indicator: "connected",
-      label: "Connected",
-      reason: "Last verified moments ago",
-    };
+  if (query.isError) {
+    return failedConnectionStatus(query, nowMs);
   }
 
-  if (query.isFetching && !hasVerifiedSuccess(query)) {
+  if (query.isFetching && !verified) {
     return {
       indicator: "connecting",
-      label: "Connecting",
+      label: "Desktop",
       reason: "Relay connecting",
     };
   }
 
-  if (query.isError) {
-    return {
-      indicator: "disconnected",
-      label: "Not connected",
-      reason: "Relay failed",
-    };
-  }
-
   return {
-    indicator: "disconnected",
-    label: "Not connected",
+    indicator: "idle",
+    label: "Desktop",
     reason: "Relay idle",
   };
 }
