@@ -1,8 +1,8 @@
 {
   "configRequest": {
-    "configId": "collaboration_mode",
+    "configId": "model",
     "sessionId": "e2e-codex-new-session-0001",
-    "value": "plan"
+    "value": "gpt-5.4-mini"
   },
   "configResponse": {
     "configOptions": [
@@ -20,7 +20,7 @@
       },
       {
         "category": "mode",
-        "currentValue": "plan",
+        "currentValue": "default",
         "id": "collaboration_mode",
         "name": "Collaboration Mode",
         "options": [
@@ -42,7 +42,7 @@
       },
       {
         "category": "thought_level",
-        "currentValue": "medium",
+        "currentValue": "high",
         "id": "reasoning_effort",
         "name": "Reasoning Effort",
         "options": [
@@ -54,7 +54,7 @@
     ],
     "currentModeId": "full-access",
     "models": {
-      "currentModelId": "gpt-5.4-mini/medium"
+      "currentModelId": "gpt-5.4-mini/high"
     },
     "modes": {
       "currentModeId": "full-access"

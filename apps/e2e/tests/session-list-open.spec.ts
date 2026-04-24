@@ -60,7 +60,7 @@ test("all-provider session list opens Claude and Copilot parity transcripts", as
   await expectNoFailureFeedback(page);
 });
 
-test("new session applies selected collaboration mode before first prompt", async ({
+test("Codex configured draft prompt applies full config before first prompt", async ({
   page,
 }) => {
   const activeHarness = requireHarness();
@@ -73,6 +73,23 @@ test("new session applies selected collaboration mode before first prompt", asyn
   await newSessionButton.click();
   await page.getByLabel("Select provider for new session").click();
   await page.getByLabel("Codex").click();
+  await expect(page.getByLabel("Approval Preset", { exact: true })).toHaveText(
+    "Full Access",
+  );
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText("GPT-5.4");
+  await expect(page.getByLabel("Reasoning Effort", { exact: true })).toHaveText(
+    "High",
+  );
+  await page.getByLabel("Select Model").click();
+  await page.getByLabel("GPT-5.4-Mini").click();
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText(
+    "GPT-5.4-Mini",
+  );
+  await page.getByLabel("Select Reasoning Effort").click();
+  await page.getByLabel("Medium").click();
+  await expect(page.getByLabel("Reasoning Effort", { exact: true })).toHaveText(
+    "Medium",
+  );
   await page.getByLabel("Select Collaboration Mode").click();
   await page.getByLabel("Plan").click();
   await expect(

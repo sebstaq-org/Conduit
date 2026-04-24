@@ -138,14 +138,14 @@ fn capture_provider(
             capture_session_load(service, session_id, cwd, ledger)
         }
         CaptureOperation::Prompt {
-            config,
+            configs,
             session_id,
             prompt_path,
         } => capture_session_prompt(
             service,
             PromptCapture {
                 session_id: session_id.as_deref(),
-                config: config.as_ref(),
+                configs,
                 prompt_path,
                 cwd,
             },
@@ -177,7 +177,7 @@ struct SetConfigCapture<'a> {
 
 struct PromptCapture<'a> {
     session_id: Option<&'a str>,
-    config: Option<&'a CaptureConfigOption>,
+    configs: &'a [CaptureConfigOption],
     prompt_path: &'a Path,
     cwd: &'a Path,
 }
@@ -273,8 +273,9 @@ fn capture_session_prompt(
         }
     };
 
-    let config_capture = match request.config {
-        Some(config) => capture_session_set_config_option_raw(
+    let mut config_captures = Vec::new();
+    for config in request.configs {
+        config_captures.push(capture_session_set_config_option_raw(
             service,
             SetConfigRawCapture {
                 session_id: &resolved_session_id,
@@ -282,9 +283,8 @@ fn capture_session_prompt(
                 value: &config.value,
             },
             ledger,
-        )?,
-        None => Value::Null,
-    };
+        )?);
+    }
 
     let mut prompt_updates = Vec::new();
     ledger.push("provider.session_prompt.start", true)?;
@@ -295,7 +295,7 @@ fn capture_session_prompt(
             ledger.push("provider.session_prompt.finish", true)?;
             Ok(json!({
                 "sessionNew": session_new,
-                "configCapture": config_capture,
+                "configCaptures": config_captures,
                 "promptRequest": {
                     "sessionId": resolved_session_id,
                     "prompt": prompt,

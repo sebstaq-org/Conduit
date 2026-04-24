@@ -201,7 +201,7 @@ fn parses_codex_session_prompt_capture_with_default_workspace()
     if request.operation
         != (super::CaptureOperation::Prompt {
             session_id: None,
-            config: None,
+            configs: Vec::new(),
             prompt_path: "/tmp/prompt.json".into(),
         })
     {
@@ -233,7 +233,7 @@ fn parses_codex_session_prompt_capture_with_existing_session()
     if request.operation
         != (super::CaptureOperation::Prompt {
             session_id: Some("session-1".to_owned()),
-            config: None,
+            configs: Vec::new(),
             prompt_path: "/tmp/prompt.json".into(),
         })
     {
@@ -270,10 +270,58 @@ fn parses_codex_session_prompt_capture_with_config_prelude()
     if request.operation
         != (super::CaptureOperation::Prompt {
             session_id: None,
-            config: Some(super::CaptureConfigOption {
+            configs: vec![super::CaptureConfigOption {
                 config_id: "collaboration_mode".to_owned(),
                 value: "plan".to_owned(),
-            }),
+            }],
+            prompt_path: "/tmp/prompt.json".into(),
+        })
+    {
+        return Err("operation did not parse".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn parses_codex_session_prompt_capture_with_multiple_config_preludes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let parsed = parse_command(&args(&[
+        "capture",
+        "codex",
+        "session/prompt",
+        "--prompt",
+        "/tmp/prompt.json",
+        "--config",
+        "model",
+        "--value",
+        "gpt-5.4-mini",
+        "--config",
+        "reasoning_effort",
+        "--value",
+        "medium",
+        "--config",
+        "collaboration_mode",
+        "--value",
+        "plan",
+    ]))?;
+    let super::Command::Capture(request) = parsed;
+    if request.operation
+        != (super::CaptureOperation::Prompt {
+            session_id: None,
+            configs: vec![
+                super::CaptureConfigOption {
+                    config_id: "model".to_owned(),
+                    value: "gpt-5.4-mini".to_owned(),
+                },
+                super::CaptureConfigOption {
+                    config_id: "reasoning_effort".to_owned(),
+                    value: "medium".to_owned(),
+                },
+                super::CaptureConfigOption {
+                    config_id: "collaboration_mode".to_owned(),
+                    value: "plan".to_owned(),
+                },
+            ],
             prompt_path: "/tmp/prompt.json".into(),
         })
     {
@@ -534,6 +582,29 @@ fn rejects_session_prompt_value_without_config() {
     .map(|error| error.to_string())
     .unwrap_or_default();
     assert!(error.contains("missing required --config"));
+}
+
+#[test]
+fn rejects_session_prompt_duplicate_config_prelude() {
+    let error = parse_command(&args(&[
+        "capture",
+        "codex",
+        "session/prompt",
+        "--prompt",
+        "/tmp/prompt.json",
+        "--config",
+        "model",
+        "--value",
+        "gpt-5.4",
+        "--config",
+        "model",
+        "--value",
+        "gpt-5.4-mini",
+    ]))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("duplicate --config model"));
 }
 
 #[test]
