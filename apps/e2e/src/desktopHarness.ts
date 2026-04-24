@@ -1,4 +1,5 @@
 import { chromium } from "@playwright/test";
+import { createSessionClient } from "@conduit/session-client";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -23,6 +24,7 @@ import type { MiniflareRuntime, RelaySnapshot } from "./harness.js";
 
 interface DesktopE2eHarness {
   readonly page: Page;
+  addProject(cwd: string): Promise<void>;
   relaySnapshot(serverId: string): Promise<RelaySnapshot>;
   stop(): Promise<void>;
 }
@@ -54,6 +56,7 @@ async function startDesktopE2eHarness(): Promise<DesktopE2eHarness> {
     frontendServer = await startStaticServer(frontendBuildDir, webPort);
     const backendPort = await freePort();
     const debugPort = await freePort();
+    const sessionWsUrl = `ws://127.0.0.1:${String(backendPort)}/api/session`;
     desktopRun = await startDesktopRun({
       debugPort,
       env: {
@@ -76,6 +79,9 @@ async function startDesktopE2eHarness(): Promise<DesktopE2eHarness> {
     const page = await waitForDesktopWindow(desktopRun, runRoot);
     await page.waitForLoadState("domcontentloaded");
     return {
+      addProject: async (cwd: string) => {
+        await addProjectAndWaitForSessions(sessionWsUrl, cwd);
+      },
       page,
       relaySnapshot: async (serverId: string) =>
         await fetchRelaySnapshot(relay.url, serverId),
@@ -153,6 +159,31 @@ async function startDesktopRun(request: {
     electron: electronProcess,
     logs,
   };
+}
+
+async function addProjectAndWaitForSessions(
+  sessionWsUrl: string,
+  cwd: string,
+): Promise<void> {
+  const client = createSessionClient({ url: sessionWsUrl });
+  try {
+    await client.addProject({ cwd });
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 15_000) {
+      const groups = await client.getSessionGroups({ updatedWithinDays: null });
+      if (
+        groups.groups.some(
+          (group) => group.cwd === cwd && group.sessions.length > 0,
+        )
+      ) {
+        return;
+      }
+      await delay(250);
+    }
+  } finally {
+    client.close();
+  }
+  throw new Error(`timed out waiting for indexed desktop sessions in ${cwd}`);
 }
 
 async function waitForDesktopWindow(

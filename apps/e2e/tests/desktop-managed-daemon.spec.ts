@@ -6,6 +6,11 @@ import { startDesktopE2eHarness } from "../src/desktopHarness.js";
 import type { Page } from "@playwright/test";
 import type { DesktopE2eHarness } from "../src/desktopHarness.js";
 
+const desktopStreamdownPrompt =
+  "Stream a markdown proof for desktop Streamdown rendering.";
+const desktopStreamdownHeading = "CONDUIT_DESKTOP_STREAMDOWN_E2E";
+const desktopStreamdownBody = "desktop Streamdown renders chunked markdown.";
+
 let harness: DesktopE2eHarness | null = null;
 
 test.beforeAll(async () => {
@@ -81,6 +86,51 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   client.close();
   const reconnectedClient = createRelaySessionClient({ offer });
   await expectEventuallySettings(reconnectedClient);
+  reconnectedClient.close();
+});
+
+test("desktop renders streaming markdown through Streamdown", async () => {
+  const activeHarness = requireHarness();
+  const page = activeHarness.page;
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) => {
+    pageErrors.push(error.message);
+  });
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(message.text());
+    }
+  });
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "Refresh status" }).click();
+  await expect(page.getByText("Daemon ready")).toBeVisible({ timeout: 60000 });
+  await activeHarness.addProject(fixtureCwd);
+  const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
+  await expect(newSessionButton).toBeVisible({ timeout: 60000 });
+  await newSessionButton.click();
+  await page.getByLabel("Select provider for new session").click();
+  await page.getByLabel("Codex").click();
+  await page.getByLabel("Session message").fill(desktopStreamdownPrompt);
+
+  const sendButton = page.getByRole("button", { name: "Send message" });
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
+
+  await expect(page.getByText(desktopStreamdownHeading)).toBeVisible({
+    timeout: 15000,
+  });
+  await expect(page.getByText(desktopStreamdownBody)).toBeVisible();
+  await expect(page.getByText("First streamed item")).toBeVisible();
+  await expect(page.getByText("Second streamed item")).toBeVisible();
+  if (process.env.CONDUIT_E2E_DESKTOP_STREAMDOWN_SCREENSHOT !== undefined) {
+    await page.screenshot({
+      fullPage: true,
+      path: process.env.CONDUIT_E2E_DESKTOP_STREAMDOWN_SCREENSHOT,
+    });
+  }
+  expectNoStreamdownRendererErrors([...pageErrors, ...consoleErrors]);
 });
 
 function requireHarness(): DesktopE2eHarness {
@@ -142,4 +192,11 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => {
     setTimeout(resolveDelay, ms);
   });
+}
+
+function expectNoStreamdownRendererErrors(messages: readonly string[]): void {
+  const rendererErrors = messages.filter((message) =>
+    /streamdown|remend|worklet|object is not a function/iu.test(message),
+  );
+  expect(rendererErrors).toEqual([]);
 }

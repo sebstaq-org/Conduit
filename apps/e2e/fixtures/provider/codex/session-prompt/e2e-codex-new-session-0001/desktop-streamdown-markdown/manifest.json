@@ -1,0 +1,19 @@
+{
+  "captureKind": "provider",
+  "contractBoundary": "provider-acp",
+  "curation": "Derived from the reviewed Codex session/prompt E2E fixture shape; prompt text and final markdown response are synthetic public-safe sentinel values, and the markdown response is split into multiple ACP agent_message_chunk updates to exercise streaming renderer behavior without private provider data.",
+  "cwd": "/tmp/conduit-e2e-fixture-project",
+  "manualCapture": false,
+  "operation": "session/prompt",
+  "provider": "codex",
+  "replacedFields": [
+    "cwd",
+    "sessionId",
+    "promptRequest.sessionId",
+    "promptRequest.prompt",
+    "promptUpdates.content.text"
+  ],
+  "sessionId": "e2e-codex-new-session-0001",
+  "sourceCapture": "apps/e2e/fixtures/provider/codex/session-prompt/e2e-codex-new-session-0001/default/provider.raw.json",
+  "timestamp": "2026-01-01T00:00:00Z"
+}
