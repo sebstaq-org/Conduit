@@ -42,6 +42,7 @@ export {
   PopoverPortal,
   PopoverPortalHost,
   PopoverRoot,
+  PopoverStatusTrigger,
   usePopoverControls,
 } from "./popover";
 export { Row } from "./row";

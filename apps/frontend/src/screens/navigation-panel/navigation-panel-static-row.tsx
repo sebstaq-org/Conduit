@@ -1,13 +1,7 @@
-import { desktopBridgeAvailable } from "@/app-state/desktop-bridge";
-import { DesktopPairingPanel } from "@/features/desktop-pairing";
-import { HostPairingPanel } from "@/features/host-pairing";
 import { ProjectsToolbar } from "@/features/projects-toolbar";
-import { Box, Text } from "@/theme";
+import { Box } from "@/theme";
 import { Row, Section } from "@/ui";
-import {
-  navigationPanelHeadingMarginBottom,
-  navigationPanelHeadingVariant,
-} from "./navigation-panel.styles";
+import { NavigationPanelHeader } from "./navigation-panel-header";
 import { NavigationPanelProjectRows } from "./navigation-panel-project-rows";
 import type { NavigationPanelScrollRow } from "./navigation-panel-scroll-rows";
 
@@ -16,28 +10,10 @@ function renderStaticNavigationPanelRow(
 ): React.JSX.Element | null {
   switch (row.kind) {
     case "heading": {
-      return (
-        <Text
-          mb={navigationPanelHeadingMarginBottom}
-          variant={navigationPanelHeadingVariant}
-        >
-          Conduit
-        </Text>
-      );
+      return <NavigationPanelHeader />;
     }
     case "projectRows": {
       return <NavigationPanelProjectRows />;
-    }
-    case "hostPairing": {
-      if (desktopBridgeAvailable()) {
-        return <DesktopPairingPanel />;
-      }
-      return (
-        <>
-          <DesktopPairingPanel />
-          <HostPairingPanel />
-        </>
-      );
     }
     case "projectsHeader": {
       return (

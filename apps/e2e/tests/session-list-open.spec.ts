@@ -181,12 +181,14 @@ test("pairing UI drives session commands through relay and reconnects", async ({
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
-  await expect(page.getByText("No desktop paired")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Desktop connection controls" }),
+  ).toBeVisible();
+  await openHostPairingPopover(page);
   await expect(page.getByLabel("Desktop idle indicator")).toBeVisible();
+  await expect(page.getByText("No desktop paired")).toBeVisible();
   await pairFrontend(page, activeHarness);
 
-  await expect(page.getByText("Relay connected")).toBeVisible();
-  await expect(page.getByLabel("Desktop connected indicator")).toBeVisible();
   const beforeReconnect = await activeHarness.relaySnapshot();
   expect(beforeReconnect.controlSocketCount).toBeGreaterThanOrEqual(1);
   expect(beforeReconnect.clientSocketCount).toBeGreaterThanOrEqual(1);
@@ -222,23 +224,27 @@ test("pairing survives reload, reconfigures, and forget clears stale data", asyn
   await expectVisibleWithDiagnostics(
     page,
     activeHarness,
-    page.getByLabel("Desktop connected indicator"),
+    page.getByRole("button", { name: "Desktop connection controls" }),
   );
+  await openHostPairingPopover(page);
+  await expect(page.getByLabel("Desktop connected indicator")).toBeVisible();
+  await closePopover(page);
   await expect(page.getByText(fixtureCwd)).toBeVisible();
 
+  await openHostPairingPopover(page);
   await submitPairingUrl(page, tamperRelayEndpoint(pairingUrl));
-  await expect(page.getByLabel("Desktop connecting indicator")).toBeVisible({
-    timeout: 5000,
-  });
+  await expect(page.getByLabel("Desktop connecting indicator")).toBeVisible();
   await expect(
     page.getByText(/relay websocket failed to connect/u).first(),
   ).toBeVisible({ timeout: 15000 });
   await expect(page.getByLabel("Desktop disconnected indicator")).toBeVisible();
 
   await pairFrontendWithUrl(page, await activeHarness.pairingUrl());
+  await openHostPairingPopover(page);
   await page.getByRole("button", { name: "Forget desktop" }).click();
   await expect(page.getByText("No desktop paired")).toBeVisible();
   await expect(page.getByLabel("Desktop idle indicator")).toBeVisible();
+  await closePopover(page);
   await expect(page.getByText(fixtureCwd)).not.toBeVisible();
 });
 
@@ -284,16 +290,35 @@ async function pairFrontendWithUrl(
   page: Page,
   pairingUrl: string,
 ): Promise<void> {
+  await openHostPairingPopover(page);
   await submitPairingUrl(page, pairingUrl);
   await expect(page.getByLabel("Desktop connected indicator")).toBeVisible({
     timeout: 15000,
   });
-  await expect(page.getByText("Relay connected")).toBeVisible();
+  await closePopover(page);
 }
 
 async function submitPairingUrl(page: Page, pairingUrl: string): Promise<void> {
   await page.getByLabel("Pairing link").fill(pairingUrl);
   await page.getByRole("button", { name: "Connect desktop" }).click();
+}
+
+async function openHostPairingPopover(page: Page): Promise<void> {
+  if (await page.getByLabel("Pairing link").isVisible().catch(() => false)) {
+    return;
+  }
+  await page
+    .getByRole("button", { name: "Desktop connection controls" })
+    .click();
+  await expect(page.getByLabel("Pairing link")).toBeVisible();
+}
+
+async function closePopover(page: Page): Promise<void> {
+  if (!(await page.getByLabel("Pairing link").isVisible().catch(() => false))) {
+    return;
+  }
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Pairing link")).toHaveCount(0);
 }
 
 function tamperRelayEndpoint(pairingUrl: string): string {
