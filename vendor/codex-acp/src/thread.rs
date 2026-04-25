@@ -4064,6 +4064,7 @@ mod tests {
     use agent_client_protocol::{RequestPermissionResponse, TextContent};
     use codex_core::{config::ConfigOverrides, test_support::all_model_presets};
     use codex_protocol::config_types::ModeKind;
+    use codex_protocol::protocol::{TokenUsage, TokenUsageInfo};
     use tokio::{
         sync::{Mutex, Notify, mpsc::UnboundedSender},
         task::LocalSet,
@@ -4570,6 +4571,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_token_count_events_do_not_emit_session_usage_updates() -> anyhow::Result<()> {
+        let client = run_prompt("token-count").await?;
+        let notifications = client.notifications.lock().unwrap();
+        assert!(
+            notifications.is_empty(),
+            "token count events must stay local to Codex ACP and not emit unsupported ACP session updates: {notifications:?}"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_turn_item_plan_sends_terminal_plan_meta() -> anyhow::Result<()> {
         let client = run_prompt("terminal-plan").await?;
         let notifications = client.notifications.lock().unwrap();
@@ -4940,6 +4953,42 @@ mod tests {
                                 msg: EventMsg::TurnComplete(TurnCompleteEvent {
                                     last_agent_message: None,
                                     turn_id,
+                                }),
+                            })
+                            .unwrap();
+                    } else if prompt == "token-count" {
+                        let info = TokenUsageInfo {
+                            total_token_usage: TokenUsage {
+                                input_tokens: 100,
+                                cached_input_tokens: 25,
+                                output_tokens: 40,
+                                reasoning_output_tokens: 10,
+                                total_tokens: 150,
+                            },
+                            last_token_usage: TokenUsage {
+                                input_tokens: 80,
+                                cached_input_tokens: 20,
+                                output_tokens: 30,
+                                reasoning_output_tokens: 5,
+                                total_tokens: 115,
+                            },
+                            model_context_window: Some(258_400),
+                        };
+                        self.op_tx
+                            .send(Event {
+                                id: id.to_string(),
+                                msg: EventMsg::TokenCount(TokenCountEvent {
+                                    info: Some(info),
+                                    rate_limits: None,
+                                }),
+                            })
+                            .unwrap();
+                        self.op_tx
+                            .send(Event {
+                                id: id.to_string(),
+                                msg: EventMsg::TurnComplete(TurnCompleteEvent {
+                                    last_agent_message: None,
+                                    turn_id: id.to_string(),
                                 }),
                             })
                             .unwrap();
