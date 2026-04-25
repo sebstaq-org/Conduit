@@ -31,6 +31,7 @@ interface E2eHarness {
 }
 
 interface E2eHarnessOptions {
+  readonly exposeDirectSessionUrl?: boolean | undefined;
   readonly fixtureRoot?: string | undefined;
 }
 
@@ -109,6 +110,7 @@ async function startE2eHarness(
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
   const frontendUrl = `http://localhost:${frontendPort}`;
+  const exposeDirectSessionUrl = options.exposeDirectSessionUrl ?? true;
   const providerFixtureRoot = options.fixtureRoot ?? defaultFixtureRoot;
   const processes: ManagedProcess[] = [];
   let cachedPairing: PairingResponse | null = null;
@@ -170,7 +172,9 @@ async function startE2eHarness(
       {
         CI: "1",
         EXPO_NO_TELEMETRY: "1",
-        EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
+        ...(exposeDirectSessionUrl
+          ? { EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl }
+          : {}),
       },
     );
     frontendServer = await startStaticServer(frontendBuildDir, frontendPort);

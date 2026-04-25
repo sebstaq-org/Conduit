@@ -21,7 +21,7 @@ const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
 let harness: E2eHarness | null = null;
 
 test.beforeAll(async () => {
-  harness = await startE2eHarness();
+  harness = await startE2eHarness({ exposeDirectSessionUrl: false });
 });
 
 test.afterAll(async () => {
@@ -48,6 +48,7 @@ test("new session hides previously opened transcript and keeps draft context", a
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   await openListedSession(page, activeHarness, fixtureSessionTitle);
   await expect(
@@ -79,6 +80,7 @@ test("all-provider session list opens Claude and Copilot parity transcripts", as
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   await openListedSession(page, activeHarness, claudeParitySessionTitle);
   await expectParityTranscript(page, claudeParitySentinel);
@@ -154,6 +156,7 @@ test("Claude parity fixture drives configured draft prompt", async ({
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
   await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
@@ -182,6 +185,7 @@ test("Copilot parity fixture drives configured draft prompt", async ({
   const activeHarness = requireHarness();
   await activeHarness.addProject(fixtureCwd);
   await openFrontend(page, activeHarness);
+  await pairFrontend(page, activeHarness);
 
   const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
   await expectVisibleWithDiagnostics(page, activeHarness, newSessionButton);
