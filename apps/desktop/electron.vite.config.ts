@@ -52,6 +52,7 @@ const preload = {
     rollupOptions: {
       output: {
         format: "cjs" as const,
+        inlineDynamicImports: true,
       },
     },
   },
