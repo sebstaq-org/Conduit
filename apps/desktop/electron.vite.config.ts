@@ -49,6 +49,11 @@ const main = {
 const preload = {
   build: {
     externalizeDeps: false,
+    rollupOptions: {
+      output: {
+        format: "cjs" as const,
+      },
+    },
   },
   resolve: {
     alias: workspaceAliases,

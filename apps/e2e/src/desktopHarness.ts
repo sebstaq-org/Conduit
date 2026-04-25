@@ -25,6 +25,7 @@ import type { MiniflareRuntime, RelaySnapshot } from "./harness.js";
 interface DesktopE2eHarness {
   readonly page: Page;
   addProject(cwd: string): Promise<void>;
+  quitDesktop(): Promise<void>;
   relaySnapshot(serverId: string): Promise<RelaySnapshot>;
   stop(): Promise<void>;
 }
@@ -35,6 +36,10 @@ interface DesktopRun {
   readonly logs: string[];
 }
 
+interface DesktopE2eHarnessOptions {
+  readonly serviceBinPath?: string;
+}
+
 const sourceDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(sourceDir, "..");
 const repoRoot = resolve(appRoot, "..", "..");
@@ -42,7 +47,9 @@ const desktopPackagePath = join(repoRoot, "apps", "desktop", "package.json");
 const desktopRequire = createRequire(desktopPackagePath);
 const desktopAppPath = join(repoRoot, "apps", "desktop");
 
-async function startDesktopE2eHarness(): Promise<DesktopE2eHarness> {
+async function startDesktopE2eHarness(
+  options: DesktopE2eHarnessOptions = {},
+): Promise<DesktopE2eHarness> {
   const runRoot = await mkdtemp(join(tmpdir(), "conduit-desktop-e2e-"));
   const frontendBuildDir = join(runRoot, "frontend-web");
   const relay = await startMiniflareRelay();
@@ -70,7 +77,7 @@ async function startDesktopE2eHarness(): Promise<DesktopE2eHarness> {
         CONDUIT_DESKTOP_HOME: join(runRoot, "home"),
         CONDUIT_DESKTOP_PROVIDER_FIXTURES: fixtureRoot,
         CONDUIT_DESKTOP_RELAY_ENDPOINT: relay.url,
-        CONDUIT_DESKTOP_SERVICE_BIN: serviceBin,
+        CONDUIT_DESKTOP_SERVICE_BIN: options.serviceBinPath ?? serviceBin,
         CONDUIT_DESKTOP_STORE_PATH: join(runRoot, "local-store.sqlite3"),
         CONDUIT_FRONTEND_URL: `http://127.0.0.1:${String(webPort)}`,
         ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
@@ -78,11 +85,17 @@ async function startDesktopE2eHarness(): Promise<DesktopE2eHarness> {
     });
     const page = await waitForDesktopWindow(desktopRun, runRoot);
     await page.waitForLoadState("domcontentloaded");
+    const activeDesktopRun = desktopRun;
     return {
       addProject: async (cwd: string) => {
         await addProjectAndWaitForSessions(sessionWsUrl, cwd);
       },
       page,
+      quitDesktop: async () => {
+        await page.close().catch(() => undefined);
+        await waitForExit(activeDesktopRun.electron, 10_000);
+        await activeDesktopRun.browser.close().catch(() => undefined);
+      },
       relaySnapshot: async (serverId: string) =>
         await fetchRelaySnapshot(relay.url, serverId),
       stop: async () => {

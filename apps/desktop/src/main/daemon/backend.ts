@@ -3,23 +3,18 @@ import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { readPresenceSnapshot } from "./presencePayload.js";
+import { readDaemonStatusPayload } from "./backend-status-payload.js";
 import type { ChildProcess } from "node:child_process";
 import type { WriteStream } from "node:fs";
-import type {
-  DesktopDaemonConfig,
-  DesktopDaemonStatus,
-  DesktopPresenceSnapshot,
-} from "./types.js";
+import type { DesktopDaemonConfig, DesktopDaemonStatus } from "./types.js";
 
 const shutdownTimeoutMs = 3000;
 
-interface DaemonStatusPayload {
-  readonly mobilePeerConnected: boolean;
-  readonly pairingConfigured: boolean;
-  readonly presence: DesktopPresenceSnapshot;
-  readonly relayEndpoint: string | null;
-  readonly serverId: string;
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function signalChild(child: ChildProcess, signal: "SIGKILL" | "SIGTERM"): void {
@@ -34,19 +29,18 @@ async function waitForExit(
   timeoutMs: number,
 ): Promise<boolean> {
   if (child.exitCode !== null || child.signalCode !== null) {
+    await Promise.resolve();
     return true;
   }
   const deferred = Promise.withResolvers<boolean>();
-  const timeoutRef: { current: ReturnType<typeof setTimeout> | null } = {
-    current: null,
-  };
+  let timeoutRef: ReturnType<typeof setTimeout> | null = null;
   const onExit = (): void => {
-    if (timeoutRef.current !== null) {
-      clearTimeout(timeoutRef.current);
+    if (timeoutRef !== null) {
+      clearTimeout(timeoutRef);
     }
     deferred.resolve(true);
   };
-  timeoutRef.current = setTimeout(() => {
+  timeoutRef = setTimeout(() => {
     child.off("exit", onExit);
     deferred.resolve(false);
   }, timeoutMs);
@@ -64,66 +58,12 @@ async function terminateChild(child: ChildProcess): Promise<void> {
   await waitForExit(child, shutdownTimeoutMs);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function stringValue(value: unknown): string | null {
-  if (typeof value === "string") {
-    return value;
-  }
-  return null;
-}
-
-function optionalStringValue(value: unknown): string | null | undefined {
-  if (value === null) {
-    return null;
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  return undefined;
-}
-
-function booleanValue(value: unknown): boolean | null {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  return null;
-}
-
-function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  const pairingConfigured = booleanValue(value.pairingConfigured);
-  const mobilePeerConnected = booleanValue(value.mobilePeerConnected);
-  const presence = readPresenceSnapshot(value.presence);
-  const relayEndpoint = optionalStringValue(value.relayEndpoint);
-  const serverId = stringValue(value.serverId);
-  if (
-    mobilePeerConnected === null ||
-    pairingConfigured === null ||
-    presence === null ||
-    relayEndpoint === undefined ||
-    serverId === null
-  ) {
-    return null;
-  }
-  return {
-    mobilePeerConnected,
-    pairingConfigured,
-    presence,
-    relayEndpoint,
-    serverId,
-  };
-}
-
 class DesktopDaemonController {
   readonly #config: DesktopDaemonConfig;
   #backendLogStream: WriteStream | null = null;
   #backendProcess: ChildProcess | null = null;
   #lastExit: string | null = null;
+  #lifecycle: Promise<null> = Promise.resolve(null);
   #restartCount = 0;
   #stopping = false;
 
@@ -140,25 +80,64 @@ class DesktopDaemonController {
   }
 
   async start(): Promise<void> {
+    await this.#enqueueLifecycle(async () => {
+      await this.#startNow();
+    });
+  }
+
+  async restart(): Promise<DesktopDaemonStatus> {
+    await Promise.resolve();
+    return this.#enqueueLifecycle(async () => {
+      this.#restartCount += 1;
+      await this.#stopNow();
+      try {
+        await this.#startNow();
+      } catch {
+        // Recovery state is exposed through status; restart should not hide UI.
+      }
+      return this.#statusNow();
+    });
+  }
+
+  async status(): Promise<DesktopDaemonStatus> {
+    await this.waitForStableLifecycle();
+    return this.#statusNow();
+  }
+
+  async stop(): Promise<void> {
+    await this.#enqueueLifecycle(async () => {
+      await this.#stopNow();
+    });
+  }
+
+  async waitForStableLifecycle(): Promise<void> {
+    await this.#lifecycle;
+  }
+
+  async #startNow(): Promise<void> {
     if (this.#backendProcess !== null) {
       return;
     }
+    await this.#spawnNextBackend();
+    try {
+      await this.#waitHealthy();
+      this.#lastExit = null;
+    } catch (error) {
+      this.#lastExit = errorMessage(error);
+      await this.#stopNow();
+      throw error;
+    }
+  }
+
+  async #spawnNextBackend(): Promise<void> {
     this.#stopping = false;
     await this.#prepareRunDirectories();
     const child = this.#spawnBackend();
     this.#backendProcess = child;
     this.#bindBackendProcess(child);
-    await this.#waitHealthy();
   }
 
-  async restart(): Promise<DesktopDaemonStatus> {
-    this.#restartCount += 1;
-    await this.stop();
-    await this.start();
-    return this.status();
-  }
-
-  async stop(): Promise<void> {
+  async #stopNow(): Promise<void> {
     this.#stopping = true;
     const child = this.#backendProcess;
     this.#backendProcess = null;
@@ -168,7 +147,7 @@ class DesktopDaemonController {
     this.#closeLogStream();
   }
 
-  async status(): Promise<DesktopDaemonStatus> {
+  async #statusNow(): Promise<DesktopDaemonStatus> {
     const daemon = await this.#fetchDaemonStatus();
     let sessionWsUrl: string | null = null;
     if (daemon !== null) {
@@ -292,6 +271,19 @@ class DesktopDaemonController {
   #closeLogStream(): void {
     this.#backendLogStream?.end();
     this.#backendLogStream = null;
+  }
+
+  async #enqueueLifecycle<Result>(task: () => Promise<Result>): Promise<Result> {
+    const previous = this.#lifecycle;
+    const next = Promise.withResolvers<null>();
+    this.#lifecycle = next.promise;
+    await previous;
+    try {
+      const result = await task();
+      return result;
+    } finally {
+      next.resolve(null);
+    }
   }
 }
 

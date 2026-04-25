@@ -14,6 +14,7 @@ const desktopIpcChannels = {
   copyText: "conduitDesktop:copyText",
   getDaemonStatus: "conduitDesktop:getDaemonStatus",
   getPairingOffer: "conduitDesktop:getPairingOffer",
+  getRuntimeConfig: "conduitDesktop:getRuntimeConfig",
   restartDaemon: "conduitDesktop:restartDaemon",
 } as const;
 
@@ -38,25 +39,37 @@ function createDesktopBootstrapPlan(): DesktopBootstrapPlan {
   };
 }
 
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim();
-  if (value === undefined || value.length === 0) {
-    return null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
   }
-  return value;
+  return undefined;
+}
+
+function runtimeConfigEntries(
+  value: Record<string, unknown>,
+): (readonly [keyof ConduitRuntimeConfig, string | undefined])[] {
+  return [
+    ["clientLogUrl", optionalString(value.clientLogUrl)],
+    ["logProfile", optionalString(value.logProfile)],
+    ["sessionWsUrl", optionalString(value.sessionWsUrl)],
+  ];
 }
 
 function desktopRuntimeConfig(): ConduitRuntimeConfig | null {
-  if (process.env.CONDUIT_DESKTOP_DAEMON !== "1") {
+  const value: unknown = ipcRenderer.sendSync(
+    desktopIpcChannels.getRuntimeConfig,
+  );
+  if (!isRecord(value)) {
     return null;
   }
-  const host = envValue("CONDUIT_DESKTOP_BACKEND_HOST") ?? "127.0.0.1";
-  const port = envValue("CONDUIT_DESKTOP_BACKEND_PORT") ?? "4174";
-  return {
-    clientLogUrl: `http://${host}:${port}/api/client-log`,
-    logProfile: "dev",
-    sessionWsUrl: `ws://${host}:${port}/api/session`,
-  };
+  return Object.fromEntries(
+    runtimeConfigEntries(value).filter((entry) => entry[1] !== undefined),
+  ) as ConduitRuntimeConfig;
 }
 
 async function invokeUnknown(

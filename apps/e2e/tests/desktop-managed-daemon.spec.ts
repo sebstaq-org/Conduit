@@ -6,6 +6,8 @@ import { startDesktopE2eHarness } from "../src/desktopHarness.js";
 import type { Page } from "@playwright/test";
 import type { DesktopE2eHarness } from "../src/desktopHarness.js";
 
+test.describe.configure({ mode: "serial" });
+
 const desktopStreamdownPrompt =
   "Stream a markdown proof for desktop Streamdown rendering.";
 const desktopStreamdownHeading = "CONDUIT_DESKTOP_STREAMDOWN_E2E";
@@ -13,24 +15,45 @@ const desktopStreamdownBody = "desktop Streamdown renders chunked markdown.";
 
 let harness: DesktopE2eHarness | null = null;
 
-test.beforeAll(async () => {
-  harness = await startDesktopE2eHarness();
-});
+function desktopPairingTrigger(page: Page) {
+  return page.locator('[aria-label="Mobile pairing controls"]');
+}
 
 test.afterAll(async () => {
   await harness?.stop();
 });
 
+test("desktop opens recovery UI when daemon startup fails", async () => {
+  const failingHarness = await startDesktopE2eHarness({
+    serviceBinPath: "/tmp/conduit-missing-service-bin",
+  });
+  try {
+    const page = failingHarness.page;
+    await expect(desktopPairingTrigger(page)).toBeVisible({
+      timeout: 60000,
+    });
+    await openDesktopPairingPopover(page);
+    await expect(page.getByText("Desktop needs attention")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Restart daemon" }),
+    ).toBeVisible();
+    await expect(readDesktopStatus(page)).resolves.toMatchObject({
+      backendHealthy: false,
+      running: false,
+    });
+  } finally {
+    await failingHarness.stop();
+  }
+});
+
 test("desktop starts daemon, exposes QR pairing, relays commands, and survives restart", async () => {
-  const activeHarness = requireHarness();
+  const activeHarness = await requireHarness();
   const page = activeHarness.page;
   // Per user contract: desktop must not say connected/connecting before it knows about a real mobile peer.
   // Do not change without an explicit product decision.
   await expect(page.getByText("Connected", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Connecting", { exact: true })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Mobile pairing controls" }),
-  ).toBeVisible();
+  await expect(desktopPairingTrigger(page)).toBeVisible();
 
   const beforeStatus = await readDesktopStatus(page);
   expect(beforeStatus.running).toBe(true);
@@ -58,9 +81,9 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   ).toBeVisible({ timeout: 15000 });
   await closePopover(page);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("button", { name: "Mobile pairing controls" }),
-  ).toBeVisible({ timeout: 60000 });
+  await expect(desktopPairingTrigger(page)).toBeVisible({
+    timeout: 60000,
+  });
   await openDesktopPairingPopover(page);
   await expect(
     page.getByLabel("Mobile pairing connected indicator"),
@@ -96,9 +119,9 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   await closePopover(page);
   await restartDesktopDaemon(page);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("button", { name: "Mobile pairing controls" }),
-  ).toBeVisible({ timeout: 60000 });
+  await expect(desktopPairingTrigger(page)).toBeVisible({
+    timeout: 60000,
+  });
   const afterStatus = await readDesktopStatus(page);
   expect(afterStatus.restartCount).toBeGreaterThanOrEqual(1);
 
@@ -123,7 +146,7 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
 });
 
 test("desktop renders streaming markdown through Streamdown", async () => {
-  const activeHarness = requireHarness();
+  const activeHarness = await requireHarness();
   const page = activeHarness.page;
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -137,9 +160,9 @@ test("desktop renders streaming markdown through Streamdown", async () => {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("button", { name: "Mobile pairing controls" }),
-  ).toBeVisible({ timeout: 60000 });
+  await expect(desktopPairingTrigger(page)).toBeVisible({
+    timeout: 60000,
+  });
   await activeHarness.addProject(fixtureCwd);
   const newSessionButton = page.getByLabel(`New session in ${fixtureCwd}`);
   await expect(newSessionButton).toBeVisible({ timeout: 60000 });
@@ -167,9 +190,20 @@ test("desktop renders streaming markdown through Streamdown", async () => {
   expectNoStreamdownRendererErrors([...pageErrors, ...consoleErrors]);
 });
 
-function requireHarness(): DesktopE2eHarness {
+test("desktop quit stops the managed daemon process", async () => {
+  const activeHarness = await requireHarness();
+  const status = await readDesktopStatus(activeHarness.page);
+  if (status.pid === null) {
+    throw new Error("desktop daemon pid was not available before quit");
+  }
+
+  await activeHarness.quitDesktop();
+  await expectProcessGone(status.pid);
+});
+
+async function requireHarness(): Promise<DesktopE2eHarness> {
   if (harness === null) {
-    throw new Error("desktop E2E harness did not start");
+    harness = await startDesktopE2eHarness();
   }
   return harness;
 }
@@ -183,7 +217,7 @@ function mobileUrlAsFragment(mobileUrl: string): string {
 }
 
 async function openDesktopPairingPopover(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Mobile pairing controls" }).click();
+  await desktopPairingTrigger(page).click();
   await expect(
     page.getByRole("button", { name: "Create mobile pairing link" }),
   ).toBeVisible();
@@ -214,6 +248,7 @@ async function readDesktopStatus(page: Page): Promise<{
     };
   } | null;
   readonly mobilePeerConnected: boolean;
+  readonly pid: number | null;
   readonly relayConfigured: boolean;
   readonly restartCount: number;
   readonly running: boolean;
@@ -231,6 +266,7 @@ async function readDesktopStatus(page: Page): Promise<{
                 };
               } | null;
               readonly mobilePeerConnected: boolean;
+              readonly pid: number | null;
               readonly relayConfigured: boolean;
               readonly restartCount: number;
               readonly running: boolean;
@@ -239,6 +275,33 @@ async function readDesktopStatus(page: Page): Promise<{
         }
       ).conduitDesktop.getDaemonStatus(),
   );
+}
+
+async function expectProcessGone(pid: number): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 10000) {
+    if (!processIsRunning(pid)) {
+      return;
+    }
+    await delay(250);
+  }
+  throw new Error(`daemon process ${String(pid)} survived desktop quit`);
+}
+
+function processIsRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ESRCH") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function mobilePresence(): {

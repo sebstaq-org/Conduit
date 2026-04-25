@@ -77,6 +77,7 @@ async function fetchDesktopPairingOffer(
   config: DesktopDaemonConfig,
   daemon: DesktopDaemonController,
 ): Promise<DesktopPairingOffer> {
+  await daemon.waitForStableLifecycle();
   const response = await fetch(`${daemon.serviceUrl}/api/pairing`);
   if (!response.ok) {
     throw new Error(

@@ -49,6 +49,12 @@ interface DesktopDaemonStatus {
   readonly sessionWsUrl: string | null;
 }
 
+interface DesktopRuntimeConfig {
+  readonly clientLogUrl?: string;
+  readonly logProfile?: string;
+  readonly sessionWsUrl?: string;
+}
+
 interface DesktopPairingOffer {
   readonly mobileUrl: string;
   readonly offer: {
@@ -72,4 +78,5 @@ export type {
   DesktopPairingOffer,
   DesktopPresenceClient,
   DesktopPresenceSnapshot,
+  DesktopRuntimeConfig,
 };

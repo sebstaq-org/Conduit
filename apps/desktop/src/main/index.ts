@@ -8,13 +8,27 @@ import type { DesktopDaemonConfig } from "./daemon/types.js";
 
 const currentDirectory = import.meta.dirname;
 const mainWindows = new Set<BrowserWindow>();
+let desktopShutdownComplete = false;
+let desktopShutdownStarted = false;
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
 
 app.disableHardwareAcceleration();
 
 const runningStageRuntime = runStageRuntimeIfConfigured();
 let desktopDaemonConfig: DesktopDaemonConfig | null = null;
+let desktopStartupError: string | null = null;
 if (!runningStageRuntime) {
-  desktopDaemonConfig = readDesktopDaemonConfig();
+  try {
+    desktopDaemonConfig = readDesktopDaemonConfig();
+  } catch (error) {
+    desktopStartupError = errorMessage(error);
+  }
 }
 let desktopDaemon: DesktopDaemonController | null = null;
 if (desktopDaemonConfig !== null) {
@@ -25,6 +39,7 @@ if (!runningStageRuntime) {
   bindDesktopDaemonIpc({
     config: desktopDaemonConfig,
     daemon: desktopDaemon,
+    startupError: desktopStartupError,
   });
 }
 
@@ -37,8 +52,8 @@ function createMainWindow(): BrowserWindow {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: join(currentDirectory, "../preload/index.mjs"),
-      sandbox: false,
+      preload: join(currentDirectory, "../preload/index.cjs"),
+      sandbox: true,
     },
   });
 
@@ -59,13 +74,43 @@ function createMainWindow(): BrowserWindow {
 }
 
 if (!runningStageRuntime) {
+  const startDesktopDaemon = async (): Promise<void> => {
+    try {
+      await desktopDaemon?.start();
+    } catch (error) {
+      desktopStartupError = errorMessage(error);
+    }
+  };
+
   const startDesktopRuntime = async (): Promise<void> => {
-    await desktopDaemon?.start();
     createMainWindow();
+    await startDesktopDaemon();
+  };
+
+  const requestDesktopQuit = async (code: number): Promise<void> => {
+    if (desktopShutdownStarted) {
+      return;
+    }
+    desktopShutdownStarted = true;
+    try {
+      await desktopDaemon?.stop();
+    } catch {
+      // Quit must still complete after best-effort daemon cleanup.
+    }
+    desktopShutdownComplete = true;
+    app.exit(code);
+  };
+
+  const startDesktopRuntimeSafely = async (): Promise<void> => {
+    try {
+      await startDesktopRuntime();
+    } catch (error) {
+      desktopStartupError = errorMessage(error);
+    }
   };
 
   app.on("ready", () => {
-    void startDesktopRuntime();
+    void startDesktopRuntimeSafely();
   });
 
   app.on("activate", () => {
@@ -80,7 +125,18 @@ if (!runningStageRuntime) {
     }
   });
 
-  app.on("before-quit", () => {
-    void desktopDaemon?.stop();
+  app.on("before-quit", (event) => {
+    if (!desktopShutdownComplete) {
+      event.preventDefault();
+      void requestDesktopQuit(0);
+    }
+  });
+
+  process.once("SIGTERM", () => {
+    void requestDesktopQuit(0);
+  });
+
+  process.once("SIGINT", () => {
+    void requestDesktopQuit(0);
   });
 }
