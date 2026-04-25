@@ -11,6 +11,7 @@ const CONNECTION_OFFER_VERSION = 1 as const;
 const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
 const OFFER_FRAGMENT_MARKER = "#offer=";
 const AUTHORIZATION_BOUNDARY = "relay-handshake";
+const DEFAULT_HOST_DISPLAY_NAME = "Conduit Desktop";
 const OFFER_KEYS =
   "v serverId daemonPublicKeyB64 nonce expiresAt authorization relay".split(
     " ",
@@ -222,6 +223,7 @@ function hostProfileFromOffer(
   const timestamp = now.toISOString();
   return {
     createdAt: timestamp,
+    displayName: DEFAULT_HOST_DISPLAY_NAME,
     lastSeenAt: timestamp,
     offerNonce: offer.nonce,
     relay: offer.relay,

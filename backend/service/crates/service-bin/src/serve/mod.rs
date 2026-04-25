@@ -3,6 +3,7 @@
 mod actor;
 mod catalog;
 mod client_logs;
+mod presence;
 mod relay;
 mod wire;
 
@@ -46,6 +47,32 @@ struct ServeState {
     app_base_url: String,
     telemetry_health: TelemetryHealth,
     mobile_peer_connections: Arc<AtomicUsize>,
+    presence: Arc<presence::PresenceStore>,
+}
+
+#[derive(Clone)]
+pub(super) struct TextConnectionRuntime {
+    actor: RuntimeActor,
+    presence: Option<Arc<presence::PresenceStore>>,
+    connection_kind: &'static str,
+}
+
+impl TextConnectionRuntime {
+    fn direct(state: &ServeState) -> Self {
+        Self {
+            actor: state.actor.clone(),
+            presence: Some(Arc::clone(&state.presence)),
+            connection_kind: "direct",
+        }
+    }
+
+    pub(super) fn relay(actor: RuntimeActor, presence: Arc<presence::PresenceStore>) -> Self {
+        Self {
+            actor,
+            presence: Some(presence),
+            connection_kind: "relay",
+        }
+    }
 }
 
 /// Runs the versioned consumer WebSocket service.
@@ -197,12 +224,14 @@ fn router_with_actor(
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
     let mobile_peer_connections = Arc::new(AtomicUsize::new(0));
+    let presence = Arc::new(presence::PresenceStore::default());
     if let Some(endpoint) = relay_endpoint.clone() {
         relay::spawn_relay_connector(
             endpoint,
             product_home.clone(),
             actor.clone(),
             Arc::clone(&mobile_peer_connections),
+            Arc::clone(&presence),
         );
     }
     Router::new()
@@ -221,6 +250,7 @@ fn router_with_actor(
             app_base_url,
             telemetry_health,
             mobile_peer_connections,
+            presence,
         }))
 }
 
@@ -265,6 +295,15 @@ async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoRespons
                     "mobilePeerConnected".to_owned(),
                     json!(state.mobile_peer_connections.load(Ordering::Relaxed) > 0),
                 );
+                if let Some(server_id) = object.get("serverId").and_then(serde_json::Value::as_str)
+                {
+                    object.insert(
+                        "presence".to_owned(),
+                        state
+                            .presence
+                            .snapshot_json(server_id, std::time::SystemTime::now()),
+                    );
+                }
             }
             (StatusCode::OK, Json(payload)).into_response()
         }
@@ -395,11 +434,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
         }
     });
     run_text_connection(
-        state.actor.clone(),
+        TextConnectionRuntime::direct(&state),
         inbound_receiver,
         outbound_text,
         connection_id,
-        "direct",
     )
     .await;
     inbound_task.abort();
@@ -412,22 +450,21 @@ async fn handle_socket(socket: WebSocket, state: Arc<ServeState>) {
     reason = "Connection loop coordinates inbound command frames, outbound runtime frames, and lifecycle telemetry."
 )]
 pub(super) async fn run_text_connection(
-    actor: RuntimeActor,
+    runtime: TextConnectionRuntime,
     mut inbound_receiver: mpsc::UnboundedReceiver<String>,
     outbound_text: mpsc::UnboundedSender<String>,
     connection_id: u64,
-    connection_kind: &'static str,
 ) {
     tracing::info!(
         event_name = "session_socket.connection.open",
         source = "service-bin",
         connection_id,
-        connection_kind
+        connection_kind = runtime.connection_kind
     );
     let (outbound, mut outbound_receiver) = mpsc::unbounded_channel();
     let watches = Arc::new(Mutex::new(WatchState::default()));
     let event_forwarder = tokio::spawn(forward_live_events(
-        actor.subscribe(),
+        runtime.actor.subscribe(),
         Arc::clone(&watches),
         outbound.clone(),
         connection_id,
@@ -439,11 +476,11 @@ pub(super) async fn run_text_connection(
                     break;
                 };
                 handle_client_text(
-                    &actor,
+                    runtime.clone(),
                     &text,
                     Arc::clone(&watches),
                     outbound.clone(),
-                    connection_id
+                    connection_id,
                 );
             }
             outbound = outbound_receiver.recv() => {
@@ -455,7 +492,7 @@ pub(super) async fn run_text_connection(
                         event_name = "session_socket.connection.serialize_failed",
                         source = "service-bin",
                         connection_id,
-                        connection_kind
+                        connection_kind = runtime.connection_kind
                     );
                     break;
                 };
@@ -464,7 +501,7 @@ pub(super) async fn run_text_connection(
                         event_name = "session_socket.connection.send_failed",
                         source = "service-bin",
                         connection_id,
-                        connection_kind
+                        connection_kind = runtime.connection_kind
                     );
                     break;
                 }
@@ -476,21 +513,20 @@ pub(super) async fn run_text_connection(
         event_name = "session_socket.connection.close",
         source = "service-bin",
         connection_id,
-        connection_kind
+        connection_kind = runtime.connection_kind
     );
 }
 
 fn handle_client_text(
-    actor: &RuntimeActor,
+    runtime: TextConnectionRuntime,
     text: &str,
     watches: SharedWatchState,
     outbound: OutboundSender,
     connection_id: u64,
 ) {
     let frame = ClientCommandFrame::from_text(text);
-    let actor = actor.clone();
     tokio::spawn(dispatch_client_frame(
-        actor,
+        runtime,
         frame,
         watches,
         outbound,
@@ -515,7 +551,7 @@ enum OutboundFrame {
     reason = "Frame dispatch covers validation, actor dispatch, watch updates, and response telemetry."
 )]
 async fn dispatch_client_frame(
-    actor: RuntimeActor,
+    runtime: TextConnectionRuntime,
     frame: ClientCommandFrame,
     watches: SharedWatchState,
     outbound: OutboundSender,
@@ -533,7 +569,20 @@ async fn dispatch_client_frame(
     );
     let response = match frame.rejection() {
         Some(rejection) => rejection,
-        None => actor.dispatch(frame.command()).await,
+        None => {
+            let command = frame.command();
+            match runtime.presence.as_ref().map(|store| {
+                store.handle_command(
+                    &command,
+                    presence::presence_transport(runtime.connection_kind),
+                )
+            }) {
+                Some(presence::PresenceCommandOutcome::Handled(response)) => *response,
+                Some(presence::PresenceCommandOutcome::NotPresence) | None => {
+                    runtime.actor.dispatch(command).await
+                }
+            }
+        }
     };
     if response.ok {
         watches
@@ -541,44 +590,84 @@ async fn dispatch_client_frame(
             .await
             .apply_command(&command_name, &response.result);
     }
-    let duration_ms = started_at.elapsed().as_millis();
-    if response.ok {
-        tracing::info!(
-            event_name = "session_socket.command.finish",
-            source = "service-bin",
-            connection_id,
-            command_id = %id,
-            command = %command_name,
-            ok = true,
-            duration_ms
-        );
-    } else {
-        let error_code = response
-            .error
-            .as_ref()
-            .map(|error| error.code.as_str())
-            .unwrap_or("unknown");
-        let error_message = response
-            .error
-            .as_ref()
-            .map(|error| error.message.as_str())
-            .unwrap_or("missing response error");
-        tracing::warn!(
-            event_name = "session_socket.command.finish",
-            source = "service-bin",
-            connection_id,
-            command_id = %id,
-            command = %command_name,
-            ok = false,
-            duration_ms,
-            error_code = %error_code,
-            error_message = %error_message
-        );
-    }
+    log_command_finish(
+        connection_id,
+        &id,
+        &command_name,
+        &response,
+        started_at.elapsed().as_millis(),
+    );
     let _send_status = outbound.send(OutboundFrame::Response {
         id,
         response: Box::new(response),
     });
+}
+
+fn log_command_finish(
+    connection_id: u64,
+    command_id: &str,
+    command_name: &str,
+    response: &service_runtime::ConsumerResponse,
+    duration_ms: u128,
+) {
+    if response.ok {
+        log_command_finish_ok(connection_id, command_id, command_name, duration_ms);
+    } else {
+        log_command_finish_error(
+            connection_id,
+            command_id,
+            command_name,
+            response,
+            duration_ms,
+        );
+    }
+}
+
+fn log_command_finish_ok(
+    connection_id: u64,
+    command_id: &str,
+    command_name: &str,
+    duration_ms: u128,
+) {
+    tracing::info!(
+        event_name = "session_socket.command.finish",
+        source = "service-bin",
+        connection_id,
+        command_id = %command_id,
+        command = %command_name,
+        ok = true,
+        duration_ms
+    );
+}
+
+fn log_command_finish_error(
+    connection_id: u64,
+    command_id: &str,
+    command_name: &str,
+    response: &service_runtime::ConsumerResponse,
+    duration_ms: u128,
+) {
+    let error_code = response
+        .error
+        .as_ref()
+        .map(|error| error.code.as_str())
+        .unwrap_or("unknown");
+    let error_message = response
+        .error
+        .as_ref()
+        .map(|error| error.message.as_str())
+        .unwrap_or("missing response error");
+    tracing::warn!(
+        event_name = "session_socket.command.finish",
+        source = "service-bin",
+        connection_id,
+        command_id = %command_id,
+        command = %command_name,
+        ok = false,
+        duration_ms,
+        error_code = %error_code,
+        error_message = %error_message
+    );
 }
 
 #[allow(

@@ -14,6 +14,7 @@ export type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  PresenceUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionNewRequest,

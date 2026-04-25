@@ -3,7 +3,7 @@
 use axum::Json;
 use serde_json::json;
 
-const CATALOG_COMMANDS: [&str; 20] = [
+const CATALOG_COMMANDS: [&str; 21] = [
     "initialize",
     "session/new",
     "session/set_config_option",
@@ -18,6 +18,7 @@ const CATALOG_COMMANDS: [&str; 20] = [
     "projects/update",
     "settings/get",
     "settings/update",
+    "presence/update",
     "sessions/grouped",
     "sessions/watch",
     "providers/config_snapshot",

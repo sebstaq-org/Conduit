@@ -37,6 +37,7 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   expect(beforeStatus.backendHealthy).toBe(true);
   expect(beforeStatus.relayConfigured).toBe(true);
   expect(beforeStatus.mobilePeerConnected).toBe(false);
+  expect(beforeStatus.daemon?.presence.clients).toEqual([]);
 
   await openDesktopPairingPopover(page);
   await page
@@ -50,10 +51,11 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
 
   const offer = parseConnectionOfferUrl(mobileUrlAsFragment(mobileUrl));
   const client = createRelaySessionClient({ offer });
+  await client.updatePresence(mobilePresence());
   await expectEventuallySettings(client);
-  await expect(page.getByLabel("Mobile pairing connected indicator")).toBeVisible(
-    { timeout: 15000 },
-  );
+  await expect(
+    page.getByLabel("Mobile pairing connected indicator"),
+  ).toBeVisible({ timeout: 15000 });
 
   const projects = await client.addProject({ cwd: fixtureCwd });
   expect(projects.projects.some((project) => project.cwd === fixtureCwd)).toBe(
@@ -102,10 +104,11 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
     mobileUrlAsFragment(restartedMobileUrl),
   );
   const reconnectedClient = createRelaySessionClient({ offer: restartedOffer });
+  await reconnectedClient.updatePresence(mobilePresence());
   await expectEventuallySettings(reconnectedClient);
-  await expect(page.getByLabel("Mobile pairing connected indicator")).toBeVisible(
-    { timeout: 15000 },
-  );
+  await expect(
+    page.getByLabel("Mobile pairing connected indicator"),
+  ).toBeVisible({ timeout: 15000 });
   reconnectedClient.close();
   await closePopover(page);
 });
@@ -171,9 +174,7 @@ function mobileUrlAsFragment(mobileUrl: string): string {
 }
 
 async function openDesktopPairingPopover(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: "Mobile pairing controls" })
-    .click();
+  await page.getByRole("button", { name: "Mobile pairing controls" }).click();
   await expect(
     page.getByRole("button", { name: "Create mobile pairing link" }),
   ).toBeVisible();
@@ -198,6 +199,11 @@ async function restartDesktopDaemon(page: Page): Promise<void> {
 
 async function readDesktopStatus(page: Page): Promise<{
   readonly backendHealthy: boolean;
+  readonly daemon: {
+    readonly presence: {
+      readonly clients: readonly unknown[];
+    };
+  } | null;
   readonly mobilePeerConnected: boolean;
   readonly relayConfigured: boolean;
   readonly restartCount: number;
@@ -210,6 +216,11 @@ async function readDesktopStatus(page: Page): Promise<{
           conduitDesktop: {
             getDaemonStatus(): Promise<{
               readonly backendHealthy: boolean;
+              readonly daemon: {
+                readonly presence: {
+                  readonly clients: readonly unknown[];
+                };
+              } | null;
               readonly mobilePeerConnected: boolean;
               readonly relayConfigured: boolean;
               readonly restartCount: number;
@@ -219,6 +230,18 @@ async function readDesktopStatus(page: Page): Promise<{
         }
       ).conduitDesktop.getDaemonStatus(),
   );
+}
+
+function mobilePresence(): {
+  readonly clientId: string;
+  readonly deviceKind: "mobile";
+  readonly displayName: string;
+} {
+  return {
+    clientId: "desktop-e2e-mobile-client",
+    deviceKind: "mobile",
+    displayName: "E2E Mobile",
+  };
 }
 
 async function expectEventuallySettings(client: {

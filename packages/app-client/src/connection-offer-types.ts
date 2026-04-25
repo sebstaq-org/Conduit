@@ -17,6 +17,7 @@ type ConnectionOfferV1 = Record<"v", 1> & {
 };
 
 interface TrustedHostRecord {
+  displayName: string;
   serverId: string;
   trustedDaemonPublicKeyB64: string;
   revokedAt: string | null;

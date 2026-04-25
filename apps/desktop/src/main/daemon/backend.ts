@@ -3,15 +3,21 @@ import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { readPresenceSnapshot } from "./presencePayload.js";
 import type { ChildProcess } from "node:child_process";
 import type { WriteStream } from "node:fs";
-import type { DesktopDaemonConfig, DesktopDaemonStatus } from "./types.js";
+import type {
+  DesktopDaemonConfig,
+  DesktopDaemonStatus,
+  DesktopPresenceSnapshot,
+} from "./types.js";
 
 const shutdownTimeoutMs = 3000;
 
 interface DaemonStatusPayload {
   readonly mobilePeerConnected: boolean;
   readonly pairingConfigured: boolean;
+  readonly presence: DesktopPresenceSnapshot;
   readonly relayEndpoint: string | null;
   readonly serverId: string;
 }
@@ -92,11 +98,13 @@ function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
   }
   const pairingConfigured = booleanValue(value.pairingConfigured);
   const mobilePeerConnected = booleanValue(value.mobilePeerConnected);
+  const presence = readPresenceSnapshot(value.presence);
   const relayEndpoint = optionalStringValue(value.relayEndpoint);
   const serverId = stringValue(value.serverId);
   if (
     mobilePeerConnected === null ||
     pairingConfigured === null ||
+    presence === null ||
     relayEndpoint === undefined ||
     serverId === null
   ) {
@@ -105,6 +113,7 @@ function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
   return {
     mobilePeerConnected,
     pairingConfigured,
+    presence,
     relayEndpoint,
     serverId,
   };
@@ -170,9 +179,11 @@ class DesktopDaemonController {
       backendHealthy: daemon !== null,
       daemon,
       lastExit: this.#lastExit,
-      mobilePeerConnected: daemon?.mobilePeerConnected ?? false,
+      mobilePeerConnected:
+        daemon?.presence.clients.some((client) => client.connected) ?? false,
       pairingConfigured: daemon?.pairingConfigured ?? false,
       pid: this.#backendProcess?.pid ?? null,
+      presence: daemon?.presence ?? null,
       relayConfigured: this.#config.relayEndpoint.length > 0,
       relayEndpoint: this.#config.relayEndpoint,
       restartCount: this.#restartCount,

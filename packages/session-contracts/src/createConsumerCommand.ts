@@ -19,6 +19,7 @@ import type {
   ConsumerCommandName,
   ConsumerCommandTarget,
   GlobalCommandTarget,
+  PresenceUpdateRequest,
   SessionGroupsCommandTarget,
 } from "./wire.js";
 
@@ -109,6 +110,38 @@ function createSettingsUpdateCommand(
     id,
     command: "settings/update",
     provider: requireGlobalProvider("settings/update", provider),
+    params,
+  });
+}
+
+function isPresenceUpdateRequest(
+  params: unknown,
+): params is PresenceUpdateRequest {
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    return false;
+  }
+  const record = params as Record<string, unknown>;
+  return (
+    typeof record.clientId === "string" &&
+    record.clientId.trim().length > 0 &&
+    typeof record.displayName === "string" &&
+    record.displayName.trim().length > 0 &&
+    (record.deviceKind === "mobile" || record.deviceKind === "web")
+  );
+}
+
+function createPresenceUpdateCommand(
+  id: string,
+  provider: ConsumerCommandTarget,
+  params: unknown,
+): ConsumerCommand {
+  if (!isPresenceUpdateRequest(params)) {
+    throw new Error("presence/update params are invalid");
+  }
+  return parseConsumerCommand({
+    id,
+    command: "presence/update",
+    provider: requireGlobalProvider("presence/update", provider),
     params,
   });
 }
@@ -235,6 +268,7 @@ type KnownConduitCommandName =
   | ProjectCommandName
   | "settings/get"
   | "settings/update"
+  | "presence/update"
   | "sessions/grouped"
   | "sessions/watch"
   | "providers/config_snapshot"
@@ -252,6 +286,7 @@ type NonProjectConduitCommandName = Exclude<
 const conduitFactories: Record<NonProjectConduitCommandName, ConduitFactory> = {
   "settings/get": createSettingsGetCommand,
   "settings/update": createSettingsUpdateCommand,
+  "presence/update": createPresenceUpdateCommand,
   "providers/config_snapshot": createProvidersConfigSnapshotCommand,
   "session/history": createSessionHistoryCommand,
   "session/open": createSessionOpenCommand,

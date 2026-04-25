@@ -38,6 +38,7 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  PresenceUpdateRequest,
   ProvidersConfigSnapshotResult,
   SessionGroupsQuery,
   SessionGroupsView,
@@ -220,6 +221,14 @@ class WebSocketSessionClient implements SessionClientPort {
       throw new Error(
         response.error?.message ?? "session respond_interaction failed",
       );
+    }
+  }
+  public async updatePresence(request: PresenceUpdateRequest): Promise<void> {
+    const response = await this.dispatch(
+      createConsumerCommand("presence/update", "all", request),
+    );
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? "presence update failed");
     }
   }
   public async subscribeTimelineChanges(

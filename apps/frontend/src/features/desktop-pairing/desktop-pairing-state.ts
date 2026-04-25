@@ -25,8 +25,8 @@ interface DesktopActionRequest {
   readonly task: () => Promise<void>;
 }
 
-const mobilePeerPollIntervalMs = 750;
-const mobilePeerPollDeadlineMs = 30_000;
+const presencePollIntervalMs = 750;
+const presencePollDeadlineMs = 120_000;
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -53,7 +53,7 @@ function runDesktopAction(request: DesktopActionRequest): void {
   void executeDesktopAction(request);
 }
 
-function scheduleMobilePeerPolling(
+function schedulePresencePolling(
   bridge: ConduitDesktopBridge,
   setStatus: (value: DesktopDaemonStatus) => void,
 ): void {
@@ -62,7 +62,7 @@ function scheduleMobilePeerPolling(
     try {
       const next = await bridge.getDaemonStatus();
       setStatus(next);
-      if (Date.now() - startedAt >= mobilePeerPollDeadlineMs) {
+      if (Date.now() - startedAt >= presencePollDeadlineMs) {
         return;
       }
     } catch {
@@ -70,11 +70,11 @@ function scheduleMobilePeerPolling(
     }
     setTimeout(() => {
       void poll();
-    }, mobilePeerPollIntervalMs);
+    }, presencePollIntervalMs);
   };
   setTimeout(() => {
     void poll();
-  }, mobilePeerPollIntervalMs);
+  }, presencePollIntervalMs);
 }
 
 function useDesktopPairingState(
@@ -99,7 +99,7 @@ function useDesktopPairingState(
       run("offer", async () => {
         setOffer(await bridge.getPairingOffer());
         setStatus(await bridge.getDaemonStatus());
-        scheduleMobilePeerPolling(bridge, setStatus);
+        schedulePresencePolling(bridge, setStatus);
       });
     }
   };

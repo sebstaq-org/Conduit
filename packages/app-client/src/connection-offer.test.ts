@@ -20,6 +20,7 @@ const offer = readConnectionOffer(JSON.parse(validOfferJson), validNow);
 
 function trustedHost(publicKey: string): TrustedHostRecord {
   return {
+    displayName: "Conduit Desktop",
     serverId: offer.serverId,
     trustedDaemonPublicKeyB64: publicKey,
     revokedAt: null,
@@ -184,6 +185,7 @@ describe("connection host profiles", () => {
     expect(result).toEqual({
       host: {
         createdAt: validNow.toISOString(),
+        displayName: "Conduit Desktop",
         lastSeenAt: validNow.toISOString(),
         offerNonce: offer.nonce,
         relay: offer.relay,

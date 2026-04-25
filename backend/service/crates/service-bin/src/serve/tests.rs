@@ -1,4 +1,7 @@
-use super::{OutboundFrame, WatchState, handle_client_text, health_response, is_loopback_client};
+use super::{
+    OutboundFrame, TextConnectionRuntime, WatchState, handle_client_text, health_response,
+    is_loopback_client,
+};
 use crate::serve::actor::RuntimeActor;
 use acp_core::{
     ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,
@@ -56,8 +59,13 @@ async fn socket_handler_accepts_following_command_while_prompt_response_is_pendi
     let watches = Arc::new(tokio::sync::Mutex::new(WatchState::default()));
     let (outbound, mut outbound_rx) = tokio_mpsc::unbounded_channel();
 
+    let runtime = TextConnectionRuntime {
+        actor: actor.clone(),
+        presence: None,
+        connection_kind: "direct",
+    };
     handle_client_text(
-        &actor,
+        runtime.clone(),
         &command_text(
             "prompt-1",
             "session/prompt",
@@ -70,7 +78,7 @@ async fn socket_handler_accepts_following_command_while_prompt_response_is_pendi
     );
     started_rx.recv_timeout(Duration::from_secs(5))?;
     handle_client_text(
-        &actor,
+        runtime,
         &command_text("watch-1", "sessions/watch", "all", json!({})),
         watches,
         outbound,

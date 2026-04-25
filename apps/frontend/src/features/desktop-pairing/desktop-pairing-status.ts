@@ -1,10 +1,11 @@
 import type { PendingAction } from "./desktop-pairing-state";
+import type { DesktopPresenceSnapshot } from "@/app-state/desktop-bridge";
 import type { ConnectionStatusKind } from "@/ui";
 
 interface DesktopPairingStatusSnapshot {
   readonly backendHealthy: boolean;
-  readonly mobilePeerConnected: boolean;
   readonly pairingConfigured: boolean;
+  readonly presence: DesktopPresenceSnapshot | null;
   readonly relayConfigured: boolean;
   readonly running: boolean;
 }
@@ -18,8 +19,15 @@ interface DesktopPairingPresentationRequest {
 
 interface DesktopPairingPresentation {
   readonly indicator: ConnectionStatusKind;
+  readonly connectedClientCount: number;
   readonly recoveryVisible: boolean;
   readonly showMobilePairing: boolean;
+}
+
+function connectedPresenceClients(
+  presence: DesktopPresenceSnapshot | null,
+): number {
+  return presence?.clients.filter((client) => client.connected).length ?? 0;
 }
 
 function daemonNeedsRecovery(
@@ -41,6 +49,7 @@ function desktopPairingPresentation({
 }: DesktopPairingPresentationRequest): DesktopPairingPresentation {
   if (pending !== null) {
     return {
+      connectedClientCount: 0,
       indicator: "connecting",
       recoveryVisible: false,
       showMobilePairing: true,
@@ -48,6 +57,7 @@ function desktopPairingPresentation({
   }
   if (actionError !== null) {
     return {
+      connectedClientCount: 0,
       indicator: "disconnected",
       recoveryVisible: true,
       showMobilePairing: true,
@@ -55,19 +65,25 @@ function desktopPairingPresentation({
   }
   if (daemonNeedsRecovery(status)) {
     return {
+      connectedClientCount: 0,
       indicator: "disconnected",
       recoveryVisible: true,
       showMobilePairing: false,
     };
   }
-  if (status?.mobilePeerConnected === true) {
+  const connectedClientCount = connectedPresenceClients(
+    status?.presence ?? null,
+  );
+  if (connectedClientCount > 0) {
     return {
+      connectedClientCount,
       indicator: "connected",
       recoveryVisible: false,
       showMobilePairing: true,
     };
   }
   return {
+    connectedClientCount: 0,
     indicator: "idle",
     recoveryVisible: false,
     showMobilePairing: true,

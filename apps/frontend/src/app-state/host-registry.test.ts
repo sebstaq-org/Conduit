@@ -11,6 +11,7 @@ import type { ConnectionHostProfile } from "@conduit/app-client";
 
 const baseHost: ConnectionHostProfile = {
   createdAt: "2026-04-19T00:00:00.000Z",
+  displayName: "Conduit Desktop",
   lastSeenAt: "2026-04-19T00:00:00.000Z",
   offerNonce: "nonce-a",
   relay: {
@@ -37,6 +38,7 @@ describe("registry state for paired hosts", () => {
   it("keys transport by relay route material, not only serverId", () => {
     const updatedHost: ConnectionHostProfile = {
       createdAt: baseHost.createdAt,
+      displayName: baseHost.displayName,
       lastSeenAt: baseHost.lastSeenAt,
       offerNonce: baseHost.offerNonce,
       relay: {

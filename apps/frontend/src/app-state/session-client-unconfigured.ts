@@ -32,6 +32,7 @@ function createUnconfiguredSessionClient(): SessionClientPort {
     setSessionConfigOption: rejectUnconfigured,
     subscribeSessionIndexChanges: rejectUnconfigured,
     subscribeTimelineChanges: rejectUnconfigured,
+    updatePresence: rejectUnconfigured,
     updateProject: rejectUnconfigured,
     updateSettings: rejectUnconfigured,
   };

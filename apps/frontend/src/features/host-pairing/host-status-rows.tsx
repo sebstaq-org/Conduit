@@ -37,7 +37,7 @@ function renderConnectedHostRows({
             status={connectionIndicator}
           />
         }
-        meta={activeHost.serverId}
+        meta={activeHost.displayName}
       />
       <Row label={connectionReason} muted />
       {renderHostKeyRow(fingerprint)}

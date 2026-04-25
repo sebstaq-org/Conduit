@@ -54,21 +54,24 @@ describe("service-bin relay runtime e2e", () => {
     await runServiceRelayScenario(relayEndpoint, adminToken);
   }, 120000);
 
-  it("reports mobile peer presence only for an active relay session", async () => {
+  it("reports product presence only after a client heartbeat", async () => {
     // Per user contract: desktop may turn Mobile pairing green only from this backend signal.
     // Do not change without an explicit product decision.
     const relayEndpoint = await startLocalRelayServer();
     currentRun = await startRelayServiceRun(relayEndpoint);
     await waitForHealth(currentRun.port);
-    await expectMobilePeerConnected(currentRun.port, false);
+    await expectPresenceConnected(currentRun.port, false);
 
     const offer = await fetchOffer(currentRun.port);
     const client = createRelaySessionClient({ offer });
     await expect(client.getSettings()).resolves.toMatchObject({});
-    await expectMobilePeerConnected(currentRun.port, true);
+    await expectPresenceConnected(currentRun.port, false);
+    await expect(
+      client.updatePresence(mobilePresence()),
+    ).resolves.toBeUndefined();
+    await expectPresenceConnected(currentRun.port, true);
 
     client.close();
-    await expectMobilePeerConnected(currentRun.port, false);
   }, 120000);
 
   it("keeps the production worker test-admin route unavailable", async () => {
@@ -177,27 +180,41 @@ async function fetchOffer(port: number): Promise<ConnectionOfferV1> {
   return readConnectionOffer(payload.offer);
 }
 
-async function expectMobilePeerConnected(
+async function expectPresenceConnected(
   port: number,
   expected: boolean,
 ): Promise<void> {
   await expect
-    .poll(async () => await fetchMobilePeerConnected(port), { timeout: 15000 })
+    .poll(async () => await fetchPresenceConnected(port), { timeout: 15000 })
     .toBe(expected);
 }
 
-async function fetchMobilePeerConnected(port: number): Promise<boolean> {
+async function fetchPresenceConnected(port: number): Promise<boolean> {
   const response = await fetch(`http://127.0.0.1:${port}/api/daemon/status`);
   if (!response.ok) {
     throw new Error(
       `daemon status failed with ${response.status}: ${await response.text()}`,
     );
   }
-  const payload = (await response.json()) as { mobilePeerConnected?: unknown };
-  if (typeof payload.mobilePeerConnected !== "boolean") {
-    throw new Error("daemon status did not include mobilePeerConnected");
+  const payload = (await response.json()) as {
+    presence?: { clients?: Array<{ connected?: unknown }> };
+  };
+  if (!Array.isArray(payload.presence?.clients)) {
+    throw new Error("daemon status did not include presence clients");
   }
-  return payload.mobilePeerConnected;
+  return payload.presence.clients.some((client) => client.connected === true);
+}
+
+function mobilePresence(): {
+  readonly clientId: string;
+  readonly deviceKind: "mobile";
+  readonly displayName: string;
+} {
+  return {
+    clientId: "service-relay-e2e-mobile-client",
+    deviceKind: "mobile",
+    displayName: "E2E Mobile",
+  };
 }
 
 async function closeRelayDataSocket(

@@ -10,12 +10,30 @@ interface DesktopDaemonConfig {
   readonly storePath: string | null;
 }
 
+interface DesktopPresenceClient {
+  readonly clientId: string;
+  readonly connected: boolean;
+  readonly deviceKind: "mobile" | "web";
+  readonly displayName: string;
+  readonly lastSeenAt: string;
+  readonly transport: "direct" | "relay";
+}
+
+interface DesktopPresenceSnapshot {
+  readonly clients: DesktopPresenceClient[];
+  readonly host: {
+    readonly displayName: string;
+    readonly serverId: string;
+  };
+}
+
 interface DesktopDaemonStatus {
   readonly appBaseUrl: string;
   readonly backendHealthy: boolean;
   readonly daemon: {
     readonly mobilePeerConnected: boolean;
     readonly pairingConfigured: boolean;
+    readonly presence: DesktopPresenceSnapshot;
     readonly relayEndpoint: string | null;
     readonly serverId: string;
   } | null;
@@ -23,6 +41,7 @@ interface DesktopDaemonStatus {
   readonly mobilePeerConnected: boolean;
   readonly pairingConfigured: boolean;
   readonly pid: number | null;
+  readonly presence: DesktopPresenceSnapshot | null;
   readonly relayConfigured: boolean;
   readonly relayEndpoint: string | null;
   readonly restartCount: number;
@@ -47,4 +66,10 @@ interface DesktopPairingOffer {
   readonly serviceUrl: string;
 }
 
-export type { DesktopDaemonConfig, DesktopDaemonStatus, DesktopPairingOffer };
+export type {
+  DesktopDaemonConfig,
+  DesktopDaemonStatus,
+  DesktopPairingOffer,
+  DesktopPresenceClient,
+  DesktopPresenceSnapshot,
+};

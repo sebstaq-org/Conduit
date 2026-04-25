@@ -40,6 +40,16 @@ function nullableString(value: unknown): string | null {
   return null;
 }
 
+function persistedDisplayName(value: Record<string, unknown>): string {
+  if (
+    typeof value.displayName === "string" &&
+    value.displayName.trim().length > 0
+  ) {
+    return value.displayName;
+  }
+  return String(value.serverId);
+}
+
 function readPersistedHost(value: unknown): ConnectionHostProfile | null {
   if (!isRecord(value) || !isRecord(value.relay)) {
     return null;
@@ -59,6 +69,7 @@ function readPersistedHost(value: unknown): ConnectionHostProfile | null {
   const revokedAt = nullableString(value.revokedAt);
   return {
     createdAt: value.createdAt,
+    displayName: persistedDisplayName(value),
     lastSeenAt,
     offerNonce: value.offerNonce,
     relay: {
