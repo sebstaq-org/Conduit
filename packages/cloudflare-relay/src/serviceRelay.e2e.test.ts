@@ -7,6 +7,7 @@ import {
   startRelayServiceRun,
   stopRelayServiceRun,
 } from "./serviceRelayProcess.js";
+import { runRelaySessionMutationScenario } from "./serviceRelayMutationScenario.js";
 import {
   bundleWorkerScript,
   capturingWebSocket,
@@ -61,6 +62,13 @@ describe("service-bin relay runtime e2e", () => {
   it("runs real session commands through relay and reconnects after data close", async () => {
     const relayEndpoint = await startLocalRelayServer();
     await runServiceRelayScenario(relayEndpoint, adminToken);
+  }, 120000);
+
+  it("runs ACP-sensitive session mutation commands through relay", async () => {
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    await runRelaySessionMutationScenario(await fetchOffer(currentRun.port));
   }, 120000);
 
   it("reports product presence only after a client heartbeat", async () => {
