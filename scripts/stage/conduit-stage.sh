@@ -15,6 +15,8 @@ WEB_HOST="${CONDUIT_STAGE_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${CONDUIT_STAGE_WEB_PORT:-4310}"
 WS_URL="${CONDUIT_STAGE_WS_URL:-ws://${BACKEND_HOST}:${BACKEND_PORT}/api/session}"
 CLIENT_LOG_URL="${CONDUIT_STAGE_CLIENT_LOG_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/client-log}"
+RELAY_ENDPOINT="${CONDUIT_STAGE_RELAY_ENDPOINT:-${CONDUIT_RELAY_ENDPOINT:-}}"
+APP_BASE_URL="${CONDUIT_STAGE_APP_BASE_URL:-conduit://pair}"
 BUILD_REF="${CONDUIT_STAGE_BUILD_REF:-HEAD}"
 DATA_ROOT="$STAGE_ROOT/data"
 PID_DIR="$STAGE_ROOT/pids"
@@ -24,7 +26,6 @@ FRONTEND_LOG_PATH="$LOG_DIR/frontend.log"
 RUNNER_PATH="$STAGE_ROOT/conduit-stage"
 ELECTRON_PID_FILE="$PID_DIR/electron.pid"
 BACKEND_PID_FILE="$PID_DIR/backend.pid"
-RUNTIME_STATUS_FILE="$PID_DIR/runtime-status.json"
 
 run() {
   if command -v rtk >/dev/null 2>&1; then
@@ -308,21 +309,29 @@ start_stage() {
   validate_release_dir "$current_release"
 
   if ! pid_running "$ELECTRON_PID_FILE"; then
+    if [[ -z "$RELAY_ENDPOINT" ]]; then
+      printf "CONDUIT_STAGE_RELAY_ENDPOINT or CONDUIT_RELAY_ENDPOINT is required for stage desktop runtime\n" >&2
+      exit 1
+    fi
     local executable
     executable="$(stage_executable_for_release "$current_release")"
+    local resources_dir="$current_release/app/resources/stage-resources"
     local acp_vendor_root="$current_release/app/resources/stage-resources/vendor/agent-client-protocol"
-    rm -f "$RUNTIME_STATUS_FILE"
     RUNNER_TRACKING_ID="" \
       CONDUIT_ACP_VENDOR_ROOT="$acp_vendor_root" \
-      CONDUIT_STAGE_RUNTIME="1" \
-      CONDUIT_STAGE_DATA_ROOT="$DATA_ROOT" \
-      CONDUIT_STAGE_LOG_DIR="$LOG_DIR" \
-      CONDUIT_STAGE_PID_DIR="$PID_DIR" \
-      CONDUIT_STAGE_STATUS_FILE="$RUNTIME_STATUS_FILE" \
-      CONDUIT_STAGE_BACKEND_HOST="$BACKEND_HOST" \
-      CONDUIT_STAGE_BACKEND_PORT="$BACKEND_PORT" \
-      CONDUIT_STAGE_WEB_HOST="$WEB_HOST" \
-      CONDUIT_STAGE_WEB_PORT="$WEB_PORT" \
+      CONDUIT_DESKTOP_APP_BASE_URL="$APP_BASE_URL" \
+      CONDUIT_DESKTOP_BACKEND_HOST="$BACKEND_HOST" \
+      CONDUIT_DESKTOP_BACKEND_LOG_PATH="$BACKEND_LOG_BASE_PATH" \
+      CONDUIT_DESKTOP_BACKEND_PID_PATH="$BACKEND_PID_FILE" \
+      CONDUIT_DESKTOP_BACKEND_PORT="$BACKEND_PORT" \
+      CONDUIT_DESKTOP_HOME="$DATA_ROOT" \
+      CONDUIT_DESKTOP_LOG_PROFILE="stage" \
+      CONDUIT_DESKTOP_RELAY_ENDPOINT="$RELAY_ENDPOINT" \
+      CONDUIT_DESKTOP_SERVICE_BIN="$resources_dir/bin/service-bin" \
+      CONDUIT_DESKTOP_STORE_PATH="$DATA_ROOT/local-store.sqlite3" \
+      CONDUIT_DESKTOP_WEB_DIR="$resources_dir/web" \
+      CONDUIT_DESKTOP_WEB_HOST="$WEB_HOST" \
+      CONDUIT_DESKTOP_WEB_PORT="$WEB_PORT" \
       setsid "$executable" --no-sandbox >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
     printf "%s" "$!" >"$ELECTRON_PID_FILE"
     sleep 0.2
@@ -333,7 +342,7 @@ start_stage() {
   fi
 
   if ! wait_for_runtime_ready; then
-    printf "Stage runtime failed readiness checks. See %s\n" "$RUNTIME_STATUS_FILE" >&2
+    printf "Stage runtime failed readiness checks. See %s/electron.log and %s\n" "$LOG_DIR" "$BACKEND_LOG_BASE_PATH" >&2
     exit 1
   fi
 
@@ -387,13 +396,6 @@ status_stage() {
   fi
 
   printf "Web: Electron-owned http://%s:%s\n" "$WEB_HOST" "$WEB_PORT"
-
-  if [[ -f "$RUNTIME_STATUS_FILE" ]]; then
-    printf "Runtime status: %s\n" "$RUNTIME_STATUS_FILE"
-    cat "$RUNTIME_STATUS_FILE"
-  else
-    printf "Runtime status: unavailable\n"
-  fi
 }
 
 verify_stage() {
@@ -433,36 +435,14 @@ verify_stage() {
     exit 1
   fi
 
-  if [[ ! -f "$RUNTIME_STATUS_FILE" ]]; then
-    printf "Runtime status file is missing: %s\n" "$RUNTIME_STATUS_FILE" >&2
-    exit 1
-  fi
-
-  local runtime_commit
-  runtime_commit="$(json_field "$RUNTIME_STATUS_FILE" build)"
-  if [[ "$runtime_commit" != "$expected_commit" ]]; then
-    printf "Stage runtime commit mismatch: expected %s, got %s\n" "$expected_commit" "$runtime_commit" >&2
-    exit 1
-  fi
-
-  local backend_healthy
-  backend_healthy="$(json_field "$RUNTIME_STATUS_FILE" backend.healthy)"
-  if [[ "$backend_healthy" != "true" ]]; then
-    printf "Backend runtime status is not healthy\n" >&2
-    exit 1
-  fi
-
-  local web_healthy
-  web_healthy="$(json_field "$RUNTIME_STATUS_FILE" web.healthy)"
-  if [[ "$web_healthy" != "true" ]]; then
-    printf "Web runtime status is not healthy\n" >&2
-    exit 1
-  fi
-
   printf "Stage verified: %s\n" "$expected_commit"
 }
 
 install_desktop_entry() {
+  if [[ -z "$RELAY_ENDPOINT" ]]; then
+    printf "CONDUIT_STAGE_RELAY_ENDPOINT or CONDUIT_RELAY_ENDPOINT is required to install the stage desktop entry\n" >&2
+    exit 1
+  fi
   local applications_dir
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   local desktop_file="$applications_dir/conduit-stage.desktop"
@@ -472,7 +452,7 @@ install_desktop_entry() {
 Type=Application
 Name=Conduit Stage
 Comment=Run isolated Conduit Electron stage build
-Exec=${RUNNER_PATH} open
+Exec=env CONDUIT_STAGE_RELAY_ENDPOINT=${RELAY_ENDPOINT} ${RUNNER_PATH} open
 Terminal=false
 Icon=utilities-terminal
 Categories=Development;

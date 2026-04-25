@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { readDaemonStatusPayload } from "./backend-status-payload.js";
+import { removePidFile, writePidFile } from "./pid-file.js";
 import type { ChildProcess } from "node:child_process";
 import type { WriteStream } from "node:fs";
 import type { DesktopDaemonConfig, DesktopDaemonStatus } from "./types.js";
@@ -135,6 +136,7 @@ class DesktopDaemonController {
     const child = this.#spawnBackend();
     this.#backendProcess = child;
     this.#bindBackendProcess(child);
+    await writePidFile(this.#config.backendPidPath, child);
   }
 
   async #stopNow(): Promise<void> {
@@ -144,6 +146,7 @@ class DesktopDaemonController {
     if (child !== null) {
       await terminateChild(child);
     }
+    await removePidFile(this.#config.backendPidPath);
     this.#closeLogStream();
   }
 
@@ -174,6 +177,9 @@ class DesktopDaemonController {
   async #prepareRunDirectories(): Promise<void> {
     await mkdir(this.#config.home, { recursive: true });
     await mkdir(dirname(this.#config.backendLogPath), { recursive: true });
+    if (this.#config.backendPidPath !== null) {
+      await mkdir(dirname(this.#config.backendPidPath), { recursive: true });
+    }
   }
 
   #spawnBackend(): ChildProcess {
@@ -195,6 +201,7 @@ class DesktopDaemonController {
     });
     child.once("close", (code, signal) => {
       this.#backendProcess = null;
+      void removePidFile(this.#config.backendPidPath);
       this.#closeLogStream();
       if (!this.#stopping) {
         this.#lastExit = `exited code=${String(code)} signal=${String(signal)}`;
@@ -231,7 +238,7 @@ class DesktopDaemonController {
       }
     }
     env.CONDUIT_HOME = this.#config.home;
-    env.CONDUIT_LOG_PROFILE = "dev";
+    env.CONDUIT_LOG_PROFILE = this.#config.logProfile;
     env.XDG_DATA_HOME = this.#config.home;
     return env;
   }

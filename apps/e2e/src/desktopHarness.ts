@@ -74,7 +74,6 @@ async function startDesktopE2eHarness(
         CONDUIT_DESKTOP_BACKEND_HOST: "127.0.0.1",
         CONDUIT_DESKTOP_BACKEND_LOG_PATH: join(runRoot, "logs", "backend.log"),
         CONDUIT_DESKTOP_BACKEND_PORT: String(backendPort),
-        CONDUIT_DESKTOP_DAEMON: "1",
         CONDUIT_DESKTOP_HOME: join(runRoot, "home"),
         CONDUIT_DESKTOP_PROVIDER_FIXTURES: fixtureRoot,
         CONDUIT_DESKTOP_RELAY_ENDPOINT: relay.url,

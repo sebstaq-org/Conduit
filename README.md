@@ -47,6 +47,6 @@ scripts/       stage operations and repository checks
 2. `rtk pnpm run stage:open`
 3. `rtk pnpm run stage:install-desktop-entry` (optional launcher icon)
 
-The stage runtime defaults to backend `ws://127.0.0.1:4274/api/session` and web `http://127.0.0.1:4310`, with isolated app data in `/srv/devops/repos/conduit-stage/data`.
+The stage launcher uses the same desktop-managed daemon runtime as dev and E2E. It defaults to backend `ws://127.0.0.1:4274/api/session` and web `http://127.0.0.1:4310`, with isolated app data in `/srv/devops/repos/conduit-stage/data`; set `CONDUIT_STAGE_RELAY_ENDPOINT` or `CONDUIT_RELAY_ENDPOINT` before starting it.
 
 Canonical detail lives in `ARCHITECTURE.md`, `AGENTS.md`, and `docs/contributing.md`.
