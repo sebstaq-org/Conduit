@@ -157,6 +157,54 @@ async function runRelayRoundtripScenario(
   control.close();
 }
 
+async function runRelayClientCloseCleansDataScenario(
+  harness: RelayTestHarness,
+): Promise<void> {
+  const daemonCapability = generateRelayCapability();
+  const clientCapability = generateRelayCapability();
+  const relayServerId = deriveRelayServerId(daemonCapability);
+  const connectionId = deriveRelayConnectionId(clientCapability);
+  const control = await harness.openSocket(
+    buildRelayWebSocketUrl(harness.endpoint, {
+      capability: daemonCapability,
+      role: "server",
+      serverId: relayServerId,
+    }),
+    daemonCapability,
+  );
+  const clientWaiting = waitForMessage(control, "client close control");
+  const client = await harness.openSocket(
+    buildRelayWebSocketUrl(harness.endpoint, {
+      capability: clientCapability,
+      connectionId,
+      role: "client",
+      serverId: relayServerId,
+    }),
+    clientCapability,
+  );
+  expect(parseRelayEnvelope(await clientWaiting)).toMatchObject({
+    connectionId,
+    type: "client_waiting",
+  });
+
+  const data = await harness.openSocket(
+    buildRelayWebSocketUrl(harness.endpoint, {
+      capability: daemonCapability,
+      connectionId,
+      role: "server",
+      serverId: relayServerId,
+    }),
+    daemonCapability,
+  );
+
+  client.close();
+
+  await waitForEnvelope(control, "client_closed", connectionId);
+  await waitForEnvelope(control, "data_closed", connectionId);
+  data.close();
+  control.close();
+}
+
 async function waitForEnvelope(
   socket: TestSocket,
   type: "client_waiting" | "data_closed" | "client_closed",
@@ -204,6 +252,7 @@ function relayWebSocketProtocol(capability: string): string {
 
 export {
   relayWebSocketProtocol,
+  runRelayClientCloseCleansDataScenario,
   runRelayHealthCheck,
   runRelayRoundtripScenario,
   waitForMessage,

@@ -51,7 +51,6 @@ class RelayDurableObject {
     );
     return Response.json({ ok: true });
   }
-
   private acceptControlSocket(protocol: string): Response {
     const sockets = new WebSocketPair();
     const client = sockets[0];
@@ -221,6 +220,7 @@ class RelayDurableObject {
     connection.bufferedBytes = 0;
     this.clearPendingTimer(connection);
     this.notifyControl("client_closed", connectionId);
+    safeClose(connection.dataSocket, CLOSE_POLICY, "relay client socket closed");
     this.deleteIfIdle(connectionId, connection);
   }
 

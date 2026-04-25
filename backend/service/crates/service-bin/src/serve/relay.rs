@@ -19,7 +19,7 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
-use tokio::time::{Duration, sleep};
+use tokio::time::{Duration, sleep, timeout};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
 use tokio_tungstenite::tungstenite::http::{HeaderValue, Request};
@@ -31,6 +31,7 @@ type RelayResult<T> = std::result::Result<T, RelayConnectorError>;
 
 const CONTROL_RETRY_INITIAL_MS: u64 = 500;
 const CONTROL_RETRY_MAX_MS: u64 = 30_000;
+const RELAY_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RelayRetrySchedule {
@@ -95,6 +96,8 @@ enum RelayConnectorError {
     InvalidHeader(#[from] tokio_tungstenite::tungstenite::http::header::InvalidHeaderValue),
     #[error("relay client did not send a handshake frame")]
     MissingHandshake,
+    #[error("relay client did not send its first frame before the handshake timeout")]
+    HandshakeTimeout,
 }
 
 pub(super) fn spawn_relay_connector(
@@ -369,7 +372,7 @@ async fn run_data_socket(
         cached_cipher,
     )
     .await?;
-    if mark_relay_offer_accepted(home, connection_id, now)?.is_none() {
+    if mark_relay_offer_accepted(home, connection_id, OffsetDateTime::now_utc())?.is_none() {
         tracing::warn!(
             event_name = "relay.offer.accept_failed",
             source = "service-bin",
@@ -510,7 +513,9 @@ async fn open_relay_cipher(
     offer: &IssuedRelayOfferContext,
     cached_cipher: Option<RelayCipherChannel>,
 ) -> RelayResult<(RelayCipherChannel, Option<String>)> {
-    let first_text = next_text_frame(receiver).await?;
+    let first_text = timeout(RELAY_HANDSHAKE_TIMEOUT, next_text_frame(receiver))
+        .await
+        .map_err(|_elapsed| RelayConnectorError::HandshakeTimeout)??;
     if let Some(cipher) = try_accept_relay_handshake(home, server_id, offer, &first_text)? {
         return Ok((cipher, None));
     }

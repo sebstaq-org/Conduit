@@ -333,6 +333,7 @@ export default defineConfig({
         "packages/cloudflare-relay/src/**/*.test.ts",
         "packages/cloudflare-relay/src/relayAdversarialHarness.ts",
         "packages/cloudflare-relay/src/serviceRelayProcess.ts",
+        "packages/cloudflare-relay/src/serviceRelayTestUtils.ts",
         "packages/cloudflare-relay/src/relayTestHarness.ts",
       ],
       rules: {

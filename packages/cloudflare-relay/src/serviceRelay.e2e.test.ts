@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { build } from "esbuild";
-import { readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -10,9 +7,21 @@ import {
   startRelayServiceRun,
   stopRelayServiceRun,
 } from "./serviceRelayProcess.js";
+import {
+  bundleWorkerScript,
+  capturingWebSocket,
+  closeCapturedSockets,
+  closeRelayDataSocket,
+  delay,
+  expectNoMessage,
+  expireStoredOffer,
+  openRawRelayClientSocket,
+  waitForHealth,
+  waitForRelayDataSocket,
+} from "./serviceRelayTestUtils.js";
 import { readConnectionOffer } from "@conduit/app-client";
 import { createRelaySessionClient } from "@conduit/session-client";
-import { deriveRelayConnectionId } from "@conduit/relay-transport";
+import { createRelayClientHandshake, deriveRelayConnectionId } from "@conduit/relay-transport";
 import type { RelayServiceRun } from "./serviceRelayProcess.js";
 import type { ConnectionOfferV1 } from "@conduit/app-client";
 
@@ -72,6 +81,46 @@ describe("service-bin relay runtime e2e", () => {
     await expectPresenceConnected(currentRun.port, true);
 
     client.close();
+  }, 120000);
+
+  it("rejects a relay handshake delayed until after offer expiry", async () => {
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    const offer = await fetchOffer(currentRun.port);
+    const connectionId = deriveRelayConnectionId(offer.relay.clientCapability);
+    const clientSocket = await openRawRelayClientSocket(relayEndpoint, offer);
+    await waitForRelayDataSocket(relayEndpoint, adminToken, offer);
+    await expireStoredOffer(currentRun.home, offer);
+
+    const handshake = await createRelayClientHandshake({
+      context: {
+        connectionId,
+        offerNonce: offer.nonce,
+        serverId: offer.relay.serverId,
+      },
+      daemonPublicKeyB64: offer.daemonPublicKeyB64,
+    });
+    const command = {
+      command: "settings/get",
+      id: "expired-handshake-settings",
+      params: {},
+      provider: "all",
+    };
+    const encryptedCommand = await handshake.channel.encryptUtf8(
+      JSON.stringify({
+        v: 1,
+        type: "command",
+        id: command.id,
+        command,
+      }),
+    );
+
+    clientSocket.send(JSON.stringify(handshake.handshake));
+    clientSocket.send(JSON.stringify(encryptedCommand));
+
+    await expectNoMessage(clientSocket, 1000);
+    clientSocket.close();
   }, 120000);
 
   it("keeps the production worker test-admin route unavailable", async () => {
@@ -185,7 +234,7 @@ async function expectPresenceConnected(
   expected: boolean,
 ): Promise<void> {
   await expect
-    .poll(async () => await fetchPresenceConnected(port), { timeout: 15000 })
+    .poll(() => fetchPresenceConnected(port), { timeout: 15000 })
     .toBe(expected);
 }
 
@@ -197,10 +246,10 @@ async function fetchPresenceConnected(port: number): Promise<boolean> {
     );
   }
   const payload = (await response.json()) as {
-    presence?: { clients?: Array<{ connected?: unknown }> };
+    presence?: { clients?: { connected?: unknown }[] };
   };
   if (!Array.isArray(payload.presence?.clients)) {
-    throw new Error("daemon status did not include presence clients");
+    throw new TypeError("daemon status did not include presence clients");
   }
   return payload.presence.clients.some((client) => client.connected === true);
 }
@@ -215,109 +264,4 @@ function mobilePresence(): {
     deviceKind: "mobile",
     displayName: "E2E Mobile",
   };
-}
-
-async function closeRelayDataSocket(
-  relayEndpoint: string,
-  relayAdminToken: string,
-  offer: ConnectionOfferV1,
-): Promise<void> {
-  const connectionId = deriveRelayConnectionId(offer.relay.clientCapability);
-  const url = new URL(`${relayEndpoint}/__conduit_test/close-data`);
-  url.searchParams.set("serverId", offer.relay.serverId);
-  url.searchParams.set("connectionId", connectionId);
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${relayAdminToken}` },
-  });
-  if (!response.ok) {
-    throw new Error(
-      `close-data failed with ${response.status}: ${await response.text()}`,
-    );
-  }
-}
-
-async function expireStoredOffer(
-  home: string,
-  offer: ConnectionOfferV1,
-): Promise<void> {
-  const connectionId = deriveRelayConnectionId(offer.relay.clientCapability);
-  const path = join(home, "relay-offers", `${connectionId}.json`);
-  const stored = JSON.parse(await readFile(path, "utf8")) as Record<
-    string,
-    unknown
-  >;
-  stored.expiresAt = "2026-04-18T00:00:00Z";
-  await writeFile(path, `${JSON.stringify(stored, null, 2)}\n`);
-}
-
-function capturingWebSocket(captured: WebSocket[]): typeof WebSocket {
-  return class CapturingWebSocket extends WebSocket {
-    public constructor(url: string | URL, protocols?: string | string[]) {
-      super(url, protocols);
-      captured.push(this);
-    }
-  };
-}
-
-async function closeCapturedSockets(
-  captured: readonly WebSocket[],
-): Promise<void> {
-  await Promise.all(captured.map((socket) => closeSocket(socket)));
-}
-
-function closeSocket(socket: WebSocket): Promise<void> {
-  if (socket.readyState === WebSocket.CLOSED) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    socket.addEventListener(
-      "close",
-      () => {
-        resolve();
-      },
-      { once: true },
-    );
-    if (
-      socket.readyState === WebSocket.CONNECTING ||
-      socket.readyState === WebSocket.OPEN
-    ) {
-      socket.close();
-    }
-  });
-}
-
-async function waitForHealth(port: number): Promise<void> {
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      await delay(100);
-    }
-  }
-  throw new Error("service-bin did not become healthy");
-}
-
-async function bundleWorkerScript(scriptPath: string): Promise<string> {
-  const result = await build({
-    bundle: true,
-    entryPoints: [scriptPath],
-    format: "esm",
-    platform: "browser",
-    write: false,
-  });
-  const output = result.outputFiles[0]?.text;
-  if (output === undefined) {
-    throw new Error("cloudflare relay worker bundle was not produced");
-  }
-  return output;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }

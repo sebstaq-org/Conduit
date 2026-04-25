@@ -8,12 +8,14 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 const OFFERS_DIR_NAME: &str = "relay-offers";
 const OFFER_VERSION: u8 = 1;
+const CONCURRENT_CREATE_RETRIES: usize = 20;
 
 /// Public relay fields attached to a pairing offer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +134,7 @@ pub fn lookup_relay_offer(
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(source) => return Err(RelayOfferStoreError::Io { path, source }),
     };
-    let stored = parse_offer(&path, &raw)?;
+    let stored = parse_offer_with_retry(&path, raw)?;
     if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
         let _ignored = fs::remove_file(&path);
         return Ok(None);
@@ -162,7 +164,7 @@ pub fn mark_relay_offer_accepted(
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
         Err(source) => return Err(RelayOfferStoreError::Io { path, source }),
     };
-    let mut stored = parse_offer(&path, &raw)?;
+    let mut stored = parse_offer_with_retry(&path, raw)?;
     if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
         let _ignored = fs::remove_file(&path);
         return Ok(None);
@@ -206,7 +208,7 @@ fn cleanup_entry_if_expired(path: &Path, now: OffsetDateTime) -> Result<(), Rela
         path: path.to_path_buf(),
         source,
     })?;
-    let stored = parse_offer(path, &raw)?;
+    let stored = parse_offer_with_retry(path, raw)?;
     if stored.accepted_at.is_none() && parse_expires_at(&stored.expires_at)? <= now {
         let _ignored = fs::remove_file(path);
     }
@@ -274,6 +276,30 @@ fn parse_offer(path: &Path, raw: &str) -> Result<StoredRelayOffer, RelayOfferSto
     Ok(stored)
 }
 
+fn parse_offer_with_retry(
+    path: &Path,
+    raw: String,
+) -> Result<StoredRelayOffer, RelayOfferStoreError> {
+    let mut current = raw;
+    for attempt in 0..=CONCURRENT_CREATE_RETRIES {
+        match parse_offer(path, &current) {
+            Ok(value) => return Ok(value),
+            Err(error)
+                if is_probable_concurrent_create_read(&error)
+                    && attempt < CONCURRENT_CREATE_RETRIES =>
+            {
+                std::thread::sleep(Duration::from_millis(5));
+                current = fs::read_to_string(path).map_err(|source| RelayOfferStoreError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                })?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    parse_offer(path, &current)
+}
+
 fn parse_expires_at(value: &str) -> Result<OffsetDateTime, RelayOfferStoreError> {
     OffsetDateTime::parse(value, &Rfc3339).map_err(|source| RelayOfferStoreError::Invalid {
         message: source.to_string(),
@@ -300,6 +326,14 @@ fn invalid(message: &str) -> RelayOfferStoreError {
     RelayOfferStoreError::Invalid {
         message: message.to_owned(),
     }
+}
+
+fn is_probable_concurrent_create_read(error: &RelayOfferStoreError) -> bool {
+    matches!(
+        error,
+        RelayOfferStoreError::Json { source, .. }
+            if source.to_string().contains("EOF while parsing a value")
+    )
 }
 
 #[cfg(test)]
