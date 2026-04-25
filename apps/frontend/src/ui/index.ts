@@ -3,6 +3,8 @@ export type {
   AutocompleteProps,
   AutocompleteRenderItemState,
 } from "./autocomplete";
+export { ConnectionStatusIndicator } from "./connection-status-indicator";
+export type { ConnectionStatusKind } from "./connection-status-indicator";
 export { IconButton } from "./icon-button";
 export { IconSlot } from "./icon-slot";
 export { GlimmerText } from "./glimmer-text";
@@ -11,6 +13,7 @@ export { List } from "./list";
 export {
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
@@ -39,9 +42,11 @@ export {
   PopoverPortal,
   PopoverPortalHost,
   PopoverRoot,
+  PopoverStatusTrigger,
   usePopoverControls,
 } from "./popover";
 export { Row } from "./row";
+export { QrImage } from "./qr-image";
 export { ScrollArea } from "./scroll-area";
 export type {
   ScrollAreaContentSize,

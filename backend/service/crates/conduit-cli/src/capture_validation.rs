@@ -129,13 +129,33 @@ pub(super) fn validate_session_prompt(value: &Value) -> Result<()> {
     if value
         .get("promptUpdates")
         .and_then(Value::as_array)
-        .is_some()
+        .is_none()
     {
-        return Ok(());
+        return Err(CliError::invalid_capture(
+            "provider session/prompt capture must contain promptUpdates array",
+        ));
     }
-    Err(CliError::invalid_capture(
-        "provider session/prompt capture must contain promptUpdates array",
-    ))
+    validate_prompt_config_captures(value)?;
+    Ok(())
+}
+
+fn validate_prompt_config_captures(value: &Value) -> Result<()> {
+    if let Some(captures) = value.get("configCaptures") {
+        let captures = captures.as_array().ok_or_else(|| {
+            CliError::invalid_capture(
+                "provider session/prompt capture configCaptures must be an array",
+            )
+        })?;
+        for capture in captures {
+            validate_session_set_config_option(capture)?;
+        }
+    }
+    if let Some(capture) = value.get("configCapture")
+        && !capture.is_null()
+    {
+        validate_session_set_config_option(capture)?;
+    }
+    Ok(())
 }
 
 pub(super) fn validate_session_set_config_option(value: &Value) -> Result<()> {

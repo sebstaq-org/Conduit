@@ -13,12 +13,16 @@
 
 mod cli;
 mod error;
+mod home;
+mod identity;
 mod local_store;
 mod runtime;
 mod serve;
 
 use crate::cli::parse_command;
 use crate::error::Result;
+use crate::home::product_home;
+use crate::identity::pairing_response;
 use std::env;
 use telemetry_support::TelemetryBinary;
 use tracing_subscriber as _;
@@ -37,17 +41,28 @@ async fn main() -> Result<()> {
         cli::Command::Serve {
             host,
             port,
+            relay_endpoint,
+            app_base_url,
             provider_fixtures,
             store_path,
         } => {
             serve::run(
                 &host,
                 port,
+                relay_endpoint,
+                app_base_url,
                 provider_fixtures,
                 store_path,
                 telemetry.health(),
             )
             .await
+        }
+        cli::Command::Pair {
+            relay_endpoint,
+            app_base_url,
+        } => {
+            let response = pairing_response(&product_home()?, &relay_endpoint, &app_base_url)?;
+            runtime::write_json(&response)
         }
         cli::Command::Runtime { command } => runtime::run(command),
     }

@@ -38,6 +38,9 @@ const sessionSelectionSlice = createSlice({
   name: "sessionSelection",
   initialState,
   reducers: {
+    activeSessionCleared: (state): void => {
+      state.activeSession = null;
+    },
     activeSessionOpened: (
       state,
       action: PayloadAction<OpenActiveSession>,
@@ -131,6 +134,7 @@ function selectActiveSession(state: RootState): ActiveSession | null {
 }
 
 const {
+  activeSessionCleared,
   activeSessionOpened,
   activeSessionConfigOptionsUpdated,
   activeSessionConfigSyncBlocked,
@@ -141,6 +145,7 @@ const {
 const sessionSelectionReducer = sessionSelectionSlice.reducer;
 
 export {
+  activeSessionCleared,
   activeSessionOpened,
   activeSessionConfigOptionsUpdated,
   activeSessionConfigSyncBlocked,

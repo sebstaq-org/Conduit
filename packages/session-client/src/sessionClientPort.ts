@@ -8,6 +8,7 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  PresenceUpdateRequest,
   SessionHistoryRequest,
   SessionHistoryWindow,
   SessionNewRequest,
@@ -34,6 +35,7 @@ import type { SessionClientTelemetryEvent } from "./transport/sessionClientTelem
 interface SessionClientPort {
   readonly policy: "official-acp-only";
   addProject(request: ProjectAddRequest): Promise<ProjectListView>;
+  close(): void;
   getProjectSuggestions(
     query?: ProjectSuggestionsQuery,
   ): Promise<ProjectSuggestionsView>;
@@ -59,6 +61,7 @@ interface SessionClientPort {
   promptSession(request: SessionPromptRequest): Promise<void>;
   respondInteraction(request: SessionRespondInteractionRequest): Promise<void>;
   removeProject(request: ProjectRemoveRequest): Promise<ProjectListView>;
+  updatePresence(request: PresenceUpdateRequest): Promise<void>;
   updateProject(request: ProjectUpdateRequest): Promise<ProjectListView>;
   updateSettings(
     request: GlobalSettingsUpdateRequest,

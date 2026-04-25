@@ -366,6 +366,53 @@ fn session_prompt_replays_after_required_config_prelude() -> TestResult<()> {
 }
 
 #[test]
+fn session_prompt_requires_all_config_preludes_when_fixture_declares_them() -> TestResult<()> {
+    let root = fixture_root(json!({ "sessions": [] }))?;
+    write_multi_config_prompt_fixtures(root.path())?;
+    let mut factory = FixtureProviderFactory::load(root.path())?;
+    let mut port = factory.connect(ProviderId::Codex)?;
+    initialize_port(port.as_mut())?;
+
+    let _response = port.session_set_config_option(
+        "session-1".to_owned(),
+        "model".to_owned(),
+        "gpt-5.4-mini".to_owned(),
+    )?;
+    let error = port
+        .session_prompt(
+            "session-1".to_owned(),
+            vec![json!({ "type": "text", "text": "hello" })],
+            &mut |_| {},
+        )
+        .err()
+        .ok_or("session/prompt unexpectedly succeeded with one missing config prelude")?;
+    if !error.to_string().contains(
+        "requires prior session/set_config_option model=gpt-5.4-mini, reasoning_effort=medium",
+    ) {
+        return Err(format!("unexpected error {error}").into());
+    }
+
+    let _response = port.session_set_config_option(
+        "session-1".to_owned(),
+        "reasoning_effort".to_owned(),
+        "medium".to_owned(),
+    )?;
+    let mut updates = Vec::new();
+    let _response = port.session_prompt(
+        "session-1".to_owned(),
+        vec![json!({ "type": "text", "text": "hello" })],
+        &mut |update| updates.push(update),
+    )?;
+    if !updates
+        .iter()
+        .any(|update| super::support::value_contains_string(&update.update, "configured-ready"))
+    {
+        return Err(format!("expected configured update, got {updates:?}").into());
+    }
+    Ok(())
+}
+
+#[test]
 fn fixture_root_must_exist() -> TestResult<()> {
     let root = TempDir::new()?;
     let missing = root.path().join("missing");
@@ -533,6 +580,88 @@ fn write_raw_set_config_fixture(root: &std::path::Path, value: Value) -> TestRes
         serde_json::to_string(&value)?,
     )?;
     Ok(())
+}
+
+fn write_multi_config_prompt_fixtures(root: &std::path::Path) -> TestResult<()> {
+    write_session_set_config_option_capture(
+        root,
+        SessionSetConfigOptionCapture {
+            capture: "model-gpt-5-4-mini",
+            config_id: "model",
+            response: json!({ "configOptions": [config_option("model", "gpt-5.4-mini")] }),
+            session_id: "session-1",
+            value: "gpt-5.4-mini",
+        },
+    )?;
+    write_session_set_config_option_capture(
+        root,
+        SessionSetConfigOptionCapture {
+            capture: "reasoning-medium",
+            config_id: "reasoning_effort",
+            response: json!({ "configOptions": [config_option("reasoning_effort", "medium")] }),
+            session_id: "session-1",
+            value: "medium",
+        },
+    )?;
+    write_multi_required_prompt_capture(root)
+}
+
+fn write_multi_required_prompt_capture(root: &std::path::Path) -> TestResult<()> {
+    let dir = root.join("codex/session-prompt/session-1/configured");
+    create_dir_all(&dir)?;
+    write(
+        dir.join("provider.raw.json"),
+        serde_json::to_string(&json!({
+            "configCaptures": [
+                {
+                    "configRequest": {
+                        "sessionId": "session-1",
+                        "configId": "model",
+                        "value": "gpt-5.4-mini"
+                    },
+                    "configResponse": {
+                        "configOptions": [config_option("model", "gpt-5.4-mini")]
+                    }
+                },
+                {
+                    "configRequest": {
+                        "sessionId": "session-1",
+                        "configId": "reasoning_effort",
+                        "value": "medium"
+                    },
+                    "configResponse": {
+                        "configOptions": [config_option("reasoning_effort", "medium")]
+                    }
+                }
+            ],
+            "promptRequest": {
+                "sessionId": "session-1",
+                "prompt": [{ "type": "text", "text": "hello" }]
+            },
+            "promptResponse": { "stopReason": "end_turn" },
+            "promptUpdates": [
+                {
+                    "index": 0,
+                    "variant": "agent_message_chunk",
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": { "type": "text", "text": "configured-ready" }
+                    }
+                }
+            ]
+        }))?,
+    )?;
+    Ok(())
+}
+
+fn config_option(config_id: &str, current_value: &str) -> Value {
+    json!({
+        "currentValue": current_value,
+        "id": config_id,
+        "name": config_id,
+        "options": [{ "name": current_value, "value": current_value }],
+        "type": "select"
+    })
 }
 
 fn assert_unsupported(result: service_runtime::Result<Value>, command: &str) -> TestResult<()> {

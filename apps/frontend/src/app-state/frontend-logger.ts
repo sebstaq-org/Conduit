@@ -45,14 +45,12 @@ function configuredLogProfile(): string | undefined {
   return frontendEnvValue("EXPO_PUBLIC_CONDUIT_LOG_PROFILE");
 }
 
-function parseWsUrl(): URL {
+function parseWsUrl(): URL | null {
   const configuredWsUrl = frontendEnvValue(
     "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL",
   );
   if (configuredWsUrl === undefined) {
-    throw new Error(
-      `${WS_URL_ENV} is required when frontend logging is enabled.`,
-    );
+    return null;
   }
   const wsUrl = configuredWsUrl.trim();
   if (wsUrl.length === 0) {
@@ -93,12 +91,16 @@ function buildClientLogUrlFromWs(wsUrl: URL): string {
   return wsUrl.toString();
 }
 
-function configuredClientLogUrl(): string {
+function configuredClientLogUrl(): string | null {
   const override = resolveClientLogOverride();
   if (override !== null) {
     return override;
   }
-  return buildClientLogUrlFromWs(parseWsUrl());
+  const wsUrl = parseWsUrl();
+  if (wsUrl === null) {
+    return null;
+  }
+  return buildClientLogUrlFromWs(wsUrl);
 }
 
 function recordWithFields(

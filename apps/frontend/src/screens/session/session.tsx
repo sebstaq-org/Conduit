@@ -2,17 +2,16 @@ import { usePlanInteractionSource } from "@/app-state";
 import { SessionComposer } from "@/features/session-composer";
 import { SessionHistory } from "@/features/session-history";
 import { Box } from "@/theme";
-import { IconButton, KeyboardLift } from "@/ui";
+import { KeyboardLift } from "@/ui";
 import type { ViewStyle } from "react-native";
 import {
   sessionScreenBackgroundColor,
   sessionScreenFlex,
   sessionScreenGap,
-  sessionScreenNavigationPanelAccessibilityLabel,
-  sessionScreenNavigationPanelIcon,
   sessionScreenPaddingX,
   sessionScreenPaddingY,
 } from "./session.styles";
+import { SessionScreenTopBar } from "./session-top-bar";
 
 interface SessionScreenProps {
   onOpenNavigationPanel?: (() => void) | undefined;
@@ -35,11 +34,7 @@ function SessionScreen({
         style={sessionScreenStyle}
       >
         {onOpenNavigationPanel !== undefined && (
-          <IconButton
-            accessibilityLabel={sessionScreenNavigationPanelAccessibilityLabel}
-            icon={sessionScreenNavigationPanelIcon}
-            onPress={onOpenNavigationPanel}
-          />
+          <SessionScreenTopBar onOpenNavigationPanel={onOpenNavigationPanel} />
         )}
         <SessionHistory />
         <SessionComposer planInteraction={planInteraction} />

@@ -1,0 +1,82 @@
+interface DesktopDaemonConfig {
+  readonly appBaseUrl: string;
+  readonly backendHost: string;
+  readonly backendLogPath: string;
+  readonly backendPort: number;
+  readonly home: string;
+  readonly providerFixtures: string | null;
+  readonly relayEndpoint: string;
+  readonly serviceBinPath: string;
+  readonly storePath: string | null;
+}
+
+interface DesktopPresenceClient {
+  readonly clientId: string;
+  readonly connected: boolean;
+  readonly deviceKind: "mobile" | "web";
+  readonly displayName: string;
+  readonly lastSeenAt: string;
+  readonly transport: "direct" | "relay";
+}
+
+interface DesktopPresenceSnapshot {
+  readonly clients: DesktopPresenceClient[];
+  readonly host: {
+    readonly displayName: string;
+    readonly serverId: string;
+  };
+}
+
+interface DesktopDaemonStatus {
+  readonly appBaseUrl: string;
+  readonly backendHealthy: boolean;
+  readonly daemon: {
+    readonly mobilePeerConnected: boolean;
+    readonly pairingConfigured: boolean;
+    readonly presence: DesktopPresenceSnapshot;
+    readonly relayEndpoint: string | null;
+    readonly serverId: string;
+  } | null;
+  readonly lastExit: string | null;
+  readonly mobilePeerConnected: boolean;
+  readonly pairingConfigured: boolean;
+  readonly pid: number | null;
+  readonly presence: DesktopPresenceSnapshot | null;
+  readonly relayConfigured: boolean;
+  readonly relayEndpoint: string | null;
+  readonly restartCount: number;
+  readonly running: boolean;
+  readonly sessionWsUrl: string | null;
+}
+
+interface DesktopRuntimeConfig {
+  readonly clientLogUrl?: string;
+  readonly logProfile?: string;
+  readonly sessionWsUrl?: string;
+}
+
+interface DesktopPairingOffer {
+  readonly mobileUrl: string;
+  readonly offer: {
+    readonly daemonPublicKeyB64: string;
+    readonly expiresAt: string;
+    readonly nonce: string;
+    readonly relay: {
+      readonly clientCapability: string;
+      readonly endpoint: string;
+      readonly serverId: string;
+    };
+    readonly serverId: string;
+  };
+  readonly qrDataUrl: string;
+  readonly serviceUrl: string;
+}
+
+export type {
+  DesktopDaemonConfig,
+  DesktopDaemonStatus,
+  DesktopPairingOffer,
+  DesktopPresenceClient,
+  DesktopPresenceSnapshot,
+  DesktopRuntimeConfig,
+};

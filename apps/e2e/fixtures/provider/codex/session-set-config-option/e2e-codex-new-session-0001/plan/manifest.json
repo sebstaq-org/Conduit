@@ -1,7 +1,7 @@
 {
   "captureKind": "provider",
   "contractBoundary": "provider-acp",
-  "curation": "Sanitized from live vendored Codex ACP capture; session id, cwd, timestamps, and volatile Codex ids replaced with deterministic E2E values.",
+  "curation": "Sanitized from live Codex ACP capture produced by conduit-cli multi-config session/prompt; session id, cwd, timestamps, volatile Codex ids, and option lists replaced with deterministic E2E values.",
   "cwd": "/tmp/conduit-e2e-fixture-project",
   "manualCapture": false,
   "operation": "session/set_config_option",
@@ -9,15 +9,14 @@
   "replacedFields": [
     "cwd",
     "sessionId",
-    "promptRequest.sessionId",
-    "configRequest.sessionId",
+    "configCaptures.configRequest.sessionId",
     "terminalPlan.itemId",
     "terminalPlan.turnId",
     "terminalPlan.threadId",
     "timestamp"
   ],
   "sessionId": "e2e-codex-new-session-0001",
-  "sourceCapture": "conduit-artifacts/manual/captures/codex/session-prompt/2026-04-18T220736.552233304Z",
-  "sourceProviderRawSha256": "36053ff96171a6ecb6e4b524b29d8190b7f25a5499864e81970adf40d8087333",
+  "sourceCapture": "conduit-artifacts/manual/captures/codex/config-e2e-multi-2026-04-24",
+  "sourceProviderRawSha256": "b1ac1fe69afa5a509294449282ff86f99041b49e539f8c79b158a05d4bc020cc",
   "timestamp": "2026-01-01T00:00:00Z"
 }

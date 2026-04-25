@@ -29,6 +29,13 @@ export {
   removeProjectById,
   updateProjectDisplayName,
 } from "./project-commands";
+export { forgetHost, pairHostFromOfferUrl } from "./host-registry-commands";
+export {
+  hostForgotten,
+  selectActiveHostProfile,
+  selectHostProfiles,
+  selectPairingError,
+} from "./host-registry";
 export type {
   LoadOlderSessionTimelineArg,
   NewSessionMutationArg,
@@ -45,6 +52,7 @@ export type {
 } from "./project-commands";
 export {
   activeSessionOpened,
+  activeSessionCleared,
   activeSessionConfigOptionsUpdated,
   activeSessionConfigSyncBlocked,
   draftSessionConfigOptionSelected,
@@ -67,6 +75,7 @@ export {
 export { ConduitStoreProvider } from "./provider";
 export { store } from "./store";
 export type { AppDispatch, RootState } from "./store";
+export type { HostRegistryState } from "./host-registry";
 export type {
   PlanInteractionCard,
   PlanInteractionOption,

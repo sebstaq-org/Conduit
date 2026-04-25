@@ -3,6 +3,8 @@ import { createReadStream } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { build } from "esbuild";
+import { createRequire } from "node:module";
 import {
   dirname,
   extname,
@@ -14,6 +16,7 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import { deriveRelayConnectionId } from "@conduit/relay-transport";
 import type { Server as HttpServer, ServerResponse } from "node:http";
 
 interface E2eHarness {
@@ -21,10 +24,14 @@ interface E2eHarness {
   readonly serviceUrl: string;
   readonly sessionWsUrl: string;
   addProject(cwd: string): Promise<void>;
+  closeRelayDataSocket(): Promise<void>;
+  pairingUrl(): Promise<string>;
+  relaySnapshot(): Promise<RelaySnapshot>;
   stop(): Promise<void>;
 }
 
 interface E2eHarnessOptions {
+  readonly exposeDirectSessionUrl?: boolean | undefined;
   readonly fixtureRoot?: string | undefined;
 }
 
@@ -40,9 +47,45 @@ interface RuntimeCommandResponse {
   readonly result?: unknown;
 }
 
+interface PairingResponse {
+  readonly offer: {
+    readonly relay: {
+      readonly clientCapability: string;
+      readonly serverId: string;
+    };
+  };
+  readonly url: string;
+}
+
+interface RelaySnapshot {
+  readonly clientMessageCount: number;
+  readonly clientSocketCount: number;
+  readonly controlSocketCount: number;
+  readonly dataMessageCount: number;
+  readonly dataSocketCount: number;
+  readonly totalClientBytes: number;
+  readonly totalDataBytes: number;
+}
+
+interface MiniflareRuntime {
+  readonly ready: Promise<URL>;
+  dispose(): Promise<void>;
+}
+
+type MiniflareConstructor = new (
+  options: Record<string, unknown>,
+) => MiniflareRuntime;
+
 const sourceDir = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(sourceDir, "..");
 const repoRoot = resolve(appRoot, "..", "..");
+const relayTestWorkerScript = join(
+  repoRoot,
+  "packages",
+  "cloudflare-relay",
+  "src",
+  "testIndex.ts",
+);
 const defaultFixtureRoot = join(appRoot, "fixtures", "provider");
 const serviceBin = join(
   cargoTargetDirectory(),
@@ -51,6 +94,10 @@ const serviceBin = join(
 );
 const fixtureCwd = "/tmp/conduit-e2e-fixture-project";
 const frontendReadyTimeoutMs = 180_000;
+const relayAdminToken = "conduit-frontend-e2e-relay-admin";
+const require = createRequire(import.meta.url);
+const Miniflare = (require("miniflare") as { Miniflare: MiniflareConstructor })
+  .Miniflare;
 
 async function startE2eHarness(
   options: E2eHarnessOptions = {},
@@ -63,11 +110,28 @@ async function startE2eHarness(
   const sessionWsUrl = `ws://127.0.0.1:${servicePort}/api/session`;
   const serviceUrl = `http://127.0.0.1:${servicePort}`;
   const frontendUrl = `http://localhost:${frontendPort}`;
+  const exposeDirectSessionUrl = options.exposeDirectSessionUrl ?? true;
   const providerFixtureRoot = options.fixtureRoot ?? defaultFixtureRoot;
   const processes: ManagedProcess[] = [];
+  let cachedPairing: PairingResponse | null = null;
   let frontendServer: HttpServer | null = null;
+  let relayServer: MiniflareRuntime | null = null;
+
+  async function harnessPairing(): Promise<PairingResponse> {
+    if (cachedPairing === null) {
+      cachedPairing = await fetchPairing(serviceUrl);
+    }
+    return cachedPairing;
+  }
+
+  async function refreshHarnessPairing(): Promise<PairingResponse> {
+    cachedPairing = await fetchPairing(serviceUrl);
+    return cachedPairing;
+  }
 
   try {
+    const relayEndpoint = await startMiniflareRelay();
+    relayServer = relayEndpoint.runtime;
     processes.push(
       spawnManaged("service-bin", serviceBin, [
         "serve",
@@ -79,6 +143,10 @@ async function startE2eHarness(
         providerFixtureRoot,
         "--store-path",
         join(runRoot, "local-store.sqlite3"),
+        "--relay-endpoint",
+        relayEndpoint.url,
+        "--app-base-url",
+        frontendUrl,
       ]),
     );
     await waitForHttp(`${serviceUrl}/health`, processes);
@@ -104,7 +172,9 @@ async function startE2eHarness(
       {
         CI: "1",
         EXPO_NO_TELEMETRY: "1",
-        EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl,
+        ...(exposeDirectSessionUrl
+          ? { EXPO_PUBLIC_CONDUIT_SESSION_WS_URL: sessionWsUrl }
+          : {}),
       },
     );
     frontendServer = await startStaticServer(frontendBuildDir, frontendPort);
@@ -115,21 +185,111 @@ async function startE2eHarness(
         await sendRuntimeCommand(sessionWsUrl, "projects/add", "all", { cwd });
         await waitForIndexedSessions(sessionWsUrl, cwd, processes, "all");
       },
+      closeRelayDataSocket: async () => {
+        await closeRelayDataSocket(relayEndpoint.url, await harnessPairing());
+      },
       frontendUrl,
+      pairingUrl: async () => (await refreshHarnessPairing()).url,
+      relaySnapshot: async () =>
+        await fetchRelaySnapshot(relayEndpoint.url, await harnessPairing()),
       serviceUrl,
       sessionWsUrl,
       stop: async () => {
         await closeStaticServer(frontendServer);
         await stopProcesses(processes);
+        await relayServer?.dispose();
         await rm(runRoot, { force: true, recursive: true });
       },
     };
   } catch (error) {
     await closeStaticServer(frontendServer);
     await stopProcesses(processes);
+    await relayServer?.dispose();
     await rm(runRoot, { force: true, recursive: true });
     throw error;
   }
+}
+
+async function startMiniflareRelay(): Promise<{
+  runtime: MiniflareRuntime;
+  url: string;
+}> {
+  const workerScript = await bundleWorkerScript(relayTestWorkerScript);
+  const runtime = new Miniflare({
+    bindings: { CONDUIT_RELAY_TEST_ADMIN_TOKEN: relayAdminToken },
+    compatibilityDate: "2026-04-18",
+    durableObjects: {
+      RELAY: "RelayDurableObject",
+    },
+    host: "127.0.0.1",
+    modules: true,
+    port: 0,
+    script: workerScript,
+  });
+  const ready = await runtime.ready;
+  return { runtime, url: ready.toString().replace(/\/$/u, "") };
+}
+
+async function bundleWorkerScript(scriptPath: string): Promise<string> {
+  const result = await build({
+    bundle: true,
+    entryPoints: [scriptPath],
+    format: "esm",
+    platform: "browser",
+    write: false,
+  });
+  const output = result.outputFiles[0]?.text;
+  if (output === undefined) {
+    throw new Error("relay worker bundle was not produced");
+  }
+  return output;
+}
+
+async function fetchPairing(serviceUrl: string): Promise<PairingResponse> {
+  const response = await fetch(`${serviceUrl}/api/pairing`);
+  if (!response.ok) {
+    throw new Error(
+      `pairing failed ${response.status}: ${await response.text()}`,
+    );
+  }
+  return (await response.json()) as PairingResponse;
+}
+
+async function closeRelayDataSocket(
+  relayEndpoint: string,
+  pairing: PairingResponse,
+): Promise<void> {
+  const url = new URL(`${relayEndpoint}/__conduit_test/close-data`);
+  url.searchParams.set("serverId", pairing.offer.relay.serverId);
+  url.searchParams.set(
+    "connectionId",
+    deriveRelayConnectionId(pairing.offer.relay.clientCapability),
+  );
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${relayAdminToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `close relay data failed ${response.status}: ${await response.text()}`,
+    );
+  }
+}
+
+async function fetchRelaySnapshot(
+  relayEndpoint: string,
+  pairing: PairingResponse,
+): Promise<RelaySnapshot> {
+  const url = new URL(`${relayEndpoint}/__conduit_test/snapshot`);
+  url.searchParams.set("serverId", pairing.offer.relay.serverId);
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${relayAdminToken}` },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `relay snapshot failed ${response.status}: ${await response.text()}`,
+    );
+  }
+  return (await response.json()) as RelaySnapshot;
 }
 
 function spawnManaged(
@@ -565,5 +725,16 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-export { fixtureCwd, startE2eHarness };
-export type { E2eHarness };
+export {
+  fixtureCwd,
+  defaultFixtureRoot as fixtureRoot,
+  freePort,
+  relayAdminToken,
+  runManaged,
+  serviceBin,
+  closeStaticServer,
+  startE2eHarness,
+  startMiniflareRelay,
+  startStaticServer,
+};
+export type { E2eHarness, MiniflareRuntime, RelaySnapshot };

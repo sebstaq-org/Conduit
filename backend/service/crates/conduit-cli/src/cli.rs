@@ -46,8 +46,8 @@ pub(crate) enum CaptureOperation {
     Prompt {
         /// ACP session id returned by the provider, when reusing a session.
         session_id: Option<String>,
-        /// Optional ACP config option to set before sending the prompt.
-        config: Option<CaptureConfigOption>,
+        /// ACP config options to set before sending the prompt.
+        configs: Vec<CaptureConfigOption>,
         /// JSON file containing the top-level ACP `ContentBlock[]` payload.
         prompt_path: PathBuf,
     },
@@ -261,12 +261,12 @@ fn parse_session_load_capture(provider: ProviderId, args: &[String]) -> Result<C
 }
 
 fn parse_session_prompt_capture(provider: ProviderId, args: &[String]) -> Result<CaptureRequest> {
-    let mut config_id = None;
+    let mut configs = Vec::new();
     let mut cwd = None;
     let mut output = None;
     let mut prompt_path = None;
     let mut session_id = None;
-    let mut value = None;
+    let mut pending_config_id = None::<String>;
     let mut index = 0;
     while index < args.len() {
         let flag = &args[index];
@@ -276,12 +276,21 @@ fn parse_session_prompt_capture(provider: ProviderId, args: &[String]) -> Result
             )));
         };
         match flag.as_str() {
-            "--config" => config_id = Some(flag_value.to_owned()),
+            "--config" => {
+                parse_session_prompt_config_flag(provider, &mut pending_config_id, flag_value)?;
+            }
             "--cwd" => cwd = Some(PathBuf::from(flag_value)),
             "--out" => output = Some(PathBuf::from(flag_value)),
             "--prompt" => prompt_path = Some(PathBuf::from(flag_value)),
             "--session" => session_id = Some(flag_value.to_owned()),
-            "--value" => value = Some(flag_value.to_owned()),
+            "--value" => {
+                parse_session_prompt_value_flag(
+                    provider,
+                    &mut configs,
+                    &mut pending_config_id,
+                    flag_value,
+                )?;
+            }
             _ => {
                 return Err(CliError::invalid_command(format!(
                     "unsupported flag {flag}"
@@ -296,21 +305,62 @@ fn parse_session_prompt_capture(provider: ProviderId, args: &[String]) -> Result
             provider.as_str()
         ))
     })?;
-    let config = parse_optional_config_option(
-        config_id,
-        value,
-        &format!("{} session/prompt capture", provider.as_str()),
-    )?;
+    if let Some(config_id) = pending_config_id {
+        return Err(CliError::invalid_command(format!(
+            "missing required --value for {} session/prompt capture config {config_id}",
+            provider.as_str()
+        )));
+    }
     Ok(CaptureRequest {
         provider,
         operation: CaptureOperation::Prompt {
             session_id,
-            config,
+            configs,
             prompt_path,
         },
         cwd: provider_workspace_cwd(provider, cwd)?,
         output,
     })
+}
+
+fn parse_session_prompt_config_flag(
+    provider: ProviderId,
+    pending_config_id: &mut Option<String>,
+    value: &str,
+) -> Result<()> {
+    if let Some(config_id) = pending_config_id {
+        return Err(CliError::invalid_command(format!(
+            "missing required --value for {} session/prompt capture config {config_id}",
+            provider.as_str()
+        )));
+    }
+    *pending_config_id = Some(value.to_owned());
+    Ok(())
+}
+
+fn parse_session_prompt_value_flag(
+    provider: ProviderId,
+    configs: &mut Vec<CaptureConfigOption>,
+    pending_config_id: &mut Option<String>,
+    value: &str,
+) -> Result<()> {
+    let config_id = pending_config_id.take().ok_or_else(|| {
+        CliError::invalid_command(format!(
+            "missing required --config for {} session/prompt capture when --value is provided",
+            provider.as_str()
+        ))
+    })?;
+    if configs.iter().any(|config| config.config_id == config_id) {
+        return Err(CliError::invalid_command(format!(
+            "duplicate --config {config_id} for {} session/prompt capture",
+            provider.as_str()
+        )));
+    }
+    configs.push(CaptureConfigOption {
+        config_id,
+        value: value.to_owned(),
+    });
+    Ok(())
 }
 
 fn parse_session_set_config_option_capture(
@@ -368,23 +418,6 @@ fn parse_session_set_config_option_capture(
     })
 }
 
-fn parse_optional_config_option(
-    config_id: Option<String>,
-    value: Option<String>,
-    command: &str,
-) -> Result<Option<CaptureConfigOption>> {
-    match (config_id, value) {
-        (Some(config_id), Some(value)) => Ok(Some(CaptureConfigOption { config_id, value })),
-        (Some(_), None) => Err(CliError::invalid_command(format!(
-            "missing required --value for {command} when --config is provided"
-        ))),
-        (None, Some(_)) => Err(CliError::invalid_command(format!(
-            "missing required --config for {command} when --value is provided"
-        ))),
-        (None, None) => Ok(None),
-    }
-}
-
 fn provider_workspace_cwd(provider: ProviderId, configured: Option<PathBuf>) -> Result<PathBuf> {
     let root = provider_workspace_root(provider);
     let candidate = match configured {
@@ -423,5 +456,5 @@ fn lexical_normalize(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "cli_tests.rs"]
+#[path = "cli_tests/mod.rs"]
 mod tests;

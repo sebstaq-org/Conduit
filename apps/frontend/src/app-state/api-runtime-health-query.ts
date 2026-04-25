@@ -79,10 +79,18 @@ async function readRuntimeHealthJson(response: Response): Promise<unknown> {
   }
 }
 
+function requiredSessionHealthUrl(): string {
+  const healthUrl = configuredSessionHealthUrl();
+  if (healthUrl === null) {
+    throw new Error("No direct runtime health endpoint is configured");
+  }
+  return healthUrl;
+}
+
 async function readRuntimeHealthResponse(
   signal: AbortSignal,
 ): Promise<RuntimeHealthView> {
-  const response = await fetch(configuredSessionHealthUrl(), { signal });
+  const response = await fetch(requiredSessionHealthUrl(), { signal });
   const payload = await readRuntimeHealthJson(response);
   if (!response.ok) {
     throw new Error(

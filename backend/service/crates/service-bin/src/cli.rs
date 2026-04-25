@@ -13,10 +13,21 @@ pub(crate) enum Command {
         host: String,
         /// TCP port to bind.
         port: u16,
+        /// Relay endpoint used for pairing offers.
+        relay_endpoint: Option<String>,
+        /// Base application URL that receives pairing offer fragments.
+        app_base_url: String,
         /// Fixture provider root for deterministic provider responses.
         provider_fixtures: Option<PathBuf>,
         /// Explicit SQLite local-store path for isolated service runs.
         store_path: Option<PathBuf>,
+    },
+    /// Emits the daemon pairing offer.
+    Pair {
+        /// Relay endpoint used for pairing offers.
+        relay_endpoint: String,
+        /// Base application URL that receives the offer fragment.
+        app_base_url: String,
     },
     /// Runs one normal runtime consumer command and writes JSON to stdout.
     Runtime {
@@ -34,14 +45,40 @@ pub(crate) fn parse_command(args: &[String]) -> Result<Command> {
         "serve" => Ok(Command::Serve {
             host: optional_value(args, "--host").unwrap_or_else(|| "127.0.0.1".to_owned()),
             port: optional_u16(args, "--port")?.unwrap_or(4174),
+            relay_endpoint: optional_value(args, "--relay-endpoint")
+                .or_else(|| std::env::var("CONDUIT_RELAY_ENDPOINT").ok())
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty()),
+            app_base_url: app_base_url(args),
             provider_fixtures: optional_value(args, "--provider-fixtures").map(PathBuf::from),
             store_path: optional_value(args, "--store-path").map(PathBuf::from),
         }),
+        "pair" => pair_command(args),
         "runtime" => Ok(Command::Runtime {
             command: runtime_command(args)?,
         }),
         _ => Err(unsupported(command)),
     }
+}
+
+fn pair_command(args: &[String]) -> Result<Command> {
+    require_flag(args, "--json")?;
+    Ok(Command::Pair {
+        relay_endpoint: optional_value(args, "--relay-endpoint")
+            .or_else(|| std::env::var("CONDUIT_RELAY_ENDPOINT").ok())
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .ok_or(crate::error::ServiceError::MissingRelayEndpoint)?,
+        app_base_url: app_base_url(args),
+    })
+}
+
+fn app_base_url(args: &[String]) -> String {
+    optional_value(args, "--app-base-url")
+        .or_else(|| std::env::var("CONDUIT_APP_BASE_URL").ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "https://app.conduit.local".to_owned())
 }
 
 fn runtime_command(args: &[String]) -> Result<ConsumerCommand> {

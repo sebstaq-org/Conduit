@@ -16,6 +16,7 @@ import {
   readProjectListResponse,
   readProjectSuggestionsResponse,
 } from "./projectViews.js";
+import { confirmGeneratedSubscription } from "./confirmGeneratedSubscription.js";
 import { readSessionGroupsResponse } from "./sessionGroupsView.js";
 import type {
   SessionClientOptions,
@@ -26,6 +27,7 @@ import {
   readSessionsIndexChanged,
 } from "./timelineEvent.js";
 import { WebSocketTransport } from "./transport/webSocketTransport.js";
+import type { CommandTransport } from "./transport/commandTransport.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
@@ -37,6 +39,7 @@ import type {
   ProjectSuggestionsQuery,
   ProjectSuggestionsView,
   ProjectUpdateRequest,
+  PresenceUpdateRequest,
   ProvidersConfigSnapshotResult,
   SessionGroupsQuery,
   SessionGroupsView,
@@ -51,12 +54,10 @@ import type {
   SessionSetConfigOptionRequest,
   SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
 import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
 } from "./timelineEvent.js";
-
 interface TimelineSubscription {
   handler: (event: SessionTimelineChanged) => void;
   openSessionId: string;
@@ -66,29 +67,26 @@ interface SessionIndexSubscription {
   handler: (event: SessionsIndexChanged) => void;
 }
 
-function confirmGeneratedSubscription(
-  result: unknown,
-  cleanup: () => void,
-  parse: (result: unknown) => unknown,
-): void {
-  try {
-    parse(result);
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
-}
+type SessionProviderId = Parameters<SessionClientPort["openSession"]>[0];
 
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
   private readonly timelineSubscriptions = new Set<TimelineSubscription>();
   private readonly sessionIndexSubscriptions =
     new Set<SessionIndexSubscription>();
-  private readonly transport: WebSocketTransport;
-  public constructor(options: SessionClientOptions = {}) {
-    this.transport = new WebSocketTransport(options, (event) => {
-      this.handleRuntimeEvent(event);
-    });
+  private readonly transport: CommandTransport;
+  public constructor(
+    options: SessionClientOptions = {},
+    transport?: CommandTransport,
+  ) {
+    this.transport =
+      transport ??
+      new WebSocketTransport(options, (event) => {
+        this.handleRuntimeEvent(event);
+      });
+  }
+  public close(): void {
+    this.transport.close();
   }
   public async listProjects(): Promise<ProjectListView> {
     const response = await this.dispatch(
@@ -163,7 +161,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readGlobalSettingsResponse(response, "settings update failed");
   }
   public async openSession(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionOpenRequest,
   ): Promise<ConsumerResponse<SessionOpenResult | null>> {
     const response = await this.dispatch(
@@ -172,7 +170,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readSessionOpenResponse(response);
   }
   public async newSession(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionNewRequest,
   ): Promise<ConsumerResponse<SessionNewResult | null>> {
     const response = await this.dispatch(
@@ -189,7 +187,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readSessionHistoryResponse(response);
   }
   public async setSessionConfigOption(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionSetConfigOptionRequest,
   ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>> {
     const response = await this.dispatch(
@@ -215,6 +213,14 @@ class WebSocketSessionClient implements SessionClientPort {
       throw new Error(
         response.error?.message ?? "session respond_interaction failed",
       );
+    }
+  }
+  public async updatePresence(request: PresenceUpdateRequest): Promise<void> {
+    const response = await this.dispatch(
+      createConsumerCommand("presence/update", "all", request),
+    );
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? "presence update failed");
     }
   }
   public async subscribeTimelineChanges(
@@ -268,7 +274,7 @@ class WebSocketSessionClient implements SessionClientPort {
     const response = await this.transport.dispatch(command);
     return response;
   }
-  private handleRuntimeEvent(event: ConduitRuntimeEvent): void {
+  public handleRuntimeEvent(event: ConduitRuntimeEvent): void {
     this.handleTimelineEvent(event);
     this.handleSessionsIndexEvent(event);
   }
@@ -291,5 +297,4 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
-
-export { WebSocketSessionClient, confirmGeneratedSubscription };
+export { WebSocketSessionClient };

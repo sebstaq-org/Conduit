@@ -9,7 +9,7 @@ use tempfile::TempDir;
 
 type LocalDeps = (&'static str, Vec<&'static str>);
 
-const APPROVED_CRATES: [&str; 16] = [
+const APPROVED_CRATES: [&str; 17] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -21,6 +21,7 @@ const APPROVED_CRATES: [&str; 16] = [
     "provider-codex",
     "provider-copilot",
     "repo-guard",
+    "remote-access",
     "service-bin",
     "service-runtime",
     "session-projection",
@@ -100,7 +101,9 @@ fn create_roots(repo_root: &Path) -> Result<()> {
         "packages/app-client/src",
         "packages/app-core/src",
         "packages/app-protocol/src",
+        "packages/cloudflare-relay/src",
         "packages/design-system-tokens/src",
+        "packages/relay-transport/src",
         "packages/session-client/src",
         "packages/session-contracts/src",
         "packages/session-model/src",
@@ -178,7 +181,7 @@ fn write_support_files(repo_root: &Path) -> Result<()> {
     )
 }
 
-fn workspace_packages() -> [(&'static str, &'static str); 10] {
+fn workspace_packages() -> [(&'static str, &'static str); 12] {
     [
         ("@conduit/desktop", "apps/desktop"),
         ("@conduit/e2e", "apps/e2e"),
@@ -186,10 +189,12 @@ fn workspace_packages() -> [(&'static str, &'static str); 10] {
         ("@conduit/app-client", "packages/app-client"),
         ("@conduit/app-core", "packages/app-core"),
         ("@conduit/app-protocol", "packages/app-protocol"),
+        ("@conduit/cloudflare-relay", "packages/cloudflare-relay"),
         (
             "@conduit/design-system-tokens",
             "packages/design-system-tokens",
         ),
+        ("@conduit/relay-transport", "packages/relay-transport"),
         ("@conduit/session-client", "packages/session-client"),
         ("@conduit/session-contracts", "packages/session-contracts"),
         ("@conduit/session-model", "packages/session-model"),
@@ -239,7 +244,7 @@ fn metadata(repo_root: &Path) -> Metadata {
     }
 }
 
-fn local_deps() -> [LocalDeps; 16] {
+fn local_deps() -> [LocalDeps; 17] {
     [
         ("acp-contracts", Vec::<&str>::new()),
         ("acp-core", Vec::<&str>::new()),
@@ -261,6 +266,7 @@ fn local_deps() -> [LocalDeps; 16] {
             "repo-guard",
             vec!["telemetry-support", "tracing", "tracing-subscriber"],
         ),
+        ("remote-access", Vec::<&str>::new()),
         (
             "service-bin",
             vec![
@@ -270,6 +276,7 @@ fn local_deps() -> [LocalDeps; 16] {
                 "provider-codex",
                 "provider-copilot",
                 "provider-fixture",
+                "remote-access",
                 "session-store",
                 "telemetry-support",
                 "tracing",

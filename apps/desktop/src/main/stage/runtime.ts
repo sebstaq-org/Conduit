@@ -51,7 +51,7 @@ function createStageWindow(config: StageRuntimeConfig): BrowserWindow {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: join(import.meta.dirname, "../../preload/index.js"),
+      preload: join(import.meta.dirname, "../../preload/index.cjs"),
       sandbox: true,
     },
     width: 1440,

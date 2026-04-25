@@ -347,6 +347,16 @@ impl FixtureProviderPort {
         self.applied_config_options.get(&key) == Some(&required.value)
     }
 
+    fn prompt_configs_satisfied(
+        &self,
+        session_id: &str,
+        required: &[RequiredPromptConfig],
+    ) -> bool {
+        required
+            .iter()
+            .all(|config| self.prompt_config_satisfied(session_id, config))
+    }
+
     fn matching_prompt_fixture(
         &self,
         session_id: &str,
@@ -355,13 +365,13 @@ impl FixtureProviderPort {
         fixtures
             .iter()
             .find(|fixture| {
-                session_prompt_fixture_required_config(fixture)
-                    .is_some_and(|required| self.prompt_config_satisfied(session_id, required))
+                let required = session_prompt_fixture_required_configs(fixture);
+                !required.is_empty() && self.prompt_configs_satisfied(session_id, required)
             })
             .or_else(|| {
                 fixtures
                     .iter()
-                    .find(|fixture| session_prompt_fixture_required_config(fixture).is_none())
+                    .find(|fixture| session_prompt_fixture_required_configs(fixture).is_empty())
             })
             .cloned()
     }
@@ -373,18 +383,22 @@ impl FixtureProviderPort {
     ) -> RuntimeError {
         let Some(required) = fixtures
             .iter()
-            .find_map(session_prompt_fixture_required_config)
+            .map(session_prompt_fixture_required_configs)
+            .find(|required| !required.is_empty())
         else {
             return RuntimeError::Provider(format!(
                 "session/prompt fixture for {} session {session_id} has no matching config state",
                 self.provider.as_str()
             ));
         };
+        let required = required
+            .iter()
+            .map(|config| format!("{}={}", config.config_id, config.value))
+            .collect::<Vec<_>>()
+            .join(", ");
         RuntimeError::Provider(format!(
-            "session/prompt fixture for {} session {session_id} requires prior session/set_config_option {}={}",
+            "session/prompt fixture for {} session {session_id} requires prior session/set_config_option {required}",
             self.provider.as_str(),
-            required.config_id,
-            required.value
         ))
     }
 }
@@ -396,12 +410,12 @@ fn session_prompt_fixture_prompt(fixture: &SessionPromptFixture) -> &[Value] {
     }
 }
 
-fn session_prompt_fixture_required_config(
+fn session_prompt_fixture_required_configs(
     fixture: &SessionPromptFixture,
-) -> Option<&prompt::RequiredPromptConfig> {
+) -> &[prompt::RequiredPromptConfig] {
     match fixture {
-        SessionPromptFixture::Failure(_) => None,
-        SessionPromptFixture::Success(success) => success.required_config.as_ref(),
+        SessionPromptFixture::Failure(_) => &[],
+        SessionPromptFixture::Success(success) => &success.required_configs,
     }
 }
 

@@ -6,3 +6,4 @@ export { PopoverOverlay } from "./popover-overlay";
 export { PopoverPortalHost } from "./popover-portal-host";
 export { PopoverPortal } from "./popover-portal";
 export { PopoverRoot } from "./popover-root";
+export { PopoverStatusTrigger } from "./popover-status-trigger";

@@ -1,6 +1,7 @@
-use super::{
-    OutboundFrame, WatchState, handle_client_message, health_response, is_loopback_client,
+use super::text_connection::{
+    OutboundFrame, TextConnectionRuntime, WatchState, handle_client_text,
 };
+use super::{health_response, is_loopback_client};
 use crate::serve::actor::RuntimeActor;
 use acp_core::{
     ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,
@@ -11,7 +12,6 @@ use acp_discovery::{InitializeProbe, LauncherCommand, ProviderDiscovery, Provide
 use agent_client_protocol_schema::{
     AgentCapabilities, Implementation, InitializeResponse, ProtocolVersion,
 };
-use axum::extract::ws::Message;
 use serde_json::json;
 use service_runtime::{
     ProviderFactory, ProviderPort, Result, RuntimeError, RuntimeEvent, RuntimeEventKind,
@@ -59,9 +59,14 @@ async fn socket_handler_accepts_following_command_while_prompt_response_is_pendi
     let watches = Arc::new(tokio::sync::Mutex::new(WatchState::default()));
     let (outbound, mut outbound_rx) = tokio_mpsc::unbounded_channel();
 
-    if !handle_client_message(
-        &actor,
-        command_message(
+    let runtime = TextConnectionRuntime {
+        actor: actor.clone(),
+        presence: None,
+        connection_kind: "direct",
+    };
+    handle_client_text(
+        runtime.clone(),
+        &command_text(
             "prompt-1",
             "session/prompt",
             "all",
@@ -70,19 +75,15 @@ async fn socket_handler_accepts_following_command_while_prompt_response_is_pendi
         Arc::clone(&watches),
         outbound.clone(),
         1,
-    ) {
-        return Err("prompt frame was rejected".into());
-    }
+    );
     started_rx.recv_timeout(Duration::from_secs(5))?;
-    if !handle_client_message(
-        &actor,
-        command_message("watch-1", "sessions/watch", "all", json!({})),
+    handle_client_text(
+        runtime,
+        &command_text("watch-1", "sessions/watch", "all", json!({})),
         watches,
         outbound,
         1,
-    ) {
-        return Err("watch frame was rejected".into());
-    }
+    );
 
     let response = tokio::time::timeout(Duration::from_millis(250), outbound_rx.recv()).await?;
     release_prompt(&release)?;
@@ -390,22 +391,19 @@ fn seed_open_session(path: &PathBuf) -> TestResult<String> {
     Ok(opened.open_session_id)
 }
 
-fn command_message(id: &str, command: &str, provider: &str, params: serde_json::Value) -> Message {
-    Message::Text(
-        json!({
-            "v": 1,
-            "type": "command",
+fn command_text(id: &str, command: &str, provider: &str, params: serde_json::Value) -> String {
+    json!({
+        "v": 1,
+        "type": "command",
+        "id": id,
+        "command": {
             "id": id,
-            "command": {
-                "id": id,
-                "command": command,
-                "provider": provider,
-                "params": params
-            }
-        })
-        .to_string()
-        .into(),
-    )
+            "command": command,
+            "provider": provider,
+            "params": params
+        }
+    })
+    .to_string()
 }
 
 fn prompt_params(open_session_id: &str) -> serde_json::Value {

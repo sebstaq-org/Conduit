@@ -4,8 +4,19 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": "../.."
   },
-  "include": ["playwright.config.ts", "src/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "playwright.config.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "../../packages/app-client/src/**/*.ts",
+    "../../packages/app-protocol/src/**/*.ts",
+    "../../packages/relay-transport/src/**/*.ts",
+    "../../packages/session-client/src/**/*.ts",
+    "../../packages/session-contracts/src/**/*.ts",
+    "../../packages/session-model/src/**/*.ts"
+  ]
 }

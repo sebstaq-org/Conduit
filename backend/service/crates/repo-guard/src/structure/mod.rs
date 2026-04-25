@@ -22,16 +22,18 @@ const ALLOWED_TOP_LEVEL: [&str; 7] = [
 ];
 const FORBIDDEN_TOP_LEVEL: [&str; 6] = ["rust", "shared", "core", "utils", "misc", "tmp"];
 const APPROVED_APPS: [&str; 3] = ["desktop", "e2e", "frontend"];
-const APPROVED_PACKAGES: [&str; 7] = [
+const APPROVED_PACKAGES: [&str; 9] = [
     "app-client",
     "app-core",
     "app-protocol",
+    "cloudflare-relay",
     "design-system-tokens",
+    "relay-transport",
     "session-client",
     "session-contracts",
     "session-model",
 ];
-const APPROVED_CRATES: [&str; 16] = [
+const APPROVED_CRATES: [&str; 17] = [
     "acp-contracts",
     "acp-core",
     "acp-discovery",
@@ -43,6 +45,7 @@ const APPROVED_CRATES: [&str; 16] = [
     "provider-codex",
     "provider-copilot",
     "repo-guard",
+    "remote-access",
     "service-bin",
     "service-runtime",
     "session-projection",

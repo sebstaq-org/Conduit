@@ -1,6 +1,6 @@
 import { ConduitSessionWatchResultSchema } from "@conduit/app-protocol";
 import { expect, it } from "vitest";
-import { confirmGeneratedSubscription } from "./webSocketSessionClient.js";
+import { confirmGeneratedSubscription } from "./confirmGeneratedSubscription.js";
 
 it("runs subscription cleanup when generated watch ack parsing fails", () => {
   let cleanedUp = false;

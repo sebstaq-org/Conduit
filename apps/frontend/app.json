@@ -2,6 +2,7 @@
   "expo": {
     "name": "Conduit",
     "slug": "conduit",
+    "owner": "ribboo",
     "version": "0.5.0",
     "orientation": "portrait",
     "platforms": ["ios", "android", "web"],
@@ -9,9 +10,23 @@
     "android": {
       "package": "org.sebstaq.conduit"
     },
-    "plugins": ["expo-router"],
+    "ios": {
+      "bundleIdentifier": "com.sebstaq.conduit",
+      "buildNumber": "2",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "27195ede-21d0-47af-aa01-685d1f42c927"
+      },
+      "router": {}
     }
   }
 }

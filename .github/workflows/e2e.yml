@@ -15,7 +15,7 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -38,8 +38,17 @@ jobs:
           toolchain: 1.93.1
           components: rustfmt, clippy
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcap-dev pkg-config
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Electron sandbox helper
+        run: |
+          ELECTRON_SANDBOX_PATH="$(pnpm --filter @conduit/desktop exec node -e "const path = require('node:path'); const pkg = require.resolve('electron/package.json'); process.stdout.write(path.join(path.dirname(pkg), 'dist', 'chrome-sandbox'));")"
+          sudo chown root:root "$ELECTRON_SANDBOX_PATH"
+          sudo chmod 4755 "$ELECTRON_SANDBOX_PATH"
 
       - name: Install Chromium
         run: pnpm --filter @conduit/e2e exec playwright install --with-deps chromium
@@ -48,4 +57,4 @@ jobs:
         run: pnpm --filter @conduit/e2e run typecheck
 
       - name: Run E2E
-        run: pnpm --filter @conduit/e2e run test
+        run: xvfb-run -a pnpm --filter @conduit/e2e run test

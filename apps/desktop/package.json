@@ -19,6 +19,7 @@
     "@conduit/session-client": "workspace:*",
     "@conduit/session-contracts": "workspace:*",
     "@conduit/session-model": "workspace:*",
+    "qrcode": "1.5.4",
     "react": "19.2.0",
     "react-dom": "19.2.0"
   },
@@ -27,6 +28,7 @@
     "@electron-forge/maker-zip": "7.11.1",
     "@electron-forge/shared-types": "7.11.1",
     "@swc/core": "1.15.24",
+    "@types/qrcode": "1.5.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.4",

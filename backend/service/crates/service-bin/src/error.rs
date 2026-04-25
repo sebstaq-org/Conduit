@@ -1,5 +1,6 @@
 //! Errors for the product service binary.
 
+use crate::identity::DaemonIdentityError;
 use thiserror::Error;
 
 /// Result type for `service-bin`.
@@ -20,9 +21,12 @@ pub(crate) enum ServiceError {
     /// Local store operations failed.
     #[error(transparent)]
     LocalStore(#[from] session_store::Error),
-    /// The operating system did not provide an application data directory.
-    #[error("local store data directory is unavailable")]
-    LocalStoreDataDirectory,
+    /// The operating system did not provide a product home directory.
+    #[error("product home directory is unavailable")]
+    ProductHomeDirectory,
+    /// Daemon identity operations failed.
+    #[error(transparent)]
+    DaemonIdentity(#[from] DaemonIdentityError),
     /// Service I/O failed.
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -48,4 +52,7 @@ pub(crate) enum ServiceError {
         /// The parse error details.
         message: String,
     },
+    /// Pairing needs a configured relay endpoint.
+    #[error("missing relay endpoint; pass --relay-endpoint or set CONDUIT_RELAY_ENDPOINT")]
+    MissingRelayEndpoint,
 }

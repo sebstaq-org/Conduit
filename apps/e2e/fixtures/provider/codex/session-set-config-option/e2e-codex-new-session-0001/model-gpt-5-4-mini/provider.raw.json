@@ -1,0 +1,63 @@
+{
+  "configRequest": {
+    "configId": "model",
+    "sessionId": "e2e-codex-new-session-0001",
+    "value": "gpt-5.4-mini"
+  },
+  "configResponse": {
+    "configOptions": [
+      {
+        "category": "mode",
+        "currentValue": "full-access",
+        "id": "mode",
+        "name": "Approval Preset",
+        "options": [
+          { "name": "Read Only", "value": "read-only" },
+          { "name": "Default", "value": "auto" },
+          { "name": "Full Access", "value": "full-access" }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "mode",
+        "currentValue": "default",
+        "id": "collaboration_mode",
+        "name": "Collaboration Mode",
+        "options": [
+          { "name": "Plan", "value": "plan" },
+          { "name": "Default", "value": "default" }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "model",
+        "currentValue": "gpt-5.4-mini",
+        "id": "model",
+        "name": "Model",
+        "options": [
+          { "name": "gpt-5.4", "value": "gpt-5.4" },
+          { "name": "GPT-5.4-Mini", "value": "gpt-5.4-mini" }
+        ],
+        "type": "select"
+      },
+      {
+        "category": "thought_level",
+        "currentValue": "high",
+        "id": "reasoning_effort",
+        "name": "Reasoning Effort",
+        "options": [
+          { "name": "Medium", "value": "medium" },
+          { "name": "High", "value": "high" }
+        ],
+        "type": "select"
+      }
+    ],
+    "currentModeId": "full-access",
+    "models": {
+      "currentModelId": "gpt-5.4-mini/high"
+    },
+    "modes": {
+      "currentModeId": "full-access"
+    }
+  }
+}

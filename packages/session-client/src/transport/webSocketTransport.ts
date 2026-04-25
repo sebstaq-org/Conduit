@@ -43,6 +43,12 @@ class WebSocketTransport {
     return this.awaitDispatchResponse(command, responseDeferred, startedAt);
   }
 
+  public close(): void {
+    const socket = this.socket;
+    this.handleClose();
+    socket?.close();
+  }
+
   private logDispatchStart(command: ConsumerCommand): void {
     this.emitTelemetry({
       event_name: "session_client.transport.dispatch.start",

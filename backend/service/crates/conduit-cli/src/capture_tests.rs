@@ -142,6 +142,58 @@ fn accepts_session_prompt_with_prompt_request_response_and_updates() {
 }
 
 #[test]
+fn accepts_session_prompt_with_multiple_config_captures() {
+    assert!(
+        validate_session_prompt(&json!({
+            "sessionNew": null,
+            "configCaptures": [
+                {
+                    "configRequest": {
+                        "sessionId": "session-1",
+                        "configId": "model",
+                        "value": "gpt-5.4-mini"
+                    },
+                    "configResponse": {
+                        "configOptions": [
+                            {
+                                "id": "model",
+                                "currentValue": "gpt-5.4-mini",
+                                "type": "select",
+                                "options": []
+                            }
+                        ]
+                    }
+                },
+                {
+                    "configRequest": {
+                        "sessionId": "session-1",
+                        "configId": "reasoning_effort",
+                        "value": "medium"
+                    },
+                    "configResponse": {
+                        "configOptions": [
+                            {
+                                "id": "reasoning_effort",
+                                "currentValue": "medium",
+                                "type": "select",
+                                "options": []
+                            }
+                        ]
+                    }
+                }
+            ],
+            "promptRequest": {
+                "sessionId": "session-1",
+                "prompt": [{ "type": "text", "text": "hello" }]
+            },
+            "promptResponse": { "stopReason": "end_turn" },
+            "promptUpdates": []
+        }))
+        .is_ok()
+    );
+}
+
+#[test]
 fn accepts_session_set_config_option_with_selected_current_value() {
     assert!(
         validate_session_set_config_option(&json!({
@@ -240,6 +292,29 @@ fn rejects_session_prompt_without_updates() {
 }
 
 #[test]
+fn rejects_session_prompt_malformed_config_capture() {
+    let error = validate_session_prompt(&json!({
+        "configCaptures": [
+            {
+                "configRequest": {
+                    "sessionId": "session-1",
+                    "configId": "model",
+                    "value": "gpt-5.4-mini"
+                },
+                "configResponse": { "configOptions": [] }
+            }
+        ],
+        "promptRequest": { "sessionId": "session-1", "prompt": [] },
+        "promptResponse": { "stopReason": "end_turn" },
+        "promptUpdates": []
+    }))
+    .err()
+    .map(|error| error.to_string())
+    .unwrap_or_default();
+    assert!(error.contains("selected config currentValue"));
+}
+
+#[test]
 fn reads_prompt_content_block_array() -> Result<(), Box<dyn std::error::Error>> {
     let tempdir = TempDir::new()?;
     let path = tempdir.path().join("prompt.json");
@@ -271,7 +346,7 @@ fn normalizes_session_prompt_with_canonical_projection() -> Result<(), Box<dyn s
     let normalized = normalize_capture(
         &CaptureOperation::Prompt {
             session_id: None,
-            config: None,
+            configs: Vec::new(),
             prompt_path: "prompt.json".into(),
         },
         &json!({

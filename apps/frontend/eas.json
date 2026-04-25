@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">=16.24.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "stage-simulator": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "stage"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "stage-simulator-markdown-repro": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "stage",
+        "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE": "true",
+        "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO": "markdown-crash-repro"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "stage": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "stage"
+      },
+      "ios": {
+        "simulator": false
+      }
+    }
+  }
+}

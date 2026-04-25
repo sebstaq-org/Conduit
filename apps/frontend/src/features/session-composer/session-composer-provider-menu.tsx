@@ -1,6 +1,10 @@
 import { PROVIDERS } from "@conduit/session-client";
 import type { ProviderId } from "@conduit/session-client";
-import { DropdownMenuContent, DropdownMenuItem } from "@/ui";
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+} from "@/ui";
 import { displayProviderName } from "./session-composer-display";
 
 interface SessionComposerProviderMenuProps {
@@ -11,17 +15,19 @@ function SessionComposerProviderMenu({
   onProviderSelect,
 }: SessionComposerProviderMenuProps): React.JSX.Element {
   return (
-    <DropdownMenuContent>
-      {PROVIDERS.map((provider) => (
-        <DropdownMenuItem
-          key={provider}
-          label={displayProviderName(provider)}
-          onSelect={() => {
-            onProviderSelect(provider);
-          }}
-        />
-      ))}
-    </DropdownMenuContent>
+    <DropdownMenuPortal>
+      <DropdownMenuContent>
+        {PROVIDERS.map((provider) => (
+          <DropdownMenuItem
+            key={provider}
+            label={displayProviderName(provider)}
+            onSelect={() => {
+              onProviderSelect(provider);
+            }}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenuPortal>
   );
 }
 

@@ -62,6 +62,7 @@ const CONDUIT_COMMANDS = [
   "projects/update",
   "settings/get",
   "settings/update",
+  "presence/update",
   "sessions/grouped",
   "sessions/watch",
   "providers/config_snapshot",
@@ -81,6 +82,7 @@ type ProjectSuggestionsCommandName = "projects/suggestions";
 type ProjectUpdateCommandName = "projects/update";
 type SettingsGetCommandName = "settings/get";
 type SettingsUpdateCommandName = "settings/update";
+type PresenceUpdateCommandName = "presence/update";
 type SessionsWatchCommandName = "sessions/watch";
 type ProvidersConfigSnapshotCommandName = "providers/config_snapshot";
 type SessionOpenCommandName = "session/open";
@@ -223,6 +225,21 @@ const SettingsUpdateConsumerCommandSchema = z
     params: GlobalSettingsUpdateRequestSchema,
   })
   .strict();
+const PresenceUpdateRequestSchema = z
+  .object({
+    clientId: z.string().min(1),
+    displayName: z.string().min(1),
+    deviceKind: z.enum(["mobile", "web"]),
+  })
+  .strict();
+const PresenceUpdateConsumerCommandSchema = z
+  .object({
+    id: z.string(),
+    command: z.literal("presence/update"),
+    provider: GlobalProviderTargetSchema,
+    params: PresenceUpdateRequestSchema,
+  })
+  .strict();
 const SessionsWatchConsumerCommandSchema = z
   .object({
     id: z.string(),
@@ -281,6 +298,7 @@ const ConsumerCommandSchema = z.union([
   ProjectUpdateConsumerCommandSchema,
   SettingsGetConsumerCommandSchema,
   SettingsUpdateConsumerCommandSchema,
+  PresenceUpdateConsumerCommandSchema,
   SessionsWatchConsumerCommandSchema,
   ProvidersConfigSnapshotConsumerCommandSchema,
   SessionHistoryConsumerCommandSchema,
@@ -313,6 +331,10 @@ type SettingsGetConsumerCommand = z.infer<
 >;
 type SettingsUpdateConsumerCommand = z.infer<
   typeof SettingsUpdateConsumerCommandSchema
+>;
+type PresenceUpdateRequest = z.infer<typeof PresenceUpdateRequestSchema>;
+type PresenceUpdateConsumerCommand = z.infer<
+  typeof PresenceUpdateConsumerCommandSchema
 >;
 type SessionsWatchConsumerCommand = z.infer<
   typeof SessionsWatchConsumerCommandSchema
@@ -426,6 +448,9 @@ export type {
   SessionRespondInteractionCommandName,
   SessionRespondInteractionConsumerCommand,
   SessionRespondInteractionRequest,
+  PresenceUpdateCommandName,
+  PresenceUpdateConsumerCommand,
+  PresenceUpdateRequest,
   SessionsWatchCommandName,
   SessionsWatchConsumerCommand,
   ProvidersConfigSnapshotCommandName,

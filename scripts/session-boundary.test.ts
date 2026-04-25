@@ -25,6 +25,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
   "projects/update",
   "settings/get",
   "settings/update",
+  "presence/update",
   "sessions/grouped",
   "sessions/watch",
   "providers/config_snapshot",
@@ -36,7 +37,7 @@ const EXPECTED_CONSUMER_COMMANDS = [
 function readCatalogCommands(): string[] {
   const sourcePath = fileURLToPath(
     new URL(
-      "../backend/service/crates/service-bin/src/serve/mod.rs",
+      "../backend/service/crates/service-bin/src/serve/catalog.rs",
       import.meta.url,
     ),
   );

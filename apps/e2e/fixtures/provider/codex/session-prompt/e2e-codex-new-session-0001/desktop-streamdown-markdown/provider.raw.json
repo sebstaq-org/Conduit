@@ -1,0 +1,72 @@
+{
+  "configCapture": null,
+  "promptRequest": {
+    "prompt": [
+      {
+        "text": "Stream a markdown proof for desktop Streamdown rendering.",
+        "type": "text"
+      }
+    ],
+    "sessionId": "e2e-codex-new-session-0001"
+  },
+  "promptResponse": {
+    "stopReason": "end_turn"
+  },
+  "promptUpdates": [
+    {
+      "index": 0,
+      "update": {
+        "content": {
+          "text": "# CONDUIT_DESKTOP_STREAMDOWN_E2E\n\n",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 1,
+      "update": {
+        "content": {
+          "text": "**Summary:** desktop ",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 2,
+      "update": {
+        "content": {
+          "text": "Streamdown renders chunked markdown.\n\n",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 3,
+      "update": {
+        "content": {
+          "text": "- First streamed item\n",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    },
+    {
+      "index": 4,
+      "update": {
+        "content": {
+          "text": "- Second streamed item\n",
+          "type": "text"
+        },
+        "sessionUpdate": "agent_message_chunk"
+      },
+      "variant": "agent_message_chunk"
+    }
+  ]
+}

@@ -10,6 +10,13 @@
       "@conduit/design-system-tokens": [
         "../../packages/design-system-tokens/src/index.ts"
       ],
+      "@conduit/relay-transport": [
+        "../../packages/relay-transport/src/index.ts"
+      ],
+      "@conduit/session-client": ["../../packages/session-client/src/index.ts"],
+      "@conduit/session-contracts": [
+        "../../packages/session-contracts/src/index.ts"
+      ],
       "@conduit/session-model": ["../../packages/session-model/src/index.ts"]
     }
   },
@@ -21,6 +28,7 @@
     "../../packages/app-client/src/**/*.ts",
     "../../packages/app-core/src/**/*.ts",
     "../../packages/design-system-tokens/src/**/*.ts",
+    "../../packages/relay-transport/src/**/*.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.d.ts",

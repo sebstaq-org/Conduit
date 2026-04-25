@@ -141,3 +141,23 @@ export type {
   ProviderSnapshot,
   RawWireEvent,
 };
+
+export {
+  AUTHORIZATION_BOUNDARY,
+  CONNECTION_OFFER_VERSION,
+  acceptConnectionOffer,
+  evaluateConnectionOfferTrust,
+  hostProfileFromOffer,
+  parseConnectionOfferUrl,
+  publicKeyFingerprint,
+  readConnectionOffer,
+  relayOfferFromHostProfile,
+} from "./connection-offer.js";
+
+export type {
+  AcceptConnectionOfferResult,
+  ConnectionHostProfile,
+  ConnectionOfferTrustResult,
+  ConnectionOfferV1,
+  TrustedHostRecord,
+} from "./connection-offer.js";

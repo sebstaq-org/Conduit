@@ -6,19 +6,66 @@ import { getBundleModeMetroConfig } from "react-native-worklets/bundleMode/index
 
 const projectRoot = import.meta.dirname;
 const require = createRequire(import.meta.url);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readBundleModeEnabled(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const worklets = value.worklets;
+  if (!isRecord(worklets)) {
+    return false;
+  }
+
+  const staticFeatureFlags = worklets.staticFeatureFlags;
+  if (!isRecord(staticFeatureFlags)) {
+    return false;
+  }
+
+  return staticFeatureFlags.BUNDLE_MODE_ENABLED === true;
+}
+
 const config = getDefaultConfig(projectRoot);
-const workletsPackagePath = path.dirname(
-  require.resolve("react-native-worklets/package.json"),
-);
-const workletsOutputPath = path.resolve(workletsPackagePath, ".worklets");
+const packageJson: unknown = require("./package.json");
+const isBundleModeEnabled = readBundleModeEnabled(packageJson);
 const workletsModulePath = path.join("react-native-worklets", ".worklets");
 
-mkdirSync(workletsOutputPath, { recursive: true });
-config.watchFolders.push(workletsOutputPath);
+if (isBundleModeEnabled) {
+  const workletsPackagePath = path.dirname(
+    require.resolve("react-native-worklets/package.json"),
+  );
+  const workletsOutputPath = path.resolve(workletsPackagePath, ".worklets");
+
+  mkdirSync(workletsOutputPath, { recursive: true });
+  config.watchFolders.push(workletsOutputPath);
+}
 
 const defaultResolveRequest = config.resolver.resolveRequest;
-const metroConfig = getBundleModeMetroConfig(config);
-const bundleModeResolveRequest = metroConfig.resolver.resolveRequest;
+
+function createMetroConfig(): typeof config {
+  if (isBundleModeEnabled) {
+    return getBundleModeMetroConfig(config);
+  }
+
+  return config;
+}
+
+function readBundleModeResolveRequest(
+  currentConfig: typeof config,
+): NonNullable<typeof config.resolver.resolveRequest> | undefined {
+  if (!isBundleModeEnabled) {
+    return undefined;
+  }
+
+  return currentConfig.resolver.resolveRequest;
+}
+
+const metroConfig = createMetroConfig();
+const bundleModeResolveRequest = readBundleModeResolveRequest(metroConfig);
 
 function resolveDefault(
   context: Parameters<NonNullable<typeof defaultResolveRequest>>[0],
@@ -99,6 +146,21 @@ const resolveWithTypeScriptExtensionFallback: ResolveRequest = (
   }
 };
 
+function resolveWebWorkletsMock(
+  context: Parameters<NonNullable<typeof defaultResolveRequest>>[0],
+  requestName: string,
+  platform: string | null,
+): unknown {
+  if (platform === "web" && requestName === "react-native-worklets") {
+    return resolveDefault(
+      context,
+      "react-native-worklets/lib/module/mock",
+      platform,
+    );
+  }
+  return null;
+}
+
 metroConfig.resolver.resolveRequest = (
   context,
   moduleName,
@@ -113,8 +175,20 @@ metroConfig.resolver.resolveRequest = (
   if (sourceRequest !== undefined) {
     return sourceRequest;
   }
+  const webWorkletsMock = resolveWebWorkletsMock(
+    context,
+    requestName,
+    platform,
+  );
+  if (webWorkletsMock !== null) {
+    return webWorkletsMock;
+  }
 
-  if (requestName.startsWith(workletsModulePath)) {
+  if (
+    isBundleModeEnabled &&
+    bundleModeResolveRequest !== undefined &&
+    requestName.startsWith(workletsModulePath)
+  ) {
     return bundleModeResolveRequest(context, moduleName, platform);
   }
 
