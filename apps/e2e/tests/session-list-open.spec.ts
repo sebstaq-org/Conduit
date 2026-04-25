@@ -275,7 +275,10 @@ test("pairing survives reload, reconfigures, and forget clears stale data", asyn
   await expect(page.getByText("No desktop paired")).toBeVisible();
   await expect(page.getByLabel("Desktop idle indicator")).toBeVisible();
   await closePopover(page);
-  await expect(page.getByText(fixtureCwd)).not.toBeVisible();
+  await expect(page.getByLabel(`New session in ${fixtureCwd}`)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: fixtureSessionTitle }),
+  ).toHaveCount(0);
 });
 
 test("pair route refreshes the offer field for a new deep link", async ({
