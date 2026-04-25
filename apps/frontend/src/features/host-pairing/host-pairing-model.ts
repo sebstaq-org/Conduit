@@ -67,6 +67,9 @@ function useHostPairingModel({
   const { activeHost, hosts, pairingError } = usePairingSelectors();
   const settings = useGetSettingsQuery(null, {
     pollingInterval: relayPollingIntervalMs,
+    refetchOnFocus: true,
+    refetchOnMountOrArgChange: true,
+    refetchOnReconnect: true,
     skip: activeHost === null,
   });
   const connection = hostConnectionStatus(

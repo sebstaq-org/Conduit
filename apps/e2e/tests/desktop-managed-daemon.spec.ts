@@ -56,6 +56,15 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   await expect(
     page.getByLabel("Mobile pairing connected indicator"),
   ).toBeVisible({ timeout: 15000 });
+  await closePopover(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(
+    page.getByRole("button", { name: "Mobile pairing controls" }),
+  ).toBeVisible({ timeout: 60000 });
+  await openDesktopPairingPopover(page);
+  await expect(
+    page.getByLabel("Mobile pairing connected indicator"),
+  ).toBeVisible({ timeout: 15000 });
 
   const projects = await client.addProject({ cwd: fixtureCwd });
   expect(projects.projects.some((project) => project.cwd === fixtureCwd)).toBe(

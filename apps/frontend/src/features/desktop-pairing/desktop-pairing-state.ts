@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import type {
   ConduitDesktopBridge,
   DesktopDaemonStatus,
   DesktopPairingOffer,
 } from "@/app-state/desktop-bridge";
+import { desktopPairingStatusController } from "./desktop-pairing-status-controller";
 
 type PendingAction = "offer" | "restart" | "status" | null;
 
@@ -25,8 +26,7 @@ interface DesktopActionRequest {
   readonly task: () => Promise<void>;
 }
 
-const presencePollIntervalMs = 750;
-const presencePollDeadlineMs = 120_000;
+type SetDesktopPairingOffer = (value: DesktopPairingOffer | null) => void;
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -53,34 +53,44 @@ function runDesktopAction(request: DesktopActionRequest): void {
   void executeDesktopAction(request);
 }
 
-function schedulePresencePolling(
+async function createPairingOffer(
   bridge: ConduitDesktopBridge,
-  setStatus: (value: DesktopDaemonStatus) => void,
-): void {
-  const startedAt = Date.now();
-  const poll = async (): Promise<void> => {
-    try {
-      const next = await bridge.getDaemonStatus();
-      setStatus(next);
-      if (Date.now() - startedAt >= presencePollDeadlineMs) {
-        return;
-      }
-    } catch {
-      return;
-    }
-    setTimeout(() => {
-      void poll();
-    }, presencePollIntervalMs);
-  };
-  setTimeout(() => {
-    void poll();
-  }, presencePollIntervalMs);
+  setOffer: SetDesktopPairingOffer,
+): Promise<void> {
+  setOffer(await bridge.getPairingOffer());
+  await desktopPairingStatusController.refreshStatus(bridge);
+  desktopPairingStatusController.startPresencePolling(bridge);
+}
+
+async function restartDesktopDaemon(
+  bridge: ConduitDesktopBridge,
+  setOffer: SetDesktopPairingOffer,
+): Promise<void> {
+  desktopPairingStatusController.cancelPolling();
+  desktopPairingStatusController.replaceStatus(await bridge.restartDaemon());
+  desktopPairingStatusController.startBaselinePolling(bridge);
+  setOffer(null);
+}
+
+function useDesktopStatus(
+  bridge: ConduitDesktopBridge | null,
+): DesktopDaemonStatus | null {
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      desktopPairingStatusController.subscribe(bridge, listener),
+    [bridge],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => desktopPairingStatusController.getSnapshot(),
+    () => desktopPairingStatusController.getSnapshot(),
+  );
 }
 
 function useDesktopPairingState(
   bridge: ConduitDesktopBridge | null,
 ): DesktopPairingState {
-  const [status, setStatus] = useState<DesktopDaemonStatus | null>(null);
+  const status = useDesktopStatus(bridge);
   const [offer, setOffer] = useState<DesktopPairingOffer | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingAction>(null);
@@ -90,16 +100,14 @@ function useDesktopPairingState(
   const handleStatus = (): void => {
     if (bridge !== null) {
       run("status", async () => {
-        setStatus(await bridge.getDaemonStatus());
+        await desktopPairingStatusController.refreshStatus(bridge);
       });
     }
   };
   const handleOffer = (): void => {
     if (bridge !== null) {
       run("offer", async () => {
-        setOffer(await bridge.getPairingOffer());
-        setStatus(await bridge.getDaemonStatus());
-        schedulePresencePolling(bridge, setStatus);
+        await createPairingOffer(bridge, setOffer);
       });
     }
   };
@@ -111,8 +119,7 @@ function useDesktopPairingState(
   const handleRestart = (): void => {
     if (bridge !== null) {
       run("restart", async () => {
-        setStatus(await bridge.restartDaemon());
-        setOffer(null);
+        await restartDesktopDaemon(bridge, setOffer);
       });
     }
   };

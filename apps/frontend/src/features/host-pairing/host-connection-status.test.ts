@@ -18,15 +18,61 @@ describe(hostConnectionStatus, () => {
 
   it("keeps a verified connection green during background polling", () => {
     expect(
-      hostConnectionStatus({
-        activeHostPaired: true,
-        data: {},
-        fulfilledTimeStamp: 1000,
-        isError: false,
-        isFetching: true,
-        isSuccess: true,
-      }),
+      hostConnectionStatus(
+        {
+          activeHostPaired: true,
+          data: {},
+          fulfilledTimeStamp: 1000,
+          isError: false,
+          isFetching: true,
+          isSuccess: true,
+        },
+        1000 + recentSuccessGraceMs - 1,
+      ),
     ).toMatchObject({ indicator: "connected", label: "Desktop" });
+  });
+
+});
+
+describe("stale relay success", () => {
+  it("does not render stale RTK Query success as connected", () => {
+    expect(
+      hostConnectionStatus(
+        {
+          activeHostPaired: true,
+          data: {},
+          fulfilledTimeStamp: 1000,
+          isError: false,
+          isFetching: false,
+          isSuccess: true,
+        },
+        1000 + recentSuccessGraceMs + 1,
+      ),
+    ).toMatchObject({
+      indicator: "idle",
+      label: "Desktop",
+      reason: "Relay idle",
+    });
+  });
+
+  it("uses spinner when stale data is being actively refreshed", () => {
+    expect(
+      hostConnectionStatus(
+        {
+          activeHostPaired: true,
+          data: {},
+          fulfilledTimeStamp: 1000,
+          isError: false,
+          isFetching: true,
+          isSuccess: true,
+        },
+        1000 + recentSuccessGraceMs + 1,
+      ),
+    ).toMatchObject({
+      indicator: "connecting",
+      label: "Desktop",
+      reason: "Relay connecting",
+    });
   });
 });
 

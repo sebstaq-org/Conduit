@@ -18,15 +18,6 @@ interface HostConnectionStatus {
 
 const recentSuccessGraceMs = 15_000;
 
-function hasVerifiedSuccess(query: HostConnectionQuery): boolean {
-  return (
-    query.isSuccess ||
-    query.currentData !== undefined ||
-    query.data !== undefined ||
-    query.fulfilledTimeStamp !== undefined
-  );
-}
-
 function hasRecentSuccess(query: HostConnectionQuery, nowMs: number): boolean {
   return (
     query.fulfilledTimeStamp !== undefined &&
@@ -56,7 +47,7 @@ function hostConnectionStatus(
   query: HostConnectionQuery,
   nowMs: number = Date.now(),
 ): HostConnectionStatus {
-  const verified = hasVerifiedSuccess(query);
+  const recentlyVerified = hasRecentSuccess(query, nowMs);
 
   if (query.activeHostPaired === false) {
     return {
@@ -66,7 +57,7 @@ function hostConnectionStatus(
     };
   }
 
-  if (verified && !query.isError) {
+  if (recentlyVerified && !query.isError) {
     return {
       indicator: "connected",
       label: "Desktop",
@@ -78,7 +69,7 @@ function hostConnectionStatus(
     return failedConnectionStatus(query, nowMs);
   }
 
-  if (query.isFetching && !verified) {
+  if (query.isFetching) {
     return {
       indicator: "connecting",
       label: "Desktop",
