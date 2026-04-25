@@ -8,7 +8,7 @@ import type { DesktopE2eHarness } from "../src/desktopHarness.js";
 
 test.describe.configure({ mode: "serial" });
 // This spec proves the built desktop shell against a real Rust daemon and relay.
-// It intentionally runs Electron with --no-sandbox; sandbox-on preload proof lives in desktop-sandboxed-preload.spec.ts.
+// Per user contract: desktop E2E uses Chromium/Electron sandbox by default.
 
 const desktopStreamdownPrompt =
   "Stream a markdown proof for desktop Streamdown rendering.";
@@ -28,7 +28,6 @@ test.afterAll(async () => {
 
 test("desktop opens recovery UI when daemon startup fails", async () => {
   const failingHarness = await startDesktopE2eHarness({
-    sandboxMode: "disabled",
     serviceBinPath: "/tmp/conduit-missing-service-bin",
   });
   try {
@@ -208,7 +207,7 @@ test("desktop quit stops the managed daemon process", async () => {
 
 async function requireHarness(): Promise<DesktopE2eHarness> {
   if (harness === null) {
-    harness = await startDesktopE2eHarness({ sandboxMode: "disabled" });
+    harness = await startDesktopE2eHarness();
   }
   return harness;
 }

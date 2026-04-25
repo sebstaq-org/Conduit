@@ -2,8 +2,19 @@ interface DesktopDaemonConfig {
   readonly appBaseUrl: string;
   readonly backendHost: string;
   readonly backendLogPath: string;
+  readonly backendPidPath: string | null;
   readonly backendPort: number;
+  readonly frontend:
+    | {
+        readonly kind: "static";
+        readonly webDir: string;
+      }
+    | {
+        readonly kind: "url";
+        readonly url: string;
+      };
   readonly home: string;
+  readonly logProfile: "dev" | "stage";
   readonly providerFixtures: string | null;
   readonly relayEndpoint: string;
   readonly serviceBinPath: string;

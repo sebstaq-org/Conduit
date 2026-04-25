@@ -6,6 +6,9 @@ Use `rtk` as the shell-command prefix when operating in this repo. Keep all new 
 
 - This is a public repository. Treat every committed byte, including old
   artifacts and testdata, as world-readable.
+- ABSOLUTELY NO PARALLEL PRODUCT PATHS, FALLBACK IMPLEMENTATIONS, OR DUPLICATED
+  RUNTIMES. Dev, stage, E2E, and production must exercise the same product code
+  path; only explicit configuration values may differ.
 - Never commit secrets or sensitive material: API keys, access tokens, OAuth
   tokens, bearer tokens, private keys, passwords, session cookies, credential
   files, private prompts, private user data, or unredacted environment dumps.

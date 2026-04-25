@@ -3,7 +3,8 @@
 Use `scripts/stage/conduit-stage.sh` to build, install, and run an isolated
 local stage outside the repo workspace. Stage is a versioned tarball containing
 a Forge-packaged Electron app, exported web assets, and the release-built Rust
-`service-bin`; Electron owns the Rust process lifecycle at runtime.
+`service-bin`; Electron starts the same desktop-managed daemon runtime used by
+dev and E2E.
 
 ## Commands
 
@@ -13,15 +14,16 @@ a Forge-packaged Electron app, exported web assets, and the release-built Rust
   `current`.
 - `deploy` / `refresh`: build an artifact, install it, stop old stage, and start
   the new packaged app.
-- `start`: start packaged Electron stage, backend, and Electron-owned web
-  server; fail if readiness checks do not pass.
+- `start`: start packaged Electron stage through the desktop-managed daemon
+  runtime; fail if readiness checks do not pass.
 - `stop`: stop Electron stage and its child backend process.
 - `status`: print release and process status.
-- `verify COMMIT`: fail unless the installed manifest, running runtime status,
-  Electron process, backend process, and health checks all match `COMMIT`.
+- `verify COMMIT`: fail unless the installed manifest, Electron process,
+  backend process, and health checks all match `COMMIT`.
 - `open`: start stage.
 - `logs [backend|frontend|electron|web]`: print stage logs.
-- `install-desktop-entry`: install `.desktop` launcher to run `open`.
+- `install-desktop-entry`: install `.desktop` launcher to run `open`; requires
+  the relay endpoint and writes it into the launcher command.
 
 ## GitHub Actions Stage Promotion
 
@@ -34,22 +36,23 @@ the uploaded artifact on a self-hosted runner, restarts stage, and runs
 ## Default Runtime Config
 
 - backend host/port: `127.0.0.1:4274`
-- web host/port: `127.0.0.1:4310`
 - ws url for stage web build: `ws://127.0.0.1:4274/api/session`
 - stage root: `/srv/devops/repos/conduit-stage`
 - backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
-- stage static server injects `globalThis.CONDUIT_RUNTIME_CONFIG` into HTML
-  instead of mutating `process.env` at browser runtime.
-- Electron waits for backend `/health` and web `/` before reporting readiness.
+- Electron's desktop-managed static frontend protocol injects
+  `globalThis.CONDUIT_RUNTIME_CONFIG` into HTML instead of mutating
+  `process.env` at browser runtime.
+- Electron waits for backend `/health` before reporting readiness.
 - Closing Electron sends `SIGTERM` to the child backend process and escalates to
   `SIGKILL` if the backend does not exit.
+- `CONDUIT_STAGE_RELAY_ENDPOINT` or `CONDUIT_RELAY_ENDPOINT` is required.
 
 ## Environment Overrides
 
 - `CONDUIT_STAGE_ROOT`
 - `CONDUIT_STAGE_BACKEND_HOST`
 - `CONDUIT_STAGE_BACKEND_PORT`
-- `CONDUIT_STAGE_WEB_HOST`
-- `CONDUIT_STAGE_WEB_PORT`
 - `CONDUIT_STAGE_WS_URL`
 - `CONDUIT_STAGE_CLIENT_LOG_URL`
+- `CONDUIT_STAGE_RELAY_ENDPOINT`
+- `CONDUIT_STAGE_APP_BASE_URL`

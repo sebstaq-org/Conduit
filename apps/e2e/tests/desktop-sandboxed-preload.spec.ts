@@ -10,7 +10,6 @@ function desktopPairingTrigger(page: Page) {
 
 test("sandboxed desktop exposes preload bridge and recovery state", async () => {
   const harness = await startDesktopE2eHarness({
-    sandboxMode: "enabled",
     serviceBinPath: "/tmp/conduit-missing-service-bin",
   });
   try {
