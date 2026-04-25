@@ -304,7 +304,12 @@ async function submitPairingUrl(page: Page, pairingUrl: string): Promise<void> {
 }
 
 async function openHostPairingPopover(page: Page): Promise<void> {
-  if (await page.getByLabel("Pairing link").isVisible().catch(() => false)) {
+  if (
+    await page
+      .getByLabel("Pairing link")
+      .isVisible()
+      .catch(() => false)
+  ) {
     return;
   }
   await page
@@ -314,7 +319,12 @@ async function openHostPairingPopover(page: Page): Promise<void> {
 }
 
 async function closePopover(page: Page): Promise<void> {
-  if (!(await page.getByLabel("Pairing link").isVisible().catch(() => false))) {
+  if (
+    !(await page
+      .getByLabel("Pairing link")
+      .isVisible()
+      .catch(() => false))
+  ) {
     return;
   }
   await page.keyboard.press("Escape");

@@ -1,6 +1,10 @@
 import { PROVIDERS } from "@conduit/session-client";
 import type { ProviderId } from "@conduit/session-client";
-import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal } from "@/ui";
+import {
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+} from "@/ui";
 import { displayProviderName } from "./session-composer-display";
 
 interface SessionComposerProviderMenuProps {

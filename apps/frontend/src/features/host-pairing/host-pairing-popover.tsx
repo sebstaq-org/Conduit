@@ -46,7 +46,9 @@ function HostPairingPopover(): React.JSX.Element {
       />
       <PopoverPortal>
         <PopoverOverlay />
-        <PopoverContent>{renderHostPairingPopoverContent(model)}</PopoverContent>
+        <PopoverContent>
+          {renderHostPairingPopoverContent(model)}
+        </PopoverContent>
       </PopoverPortal>
     </PopoverRoot>
   );

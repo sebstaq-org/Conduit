@@ -4,7 +4,10 @@ import {
   remoteInstallAndLaunchScript,
   runRemoteBash,
 } from "./iosSimulatorHarness.ts";
-import type { IosSimulatorProfile, WorkspaceInfo } from "./iosSimulatorHarness.ts";
+import type {
+  IosSimulatorProfile,
+  WorkspaceInfo,
+} from "./iosSimulatorHarness.ts";
 
 const profile: IosSimulatorProfile = {
   artifactName: "Conduit-stage-simulator-markdown-repro.tar.gz",

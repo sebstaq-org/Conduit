@@ -31,7 +31,6 @@ describe(hostConnectionStatus, () => {
       ),
     ).toMatchObject({ indicator: "connected", label: "Desktop" });
   });
-
 });
 
 describe("stale relay success", () => {

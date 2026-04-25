@@ -21,10 +21,7 @@ function renderDesktopPairingPopoverContent(args: {
   return (
     <Box gap="md">
       <Text variant="panelHeading">Mobile pairing</Text>
-      <DesktopPairingBody
-        presentation={args.presentation}
-        state={args.state}
-      />
+      <DesktopPairingBody presentation={args.presentation} state={args.state} />
     </Box>
   );
 }

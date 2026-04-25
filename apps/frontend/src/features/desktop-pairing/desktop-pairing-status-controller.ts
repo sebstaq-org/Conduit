@@ -63,9 +63,7 @@ function presenceDeadlineReached(context: PollContext): boolean {
   );
 }
 
-class DesktopPairingStatusControllerImpl
-  implements DesktopPairingStatusController
-{
+class DesktopPairingStatusControllerImpl implements DesktopPairingStatusController {
   private readonly listeners = new Set<DesktopPairingStatusListener>();
   private bridge: ConduitDesktopBridge | null = null;
   private generation = 0;
@@ -252,8 +250,7 @@ function createDesktopPairingStatusController(): DesktopPairingStatusController 
   return new DesktopPairingStatusControllerImpl();
 }
 
-const desktopPairingStatusController =
-  createDesktopPairingStatusController();
+const desktopPairingStatusController = createDesktopPairingStatusController();
 
 export {
   baselinePollIntervalMs,

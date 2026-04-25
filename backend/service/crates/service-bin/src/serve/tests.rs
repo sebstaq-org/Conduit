@@ -1,7 +1,7 @@
-use super::{
-    OutboundFrame, TextConnectionRuntime, WatchState, handle_client_text, health_response,
-    is_loopback_client,
+use super::text_connection::{
+    OutboundFrame, TextConnectionRuntime, WatchState, handle_client_text,
 };
+use super::{health_response, is_loopback_client};
 use crate::serve::actor::RuntimeActor;
 use acp_core::{
     ConnectionState, ProviderInitializeRequest, ProviderInitializeResponse,

@@ -456,5 +456,5 @@ fn lexical_normalize(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "cli_tests.rs"]
+#[path = "cli_tests/mod.rs"]
 mod tests;

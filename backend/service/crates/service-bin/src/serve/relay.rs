@@ -2,7 +2,7 @@
 
 use super::actor::RuntimeActor;
 use super::presence::PresenceStore;
-use super::{TextConnectionRuntime, run_text_connection};
+use super::text_connection::{TextConnectionRuntime, run_text_connection};
 use crate::identity::load_daemon_secret_key_b64;
 use futures_util::{SinkExt, StreamExt};
 use remote_access::{

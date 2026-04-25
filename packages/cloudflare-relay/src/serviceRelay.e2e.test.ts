@@ -22,7 +22,10 @@ import {
 } from "./serviceRelayTestUtils.js";
 import { readConnectionOffer } from "@conduit/app-client";
 import { createRelaySessionClient } from "@conduit/session-client";
-import { createRelayClientHandshake, deriveRelayConnectionId } from "@conduit/relay-transport";
+import {
+  createRelayClientHandshake,
+  deriveRelayConnectionId,
+} from "@conduit/relay-transport";
 import type { RelayServiceRun } from "./serviceRelayProcess.js";
 import type { ConnectionOfferV1 } from "@conduit/app-client";
 

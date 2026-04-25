@@ -63,7 +63,10 @@ describe("native dropdown portal contract", () => {
 
   it("renders native dropdown children through the primitive portal above a dismiss overlay", () => {
     const dropdownContent = createElement("DropdownMenuContent");
-    const element = renderPortalElement(NativeDropdownMenuPortal, dropdownContent);
+    const element = renderPortalElement(
+      NativeDropdownMenuPortal,
+      dropdownContent,
+    );
     const children = requireChildrenArray(element.props.children);
     const overlay = requireElement(children.at(0));
 

@@ -95,7 +95,10 @@ async function expectConfigUpdate(
 async function waitForCodexConfigSnapshot(
   client: ReturnType<typeof createRelaySessionClient>,
 ): Promise<{
-  readonly configOptions: readonly { readonly currentValue?: unknown; readonly id: string }[];
+  readonly configOptions: readonly {
+    readonly currentValue?: unknown;
+    readonly id: string;
+  }[];
 }> {
   await expect
     .poll(

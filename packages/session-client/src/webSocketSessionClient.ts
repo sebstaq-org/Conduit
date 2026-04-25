@@ -16,6 +16,7 @@ import {
   readProjectListResponse,
   readProjectSuggestionsResponse,
 } from "./projectViews.js";
+import { confirmGeneratedSubscription } from "./confirmGeneratedSubscription.js";
 import { readSessionGroupsResponse } from "./sessionGroupsView.js";
 import type {
   SessionClientOptions,
@@ -53,7 +54,6 @@ import type {
   SessionSetConfigOptionRequest,
   SessionSetConfigOptionResult,
 } from "@conduit/session-contracts";
-import type { ProviderId } from "@conduit/session-model";
 import type {
   SessionTimelineChanged,
   SessionsIndexChanged,
@@ -62,21 +62,13 @@ interface TimelineSubscription {
   handler: (event: SessionTimelineChanged) => void;
   openSessionId: string;
 }
+
 interface SessionIndexSubscription {
   handler: (event: SessionsIndexChanged) => void;
 }
-function confirmGeneratedSubscription(
-  result: unknown,
-  cleanup: () => void,
-  parse: (result: unknown) => unknown,
-): void {
-  try {
-    parse(result);
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
-}
+
+type SessionProviderId = Parameters<SessionClientPort["openSession"]>[0];
+
 class WebSocketSessionClient implements SessionClientPort {
   public readonly policy = "official-acp-only";
   private readonly timelineSubscriptions = new Set<TimelineSubscription>();
@@ -169,7 +161,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readGlobalSettingsResponse(response, "settings update failed");
   }
   public async openSession(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionOpenRequest,
   ): Promise<ConsumerResponse<SessionOpenResult | null>> {
     const response = await this.dispatch(
@@ -178,7 +170,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readSessionOpenResponse(response);
   }
   public async newSession(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionNewRequest,
   ): Promise<ConsumerResponse<SessionNewResult | null>> {
     const response = await this.dispatch(
@@ -195,7 +187,7 @@ class WebSocketSessionClient implements SessionClientPort {
     return readSessionHistoryResponse(response);
   }
   public async setSessionConfigOption(
-    provider: ProviderId,
+    provider: SessionProviderId,
     request: SessionSetConfigOptionRequest,
   ): Promise<ConsumerResponse<SessionSetConfigOptionResult | null>> {
     const response = await this.dispatch(
@@ -305,4 +297,4 @@ class WebSocketSessionClient implements SessionClientPort {
     }
   }
 }
-export { WebSocketSessionClient, confirmGeneratedSubscription };
+export { WebSocketSessionClient };

@@ -6,7 +6,12 @@
   "manualCapture": false,
   "operation": "session/set_config_option",
   "provider": "codex",
-  "replacedFields": ["cwd", "sessionId", "configRequest.sessionId", "timestamp"],
+  "replacedFields": [
+    "cwd",
+    "sessionId",
+    "configRequest.sessionId",
+    "timestamp"
+  ],
   "sessionId": "e2e-codex-new-session-0001",
   "sourceCapture": "conduit-artifacts/manual/captures/codex/config-e2e-multi-2026-04-24",
   "sourceProviderRawSha256": "b1ac1fe69afa5a509294449282ff86f99041b49e539f8c79b158a05d4bc020cc",

@@ -273,7 +273,9 @@ class DesktopDaemonController {
     this.#backendLogStream = null;
   }
 
-  async #enqueueLifecycle<Result>(task: () => Promise<Result>): Promise<Result> {
+  async #enqueueLifecycle<Result>(
+    task: () => Promise<Result>,
+  ): Promise<Result> {
     const previous = this.#lifecycle;
     const next = Promise.withResolvers<null>();
     this.#lifecycle = next.promise;

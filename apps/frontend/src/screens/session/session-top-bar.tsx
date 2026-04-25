@@ -13,8 +13,9 @@ interface SessionScreenTopBarProps {
 function SessionScreenTopBar({
   onOpenNavigationPanel,
 }: SessionScreenTopBarProps): React.JSX.Element {
-  const [navigationButton, pairingPopover] =
-    renderSessionScreenTopBarChildren(onOpenNavigationPanel);
+  const [navigationButton, pairingPopover] = renderSessionScreenTopBarChildren(
+    onOpenNavigationPanel,
+  );
 
   return (
     <Box

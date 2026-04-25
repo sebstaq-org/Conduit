@@ -55,15 +55,11 @@ describe("cloudflare relay local e2e", () => {
     await runRelayRoundtripScenario(harness, "local_roundtrip");
   });
 
-  it(
-    "closes daemon data sockets when the mobile client disconnects",
-    async () => {
-      const harness = await createLocalHarness();
+  it("closes daemon data sockets when the mobile client disconnects", async () => {
+    const harness = await createLocalHarness();
 
-      await runRelayClientCloseCleansDataScenario(harness);
-    },
-    15000,
-  );
+    await runRelayClientCloseCleansDataScenario(harness);
+  }, 15000);
 
   it("rejects relay socket hijacking without disturbing valid sockets", async () => {
     const harness = await createLocalHarness();
