@@ -36,7 +36,7 @@ function SessionScreen({
         {onOpenNavigationPanel !== undefined && (
           <SessionScreenTopBar onOpenNavigationPanel={onOpenNavigationPanel} />
         )}
-        <SessionHistory historyOverride={planInteraction.history} />
+        <SessionHistory />
         <SessionComposer planInteraction={planInteraction} />
       </Box>
     </KeyboardLift>

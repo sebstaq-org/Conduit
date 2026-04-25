@@ -42,6 +42,37 @@ test("session list opens fixture transcript", async ({ page }) => {
   await expectNoFailureFeedback(page);
 });
 
+test("new session hides previously opened transcript and keeps draft context", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openFrontend(page, activeHarness);
+
+  await openListedSession(page, activeHarness, fixtureSessionTitle);
+  await expect(
+    page.getByText(transcriptSentinel, { exact: true }),
+  ).toBeVisible();
+
+  await page.getByLabel(`New session in ${fixtureCwd}`).click();
+  await expect(
+    page.getByLabel("Select provider for new session"),
+  ).toBeVisible();
+  await expect(page.getByText(transcriptSentinel, { exact: true })).toHaveCount(
+    0,
+  );
+
+  const messageInput = page.getByLabel("Session message");
+  await messageInput.fill("Draft context must not show old transcript");
+  await expect(messageInput).toHaveValue(
+    "Draft context must not show old transcript",
+  );
+  await expect(page.getByText(transcriptSentinel, { exact: true })).toHaveCount(
+    0,
+  );
+  await expectNoFailureFeedback(page);
+});
+
 test("all-provider session list opens Claude and Copilot parity transcripts", async ({
   page,
 }) => {
