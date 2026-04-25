@@ -3,14 +3,9 @@ import { selectActiveSession, useSessionTimeline } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
 import { SessionHistoryList } from "./session-history-list";
-import type { SessionHistoryWindow } from "@conduit/session-client";
 import type { ViewStyle } from "react-native";
 
 type HistoryRenderState = "loading" | "ready" | "unavailable";
-
-interface SessionHistoryProps {
-  historyOverride?: SessionHistoryWindow | null | undefined;
-}
 
 const historyStatusVariant = "rowLabelMuted" as const;
 const historyRootStyle: ViewStyle = { minHeight: 0, position: "relative" };
@@ -22,7 +17,6 @@ const historyOverlayStyle: ViewStyle = {
   top: 8,
   zIndex: 1,
 };
-const noopLoadOlder = (): void => undefined;
 
 function renderNoActiveSession(): React.JSX.Element {
   return (
@@ -126,23 +120,6 @@ function selectedOpenSessionId(
   return activeSession.openSessionId;
 }
 
-function renderHistoryOverride(
-  historyOverride: SessionHistoryWindow | null,
-): React.JSX.Element | null {
-  if (historyOverride === null) {
-    return null;
-  }
-  return renderReadyHistory(
-    {
-      history: historyOverride,
-      isFetchingOlder: false,
-      isOlderError: false,
-      loadOlderIfNeeded: noopLoadOlder,
-    },
-    historyOverride.openSessionId,
-  );
-}
-
 function renderSessionHistory(args: {
   activeSession: ActiveSession | null;
   openSessionId: string | null;
@@ -158,17 +135,11 @@ function renderSessionHistory(args: {
   return renderReadyHistory(args.timeline, args.openSessionId);
 }
 
-function SessionHistory({
-  historyOverride = null,
-}: SessionHistoryProps): React.JSX.Element {
+function SessionHistory(): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
-  const overrideElement = renderHistoryOverride(historyOverride);
 
-  if (overrideElement !== null) {
-    return overrideElement;
-  }
   return renderSessionHistory({ activeSession, openSessionId, timeline });
 }
 
