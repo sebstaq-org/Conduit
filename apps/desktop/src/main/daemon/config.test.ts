@@ -19,8 +19,6 @@ const desktopEnvKeys = [
   "CONDUIT_DESKTOP_SERVICE_BIN",
   "CONDUIT_DESKTOP_STORE_PATH",
   "CONDUIT_DESKTOP_WEB_DIR",
-  "CONDUIT_DESKTOP_WEB_HOST",
-  "CONDUIT_DESKTOP_WEB_PORT",
   "CONDUIT_FRONTEND_URL",
 ] as const;
 
@@ -61,8 +59,6 @@ function expectManagedStaticConfig(): void {
     frontend: {
       kind: "static",
       webDir: "/repo/stage/web",
-      webHost: "127.0.0.1",
-      webPort: 4310,
     },
     logProfile: "stage",
   });
@@ -91,8 +87,6 @@ describe("desktop daemon config", () => {
     withManagedDesktopEnv();
     process.env.CONDUIT_DESKTOP_LOG_PROFILE = "stage";
     process.env.CONDUIT_DESKTOP_WEB_DIR = "/repo/stage/web";
-    process.env.CONDUIT_DESKTOP_WEB_HOST = "127.0.0.1";
-    process.env.CONDUIT_DESKTOP_WEB_PORT = "4310";
 
     expectManagedStaticConfig();
   });

@@ -36,14 +36,13 @@ the uploaded artifact on a self-hosted runner, restarts stage, and runs
 ## Default Runtime Config
 
 - backend host/port: `127.0.0.1:4274`
-- web host/port: `127.0.0.1:4310`
 - ws url for stage web build: `ws://127.0.0.1:4274/api/session`
 - stage root: `/srv/devops/repos/conduit-stage`
 - backend tracing profile: `CONDUIT_LOG_PROFILE=stage` (default level `debug`)
-- Electron's desktop-managed frontend server injects
+- Electron's desktop-managed static frontend protocol injects
   `globalThis.CONDUIT_RUNTIME_CONFIG` into HTML instead of mutating
   `process.env` at browser runtime.
-- Electron waits for backend `/health` and web `/` before reporting readiness.
+- Electron waits for backend `/health` before reporting readiness.
 - Closing Electron sends `SIGTERM` to the child backend process and escalates to
   `SIGKILL` if the backend does not exit.
 - `CONDUIT_STAGE_RELAY_ENDPOINT` or `CONDUIT_RELAY_ENDPOINT` is required.
@@ -53,8 +52,6 @@ the uploaded artifact on a self-hosted runner, restarts stage, and runs
 - `CONDUIT_STAGE_ROOT`
 - `CONDUIT_STAGE_BACKEND_HOST`
 - `CONDUIT_STAGE_BACKEND_PORT`
-- `CONDUIT_STAGE_WEB_HOST`
-- `CONDUIT_STAGE_WEB_PORT`
 - `CONDUIT_STAGE_WS_URL`
 - `CONDUIT_STAGE_CLIENT_LOG_URL`
 - `CONDUIT_STAGE_RELAY_ENDPOINT`

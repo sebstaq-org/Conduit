@@ -8,8 +8,6 @@ interface DesktopDaemonConfig {
     | {
         readonly kind: "static";
         readonly webDir: string;
-        readonly webHost: string;
-        readonly webPort: number;
       }
     | {
         readonly kind: "url";

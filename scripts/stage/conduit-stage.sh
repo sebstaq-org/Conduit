@@ -11,8 +11,6 @@ CURRENT_LINK="$STAGE_ROOT/current"
 BUILD_DIR="$STAGE_ROOT/.build"
 BACKEND_HOST="${CONDUIT_STAGE_BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${CONDUIT_STAGE_BACKEND_PORT:-4274}"
-WEB_HOST="${CONDUIT_STAGE_WEB_HOST:-127.0.0.1}"
-WEB_PORT="${CONDUIT_STAGE_WEB_PORT:-4310}"
 WS_URL="${CONDUIT_STAGE_WS_URL:-ws://${BACKEND_HOST}:${BACKEND_PORT}/api/session}"
 CLIENT_LOG_URL="${CONDUIT_STAGE_CLIENT_LOG_URL:-http://${BACKEND_HOST}:${BACKEND_PORT}/api/client-log}"
 RELAY_ENDPOINT="${CONDUIT_STAGE_RELAY_ENDPOINT:-${CONDUIT_RELAY_ENDPOINT:-}}"
@@ -80,12 +78,10 @@ wait_for_pid_exit() {
 
 wait_for_runtime_ready() {
   local backend_url="http://${BACKEND_HOST}:${BACKEND_PORT}/health"
-  local web_url="http://${WEB_HOST}:${WEB_PORT}/"
   local attempts=60
   local index=0
   while [[ "$index" -lt "$attempts" ]]; do
-    if curl --silent --show-error --fail --max-time 2 "$backend_url" >/dev/null 2>&1 &&
-      curl --silent --show-error --fail --max-time 2 "$web_url" >/dev/null 2>&1; then
+    if curl --silent --show-error --fail --max-time 2 "$backend_url" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -221,8 +217,6 @@ write_manifest() {
   "arch": "x64",
   "backendHost": "$BACKEND_HOST",
   "backendPort": $BACKEND_PORT,
-  "webHost": "$WEB_HOST",
-  "webPort": $WEB_PORT,
   "websocketUrl": "$WS_URL"
 }
 EOF
@@ -246,6 +240,10 @@ validate_release_dir() {
   fi
   if [[ ! -x "$release_dir/app/resources/stage-resources/bin/codex-acp" ]]; then
     printf "Stage release is missing codex-acp adapter binary\n" >&2
+    exit 1
+  fi
+  if [[ ! -f "$release_dir/app/resources/stage-resources/web/index.html" ]]; then
+    printf "Stage release is missing frontend web assets\n" >&2
     exit 1
   fi
 }
@@ -330,9 +328,7 @@ start_stage() {
       CONDUIT_DESKTOP_SERVICE_BIN="$resources_dir/bin/service-bin" \
       CONDUIT_DESKTOP_STORE_PATH="$DATA_ROOT/local-store.sqlite3" \
       CONDUIT_DESKTOP_WEB_DIR="$resources_dir/web" \
-      CONDUIT_DESKTOP_WEB_HOST="$WEB_HOST" \
-      CONDUIT_DESKTOP_WEB_PORT="$WEB_PORT" \
-      setsid "$executable" --no-sandbox >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
+      setsid "$executable" >"$LOG_DIR/electron.log" 2>&1 < /dev/null &
     printf "%s" "$!" >"$ELECTRON_PID_FILE"
     sleep 0.2
     if ! pid_running "$ELECTRON_PID_FILE"; then
@@ -347,7 +343,7 @@ start_stage() {
   fi
 
   printf "Backend: ws://%s:%s/api/session\n" "$BACKEND_HOST" "$BACKEND_PORT"
-  printf "Web: http://%s:%s\n" "$WEB_HOST" "$WEB_PORT"
+  printf "Web: conduit-desktop://desktop/\n"
 }
 
 stop_stage() {
@@ -395,7 +391,7 @@ status_stage() {
     printf "Backend: stopped\n"
   fi
 
-  printf "Web: Electron-owned http://%s:%s\n" "$WEB_HOST" "$WEB_PORT"
+  printf "Web: Electron protocol conduit-desktop://desktop/\n"
 }
 
 verify_stage() {

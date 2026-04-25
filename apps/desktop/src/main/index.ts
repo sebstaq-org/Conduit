@@ -1,23 +1,31 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { join } from "node:path";
 import { DesktopDaemonController } from "./daemon/backend.js";
 import { readDesktopDaemonConfig } from "./daemon/config.js";
 import { bindDesktopDaemonIpc } from "./daemon/ipc.js";
 import {
-  closeStaticFrontendServer,
+  desktopStaticScheme,
   frontendUrl,
-  startStaticFrontendServer,
-} from "./daemon/static-frontend-server.js";
+  registerStaticFrontendProtocol,
+} from "./daemon/static-frontend-protocol.js";
 import type { DesktopDaemonConfig } from "./daemon/types.js";
-import type { Server } from "node:http";
 
 const currentDirectory = import.meta.dirname;
 const mainWindows = new Set<BrowserWindow>();
 let desktopShutdownComplete = false;
 let desktopShutdownStarted = false;
-let frontendServer: Server | null = null;
 
 app.disableHardwareAcceleration();
+protocol.registerSchemesAsPrivileged([
+  {
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+    },
+    scheme: desktopStaticScheme,
+  },
+]);
 
 const desktopDaemonConfig: DesktopDaemonConfig = readDesktopDaemonConfig();
 const desktopDaemon = new DesktopDaemonController(desktopDaemonConfig);
@@ -59,7 +67,7 @@ const startDesktopDaemon = async (): Promise<void> => {
 };
 
 const startDesktopRuntime = async (): Promise<void> => {
-  frontendServer = await startStaticFrontendServer(desktopDaemonConfig);
+  registerStaticFrontendProtocol(desktopDaemonConfig, protocol);
   createMainWindow();
   await startDesktopDaemon();
 };
@@ -73,8 +81,6 @@ const requestDesktopQuit = async (code: number): Promise<void> => {
     await desktopDaemon.stop();
   } catch {
     // Quit must still complete after best-effort daemon cleanup.
-  } finally {
-    await closeStaticFrontendServer(frontendServer);
   }
   desktopShutdownComplete = true;
   app.exit(code);

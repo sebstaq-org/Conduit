@@ -37,7 +37,6 @@ interface DesktopRun {
 }
 
 interface DesktopE2eHarnessOptions {
-  readonly sandboxMode?: "disabled" | "enabled";
   readonly serviceBinPath?: string;
 }
 
@@ -82,7 +81,6 @@ async function startDesktopE2eHarness(
         CONDUIT_FRONTEND_URL: `http://127.0.0.1:${String(webPort)}`,
         ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
       },
-      sandboxMode: options.sandboxMode ?? "disabled",
     });
     const page = await waitForDesktopWindow(desktopRun, runRoot);
     await page.waitForLoadState("domcontentloaded");
@@ -142,7 +140,6 @@ async function exportFrontendWeb(outputDir: string): Promise<void> {
 async function startDesktopRun(request: {
   readonly debugPort: number;
   readonly env: NodeJS.ProcessEnv;
-  readonly sandboxMode: "disabled" | "enabled";
 }): Promise<DesktopRun> {
   const logs: string[] = [];
   const electronArgs = [
@@ -150,9 +147,6 @@ async function startDesktopRun(request: {
     "--disable-gpu",
     `--remote-debugging-port=${String(request.debugPort)}`,
   ];
-  if (request.sandboxMode === "disabled") {
-    electronArgs.splice(1, 0, "--no-sandbox");
-  }
   const electronProcess = spawn(
     String(desktopRequire("electron")),
     electronArgs,

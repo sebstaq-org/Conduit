@@ -21,6 +21,14 @@ const scanRoots = [
   "scripts/stage",
   "README.md",
 ] as const;
+const sandboxRuntimeFiles = [
+  "apps/desktop/package.json",
+  "apps/desktop/src/main/index.ts",
+  "apps/e2e/src/desktopHarness.ts",
+  "apps/e2e/tests/desktop-managed-daemon.spec.ts",
+  "apps/e2e/tests/desktop-sandboxed-preload.spec.ts",
+  "scripts/stage/conduit-stage.sh",
+] as const;
 
 function sourceFiles(path: string): string[] {
   let absolutePath = path;
@@ -58,6 +66,18 @@ describe("desktop runtime contract", () => {
           .map((fragment) => `${file}: ${fragment}`);
       }),
     );
+
+    expect(violations).toStrictEqual([]);
+  });
+
+  it("keeps desktop dev, stage, and E2E on Chromium sandbox", () => {
+    // Per user contract: desktop runtime must not launch Electron with --no-sandbox.
+    const violations = sandboxRuntimeFiles.flatMap((file) => {
+      const text = readFileSync(join(repoRoot, file), "utf8");
+      return ["--no-sandbox", "--noSandbox"]
+        .filter((fragment) => text.includes(fragment))
+        .map((fragment) => `${file}: ${fragment}`);
+    });
 
     expect(violations).toStrictEqual([]);
   });

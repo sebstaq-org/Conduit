@@ -55,8 +55,6 @@ function frontendConfig(): DesktopDaemonConfig["frontend"] {
     return {
       kind: "static",
       webDir,
-      webHost: envValue("CONDUIT_DESKTOP_WEB_HOST") ?? "127.0.0.1",
-      webPort: envPort("CONDUIT_DESKTOP_WEB_PORT", 4310),
     };
   }
   throw new Error(

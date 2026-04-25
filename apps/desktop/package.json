@@ -6,7 +6,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "build": "pnpm run typecheck && electron-vite build",
-    "dev": "electron-vite dev --noSandbox",
+    "dev": "electron-vite dev",
     "lint": "oxlint . --config ../../oxlint.config.ts --deny-warnings",
     "package:stage": "electron-forge package --platform=linux --arch=x64",
     "test": "vitest run --config vitest.config.ts",
