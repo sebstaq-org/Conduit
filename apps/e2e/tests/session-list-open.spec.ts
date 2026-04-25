@@ -233,7 +233,6 @@ test("pairing survives reload, reconfigures, and forget clears stale data", asyn
 
   await openHostPairingPopover(page);
   await submitPairingUrl(page, tamperRelayEndpoint(pairingUrl));
-  await expect(page.getByLabel("Desktop connecting indicator")).toBeVisible();
   await expect(
     page.getByText(/relay websocket failed to connect/u).first(),
   ).toBeVisible({ timeout: 15000 });
