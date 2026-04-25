@@ -18,7 +18,7 @@ use agent_client_protocol::{
     SessionConfigValueId, SessionId, SessionInfoUpdate, SessionMode, SessionModeId,
     SessionModeState, SessionModelState, SessionNotification, SessionUpdate, StopReason, Terminal,
     TextResourceContents, ToolCall, ToolCallContent, ToolCallId, ToolCallLocation, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
 };
 use codex_apply_patch::parse_patch;
 use codex_core::{
@@ -979,18 +979,7 @@ impl PromptState {
             }) => {
                 info!("Task started with context window of {turn_id} {model_context_window:?} {collaboration_mode_kind:?}");
             }
-            EventMsg::TokenCount(TokenCountEvent { info, .. }) => {
-                if let Some(info) = info
-                    && let Some(size) = info.model_context_window {
-                        let used = info.last_token_usage.tokens_in_context_window().max(0) as u64;
-                        client
-                            .send_notification(SessionUpdate::UsageUpdate(UsageUpdate::new(
-                                used,
-                                size as u64,
-                            )))
-                            .await;
-                    }
-            }
+            EventMsg::TokenCount(TokenCountEvent { .. }) => {}
             EventMsg::ItemStarted(ItemStartedEvent { thread_id, turn_id, item }) => {
                 info!("Item started with thread_id: {thread_id}, turn_id: {turn_id}, item: {item:?}");
             }
