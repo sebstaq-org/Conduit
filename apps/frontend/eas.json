@@ -4,6 +4,26 @@
     "appVersionSource": "local"
   },
   "build": {
+    "dev-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "dev"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "dev": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "dev"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
     "stage-simulator": {
       "developmentClient": false,
       "distribution": "internal",

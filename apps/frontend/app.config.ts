@@ -1,6 +1,6 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
-type AppVariant = "stage";
+type AppVariant = "dev" | "stage";
 type ExpoPlatform = NonNullable<ExpoConfig["platforms"]>[number];
 type ExpoPlugin = NonNullable<ExpoConfig["plugins"]>[number];
 
@@ -11,11 +11,13 @@ function resolveVariant(): AppVariant {
   }
 
   const variant = rawVariant.trim().toLowerCase();
-  if (variant === "stage") {
+  if (variant === "dev" || variant === "stage") {
     return variant;
   }
 
-  throw new Error(`Unsupported APP_VARIANT: ${rawVariant}. Expected stage.`);
+  throw new Error(
+    `Unsupported APP_VARIANT: ${rawVariant}. Expected dev or stage.`,
+  );
 }
 
 function requireString(value: unknown, field: string): string {
@@ -51,20 +53,50 @@ function isNotDevClientPlugin(plugin: ExpoPlugin): boolean {
   return plugin !== "expo-dev-client";
 }
 
-function readPlugins(config: ExpoConfig): ExpoPlugin[] {
-  return (config.plugins ?? []).filter((plugin) =>
+function readPlugins(config: ExpoConfig, variant: AppVariant): ExpoPlugin[] {
+  const plugins = (config.plugins ?? []).filter((plugin) =>
     isNotDevClientPlugin(plugin),
   );
+
+  if (variant !== "dev") {
+    return plugins;
+  }
+
+  return [...plugins, ["expo-dev-client", { launchMode: "most-recent" }]];
+}
+
+function androidPackageForVariant(
+  packageName: string,
+  variant: AppVariant,
+): string {
+  if (variant === "dev") {
+    return `${packageName}.dev`;
+  }
+
+  return packageName;
 }
 
 function createAndroidConfig(
   config: ExpoConfig,
+  variant: AppVariant,
 ): NonNullable<ExpoConfig["android"]> {
   const androidConfig: NonNullable<ExpoConfig["android"]> = {};
+  const packageName = requireString(config.android?.package, "android.package");
 
   return Object.assign(androidConfig, config.android, {
-    package: requireString(config.android?.package, "android.package"),
+    package: androidPackageForVariant(packageName, variant),
   });
+}
+
+function iosBundleIdentifierForVariant(
+  bundleIdentifier: string,
+  variant: AppVariant,
+): string {
+  if (variant === "dev") {
+    return `${bundleIdentifier}.dev`;
+  }
+
+  return bundleIdentifier;
 }
 
 function createIosEncryptionConfigTarget(): NonNullable<
@@ -73,7 +105,10 @@ function createIosEncryptionConfigTarget(): NonNullable<
   return {};
 }
 
-function createIosConfig(config: ExpoConfig): NonNullable<ExpoConfig["ios"]> {
+function createIosConfig(
+  config: ExpoConfig,
+  variant: AppVariant,
+): NonNullable<ExpoConfig["ios"]> {
   const iosEncryptionConfig = Object.assign(
     createIosEncryptionConfigTarget(),
     config.ios?.config,
@@ -85,12 +120,13 @@ function createIosConfig(config: ExpoConfig): NonNullable<ExpoConfig["ios"]> {
     },
   );
   const iosConfig: NonNullable<ExpoConfig["ios"]> = {};
+  const bundleIdentifier = requireString(
+    config.ios?.bundleIdentifier,
+    "ios.bundleIdentifier",
+  );
 
   return Object.assign(iosConfig, config.ios, {
-    bundleIdentifier: requireString(
-      config.ios?.bundleIdentifier,
-      "ios.bundleIdentifier",
-    ),
+    bundleIdentifier: iosBundleIdentifierForVariant(bundleIdentifier, variant),
     buildNumber: requireString(config.ios?.buildNumber, "ios.buildNumber"),
     supportsTablet: requireBoolean(
       config.ios?.supportsTablet,
@@ -133,23 +169,40 @@ function createExtraConfig(
   });
 }
 
+function appNameForVariant(config: ExpoConfig, variant: AppVariant): string {
+  if (variant === "dev") {
+    return "Conduit (Dev)";
+  }
+
+  return requireString(config.name, "name");
+}
+
+function schemeForVariant(scheme: string, variant: AppVariant): string {
+  if (variant === "dev") {
+    return `${scheme}-dev`;
+  }
+
+  return scheme;
+}
+
 export default function createExpoConfig({
   config,
 }: ConfigContext): ExpoConfig {
   const variant = resolveVariant();
   const expoConfig: ExpoConfig = {};
+  const scheme = requireString(config.scheme, "scheme");
 
   return Object.assign(expoConfig, config, {
-    name: requireString(config.name, "name"),
+    name: appNameForVariant(config, variant),
     slug: requireString(config.slug, "slug"),
     owner: requireString(config.owner, "owner"),
     version: requireString(config.version, "version"),
     orientation: "portrait",
     platforms: readPlatforms(config),
-    scheme: requireString(config.scheme, "scheme"),
-    android: createAndroidConfig(config),
-    ios: createIosConfig(config),
-    plugins: readPlugins(config),
+    scheme: schemeForVariant(scheme, variant),
+    android: createAndroidConfig(config, variant),
+    ios: createIosConfig(config, variant),
+    plugins: readPlugins(config, variant),
     experiments: createExperimentsConfig(config),
     extra: createExtraConfig(config, variant),
   });
