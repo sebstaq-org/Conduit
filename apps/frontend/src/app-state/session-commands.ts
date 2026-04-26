@@ -57,6 +57,8 @@ interface CanSubmitPromptArgs {
   openSessionConfigSyncBlocked: boolean;
 }
 
+const openSessionHistoryLimit = 100;
+
 function canSubmitPrompt({
   activeSession,
   isLoading,
@@ -147,5 +149,10 @@ async function submitPrompt({
   }
 }
 
-export { canSubmitPrompt, openSessionRow, submitPrompt };
+export {
+  canSubmitPrompt,
+  openSessionHistoryLimit,
+  openSessionRow,
+  submitPrompt,
+};
 export type { OpenSessionFailure, PromptFailure };

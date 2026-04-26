@@ -20,6 +20,7 @@ export {
 } from "./api-hooks";
 export {
   canSubmitPrompt,
+  openSessionHistoryLimit,
   openSessionRow,
   submitPrompt,
 } from "./session-commands";

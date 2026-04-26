@@ -21,12 +21,12 @@ function selectNavigationPanelSessionTarget({
   onSessionTargetSelected,
   target,
 }: SelectNavigationPanelSessionTargetArgs): void {
+  onSessionTargetSelected?.(target);
   if (target.kind === "draft") {
     dispatch(draftSessionStarted({ cwd: target.cwd }));
   } else {
     onOpenSessionTarget(target);
   }
-  onSessionTargetSelected?.(target);
 }
 
 export { selectNavigationPanelSessionTarget };

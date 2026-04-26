@@ -1,5 +1,6 @@
 import { useTheme } from "@shopify/restyle";
 import {
+  openSessionHistoryLimit,
   openSessionRow,
   selectActiveSession,
   useGetSessionGroupsQuery,
@@ -31,7 +32,7 @@ const defaultSessionGroupsQuery = {};
 function openSessionRequest(target: OpenSessionTarget): OpenSessionMutationArg {
   return {
     cwd: target.cwd,
-    limit: 100,
+    limit: openSessionHistoryLimit,
     provider: target.provider,
     sessionId: target.sessionId,
     title: target.title,

@@ -19,6 +19,7 @@ function openSessionTargetRecording(calls: string[]): OpenSessionTargetHandler {
 }
 
 it("selects draft targets through the same panel selection callback", () => {
+  // Per user contract: mobile navigation reacts to the tap before any draft state side effect can block drawer close.
   const calls: string[] = [];
 
   selectNavigationPanelSessionTarget({
@@ -31,12 +32,13 @@ it("selects draft targets through the same panel selection callback", () => {
   });
 
   expect(calls).toEqual([
-    "dispatch:sessionSelection/draftSessionStarted:/srv/devops",
     "selected:draft:/srv/devops",
+    "dispatch:sessionSelection/draftSessionStarted:/srv/devops",
   ]);
 });
 
 it("selects open targets through the same panel selection callback", () => {
+  // Per user contract: mobile navigation reacts to the tap before open-session I/O can block drawer close.
   const calls: string[] = [];
 
   selectNavigationPanelSessionTarget({
@@ -55,7 +57,7 @@ it("selects open targets through the same panel selection callback", () => {
   });
 
   expect(calls).toEqual([
-    "open:/srv/devops:codex:session-1",
     "selected:open:/srv/devops",
+    "open:/srv/devops:codex:session-1",
   ]);
 });
