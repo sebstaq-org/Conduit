@@ -3,7 +3,6 @@ import { useTheme } from "@shopify/restyle";
 import { Keyboard, useWindowDimensions } from "react-native";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
-import type { ViewStyle } from "react-native";
 import { NavigationPanelContent } from "@/screens/navigation-panel/navigation-panel-content";
 import { SessionScreen } from "@/screens/session";
 import { PanelFrame } from "@/ui";
@@ -19,7 +18,9 @@ import {
 } from "./app-shell.styles";
 
 interface RenderNavigationPanelOptions {
-  onSessionSelected?: (() => void) | undefined;
+  onSessionTargetSelected?: Parameters<
+    typeof NavigationPanelContent
+  >[0]["onSessionTargetSelected"];
   width?: number | undefined;
 }
 
@@ -30,15 +31,17 @@ interface NavigationPanelWidthState {
   width: number;
 }
 
-const appShellScreenStyle: ViewStyle = { minHeight: 0 };
+const appShellScreenStyle = { minHeight: 0 } as const;
 
 function renderNavigationPanel({
-  onSessionSelected,
+  onSessionTargetSelected,
   width,
 }: RenderNavigationPanelOptions = {}): React.JSX.Element {
   return (
     <PanelFrame width={width}>
-      <NavigationPanelContent onSessionSelected={onSessionSelected} />
+      <NavigationPanelContent
+        onSessionTargetSelected={onSessionTargetSelected}
+      />
     </PanelFrame>
   );
 }
@@ -113,8 +116,8 @@ function AppShellScreen(): React.JSX.Element {
       height={height}
       onCloseDrawer={closeDrawer}
       onOpenDrawer={openDrawer}
-      renderNavigationPanel={(onSessionSelected) =>
-        renderNavigationPanel({ onSessionSelected })
+      renderNavigationPanel={(onSessionTargetSelected) =>
+        renderNavigationPanel({ onSessionTargetSelected })
       }
       theme={theme}
       width={width}

@@ -16,7 +16,6 @@ interface OpenSessionRowArgs {
   openSession: OpenSessionTrigger;
   onFailure?: ((failure: OpenSessionFailure) => void) | undefined;
   request: OpenSessionMutationArg;
-  onSessionSelected?: (() => void) | undefined;
 }
 
 interface SubmitPromptArgs {
@@ -79,7 +78,6 @@ function canSubmitPrompt({
 
 async function openSessionRow({
   onFailure,
-  onSessionSelected,
   openSession,
   request,
 }: OpenSessionRowArgs): Promise<void> {
@@ -90,7 +88,6 @@ async function openSessionRow({
       provider: request.provider,
       session_id: request.sessionId,
     });
-    onSessionSelected?.();
   } catch (error) {
     logFailure("frontend.session.open.intent.failed", error, {
       cwd: request.cwd,

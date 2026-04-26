@@ -1,14 +1,11 @@
 import { useSelector } from "react-redux";
-import { openSessionRow, selectSessionPromptTurnStreaming } from "@/app-state";
-import type {
-  ActiveSession,
-  RootState,
-  useOpenSessionMutation,
-} from "@/app-state";
-import { showOpenSessionFailureToast } from "@/features/session-notifications";
+import { selectSessionPromptTurnStreaming } from "@/app-state";
+import type { ActiveSession, RootState } from "@/app-state";
 import { Row, Spinner } from "@/ui";
 import { sessionRowDepth } from "./session-list.constants";
+import { openSessionTarget } from "./session-list-target";
 import type { SessionGroup, SessionRow } from "./session-list.types";
+import type { SessionListTargetSelected } from "./session-list-target";
 import type { ReactNode } from "react";
 
 function formatSessionMeta(provider: string, updatedAt: string | null): string {
@@ -53,16 +50,14 @@ function sessionRowLeading(isWorking: boolean): ReactNode | undefined {
 
 interface SessionRowItemProps {
   group: SessionGroup;
-  onSessionSelected?: (() => void) | undefined;
-  openSession: ReturnType<typeof useOpenSessionMutation>[0];
+  onSessionTargetSelected: SessionListTargetSelected;
   session: SessionRow;
   activeSession: ActiveSession | null;
 }
 
 function SessionRowItem({
   group,
-  onSessionSelected,
-  openSession,
+  onSessionTargetSelected,
   session,
   activeSession,
 }: SessionRowItemProps): React.JSX.Element {
@@ -81,18 +76,7 @@ function SessionRowItem({
       meta={formatSessionMeta(session.provider, session.updatedAt)}
       reserveLeadingSpace
       onPress={() => {
-        void openSessionRow({
-          onFailure: showOpenSessionFailureToast,
-          onSessionSelected,
-          openSession,
-          request: {
-            cwd: group.cwd,
-            limit: 100,
-            provider: session.provider,
-            sessionId: session.sessionId,
-            title: session.title,
-          },
-        });
+        onSessionTargetSelected(openSessionTarget(group, session));
       }}
       selected={isActiveSession(
         {
