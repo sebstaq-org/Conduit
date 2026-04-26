@@ -979,6 +979,8 @@ impl PromptState {
             }) => {
                 info!("Task started with context window of {turn_id} {model_context_window:?} {collaboration_mode_kind:?}");
             }
+            // Conduit does not enable ACP unstable_session_usage, so Codex token
+            // counts must stay local instead of becoming usage_update notifications.
             EventMsg::TokenCount(TokenCountEvent { .. }) => {}
             EventMsg::ItemStarted(ItemStartedEvent { thread_id, turn_id, item }) => {
                 info!("Item started with thread_id: {thread_id}, turn_id: {turn_id}, item: {item:?}");
