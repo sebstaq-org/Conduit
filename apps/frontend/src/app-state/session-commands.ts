@@ -16,7 +16,6 @@ interface OpenSessionRowArgs {
   openSession: OpenSessionTrigger;
   onFailure?: ((failure: OpenSessionFailure) => void) | undefined;
   request: OpenSessionMutationArg;
-  onSessionSelected?: (() => void) | undefined;
 }
 
 interface SubmitPromptArgs {
@@ -58,6 +57,8 @@ interface CanSubmitPromptArgs {
   openSessionConfigSyncBlocked: boolean;
 }
 
+const openSessionHistoryLimit = 100;
+
 function canSubmitPrompt({
   activeSession,
   isLoading,
@@ -79,7 +80,6 @@ function canSubmitPrompt({
 
 async function openSessionRow({
   onFailure,
-  onSessionSelected,
   openSession,
   request,
 }: OpenSessionRowArgs): Promise<void> {
@@ -90,7 +90,6 @@ async function openSessionRow({
       provider: request.provider,
       session_id: request.sessionId,
     });
-    onSessionSelected?.();
   } catch (error) {
     logFailure("frontend.session.open.intent.failed", error, {
       cwd: request.cwd,
@@ -150,5 +149,10 @@ async function submitPrompt({
   }
 }
 
-export { canSubmitPrompt, openSessionRow, submitPrompt };
+export {
+  canSubmitPrompt,
+  openSessionHistoryLimit,
+  openSessionRow,
+  submitPrompt,
+};
 export type { OpenSessionFailure, PromptFailure };

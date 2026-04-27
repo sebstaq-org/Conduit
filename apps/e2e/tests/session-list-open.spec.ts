@@ -17,6 +17,7 @@ const copilotParityPrompt =
 const copilotParitySentinel = "CONDUIT_E2E_COPILOT_PARITY_RESPONSE";
 const copilotParitySessionTitle = "Copilot E2E parity session";
 const transcriptSentinel = "CONDUIT_E2E_SENTINEL_SESSION_LOAD_TRANSCRIPT";
+const mobileViewport = { height: 844, width: 390 };
 
 let harness: E2eHarness | null = null;
 
@@ -39,6 +40,44 @@ test("session list opens fixture transcript", async ({ page }) => {
   await sessionRow.click();
 
   await expect(page.getByText(transcriptSentinel)).toBeVisible();
+  await expectNoFailureFeedback(page);
+});
+
+test("mobile drawer closes immediately when an existing session is selected", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openMobileFrontend(page, activeHarness);
+  await pairFrontendFromPairRoute(page, activeHarness);
+
+  await openMobileNavigationPanel(page);
+  const sessionRow = page.getByRole("button", { name: fixtureSessionTitle });
+  await expectVisibleWithDiagnostics(page, activeHarness, sessionRow);
+  await sessionRow.click();
+
+  await expect(page.getByText(transcriptSentinel, { exact: true })).toBeVisible(
+    { timeout: 15000 },
+  );
+  await expectMobileNavigationPanelClosed(page);
+  await expectNoFailureFeedback(page);
+});
+
+test("mobile drawer closes immediately when a draft session is selected", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openMobileFrontend(page, activeHarness);
+  await pairFrontendFromPairRoute(page, activeHarness);
+
+  await openMobileNavigationPanel(page);
+  await page.getByLabel(`New session in ${fixtureCwd}`).click();
+
+  await expect(
+    page.getByLabel("Select provider for new session"),
+  ).toBeVisible();
+  await expectMobileNavigationPanelClosed(page);
   await expectNoFailureFeedback(page);
 });
 
@@ -316,11 +355,47 @@ async function openFrontend(
   await page.goto(activeHarness.frontendUrl);
 }
 
+async function openMobileFrontend(
+  page: Page,
+  activeHarness: E2eHarness,
+): Promise<void> {
+  await page.setViewportSize(mobileViewport);
+  await openFrontend(page, activeHarness);
+}
+
+async function openMobileNavigationPanel(page: Page): Promise<void> {
+  await page.getByLabel("Open navigation panel").click();
+  await expect(
+    page.getByLabel(`New session in ${fixtureCwd}`),
+  ).toBeInViewport();
+}
+
+async function expectMobileNavigationPanelClosed(page: Page): Promise<void> {
+  await expect(
+    page.getByLabel(`New session in ${fixtureCwd}`),
+  ).not.toBeInViewport();
+}
+
 async function pairFrontend(
   page: Page,
   activeHarness: E2eHarness,
 ): Promise<void> {
   await pairFrontendWithUrl(page, await activeHarness.pairingUrl());
+}
+
+async function pairFrontendFromPairRoute(
+  page: Page,
+  activeHarness: E2eHarness,
+): Promise<void> {
+  const pairingUrl = await activeHarness.pairingUrl();
+  await page.goto(
+    `${activeHarness.frontendUrl}/pair?offer=${offerFragmentValue(pairingUrl)}`,
+  );
+  await submitPairingUrl(page, pairingUrl);
+  await expect(page.getByLabel("Desktop connected indicator")).toBeVisible({
+    timeout: 15000,
+  });
+  await page.goto(activeHarness.frontendUrl);
 }
 
 async function pairFrontendWithUrl(

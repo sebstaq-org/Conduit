@@ -1,5 +1,6 @@
 import { Drawer } from "react-native-drawer-layout";
 import { SessionScreen } from "@/screens/session";
+import type { SessionListTarget } from "@/features/session-list/session-list-target";
 import {
   appShellDrawerAccessibilityLabel,
   appShellDrawerPosition,
@@ -16,7 +17,9 @@ interface MobileAppShellProps {
   height: number;
   onCloseDrawer: () => void;
   onOpenDrawer: () => void;
-  renderNavigationPanel: (onSessionSelected: () => void) => React.JSX.Element;
+  renderNavigationPanel: (
+    onSessionTargetSelected: (target: SessionListTarget) => void,
+  ) => React.JSX.Element;
   theme: Theme;
   width: number;
 }
@@ -30,6 +33,10 @@ function MobileAppShell({
   theme,
   width,
 }: MobileAppShellProps): React.JSX.Element {
+  function handleSessionTargetSelected(): void {
+    onCloseDrawer();
+  }
+
   return (
     <Drawer
       drawerPosition={appShellDrawerPosition}
@@ -40,7 +47,9 @@ function MobileAppShell({
       onOpen={onOpenDrawer}
       open={drawerOpen}
       overlayAccessibilityLabel={appShellDrawerAccessibilityLabel}
-      renderDrawerContent={() => renderNavigationPanel(onCloseDrawer)}
+      renderDrawerContent={() =>
+        renderNavigationPanel(handleSessionTargetSelected)
+      }
       style={createAppShellRootStyle(theme)}
       swipeEdgeWidth={appShellSwipeEdgeWidth}
       swipeEnabled={appShellSwipeEnabled}

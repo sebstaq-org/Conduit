@@ -290,6 +290,7 @@ where
         let command = request.command.clone();
         let mut response = runtime.dispatch(request.command);
         register_prompt_lane_owner_from_response(&owners, &owner_lane, &command, &mut response);
+        active.store(false, Ordering::Release);
         let response_status = request.respond_to.send(response);
         if response_status.is_err() {
             tracing::warn!(
@@ -298,7 +299,6 @@ where
                 command = %command.command
             );
         }
-        active.store(false, Ordering::Release);
     }
     tracing::warn!(event_name = "prompt_lane.stopped", source = "service-bin");
 }
