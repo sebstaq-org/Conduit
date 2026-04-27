@@ -3,7 +3,7 @@ import {
   buildRelayWebSocketUrl,
   deriveRelayConnectionId,
 } from "@conduit/relay-transport";
-import type { RelayConnectionOffer } from "./relayWebSocketTransport.js";
+import type { RelayConnectionOffer } from "./relaySessionClientOptions.js";
 
 interface RelaySocketRoute {
   readonly connectionId: string;

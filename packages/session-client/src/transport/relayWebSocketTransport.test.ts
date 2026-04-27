@@ -1,11 +1,15 @@
 import { generateRelayDaemonKeyPair } from "@conduit/relay-transport";
 import { expect, it } from "vitest";
+import { FakeRelayWebSocket } from "./fakeRelayWebSocket.testSupport.js";
 import { RelayWebSocketTransport } from "./relayWebSocketTransport.js";
 
 const closeCodeMessageTooBig = 1009;
+const failOnEvent = (): void => {
+  throw new Error("unexpected relay event");
+};
 
 it("rejects pending relay commands with a clear frame limit error", async () => {
-  const sockets: FakeWebSocket[] = [];
+  const sockets: FakeRelayWebSocket[] = [];
   const daemonKeys = generateRelayDaemonKeyPair();
   const transport = new RelayWebSocketTransport(
     {
@@ -18,9 +22,9 @@ it("rejects pending relay commands with a clear frame limit error", async () => 
           serverId: "srv_relay_frame_limit",
         },
       },
-      WebSocketImpl: fakeWebSocketFactory(sockets),
+      WebSocketImpl: FakeRelayWebSocket.collect(sockets),
     },
-    () => undefined,
+    failOnEvent,
   );
 
   const response = transport.dispatch({
@@ -29,57 +33,10 @@ it("rejects pending relay commands with a clear frame limit error", async () => 
     params: {},
     provider: "all",
   });
-  await nextTask();
+  await expect.poll(() => sockets[0]?.sent.length ?? 0).toBeGreaterThan(1);
   sockets[0]?.close(closeCodeMessageTooBig, "relay frame too large");
 
   await expect(response).rejects.toThrow(
     "Relay message too large. The session response exceeded the relay frame limit.",
   );
 });
-
-function fakeWebSocketFactory(sockets: FakeWebSocket[]): typeof WebSocket {
-  return class TestWebSocket extends FakeWebSocket {
-    public static readonly CLOSED = WebSocket.CLOSED;
-    public static readonly CLOSING = WebSocket.CLOSING;
-    public static readonly CONNECTING = WebSocket.CONNECTING;
-    public static readonly OPEN = WebSocket.OPEN;
-
-    public constructor(_url: string | URL, _protocols?: string | string[]) {
-      super();
-      sockets.push(this);
-    }
-  } as unknown as typeof WebSocket;
-}
-
-function nextTask(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-}
-
-class FakeWebSocket extends EventTarget {
-  public readyState: number = WebSocket.CONNECTING;
-  public readonly sent: string[] = [];
-
-  public constructor() {
-    super();
-    queueMicrotask(() => {
-      this.readyState = WebSocket.OPEN;
-      this.dispatchEvent(new Event("open"));
-    });
-  }
-
-  public send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
-    this.sent.push(String(data));
-  }
-
-  public close(code = 1000, reason = ""): void {
-    this.readyState = WebSocket.CLOSED;
-    const event = new Event("close") as CloseEvent;
-    Object.defineProperties(event, {
-      code: { value: code },
-      reason: { value: reason },
-    });
-    this.dispatchEvent(event);
-  }
-}

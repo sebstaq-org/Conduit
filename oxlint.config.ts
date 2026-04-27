@@ -336,6 +336,8 @@ export default defineConfig({
         "packages/cloudflare-relay/src/serviceRelayProcess.ts",
         "packages/cloudflare-relay/src/serviceRelayTestUtils.ts",
         "packages/cloudflare-relay/src/relayTestHarness.ts",
+        "packages/cloudflare-relay/src/relayLargeFrameScenario.ts",
+        "packages/cloudflare-relay/src/relayTestHarnessCore.ts",
       ],
       rules: {
         "eslint/prefer-object-spread": "off",

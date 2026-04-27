@@ -10,10 +10,25 @@ interface RelayConnectionOffer {
   };
 }
 
+type RelayWebSocket = Pick<
+  WebSocket,
+  "addEventListener" | "close" | "readyState" | "send"
+>;
+
+type RelayWebSocketConstructor = new (
+  url: string | URL,
+  protocols?: string | string[],
+) => RelayWebSocket;
+
 interface RelaySessionClientOptions {
   readonly offer: RelayConnectionOffer;
-  readonly WebSocketImpl?: typeof WebSocket;
+  readonly WebSocketImpl?: RelayWebSocketConstructor;
   readonly onTelemetryEvent?: (event: SessionClientTelemetryEvent) => void;
 }
 
-export type { RelayConnectionOffer, RelaySessionClientOptions };
+export type {
+  RelayConnectionOffer,
+  RelaySessionClientOptions,
+  RelayWebSocket,
+  RelayWebSocketConstructor,
+};
