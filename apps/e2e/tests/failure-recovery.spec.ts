@@ -61,7 +61,9 @@ for (const provider of providers) {
     await expect(page.getByText("Session failed to open")).not.toBeVisible();
   });
 
-  test(`draft ${provider} prompt failure preserves draft`, async ({ page }) => {
+  test(`draft ${provider} prompt failure clears composer and keeps message visible`, async ({
+    page,
+  }) => {
     const activeHarness = requireHarness();
     const draftText = `CONDUIT_E2E_PROMPT_FAILURE_DRAFT_${provider}`;
     await activeHarness.addProject(fixtureCwd);
@@ -83,14 +85,15 @@ for (const provider of providers) {
       page.getByText("Request failed", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(`${titleCase(provider)} request failed. Draft kept.`),
+      page.getByText(`${titleCase(provider)} request failed.`),
     ).toBeVisible();
     await expect(
-      page.getByText("Your draft was kept. Edit it and try again."),
+      page.getByText("Your message was sent to the session."),
     ).toBeVisible();
-    await expect(messageInput).toHaveValue(draftText);
+    await expect(messageInput).toHaveValue("");
+    await expect(page.getByText(draftText, { exact: true })).toBeVisible();
     await expect(messageInput).toBeEditable();
-    await expect(sendButton).toBeEnabled();
+    await expect(sendButton).toBeDisabled();
   });
 }
 

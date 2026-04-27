@@ -506,9 +506,9 @@ async function expectNoFailureFeedback(page: Page): Promise<void> {
   );
   await expect(page.getByText("Session failed to open")).toHaveCount(0);
   await expect(page.getByText(/Couldn't open .* session/)).toHaveCount(0);
-  await expect(page.getByText(/request failed\. Draft kept\./i)).toHaveCount(0);
+  await expect(page.getByText(/request failed\./i)).toHaveCount(0);
   await expect(
-    page.getByText("Your draft was kept. Edit it and try again."),
+    page.getByText("Your message was sent to the session."),
   ).toHaveCount(0);
 }
 

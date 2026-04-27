@@ -5,6 +5,9 @@ import type { ActiveSession } from "./session-selection";
 
 type SubmitPromptArgs = Parameters<typeof submitPrompt>[0];
 type NewSessionTrigger = SubmitPromptArgs["newSession"];
+type PromptSubmittedCallback = NonNullable<
+  SubmitPromptArgs["onPromptSubmitted"]
+>;
 type OpenSessionTrigger = SubmitPromptArgs["openSession"];
 type PromptFailureCallback = NonNullable<SubmitPromptArgs["onFailure"]>;
 type PromptSessionTrigger = SubmitPromptArgs["promptSession"];
@@ -120,13 +123,23 @@ function failureRecording(calls: string[]): PromptFailureCallback {
   };
 }
 
-it("tracks an open-session prompt and clears the draft after success", async () => {
+function promptSubmittedRecording(calls: string[]): PromptSubmittedCallback {
+  return (submitted): void => {
+    calls.push(
+      `submitted:${submitted.openSessionId}:${submitted.baseRevision}:${submitted.text}`,
+    );
+  };
+}
+
+it("tracks an open-session prompt and clears the draft immediately", async () => {
   const calls: string[] = [];
 
   await submitPrompt({
     activeSession: openActiveSession(),
     newSession: unexpectedNewSession(),
+    openSessionBaseRevision: 7,
     onFailure: failureRecording(calls),
+    onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
     onPromptTurnStarted: promptTurnStartedRecording(calls),
     openSession: unexpectedOpenSession(),
@@ -137,20 +150,23 @@ it("tracks an open-session prompt and clears the draft after success", async () 
   });
 
   expect(calls).toEqual([
+    "submitted:open-session-1:7:asasas",
+    "draft:",
     "start:codex:session-1",
     "prompt:open-session-1",
     "finish:codex:session-1",
-    "draft:",
   ]);
 });
 
-it("preserves the draft and still finishes the open-session turn after prompt failure", async () => {
+it("keeps the submitted draft cleared after open-session prompt failure", async () => {
   const calls: string[] = [];
 
   await submitPrompt({
     activeSession: openActiveSession(),
     newSession: unexpectedNewSession(),
+    openSessionBaseRevision: 7,
     onFailure: failureRecording(calls),
+    onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
     onPromptTurnStarted: promptTurnStartedRecording(calls),
     openSession: unexpectedOpenSession(),
@@ -164,6 +180,8 @@ it("preserves the draft and still finishes the open-session turn after prompt fa
   });
 
   expect(calls).toEqual([
+    "submitted:open-session-1:7:asasas",
+    "draft:",
     "start:codex:session-1",
     "prompt:open-session-1",
     "finish:codex:session-1",
@@ -177,10 +195,12 @@ it("tracks a draft prompt, commits the opened session, and clears the draft afte
   await submitPrompt({
     activeSession: draftActiveSession(),
     newSession: newSessionRecording(calls),
+    openSessionBaseRevision: null,
     onDraftPromptCommitted: (session) => {
       calls.push(`commit:${session.sessionId}`);
     },
     onFailure: failureRecording(calls),
+    onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
     onPromptTurnStarted: promptTurnStartedRecording(calls),
     openSession: unexpectedOpenSession(),
@@ -192,24 +212,27 @@ it("tracks a draft prompt, commits the opened session, and clears the draft afte
 
   expect(calls).toEqual([
     "new:codex",
+    "submitted:draft-open-session-1:0:asasas",
+    "draft:",
     "start:codex:draft-session-1",
     "prompt:draft-open-session-1",
     "finish:codex:draft-session-1",
     "commit:draft-session-1",
-    "draft:",
   ]);
 });
 
-it("preserves an uncommitted draft and still finishes the draft turn after prompt failure", async () => {
+it("keeps the submitted draft cleared after draft prompt failure", async () => {
   const calls: string[] = [];
 
   await submitPrompt({
     activeSession: draftActiveSession(),
     newSession: newSessionRecording(calls),
+    openSessionBaseRevision: null,
     onDraftPromptCommitted: (session) => {
       calls.push(`commit:${session.sessionId}`);
     },
     onFailure: failureRecording(calls),
+    onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
     onPromptTurnStarted: promptTurnStartedRecording(calls),
     openSession: unexpectedOpenSession(),
@@ -224,6 +247,8 @@ it("preserves an uncommitted draft and still finishes the draft turn after promp
 
   expect(calls).toEqual([
     "new:codex",
+    "submitted:draft-open-session-1:0:asasas",
+    "draft:",
     "start:codex:draft-session-1",
     "prompt:draft-open-session-1",
     "finish:codex:draft-session-1",
