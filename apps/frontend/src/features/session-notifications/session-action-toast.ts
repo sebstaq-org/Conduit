@@ -47,9 +47,9 @@ function promptProvider(activeSession: ActiveSession): string | null {
 function promptFailureTitle(activeSession: ActiveSession): string {
   const provider = promptProvider(activeSession);
   if (provider === null) {
-    return "Request failed. Draft kept.";
+    return "Request failed.";
   }
-  return `${providerLabel(provider)} request failed. Draft kept.`;
+  return `${providerLabel(provider)} request failed.`;
 }
 
 function failureMessage(prefix: string, error: unknown): string {
@@ -75,10 +75,7 @@ function showOpenSessionFailureToast({
 
 function showPromptFailureToast({ activeSession, error }: PromptFailure): void {
   showErrorToast({
-    message: failureMessage(
-      "Your draft was kept. Edit it and try again.",
-      error,
-    ),
+    message: failureMessage("Your message was sent to the session.", error),
     title: promptFailureTitle(activeSession),
   });
 }

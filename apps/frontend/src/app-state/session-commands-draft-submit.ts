@@ -36,6 +36,7 @@ interface DraftConfigSyncState {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   openSessionId: string;
+  revision: number;
 }
 
 interface SubmitDraftPromptArgs {
@@ -43,6 +44,13 @@ interface SubmitDraftPromptArgs {
   newSession: NewSessionTrigger;
   onDraftPromptCommitted?:
     | ((session: DraftCommittedSession) => void)
+    | undefined;
+  onPromptSubmitted?:
+    | ((submitted: {
+        baseRevision: number;
+        openSessionId: string;
+        text: string;
+      }) => void)
     | undefined;
   onPromptTurnFinished?:
     | ((identity: SessionPromptTurnIdentity) => void)
@@ -112,6 +120,13 @@ async function promptOpenDraftSession(args: {
   onDraftPromptCommitted:
     | ((session: DraftCommittedSession) => void)
     | undefined;
+  onPromptSubmitted:
+    | ((submitted: {
+        baseRevision: number;
+        openSessionId: string;
+        text: string;
+      }) => void)
+    | undefined;
   onPromptTurnFinished:
     | ((identity: SessionPromptTurnIdentity) => void)
     | undefined;
@@ -125,6 +140,12 @@ async function promptOpenDraftSession(args: {
   syncState: DraftConfigSyncState;
   text: string;
 }): Promise<void> {
+  args.onPromptSubmitted?.({
+    baseRevision: args.syncState.revision,
+    openSessionId: args.syncState.openSessionId,
+    text: args.text,
+  });
+  args.setDraft("");
   await promptTrackedOpenSession({
     identity: { provider: args.provider, sessionId: args.response.sessionId },
     onPromptTurnFinished: args.onPromptTurnFinished,
@@ -140,7 +161,6 @@ async function promptOpenDraftSession(args: {
       syncState: args.syncState,
     }),
   );
-  args.setDraft("");
 }
 
 async function createDraftSession(args: {
@@ -173,59 +193,78 @@ async function syncCreatedDraftSession(args: {
     state: initialDraftConfigSyncState(
       args.response.configOptions ?? null,
       args.response.history.openSessionId,
+      args.response.history.revision,
     ),
   });
   return syncState;
 }
 
-async function submitDraftPrompt({
-  activeSession,
-  newSession,
-  onDraftPromptCommitted,
-  onPromptTurnFinished,
-  onPromptTurnStarted,
-  openSession,
-  promptSession,
-  setSessionConfigOption,
-  setDraft,
-  text,
-}: SubmitDraftPromptArgs): Promise<void> {
-  const provider = activeSession.provider;
-  if (provider === null) {
-    return;
-  }
+async function createAndSyncDraftSession(
+  args: SubmitDraftPromptArgs,
+  provider: ProviderId,
+): Promise<{
+  response: SessionNewResult;
+  syncState: DraftConfigSyncState;
+}> {
   const response = await createDraftSession({
-    activeSession,
-    newSession,
+    activeSession: args.activeSession,
+    newSession: args.newSession,
     provider,
   });
   const syncState = await syncCreatedDraftSession({
-    activeSession,
-    openSession,
+    activeSession: args.activeSession,
+    openSession: args.openSession,
     response,
-    setSessionConfigOption,
+    setSessionConfigOption: args.setSessionConfigOption,
   });
+  return { response, syncState };
+}
+
+async function submitSyncedDraftPrompt(args: {
+  provider: ProviderId;
+  request: SubmitDraftPromptArgs;
+  response: SessionNewResult;
+  syncState: DraftConfigSyncState;
+}): Promise<void> {
+  await promptOpenDraftSession({
+    activeSession: args.request.activeSession,
+    onDraftPromptCommitted: args.request.onDraftPromptCommitted,
+    onPromptSubmitted: args.request.onPromptSubmitted,
+    onPromptTurnFinished: args.request.onPromptTurnFinished,
+    onPromptTurnStarted: args.request.onPromptTurnStarted,
+    promptSession: args.request.promptSession,
+    provider: args.provider,
+    response: args.response,
+    setDraft: args.request.setDraft,
+    syncState: args.syncState,
+    text: args.request.text,
+  });
+}
+
+async function submitDraftPrompt(args: SubmitDraftPromptArgs): Promise<void> {
+  const provider = args.activeSession.provider;
+  if (provider === null) {
+    return;
+  }
+  const { response, syncState } = await createAndSyncDraftSession(
+    args,
+    provider,
+  );
   if (
     commitDraftIfConfigBlocked({
-      activeSession,
-      onDraftPromptCommitted,
+      activeSession: args.activeSession,
+      onDraftPromptCommitted: args.onDraftPromptCommitted,
       response,
       syncState,
     })
   ) {
     return;
   }
-  await promptOpenDraftSession({
-    activeSession,
-    onDraftPromptCommitted,
-    onPromptTurnFinished,
-    onPromptTurnStarted,
-    promptSession,
+  await submitSyncedDraftPrompt({
     provider,
+    request: args,
     response,
-    setDraft,
     syncState,
-    text,
   });
 }
 

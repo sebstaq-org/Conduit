@@ -21,11 +21,13 @@ interface OpenSessionRowArgs {
 interface SubmitPromptArgs {
   activeSession: ActiveSession;
   newSession: NewSessionTrigger;
+  openSessionBaseRevision: number | null;
   openSession: OpenSessionTrigger;
   onDraftPromptCommitted?:
     | ((session: DraftCommittedSession) => void)
     | undefined;
   onFailure?: ((failure: PromptFailure) => void) | undefined;
+  onPromptSubmitted?: ((submitted: PromptSubmitted) => void) | undefined;
   onPromptTurnFinished?:
     | ((identity: SessionPromptTurnIdentity) => void)
     | undefined;
@@ -35,6 +37,12 @@ interface SubmitPromptArgs {
   promptSession: PromptSessionTrigger;
   setSessionConfigOption: SetSessionConfigOptionTrigger;
   setDraft: (draft: string) => void;
+  text: string;
+}
+
+interface PromptSubmitted {
+  baseRevision: number;
+  openSessionId: string;
   text: string;
 }
 
@@ -58,6 +66,52 @@ interface CanSubmitPromptArgs {
 }
 
 const openSessionHistoryLimit = 100;
+
+async function submitDraftActiveSessionPrompt(
+  args: SubmitPromptArgs,
+): Promise<void> {
+  if (args.activeSession.kind !== "draft") {
+    return;
+  }
+  await submitDraftPrompt({
+    activeSession: args.activeSession,
+    newSession: args.newSession,
+    onDraftPromptCommitted: args.onDraftPromptCommitted,
+    onPromptSubmitted: args.onPromptSubmitted,
+    onPromptTurnFinished: args.onPromptTurnFinished,
+    onPromptTurnStarted: args.onPromptTurnStarted,
+    openSession: args.openSession,
+    promptSession: args.promptSession,
+    setSessionConfigOption: args.setSessionConfigOption,
+    setDraft: args.setDraft,
+    text: args.text,
+  });
+}
+
+async function submitOpenActiveSessionPrompt(
+  args: SubmitPromptArgs,
+): Promise<void> {
+  if (args.activeSession.kind !== "open") {
+    return;
+  }
+  args.onPromptSubmitted?.({
+    baseRevision: args.openSessionBaseRevision ?? 0,
+    openSessionId: args.activeSession.openSessionId,
+    text: args.text,
+  });
+  args.setDraft("");
+  await promptTrackedOpenSession({
+    identity: {
+      provider: args.activeSession.provider,
+      sessionId: args.activeSession.sessionId,
+    },
+    onPromptTurnFinished: args.onPromptTurnFinished,
+    onPromptTurnStarted: args.onPromptTurnStarted,
+    openSessionId: args.activeSession.openSessionId,
+    promptSession: args.promptSession,
+    text: args.text,
+  });
+}
 
 function canSubmitPrompt({
   activeSession,
@@ -102,50 +156,20 @@ async function openSessionRow({
   }
 }
 
-async function submitPrompt({
-  activeSession,
-  newSession,
-  onDraftPromptCommitted,
-  onFailure,
-  onPromptTurnFinished,
-  onPromptTurnStarted,
-  openSession,
-  promptSession,
-  setSessionConfigOption,
-  setDraft,
-  text,
-}: SubmitPromptArgs): Promise<void> {
+async function submitPrompt(args: SubmitPromptArgs): Promise<void> {
   try {
-    if (activeSession.kind === "draft") {
-      await submitDraftPrompt({
-        activeSession,
-        newSession,
-        onDraftPromptCommitted,
-        onPromptTurnFinished,
-        onPromptTurnStarted,
-        openSession,
-        promptSession,
-        setSessionConfigOption,
-        setDraft,
-        text,
-      });
+    if (args.activeSession.kind === "draft") {
+      await submitDraftActiveSessionPrompt(args);
       return;
     }
-    await promptTrackedOpenSession({
-      identity: {
-        provider: activeSession.provider,
-        sessionId: activeSession.sessionId,
-      },
-      onPromptTurnFinished,
-      onPromptTurnStarted,
-      openSessionId: activeSession.openSessionId,
-      promptSession,
-      text,
-    });
-    setDraft("");
+    await submitOpenActiveSessionPrompt(args);
   } catch (error) {
-    // The mutation state renders the failure while preserving the draft.
-    onFailure?.({ activeSession, error, text });
+    // The mutation state renders the failure while preserving submitted text in history.
+    args.onFailure?.({
+      activeSession: args.activeSession,
+      error,
+      text: args.text,
+    });
   }
 }
 
@@ -155,4 +179,4 @@ export {
   openSessionRow,
   submitPrompt,
 };
-export type { OpenSessionFailure, PromptFailure };
+export type { OpenSessionFailure, PromptFailure, PromptSubmitted };
