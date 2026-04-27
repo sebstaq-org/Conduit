@@ -26,7 +26,6 @@ import type {
 } from "@conduit/session-contracts";
 import type { PendingRelayResponse } from "./relayWebSocketOpen.js";
 const transportVersionField = "v";
-
 class RelayWebSocketTransport implements CommandTransport {
   private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: RelaySessionClientOptions;
@@ -72,7 +71,6 @@ class RelayWebSocketTransport implements CommandTransport {
       throw error;
     }
   }
-
   public close(): void {
     const socket = this.socket;
     this.handleClose();
