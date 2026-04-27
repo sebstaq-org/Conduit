@@ -44,15 +44,34 @@ interface SessionRowsInput {
   error: unknown;
   isError: boolean;
   isLoading: boolean;
+  openSessionError: unknown;
   showOpenSessionError: boolean;
 }
 
-function sessionGroupsErrorMessage(error: unknown): string {
+function objectStringField(value: unknown, field: string): string | null {
+  if (typeof value !== "object" || value === null || !(field in value)) {
+    return null;
+  }
+  const fieldValue: unknown = Reflect.get(value, field);
+  if (typeof fieldValue !== "string" || fieldValue.length === 0) {
+    return null;
+  }
+  return fieldValue;
+}
+
+function requestErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === "string") {
     return error;
   }
-
-  return "session request failed";
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return (
+    objectStringField(error, "message") ??
+    objectStringField(error, "data") ??
+    objectStringField(error, "error") ??
+    fallback
+  );
 }
 
 function draftSessionForGroup(
@@ -133,7 +152,14 @@ function appendSessionGroupRows(
 
 function appendStatusRows(
   rows: NavigationPanelScrollRow[],
-  { data, error, isError, isLoading, showOpenSessionError }: SessionRowsInput,
+  {
+    data,
+    error,
+    isError,
+    isLoading,
+    openSessionError,
+    showOpenSessionError,
+  }: SessionRowsInput,
 ): void {
   if (isLoading) {
     rows.push({
@@ -147,7 +173,7 @@ function appendStatusRows(
       kind: "status",
       key: "status:error",
       label: "Sessions unavailable",
-      meta: sessionGroupsErrorMessage(error),
+      meta: requestErrorMessage(error, "session request failed"),
     });
   }
   if (showOpenSessionError) {
@@ -155,6 +181,7 @@ function appendStatusRows(
       kind: "status",
       key: "status:open-error",
       label: "Session failed to open",
+      meta: requestErrorMessage(openSessionError, "session open failed"),
     });
   }
   if (!isLoading && !isError && data?.groups.length === 0) {

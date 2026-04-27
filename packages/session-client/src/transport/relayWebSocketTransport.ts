@@ -18,6 +18,11 @@ import type {
   ConsumerResponse,
 } from "@conduit/session-contracts";
 const transportVersionField = "v";
+const closeCodeMessageTooBig = 1009;
+const relayFrameTooLargeReason = "relay frame too large";
+const relayFrameTooLargeMessage =
+  "Relay message too large. The session response exceeded the relay frame limit.";
+
 class RelayWebSocketTransport implements CommandTransport {
   private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: RelaySessionClientOptions;
@@ -154,8 +159,8 @@ class RelayWebSocketTransport implements CommandTransport {
     socket.addEventListener("message", (event: MessageEvent) => {
       void this.handleMessage(event);
     });
-    socket.addEventListener("close", () => {
-      this.handleClose();
+    socket.addEventListener("close", (event: CloseEvent) => {
+      this.handleClose(event);
     });
   }
 
@@ -207,8 +212,10 @@ class RelayWebSocketTransport implements CommandTransport {
       });
       deferred.reject(new Error("relay websocket failed to connect"));
     });
-    socket.addEventListener("close", () => {
-      deferred.reject(new Error("relay websocket closed before open"));
+    socket.addEventListener("close", (event: CloseEvent) => {
+      deferred.reject(
+        this.closeError(event, "relay websocket closed before open"),
+      );
     });
     const openedSocket = await deferred.promise;
     return openedSocket;
@@ -264,20 +271,36 @@ class RelayWebSocketTransport implements CommandTransport {
     this.handleEvent(frame.event);
   }
 
-  private handleClose(): void {
+  private handleClose(event?: CloseEvent): void {
     const pendingCount = this.pending.size;
+    const error = this.closeError(event, "relay websocket closed");
     this.channel = null;
     this.socket = null;
     this.connecting = null;
     for (const pending of this.pending.values()) {
-      pending.reject(new Error("relay websocket closed"));
+      pending.reject(error);
     }
     this.pending.clear();
     this.emitTelemetry({
       event_name: "session_client.relay.socket.closed",
-      fields: { pending_count: pendingCount },
+      fields: {
+        close_code: event?.code ?? null,
+        close_reason: event?.reason ?? null,
+        error,
+        pending_count: pendingCount,
+      },
       level: "warn",
     });
+  }
+
+  private closeError(event: CloseEvent | undefined, fallback: string): Error {
+    if (
+      event?.code === closeCodeMessageTooBig &&
+      event.reason === relayFrameTooLargeReason
+    ) {
+      return new Error(relayFrameTooLargeMessage);
+    }
+    return new Error(fallback);
   }
 
   private requireChannel(): RelayCipherChannel {

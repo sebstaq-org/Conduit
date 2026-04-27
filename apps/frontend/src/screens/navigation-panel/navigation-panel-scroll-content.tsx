@@ -43,6 +43,7 @@ function NavigationPanelScrollContent({
     error,
     isError,
     isLoading,
+    openSessionError: openSessionState.error,
     showOpenSessionError,
   });
 
