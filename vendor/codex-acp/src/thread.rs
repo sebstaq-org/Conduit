@@ -88,6 +88,61 @@ const CODEX_TERMINAL_PLAN_META_KEY: &str = "terminalPlan";
 const PROPOSED_PLAN_OPEN_TAG: &str = "<proposed_plan>";
 const PROPOSED_PLAN_CLOSE_TAG: &str = "</proposed_plan>";
 
+fn current_approval_preset(config: &Config) -> Option<&ApprovalPreset> {
+    APPROVAL_PRESETS
+        .iter()
+        .find(|preset| approval_preset_matches_config(preset, config))
+        .or_else(|| {
+            // When the project is untrusted, the above code won't match since
+            // AskForApproval::UnlessTrusted is not part of the default
+            // presets. However, in this case we still want to show the mode
+            // selector, which allows the user to choose a different mode
+            // (which will set the project to be trusted).
+            // See https://github.com/zed-industries/zed/issues/48132
+            if config.active_project.is_untrusted() {
+                APPROVAL_PRESETS
+                    .iter()
+                    .find(|preset| preset.id == "read-only")
+            } else {
+                None
+            }
+        })
+}
+
+fn approval_preset_matches_config(preset: &ApprovalPreset, config: &Config) -> bool {
+    &preset.approval == config.permissions.approval_policy.get()
+        && sandbox_policy_matches_preset(&preset.sandbox, config.permissions.sandbox_policy.get())
+}
+
+fn sandbox_policy_matches_preset(preset: &SandboxPolicy, actual: &SandboxPolicy) -> bool {
+    match (preset, actual) {
+        (SandboxPolicy::DangerFullAccess, SandboxPolicy::DangerFullAccess) => true,
+        (
+            SandboxPolicy::ReadOnly {
+                access: preset_access,
+                network_access: preset_network_access,
+            },
+            SandboxPolicy::ReadOnly {
+                access,
+                network_access,
+            },
+        ) => preset_access == access && preset_network_access == network_access,
+        (
+            SandboxPolicy::WorkspaceWrite {
+                read_only_access: preset_read_only_access,
+                network_access: preset_network_access,
+                ..
+            },
+            SandboxPolicy::WorkspaceWrite {
+                read_only_access,
+                network_access,
+                ..
+            },
+        ) => preset_read_only_access == read_only_access && preset_network_access == network_access,
+        _ => false,
+    }
+}
+
 /// Trait for abstracting over the `CodexThread` to make testing easier.
 #[async_trait::async_trait]
 pub trait CodexThreadImpl {
@@ -2907,28 +2962,8 @@ impl<A: Auth> ThreadActor<A> {
     }
 
     fn modes(&self) -> Option<SessionModeState> {
-        let current_mode_id = APPROVAL_PRESETS
-            .iter()
-            .find(|preset| {
-                &preset.approval == self.config.permissions.approval_policy.get()
-                    && &preset.sandbox == self.config.permissions.sandbox_policy.get()
-            })
-            .or_else(|| {
-                // When the project is untrusted, the above code won't match
-                // since AskForApproval::UnlessTrusted is not part of the
-                // default presets. However, in this case we still want to show
-                // the mode selector, which allows the user to choose a
-                // different mode (which will set the project to be trusted)
-                // See https://github.com/zed-industries/zed/issues/48132
-                if self.config.active_project.is_untrusted() {
-                    APPROVAL_PRESETS
-                        .iter()
-                        .find(|preset| preset.id == "read-only")
-                } else {
-                    None
-                }
-            })
-            .map(|preset| SessionModeId::new(preset.id))?;
+        let current_mode_id =
+            current_approval_preset(&self.config).map(|preset| SessionModeId::new(preset.id))?;
 
         Some(SessionModeState::new(
             current_mode_id,
@@ -4074,7 +4109,10 @@ mod tests {
 
     use agent_client_protocol::{RequestPermissionResponse, TextContent};
     use codex_core::{config::ConfigOverrides, test_support::all_model_presets};
-    use codex_protocol::config_types::ModeKind;
+    use codex_protocol::{
+        config_types::{ModeKind, SandboxMode},
+        protocol::AskForApproval,
+    };
     use tokio::{
         sync::{Mutex, Notify, mpsc::UnboundedSender},
         task::LocalSet,
@@ -4083,6 +4121,50 @@ mod tests {
     use super::*;
 
     const TEST_THREAD_ID: &str = "019d9800-bf71-7f40-818a-fcdb9422263b";
+
+    #[tokio::test]
+    async fn test_approval_preset_matches_workspace_write_with_extra_roots() -> anyhow::Result<()> {
+        let config = Config::load_with_cli_overrides_and_harness_overrides(
+            vec![],
+            ConfigOverrides {
+                approval_policy: Some(AskForApproval::OnRequest),
+                sandbox_mode: Some(SandboxMode::WorkspaceWrite),
+                cwd: Some(std::env::current_dir()?),
+                additional_writable_roots: vec![
+                    std::env::temp_dir().join("conduit-codex-acp-extra-writable-root"),
+                ],
+                ..ConfigOverrides::default()
+            },
+        )
+        .await?;
+
+        let SandboxPolicy::WorkspaceWrite { writable_roots, .. } =
+            config.permissions.sandbox_policy.get()
+        else {
+            panic!("test setup must produce workspace-write sandbox policy");
+        };
+        assert!(
+            !writable_roots.is_empty(),
+            "test must cover the Codex config shape that appends internal writable roots"
+        );
+
+        let preset = current_approval_preset(&config).expect("approval preset should resolve");
+        assert_eq!(preset.id, "auto");
+
+        let actor = test_actor_with_config(config);
+        let options = actor.config_options().await?;
+        let mode_option = options
+            .iter()
+            .find(|option| option.id.0.as_ref() == "mode")
+            .expect("config options should include Approval Preset");
+        let mode_select = match &mode_option.kind {
+            agent_client_protocol::SessionConfigKind::Select(select) => select,
+            _ => panic!("Approval Preset must be a select config option"),
+        };
+        assert_eq!(mode_select.current_value.0.as_ref(), "auto");
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_prompt() -> anyhow::Result<()> {
@@ -4713,6 +4795,27 @@ mod tests {
         let local_set = LocalSet::new();
         local_set.spawn_local(actor.spawn());
         Ok((session_id, client, conversation, message_tx, local_set))
+    }
+
+    fn test_actor_with_config(config: Config) -> ThreadActor<StubAuth> {
+        let session_id = SessionId::new("test");
+        let client = Arc::new(StubClient::new());
+        let session_client = SessionClient::with_client(session_id, client, Arc::default());
+        let conversation = Arc::new(StubCodexThread::new());
+        let models_manager = Arc::new(StubModelsManager);
+        let (_message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (resolution_tx, resolution_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        ThreadActor::new(
+            StubAuth,
+            session_client,
+            conversation,
+            models_manager,
+            config,
+            message_rx,
+            resolution_tx,
+            resolution_rx,
+        )
     }
 
     struct StubAuth;
