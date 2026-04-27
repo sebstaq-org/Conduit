@@ -89,26 +89,18 @@ class RelayDurableObject {
   }
 
   private acceptClientSocket(connectionId: string, protocol: string): Response {
-    const existing = this.connections.get(connectionId);
-    if (
-      existing?.clientSocket !== null &&
-      existing?.clientSocket !== undefined
-    ) {
-      return new Response("relay client socket already connected", {
-        status: 409,
-      });
-    }
     const sockets = new WebSocketPair();
     const client = sockets[0];
     const server = sockets[1];
     server.accept();
     const connection = connectionFor(this.connections, connectionId);
+    this.replaceClientSocket(connection);
     connection.clientSocket = server;
     this.testSnapshot.clientSocketCount += 1;
     notifyControl(this.controlSocket, "client_waiting", connectionId);
     armPendingTimer(this.connections, connectionId, connection);
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
-      this.handleClientMessage(connectionId, event.data);
+      this.handleClientMessage(connectionId, server, event.data);
     });
     server.addEventListener("close", () => {
       this.handleClientClose(connectionId, server);
@@ -117,6 +109,17 @@ class RelayDurableObject {
       this.handleClientClose(connectionId, server);
     });
     return websocketResponse(client, protocol);
+  }
+
+  private replaceClientSocket(connection: RelayConnection): void {
+    safeClose(
+      connection.clientSocket,
+      CLOSE_REPLACED,
+      "client socket replaced",
+    );
+    connection.clientBuffer.length = 0;
+    connection.bufferedBytes = 0;
+    clearPendingTimer(connection);
   }
 
   private acceptDataSocket(connectionId: string, protocol: string): Response {
@@ -131,7 +134,7 @@ class RelayDurableObject {
     clearPendingTimer(connection);
     this.flushClientBuffer(connection);
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
-      this.handleDataMessage(connectionId, event.data);
+      this.handleDataMessage(connectionId, server, event.data);
     });
     server.addEventListener("close", () => {
       this.handleDataClose(connectionId, server);
@@ -144,9 +147,13 @@ class RelayDurableObject {
 
   private handleClientMessage(
     connectionId: string,
+    socket: WorkerWebSocket,
     message: RelayMessage,
   ): void {
     const connection = connectionFor(this.connections, connectionId);
+    if (connection.clientSocket !== socket) {
+      return;
+    }
     const bytes = frameBytes(message);
     this.testSnapshot.clientMessageCount += 1;
     this.testSnapshot.totalClientBytes += bytes;
@@ -165,8 +172,15 @@ class RelayDurableObject {
     this.queueClientMessage(connectionId, connection, message, bytes);
   }
 
-  private handleDataMessage(connectionId: string, message: RelayMessage): void {
+  private handleDataMessage(
+    connectionId: string,
+    socket: WorkerWebSocket,
+    message: RelayMessage,
+  ): void {
     const connection = connectionFor(this.connections, connectionId);
+    if (connection.dataSocket !== socket) {
+      return;
+    }
     const bytes = frameBytes(message);
     this.testSnapshot.dataMessageCount += 1;
     this.testSnapshot.totalDataBytes += bytes;

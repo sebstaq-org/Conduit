@@ -3,7 +3,7 @@ import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { MAX_FRAME_BYTES } from "./limits.js";
+import { CLOSE_REPLACED, MAX_FRAME_BYTES } from "./limits.js";
 import { runRelayAdversarialScenario } from "./relayAdversarialHarness.js";
 import {
   relayWebSocketProtocol,
@@ -11,6 +11,7 @@ import {
   runRelayHealthCheck,
   runRelayLargeServerFrameScenario,
   runRelayRoundtripScenario,
+  waitForMessage,
 } from "./relayTestHarness.js";
 import type { RelayTestHarness, TestSocket } from "./relayTestHarness.js";
 import {
@@ -109,6 +110,52 @@ describe("cloudflare relay local e2e", () => {
     client.send("x".repeat(MAX_FRAME_BYTES + 1));
 
     await expect(waitForClose(client)).resolves.toBeGreaterThan(0);
+  });
+
+  it("replaces stale client sockets for the same relay connection", async () => {
+    const harness = await createLocalHarness();
+    const daemonCapability = generateRelayCapability();
+    const clientCapability = generateRelayCapability();
+    const serverId = deriveRelayServerId(daemonCapability);
+    const connectionId = deriveRelayConnectionId(clientCapability);
+    const clientUrl = buildRelayWebSocketUrl(endpoint, {
+      capability: clientCapability,
+      connectionId,
+      role: "client",
+      serverId,
+    });
+    const control = await harness.openSocket(
+      buildRelayWebSocketUrl(endpoint, {
+        capability: daemonCapability,
+        role: "server",
+        serverId,
+      }),
+      daemonCapability,
+    );
+    const firstWaiting = waitForMessage(control, "first client waiting");
+    const firstClient = await harness.openSocket(clientUrl, clientCapability);
+    await expect(firstWaiting).resolves.toContain(connectionId);
+
+    const firstClientClosed = waitForClose(firstClient);
+    const secondClient = await harness.openSocket(clientUrl, clientCapability);
+
+    await expect(firstClientClosed).resolves.toBe(CLOSE_REPLACED);
+    secondClient.send("replacement client frame");
+    const data = await harness.openSocket(
+      buildRelayWebSocketUrl(endpoint, {
+        capability: daemonCapability,
+        connectionId,
+        role: "server",
+        serverId,
+      }),
+      daemonCapability,
+    );
+    await expect(waitForMessage(data, "replacement client frame")).resolves.toBe(
+      "replacement client frame",
+    );
+    data.close();
+    secondClient.close();
+    control.close();
   });
 });
 

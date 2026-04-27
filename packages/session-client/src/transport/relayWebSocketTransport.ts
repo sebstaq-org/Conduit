@@ -1,25 +1,21 @@
 import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
 import { createRelayClientHandshake } from "@conduit/relay-transport";
-import { createDeferred } from "./deferred.js";
 import { readRelayCipherFrame } from "./relayCipherFrame.js";
 import { relayCloseError } from "./relayCloseError.js";
 import { relaySocketRoute } from "./relayRoute.js";
+import {
+  createPendingRelayResponse,
+  rejectRelayCommandTimeout,
+  waitForRelaySocketOpen,
+} from "./relayWebSocketOpen.js";
 import { parseServerFrame } from "./wireFrame.js";
-import type {
-  RelayCipherChannel,
-  RelayCipherFrame,
-} from "@conduit/relay-transport";
+import type { RelayCipherChannel, RelayCipherFrame } from "@conduit/relay-transport";
 import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
 import type { CommandTransport } from "./commandTransport.js";
-import type {
-  RelaySessionClientOptions,
-  RelayWebSocket,
-} from "./relaySessionClientOptions.js";
+import type { RelaySessionClientOptions, RelayWebSocket } from "./relaySessionClientOptions.js";
 import type { ParsedServerFrame } from "./wireFrame.js";
-import type {
-  ConsumerCommand,
-  ConsumerResponse,
-} from "@conduit/session-contracts";
+import type { ConsumerCommand, ConsumerResponse } from "@conduit/session-contracts";
+import type { PendingRelayResponse } from "./relayWebSocketOpen.js";
 const transportVersionField = "v";
 
 class RelayWebSocketTransport implements CommandTransport {
@@ -27,7 +23,7 @@ class RelayWebSocketTransport implements CommandTransport {
   private readonly options: RelaySessionClientOptions;
   private readonly pending = new Map<
     string,
-    PromiseWithResolvers<ConsumerResponse>
+    PendingRelayResponse
   >();
   private channel: RelayCipherChannel | null = null;
   private connecting: Promise<RelayWebSocket> | null = null;
@@ -48,7 +44,7 @@ class RelayWebSocketTransport implements CommandTransport {
     });
     const responseDeferred = await this.sendCommand(command);
     try {
-      const response = await responseDeferred.promise;
+      const response = await responseDeferred.deferred.promise;
       this.emitTelemetry({
         event_name: "session_client.relay.dispatch.finish",
         fields: { command, duration_ms: Date.now() - startedAt, ok: true },
@@ -78,7 +74,7 @@ class RelayWebSocketTransport implements CommandTransport {
   }
   private async sendCommand(
     command: ConsumerCommand,
-  ): Promise<PromiseWithResolvers<ConsumerResponse>> {
+  ): Promise<PendingRelayResponse> {
     const socket = await this.openSocket();
     const responseDeferred = this.trackResponse(command.id);
     const encrypted = await this.encryptCommand(command);
@@ -86,15 +82,23 @@ class RelayWebSocketTransport implements CommandTransport {
       socket.send(JSON.stringify(encrypted));
       return responseDeferred;
     } catch (error) {
-      this.pending.delete(command.id);
-      responseDeferred.reject(new Error("relay websocket send failed"));
-      this.emitTelemetry({
-        event_name: "session_client.relay.send_failed",
-        fields: { command, error, ok: false },
-        level: "warn",
-      });
+      this.handleSendFailure(command, responseDeferred, error);
       throw error;
     }
+  }
+  private handleSendFailure(
+    command: ConsumerCommand,
+    responseDeferred: PendingRelayResponse,
+    error: unknown,
+  ): void {
+    this.pending.delete(command.id);
+    clearTimeout(responseDeferred.timeout);
+    responseDeferred.deferred.reject(new Error("relay websocket send failed"));
+    this.emitTelemetry({
+      event_name: "session_client.relay.send_failed",
+      fields: { command, error, ok: false },
+      level: "warn",
+    });
   }
   private async encryptCommand(
     command: ConsumerCommand,
@@ -144,7 +148,14 @@ class RelayWebSocketTransport implements CommandTransport {
     socket: RelayWebSocket,
     connectionId: string,
   ): Promise<void> {
-    await this.waitForOpen(socket);
+    await waitForRelaySocketOpen(socket, {
+      emitTelemetry: (event) => {
+        this.emitTelemetry(event);
+      },
+      onConnectFailed: () => {
+        this.connecting = null;
+      },
+    });
     await this.sendHandshake(socket, connectionId);
   }
   private handleConnectFailure(socket: RelayWebSocket): void {
@@ -183,41 +194,24 @@ class RelayWebSocketTransport implements CommandTransport {
     this.channel = handshake.channel;
     socket.send(JSON.stringify(handshake.handshake));
   }
-  private async waitForOpen(socket: RelayWebSocket): Promise<RelayWebSocket> {
-    const deferred = createDeferred<RelayWebSocket>();
-    socket.addEventListener("open", () => {
-      this.emitTelemetry({
-        event_name: "session_client.relay.socket.connect.finish",
-        fields: { ok: true },
-        level: "info",
-      });
-      deferred.resolve(socket);
+  private trackResponse(id: string): PendingRelayResponse {
+    const pending = createPendingRelayResponse(() => {
+      this.handleCommandTimeout(id);
     });
-    socket.addEventListener("error", (event) => {
-      this.connecting = null;
-      this.emitTelemetry({
-        event_name: "session_client.relay.socket.connect.finish",
-        fields: {
-          error: event,
-          error_code: "socket_connect_failed",
-          ok: false,
-        },
-        level: "warn",
-      });
-      deferred.reject(new Error("relay websocket failed to connect"));
-    });
-    socket.addEventListener("close", (event: CloseEvent) => {
-      deferred.reject(
-        relayCloseError(event, "relay websocket closed before open"),
-      );
-    });
-    const openedSocket = await deferred.promise;
-    return openedSocket;
+    this.pending.set(id, pending);
+    return pending;
   }
-  private trackResponse(id: string): PromiseWithResolvers<ConsumerResponse> {
-    const deferred = createDeferred<ConsumerResponse>();
-    this.pending.set(id, deferred);
-    return deferred;
+  private handleCommandTimeout(id: string): void {
+    rejectRelayCommandTimeout({
+      closeSocket: () => {
+        this.socket?.close();
+      },
+      emitTelemetry: (event) => {
+        this.emitTelemetry(event);
+      },
+      id,
+      pending: this.pending,
+    });
   }
   private async handleMessage(event: MessageEvent): Promise<void> {
     if (typeof event.data !== "string") {
@@ -253,7 +247,11 @@ class RelayWebSocketTransport implements CommandTransport {
   }
   private handleServerFrame(frame: ParsedServerFrame): void {
     if (frame.type === "response") {
-      this.pending.get(frame.id)?.resolve(frame.response);
+      const pending = this.pending.get(frame.id);
+      if (pending !== undefined) {
+        clearTimeout(pending.timeout);
+        pending.deferred.resolve(frame.response);
+      }
       this.pending.delete(frame.id);
       return;
     }
@@ -266,7 +264,8 @@ class RelayWebSocketTransport implements CommandTransport {
     this.socket = null;
     this.connecting = null;
     for (const pending of this.pending.values()) {
-      pending.reject(error);
+      clearTimeout(pending.timeout);
+      pending.deferred.reject(error);
     }
     this.pending.clear();
     this.emitTelemetry({
@@ -294,5 +293,4 @@ class RelayWebSocketTransport implements CommandTransport {
     this.options.onTelemetryEvent?.(event);
   }
 }
-
 export { RelayWebSocketTransport };
