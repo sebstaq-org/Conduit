@@ -6,6 +6,7 @@ import { Box } from "@/theme";
 import type { Theme } from "@/theme";
 import { KeyboardDock, KeyboardLift } from "@/ui";
 import type { ViewStyle } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   createSessionComposerDockStyle,
   sessionScreenBackgroundColor,
@@ -42,11 +43,17 @@ function renderSessionViewport(
 }
 
 function renderSessionComposerDock(args: {
+  bottomInset: number;
   planInteraction: ReturnType<typeof usePlanInteractionSource>;
   theme: Theme;
 }): React.JSX.Element {
   return (
-    <KeyboardDock contentStyle={createSessionComposerDockStyle(args.theme)}>
+    <KeyboardDock
+      contentStyle={createSessionComposerDockStyle(
+        args.theme,
+        args.bottomInset,
+      )}
+    >
       <SessionComposer planInteraction={args.planInteraction} />
     </KeyboardDock>
   );
@@ -56,6 +63,7 @@ function SessionScreen({
   onOpenNavigationPanel,
 }: SessionScreenProps): React.JSX.Element {
   const planInteraction = usePlanInteractionSource();
+  const safeAreaInsets = useSafeAreaInsets();
   const theme = useTheme<Theme>();
   return (
     <KeyboardLift>
@@ -65,7 +73,11 @@ function SessionScreen({
         style={sessionScreenStyle}
       >
         {renderSessionViewport(onOpenNavigationPanel)}
-        {renderSessionComposerDock({ planInteraction, theme })}
+        {renderSessionComposerDock({
+          bottomInset: safeAreaInsets.bottom,
+          planInteraction,
+          theme,
+        })}
       </Box>
     </KeyboardLift>
   );

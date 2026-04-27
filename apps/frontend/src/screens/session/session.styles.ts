@@ -12,9 +12,12 @@ const sessionTopBarAlignItems = "center" as const;
 const sessionTopBarFlexDirection = "row" as const;
 const sessionTopBarJustifyContent = "space-between" as const;
 
-function createSessionComposerDockStyle(theme: Theme): ViewStyle {
+function createSessionComposerDockStyle(
+  theme: Theme,
+  bottomInset: number,
+): ViewStyle {
   return {
-    paddingBottom: theme.spacing.contentTop,
+    paddingBottom: bottomInset + theme.spacing.contentTop,
     paddingHorizontal: theme.spacing.contentX,
     paddingTop: theme.spacing[sessionScreenGap],
   };
