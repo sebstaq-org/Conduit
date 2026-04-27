@@ -50,6 +50,9 @@ function eventLabel(item: TranscriptItem): string {
   if (item.kind !== "event") {
     return "";
   }
+  if (item.variant === "turn_error") {
+    return transcriptItemLabel(item);
+  }
   if (item.variant === "tool_call" || item.variant === "tool_call_update") {
     return "Tool call";
   }

@@ -28,4 +28,25 @@ describe("session history content", () => {
     expect(transcriptItemLabel(item)).toBe("tool_call");
     expect(transcriptItemMeta(item)).toBe("event");
   });
+
+  it("renders prompt turn errors with the surfaced message", () => {
+    const item: TranscriptItem = {
+      data: {
+        errorCode: "provider_error",
+        message: "official ACP SDK error from codex during session/prompt",
+        provider: "codex",
+        sessionUpdate: "turn_error",
+      },
+      id: "turn-1-update-0",
+      kind: "event",
+      status: "failed",
+      turnId: "turn-1",
+      variant: "turn_error",
+    };
+
+    expect(transcriptItemLabel(item)).toBe(
+      "official ACP SDK error from codex during session/prompt",
+    );
+    expect(transcriptItemMeta(item)).toBe("event");
+  });
 });

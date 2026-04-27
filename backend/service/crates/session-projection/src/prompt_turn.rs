@@ -31,8 +31,15 @@ pub fn prompt_turn_items(
             }
         )
     });
+    let has_turn_error = prompt_update_items.iter().any(|item| {
+        matches!(
+            item,
+            TranscriptItem::Event { variant, .. } if variant == "turn_error"
+        )
+    });
     items.extend(prompt_update_items);
     if !has_agent_message
+        && !has_turn_error
         && matches!(
             status,
             TranscriptItemStatus::Cancelled | TranscriptItemStatus::Failed
@@ -76,6 +83,30 @@ mod tests {
         ensure_eq(&items.len(), &2usize, "prompt item count")?;
         assert_message(&items[0], MessageRole::User, "prompt")?;
         assert_message(&items[1], MessageRole::Agent, "fixture-ready")
+    }
+
+    #[test]
+    fn failed_prompt_turn_with_error_event_does_not_add_empty_agent_message() -> TestResult {
+        let items = prompt_turn_items(
+            "turn-1",
+            &[json!({ "type": "text", "text": "prompt" })],
+            &[TranscriptUpdateSnapshot {
+                index: 0,
+                variant: "turn_error".to_owned(),
+                update: json!({
+                    "sessionUpdate": "turn_error",
+                    "message": "provider failed"
+                }),
+            }],
+            TranscriptItemStatus::Failed,
+            None,
+        );
+
+        ensure_eq(&items.len(), &2usize, "prompt item count")?;
+        let TranscriptItem::Event { variant, .. } = &items[1] else {
+            return Err(format!("expected error event, got {:?}", items[1]).into());
+        };
+        ensure_eq(variant, &"turn_error".to_owned(), "event variant")
     }
 
     fn transcript_update(index: usize, variant: &str, text: &str) -> TranscriptUpdateSnapshot {

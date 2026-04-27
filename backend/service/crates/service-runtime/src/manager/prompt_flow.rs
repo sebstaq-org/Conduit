@@ -4,7 +4,7 @@ use crate::error::string_param;
 use crate::event::RuntimeEventKind;
 use crate::manager_helpers::{content_blocks_param, prompt_lifecycle, prompt_status};
 use crate::manager_response::{append_snapshot_updates_if_missing, store_lock_error};
-use crate::{ProviderFactory, Result};
+use crate::{ProviderFactory, Result, RuntimeError};
 use acp_core::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
@@ -59,7 +59,7 @@ where
         let provider = target.key.provider;
         let prompt = content_blocks_param("session/prompt", params, "prompt")?;
         if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
-            self.append_failed_prompt_turn(provider, &target, &prompt)?;
+            self.append_failed_prompt_turn(provider, &target, &prompt, &error)?;
             return Err(error);
         }
         let prompt_turn = self.begin_prompt_turn(provider, &target, &prompt)?;
@@ -70,16 +70,17 @@ where
             turn_id: &prompt_turn.turn_id,
             prompt: &prompt,
         };
-        let run = self.run_provider_prompt_turn(context, &mut observed_updates)?;
+        let run = match self.run_provider_prompt_turn(context, &mut observed_updates) {
+            Ok(run) => run,
+            Err(error) => {
+                self.replace_failed_prompt_turn_with_error(context, &observed_updates, &error)?;
+                return Err(error);
+            }
+        };
         let result = match run.result {
             Ok(result) => result,
             Err(error) => {
-                self.replace_prompt_turn_from_updates(PromptTurnProjection {
-                    context,
-                    updates: &observed_updates,
-                    status: TranscriptItemStatus::Failed,
-                    stop_reason: None,
-                })?;
+                self.replace_failed_prompt_turn_with_error(context, &observed_updates, &error)?;
                 return Err(error);
             }
         };
@@ -96,6 +97,27 @@ where
             stop_reason: lifecycle.and_then(|value| value.stop_reason.as_deref()),
         })?;
         Ok(ConsumerResponse::success_without_snapshot(id, result))
+    }
+
+    fn replace_failed_prompt_turn_with_error(
+        &mut self,
+        context: PromptTurnContext<'_>,
+        updates: &[TranscriptUpdateSnapshot],
+        error: &RuntimeError,
+    ) -> Result<()> {
+        let mut failed_updates = updates.to_vec();
+        failed_updates.push(prompt_error_update(
+            context.provider,
+            &failed_updates,
+            error.code(),
+            &error.to_string(),
+        ));
+        self.replace_prompt_turn_from_updates(PromptTurnProjection {
+            context,
+            updates: &failed_updates,
+            status: TranscriptItemStatus::Failed,
+            stop_reason: None,
+        })
     }
 
     fn session_prompt_target(&self, params: &Value) -> Result<SessionPromptTarget> {
@@ -240,14 +262,21 @@ where
         provider: ProviderId,
         target: &SessionPromptTarget,
         prompt: &[Value],
+        error: &RuntimeError,
     ) -> Result<()> {
+        let updates = [prompt_error_update(
+            provider,
+            &[],
+            error.code(),
+            &error.to_string(),
+        )];
         let mutation = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store
                 .append_prompt_turn_updates(PromptTurnAppend {
                     open_session_id: &target.open_session_id,
                     prompt,
-                    updates: &[],
+                    updates: &updates,
                     status: TranscriptItemStatus::Failed,
                     stop_reason: None,
                 })?
@@ -260,6 +289,29 @@ where
             items: &mutation.items,
         });
         Ok(())
+    }
+}
+
+fn prompt_error_update(
+    provider: ProviderId,
+    existing: &[TranscriptUpdateSnapshot],
+    error_code: &str,
+    message: &str,
+) -> TranscriptUpdateSnapshot {
+    let index = existing
+        .iter()
+        .map(|update| update.index)
+        .max()
+        .map_or(0, |index| index.saturating_add(1));
+    TranscriptUpdateSnapshot {
+        index,
+        variant: "turn_error".to_owned(),
+        update: json!({
+            "sessionUpdate": "turn_error",
+            "provider": provider.as_str(),
+            "errorCode": error_code,
+            "message": message
+        }),
     }
 }
 

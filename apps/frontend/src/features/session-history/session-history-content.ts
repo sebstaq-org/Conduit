@@ -19,8 +19,21 @@ function textFromContentBlocks(content: ContentBlock[]): string {
     .join("");
 }
 
+function eventMessage(item: TranscriptItem): string | null {
+  if (item.kind !== "event" || !isRecord(item.data)) {
+    return null;
+  }
+  if (typeof item.data.message !== "string") {
+    return null;
+  }
+  return item.data.message;
+}
+
 function transcriptItemLabel(item: TranscriptItem): string {
   if (item.kind === "event") {
+    if (item.variant === "turn_error") {
+      return eventMessage(item) ?? "Turn failed";
+    }
     return item.variant;
   }
   const text = textFromContentBlocks(item.content).trim();
