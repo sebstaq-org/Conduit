@@ -1,3 +1,6 @@
+import type { ViewStyle } from "react-native";
+import type { Theme } from "@/theme";
+
 const sessionScreenBackgroundColor = "background" as const;
 const sessionScreenFlex = 1;
 const sessionScreenGap = "lg" as const;
@@ -9,7 +12,19 @@ const sessionTopBarAlignItems = "center" as const;
 const sessionTopBarFlexDirection = "row" as const;
 const sessionTopBarJustifyContent = "space-between" as const;
 
+function createSessionComposerDockStyle(
+  theme: Theme,
+  bottomInset: number,
+): ViewStyle {
+  return {
+    paddingBottom: bottomInset + theme.spacing.contentTop,
+    paddingHorizontal: theme.spacing.contentX,
+    paddingTop: theme.spacing[sessionScreenGap],
+  };
+}
+
 export {
+  createSessionComposerDockStyle,
   sessionScreenBackgroundColor,
   sessionScreenFlex,
   sessionScreenGap,

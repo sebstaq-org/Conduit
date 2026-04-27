@@ -181,6 +181,8 @@ function SessionHistoryList({
       getItemType={rowType}
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
       keyExtractor={(row) => row.key}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="never"
       listKey={openSessionId}
       maintainVisibleContentPosition={historyVisibleContentPosition}
       onStartReached={onStartReached}
