@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "@shopify/restyle";
-import { useWindowDimensions } from "react-native";
+import { Keyboard, useWindowDimensions } from "react-native";
 import { Box } from "@/theme";
 import type { Theme } from "@/theme";
 import type { ViewStyle } from "react-native";
@@ -99,6 +99,7 @@ function AppShellScreen(): React.JSX.Element {
   }
 
   function openDrawer(): void {
+    Keyboard.dismiss();
     setDrawerOpen(true);
   }
 

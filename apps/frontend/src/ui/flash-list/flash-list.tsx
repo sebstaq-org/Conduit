@@ -7,6 +7,8 @@ interface VirtualListProps<Item> {
   getItemType?: FlashListProps<Item>["getItemType"];
   ItemSeparatorComponent?: FlashListProps<Item>["ItemSeparatorComponent"];
   keyExtractor: (item: Item, index: number) => string;
+  keyboardDismissMode?: FlashListProps<Item>["keyboardDismissMode"];
+  keyboardShouldPersistTaps?: FlashListProps<Item>["keyboardShouldPersistTaps"];
   listKey?: string;
   maintainVisibleContentPosition?: FlashListProps<Item>["maintainVisibleContentPosition"];
   onStartReached?: FlashListProps<Item>["onStartReached"];
@@ -22,6 +24,8 @@ function VirtualList<Item>({
   getItemType,
   ItemSeparatorComponent,
   keyExtractor,
+  keyboardDismissMode,
+  keyboardShouldPersistTaps,
   listKey,
   maintainVisibleContentPosition,
   onStartReached,
@@ -38,6 +42,8 @@ function VirtualList<Item>({
       ItemSeparatorComponent={ItemSeparatorComponent}
       key={listKey}
       keyExtractor={keyExtractor}
+      keyboardDismissMode={keyboardDismissMode}
+      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
       onStartReached={onStartReached}
       onStartReachedThreshold={onStartReachedThreshold}

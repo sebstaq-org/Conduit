@@ -10,6 +10,7 @@ export { IconSlot } from "./icon-slot";
 export { GlimmerText } from "./glimmer-text";
 export { KeyboardDock } from "./keyboard-dock";
 export type { KeyboardDockProps } from "./keyboard-dock";
+export { KeyboardDismissView } from "./keyboard-dismiss-view";
 export { KeyboardLift } from "./keyboard-lift";
 export { List } from "./list";
 export {

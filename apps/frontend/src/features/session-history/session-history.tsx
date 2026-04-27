@@ -2,13 +2,15 @@ import { useSelector } from "react-redux";
 import { selectActiveSession, useSessionTimeline } from "@/app-state";
 import type { ActiveSession } from "@/app-state";
 import { Box, Text } from "@/theme";
-import { SessionHistoryList } from "./session-history-list";
+import { KeyboardDismissView } from "@/ui";
 import type { ViewStyle } from "react-native";
+import { SessionHistoryList } from "./session-history-list";
 
 type HistoryRenderState = "loading" | "ready" | "unavailable";
 
 const historyStatusVariant = "rowLabelMuted" as const;
 const historyRootStyle: ViewStyle = { minHeight: 0, position: "relative" };
+const historyDismissAreaStyle: ViewStyle = { flex: 1 };
 const historyOverlayStyle: ViewStyle = {
   alignItems: "center",
   left: 0,
@@ -20,25 +22,31 @@ const historyOverlayStyle: ViewStyle = {
 
 function renderNoActiveSession(): React.JSX.Element {
   return (
-    <Box flex={1}>
-      <Text variant={historyStatusVariant}>Select a session</Text>
-    </Box>
+    <KeyboardDismissView style={historyDismissAreaStyle}>
+      <Box flex={1}>
+        <Text variant={historyStatusVariant}>Select a session</Text>
+      </Box>
+    </KeyboardDismissView>
   );
 }
 
 function renderHistoryUnavailable(): React.JSX.Element {
   return (
-    <Box flex={1}>
-      <Text variant={historyStatusVariant}>Session unavailable</Text>
-    </Box>
+    <KeyboardDismissView style={historyDismissAreaStyle}>
+      <Box flex={1}>
+        <Text variant={historyStatusVariant}>Session unavailable</Text>
+      </Box>
+    </KeyboardDismissView>
   );
 }
 
 function renderHistoryLoading(): React.JSX.Element {
   return (
-    <Box flex={1}>
-      <Text variant={historyStatusVariant}>Loading session</Text>
-    </Box>
+    <KeyboardDismissView style={historyDismissAreaStyle}>
+      <Box flex={1}>
+        <Text variant={historyStatusVariant}>Loading session</Text>
+      </Box>
+    </KeyboardDismissView>
   );
 }
 
