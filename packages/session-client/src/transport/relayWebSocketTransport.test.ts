@@ -115,9 +115,7 @@ it("times out relay commands that never receive a response", async () => {
   await vi.waitFor(() => {
     expect(sockets[0]?.sent.length ?? 0).toBeGreaterThan(1);
   });
-  const assertion = expect(response).rejects.toThrow(
-    "relay command timed out",
-  );
+  const assertion = expect(response).rejects.toThrow("relay command timed out");
   await vi.advanceTimersByTimeAsync(relayCommandTimeoutMs);
 
   await assertion;

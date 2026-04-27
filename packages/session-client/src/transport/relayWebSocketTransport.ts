@@ -9,22 +9,28 @@ import {
   waitForRelaySocketOpen,
 } from "./relayWebSocketOpen.js";
 import { parseServerFrame } from "./wireFrame.js";
-import type { RelayCipherChannel, RelayCipherFrame } from "@conduit/relay-transport";
+import type {
+  RelayCipherChannel,
+  RelayCipherFrame,
+} from "@conduit/relay-transport";
 import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
 import type { CommandTransport } from "./commandTransport.js";
-import type { RelaySessionClientOptions, RelayWebSocket } from "./relaySessionClientOptions.js";
+import type {
+  RelaySessionClientOptions,
+  RelayWebSocket,
+} from "./relaySessionClientOptions.js";
 import type { ParsedServerFrame } from "./wireFrame.js";
-import type { ConsumerCommand, ConsumerResponse } from "@conduit/session-contracts";
+import type {
+  ConsumerCommand,
+  ConsumerResponse,
+} from "@conduit/session-contracts";
 import type { PendingRelayResponse } from "./relayWebSocketOpen.js";
 const transportVersionField = "v";
 
 class RelayWebSocketTransport implements CommandTransport {
   private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: RelaySessionClientOptions;
-  private readonly pending = new Map<
-    string,
-    PendingRelayResponse
-  >();
+  private readonly pending = new Map<string, PendingRelayResponse>();
   private channel: RelayCipherChannel | null = null;
   private connecting: Promise<RelayWebSocket> | null = null;
   private socket: RelayWebSocket | null = null;

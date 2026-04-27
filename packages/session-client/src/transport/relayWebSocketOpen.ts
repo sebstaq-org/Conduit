@@ -1,8 +1,6 @@
 import { createDeferred } from "./deferred.js";
 import { relayCloseError } from "./relayCloseError.js";
-import type {
-  ConsumerResponse,
-} from "@conduit/session-contracts";
+import type { ConsumerResponse } from "@conduit/session-contracts";
 import type {
   RelaySessionClientOptions,
   RelayWebSocket,
@@ -38,10 +36,7 @@ interface RelayCommandTimeoutRequest {
   readonly pending: Map<string, PendingRelayResponse>;
 }
 
-function settleOpen(
-  state: RelaySocketOpenState,
-  task: () => void,
-): void {
+function settleOpen(state: RelaySocketOpenState, task: () => void): void {
   if (state.settled) {
     return;
   }

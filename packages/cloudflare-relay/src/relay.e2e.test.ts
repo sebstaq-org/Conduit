@@ -150,9 +150,9 @@ describe("cloudflare relay local e2e", () => {
       }),
       daemonCapability,
     );
-    await expect(waitForMessage(data, "replacement client frame")).resolves.toBe(
-      "replacement client frame",
-    );
+    await expect(
+      waitForMessage(data, "replacement client frame"),
+    ).resolves.toBe("replacement client frame");
     data.close();
     secondClient.close();
     control.close();
