@@ -158,10 +158,12 @@ fn assert_message(item: &Value, role: &str, text: &str) -> TestResult<()> {
 
 fn assert_turn_error(item: &Value) -> TestResult<()> {
     if item.get("kind").and_then(Value::as_str) != Some("event")
+        || item.get("source").and_then(Value::as_str) != Some("conduit")
         || item.get("variant").and_then(Value::as_str) != Some("turn_error")
         || item.get("status").and_then(Value::as_str) != Some("failed")
         || item.pointer("/data/message").and_then(Value::as_str) != Some(INCIDENT_ERROR)
         || item.pointer("/data/provider").and_then(Value::as_str) != Some("codex")
+        || item.pointer("/data/sessionUpdate").is_some()
     {
         return Err(format!("turn_error event mismatch: {item}").into());
     }

@@ -68,6 +68,7 @@ function siblingInteractionQuestion(
     },
     id: interactionId,
     kind: "event",
+    source: "provider",
     variant: "interaction_request",
   };
 }
@@ -83,6 +84,7 @@ function siblingInteractionResolution(): TranscriptItem {
     },
     id: "interaction-resolution-1",
     kind: "event",
+    source: "provider",
     variant: "interaction_resolution",
   };
 }
@@ -101,6 +103,7 @@ function terminalPlanEvent(): TranscriptItem {
     },
     id: "terminal-plan-event",
     kind: "event",
+    source: "conduit",
     variant: "terminal_plan",
   };
 }
@@ -249,6 +252,7 @@ describe("plan interaction validation", () => {
             },
             id: "malformed-interaction",
             kind: "event",
+            source: "provider",
             variant: "interaction_request",
           },
         ],

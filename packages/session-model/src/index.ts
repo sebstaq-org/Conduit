@@ -151,6 +151,7 @@ const ProjectSuggestionsQuerySchema = z
 type ProjectSuggestionsQuery = z.infer<typeof ProjectSuggestionsQuerySchema>;
 type TranscriptMessageRole = "user" | "agent";
 type TranscriptItemStatus = "complete" | "streaming" | "cancelled" | "failed";
+type TranscriptEventSource = "provider" | "conduit";
 const TextContentBlockSchema = z
   .object({ type: z.literal("text"), text: z.string() })
   .strict();
@@ -175,6 +176,7 @@ interface TranscriptEventItem {
   turnId?: string | undefined;
   status?: TranscriptItemStatus | undefined;
   stopReason?: string | undefined;
+  source: TranscriptEventSource;
   variant: string;
   data: unknown;
 }
@@ -328,6 +330,7 @@ const TranscriptEventItemSchema = z
     turnId: z.string().optional(),
     status: z.enum(["complete", "streaming", "cancelled", "failed"]).optional(),
     stopReason: z.string().optional(),
+    source: z.enum(["provider", "conduit"]),
     variant: z.string(),
     data: z.unknown(),
   })
@@ -522,6 +525,7 @@ export type {
   SessionRespondInteractionRequest,
   SessionRespondInteractionResponse,
   TranscriptEventItem,
+  TranscriptEventSource,
   TranscriptItem,
   TranscriptItemStatus,
   TranscriptMessageItem,

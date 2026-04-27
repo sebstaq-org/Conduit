@@ -17,7 +17,7 @@ use ids::{history_cursor, open_session_id_for};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use serde_json::Value;
-use session_projection::{project_items, prompt_turn_items};
+use session_projection::{PromptTurnInput, project_items, prompt_turn_items};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -41,7 +41,10 @@ pub use project_suggestions::ProjectSuggestion;
 pub use projects::{ProjectRow, project_id_for_cwd};
 use schema::{BOOTSTRAP_SCHEMA, MIGRATE_SCHEMA_5_TO_6, SCHEMA_VERSION};
 pub use session_index::{SessionIndexEntry, SessionIndexSnapshot};
-pub use session_projection::{MessageRole, TranscriptItem, TranscriptItemStatus};
+pub use session_projection::{
+    ConduitLocalTranscriptEvent, MessageRole, TranscriptEventSource, TranscriptItem,
+    TranscriptItemStatus,
+};
 pub use settings::GlobalSettings;
 
 /// Result type for local store operations.
@@ -140,6 +143,8 @@ pub struct PromptTurnAppend<'a> {
     pub prompt: &'a [Value],
     /// ACP updates observed during the prompt turn.
     pub updates: &'a [TranscriptUpdateSnapshot],
+    /// Conduit-local events attached to this prompt turn.
+    pub conduit_events: &'a [ConduitLocalTranscriptEvent],
     /// Terminal transcript status for agent-authored prompt items.
     pub status: TranscriptItemStatus,
     /// ACP stop reason returned by the provider, when known.
@@ -170,6 +175,8 @@ pub struct PromptTurnReplace<'a> {
     pub prompt: &'a [Value],
     /// ACP updates observed so far during the prompt turn.
     pub updates: &'a [TranscriptUpdateSnapshot],
+    /// Conduit-local events attached to this prompt turn.
+    pub conduit_events: &'a [ConduitLocalTranscriptEvent],
     /// Current transcript status for agent-authored prompt items.
     pub status: TranscriptItemStatus,
     /// ACP stop reason returned by the provider, when known.
@@ -306,18 +313,20 @@ impl LocalStore {
             open_session_id = append.open_session_id,
             prompt_blocks = append.prompt.len(),
             updates = append.updates.len(),
+            conduit_events = append.conduit_events.len(),
             stop_reason = ?append.stop_reason
         );
         let existing = self.session_revision("session/prompt", append.open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");
-        let items = prompt_turn_items(
-            &turn_id,
-            append.prompt,
-            append.updates,
-            append.status,
-            append.stop_reason,
-        );
+        let items = prompt_turn_items(PromptTurnInput {
+            turn_id: &turn_id,
+            prompt: append.prompt,
+            updates: append.updates,
+            conduit_events: append.conduit_events,
+            status: append.status,
+            stop_reason: append.stop_reason,
+        });
         self.append_items(append.open_session_id, revision, &items)?;
         Ok(TimelineMutation {
             open_session_id: append.open_session_id.to_owned(),
@@ -340,7 +349,14 @@ impl LocalStore {
         let existing = self.session_revision("session/prompt", open_session_id)?;
         let revision = existing + 1;
         let turn_id = format!("turn-{revision}");
-        let items = prompt_turn_items(&turn_id, prompt, &[], TranscriptItemStatus::Streaming, None);
+        let items = prompt_turn_items(PromptTurnInput {
+            turn_id: &turn_id,
+            prompt,
+            updates: &[],
+            conduit_events: &[],
+            status: TranscriptItemStatus::Streaming,
+            stop_reason: None,
+        });
         self.append_items(open_session_id, revision, &items)?;
         Ok(PromptTurnMutation {
             open_session_id: open_session_id.to_owned(),
@@ -362,13 +378,14 @@ impl LocalStore {
     ) -> Result<TimelineMutation> {
         let existing = self.session_revision("session/prompt", replace.open_session_id)?;
         let revision = existing + 1;
-        let items = prompt_turn_items(
-            replace.turn_id,
-            replace.prompt,
-            replace.updates,
-            replace.status,
-            replace.stop_reason,
-        );
+        let items = prompt_turn_items(PromptTurnInput {
+            turn_id: replace.turn_id,
+            prompt: replace.prompt,
+            updates: replace.updates,
+            conduit_events: replace.conduit_events,
+            status: replace.status,
+            stop_reason: replace.stop_reason,
+        });
         let tx = self.connection.transaction()?;
         replace_turn_items(&tx, replace.open_session_id, replace.turn_id, &items)?;
         tx.execute(

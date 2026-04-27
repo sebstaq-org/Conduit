@@ -9,8 +9,8 @@ use acp_core::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use session_store::{
-    OpenSessionKey, PromptTurnAppend, PromptTurnMutation, PromptTurnReplace, TranscriptItem,
-    TranscriptItemStatus,
+    ConduitLocalTranscriptEvent, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
+    PromptTurnReplace, TranscriptItem, TranscriptItemStatus,
 };
 
 struct SessionPromptTarget {
@@ -29,6 +29,7 @@ struct PromptTurnContext<'a> {
 struct PromptTurnProjection<'a> {
     context: PromptTurnContext<'a>,
     updates: &'a [TranscriptUpdateSnapshot],
+    conduit_events: &'a [ConduitLocalTranscriptEvent],
     status: TranscriptItemStatus,
     stop_reason: Option<&'a str>,
 }
@@ -93,6 +94,7 @@ where
         self.replace_prompt_turn_from_updates(PromptTurnProjection {
             context,
             updates: &observed_updates,
+            conduit_events: &[],
             status: prompt_status(lifecycle),
             stop_reason: lifecycle.and_then(|value| value.stop_reason.as_deref()),
         })?;
@@ -105,16 +107,11 @@ where
         updates: &[TranscriptUpdateSnapshot],
         error: &RuntimeError,
     ) -> Result<()> {
-        let mut failed_updates = updates.to_vec();
-        failed_updates.push(prompt_error_update(
-            context.provider,
-            &failed_updates,
-            error.code(),
-            &error.to_string(),
-        ));
+        let conduit_events = [prompt_error_event(context.provider, error)];
         self.replace_prompt_turn_from_updates(PromptTurnProjection {
             context,
-            updates: &failed_updates,
+            updates,
+            conduit_events: &conduit_events,
             status: TranscriptItemStatus::Failed,
             stop_reason: None,
         })
@@ -169,6 +166,7 @@ where
                     let projection = PromptTurnProjection {
                         context,
                         updates: observed_updates,
+                        conduit_events: &[],
                         status: TranscriptItemStatus::Streaming,
                         stop_reason: None,
                     };
@@ -198,6 +196,7 @@ where
                     turn_id: projection.context.turn_id,
                     prompt: projection.context.prompt,
                     updates: projection.updates,
+                    conduit_events: projection.conduit_events,
                     status: projection.status,
                     stop_reason: projection.stop_reason,
                 })?
@@ -264,19 +263,15 @@ where
         prompt: &[Value],
         error: &RuntimeError,
     ) -> Result<()> {
-        let updates = [prompt_error_update(
-            provider,
-            &[],
-            error.code(),
-            &error.to_string(),
-        )];
+        let conduit_events = [prompt_error_event(provider, error)];
         let mutation = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store
                 .append_prompt_turn_updates(PromptTurnAppend {
                     open_session_id: &target.open_session_id,
                     prompt,
-                    updates: &updates,
+                    updates: &[],
+                    conduit_events: &conduit_events,
                     status: TranscriptItemStatus::Failed,
                     stop_reason: None,
                 })?
@@ -292,25 +287,13 @@ where
     }
 }
 
-fn prompt_error_update(
-    provider: ProviderId,
-    existing: &[TranscriptUpdateSnapshot],
-    error_code: &str,
-    message: &str,
-) -> TranscriptUpdateSnapshot {
-    let index = existing
-        .iter()
-        .map(|update| update.index)
-        .max()
-        .map_or(0, |index| index.saturating_add(1));
-    TranscriptUpdateSnapshot {
-        index,
+fn prompt_error_event(provider: ProviderId, error: &RuntimeError) -> ConduitLocalTranscriptEvent {
+    ConduitLocalTranscriptEvent {
         variant: "turn_error".to_owned(),
-        update: json!({
-            "sessionUpdate": "turn_error",
+        data: json!({
             "provider": provider.as_str(),
-            "errorCode": error_code,
-            "message": message
+            "errorCode": error.code(),
+            "message": error.to_string()
         }),
     }
 }

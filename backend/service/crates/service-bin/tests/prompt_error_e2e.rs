@@ -306,11 +306,17 @@ fn assert_turn_error_history(frame: &Value) -> TestResult<()> {
     if turn_error.get("status").and_then(Value::as_str) != Some("failed") {
         return Err(format!("turn_error was not marked failed: {turn_error}").into());
     }
+    if turn_error.get("source").and_then(Value::as_str) != Some("conduit") {
+        return Err(format!("turn_error was not marked conduit-local: {turn_error}").into());
+    }
     if turn_error.pointer("/data/message").and_then(Value::as_str) != Some(INCIDENT_ERROR) {
         return Err(format!("turn_error missing incident error: {turn_error}").into());
     }
     if turn_error.pointer("/data/provider").and_then(Value::as_str) != Some("codex") {
         return Err(format!("turn_error missing provider: {turn_error}").into());
+    }
+    if turn_error.pointer("/data/sessionUpdate").is_some() {
+        return Err(format!("turn_error looked like an ACP update: {turn_error}").into());
     }
     Ok(())
 }

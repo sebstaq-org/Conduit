@@ -14,7 +14,8 @@
 mod prompt_turn;
 mod transcript;
 
-pub use prompt_turn::prompt_turn_items;
+pub use prompt_turn::{PromptTurnInput, prompt_turn_items};
 pub use transcript::{
-    MessageRole, TranscriptItem, TranscriptItemStatus, project_items, project_prompt_turn_items,
+    ConduitLocalTranscriptEvent, MessageRole, TranscriptEventSource, TranscriptItem,
+    TranscriptItemStatus, project_items, project_prompt_turn_items,
 };

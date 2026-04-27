@@ -69,6 +69,7 @@ fn session_prompt_preserves_codex_terminal_plan_as_timeline_event() -> TestResul
         "TurnItem::Plan",
     )?;
     assert_event_string_field(&latest.result, "terminal_plan", "planText", "# Plan\n")?;
+    assert_event_source(&latest.result, "terminal_plan", "conduit")?;
     assert_prompt_turn_status(&latest.result, "complete")
 }
 
@@ -344,4 +345,19 @@ fn assert_event_string_field(
         return Ok(());
     }
     Err(format!("expected {variant}.{field}={expected:?}, got {actual:?}").into())
+}
+
+fn assert_event_source(value: &Value, variant: &str, expected: &str) -> TestResult<()> {
+    let items = value
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing items: {value}"))?;
+    let event = items
+        .iter()
+        .find(|item| item.get("variant").and_then(Value::as_str) == Some(variant))
+        .ok_or_else(|| format!("missing event variant {variant}: {items:?}"))?;
+    if event.get("source").and_then(Value::as_str) == Some(expected) {
+        return Ok(());
+    }
+    Err(format!("expected {variant} source {expected:?}, got {event}").into())
 }

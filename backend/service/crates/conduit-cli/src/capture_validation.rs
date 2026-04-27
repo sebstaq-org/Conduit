@@ -246,13 +246,14 @@ fn normalize_session_prompt(value: &Value) -> Result<Value> {
                 "provider session/prompt capture must contain promptUpdates array",
             )
         })?)?;
-    let items = session_projection::prompt_turn_items(
-        "capture-turn",
-        &prompt,
-        &updates,
-        TranscriptItemStatus::Complete,
-        Some(stop_reason),
-    );
+    let items = session_projection::prompt_turn_items(session_projection::PromptTurnInput {
+        turn_id: "capture-turn",
+        prompt: &prompt,
+        updates: &updates,
+        conduit_events: &[],
+        status: TranscriptItemStatus::Complete,
+        stop_reason: Some(stop_reason),
+    });
     Ok(json!({
         "operation": "session/prompt",
         "sessionId": session_id,

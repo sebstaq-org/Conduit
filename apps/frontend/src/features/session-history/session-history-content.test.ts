@@ -22,6 +22,7 @@ describe("session history content", () => {
       data: { sessionUpdate: "tool_call" },
       id: "event-1",
       kind: "event",
+      source: "provider",
       variant: "tool_call",
     };
 
@@ -35,10 +36,10 @@ describe("session history content", () => {
         errorCode: "provider_error",
         message: "official ACP SDK error from codex during session/prompt",
         provider: "codex",
-        sessionUpdate: "turn_error",
       },
       id: "turn-1-update-0",
       kind: "event",
+      source: "conduit",
       status: "failed",
       turnId: "turn-1",
       variant: "turn_error",
