@@ -9,6 +9,7 @@ import {
   relayWebSocketProtocol,
   runRelayClientCloseCleansDataScenario,
   runRelayHealthCheck,
+  runRelayLargeServerFrameScenario,
   runRelayRoundtripScenario,
 } from "./relayTestHarness.js";
 import type { RelayTestHarness, TestSocket } from "./relayTestHarness.js";
@@ -54,6 +55,12 @@ describe("cloudflare relay local e2e", () => {
 
     await runRelayRoundtripScenario(harness, "local_roundtrip");
   });
+
+  it("routes large encrypted server frames for session snapshots", async () => {
+    const harness = await createLocalHarness();
+
+    await runRelayLargeServerFrameScenario(harness);
+  }, 15000);
 
   it("closes daemon data sockets when the mobile client disconnects", async () => {
     const harness = await createLocalHarness();

@@ -2,6 +2,7 @@ import { CONDUIT_TRANSPORT_VERSION } from "@conduit/session-contracts";
 import { createRelayClientHandshake } from "@conduit/relay-transport";
 import { createDeferred } from "./deferred.js";
 import { readRelayCipherFrame } from "./relayCipherFrame.js";
+import { relayCloseError } from "./relayCloseError.js";
 import { relaySocketRoute } from "./relayRoute.js";
 import { parseServerFrame } from "./wireFrame.js";
 import type {
@@ -10,14 +11,17 @@ import type {
 } from "@conduit/relay-transport";
 import type { ConduitRuntimeEvent } from "@conduit/app-protocol";
 import type { CommandTransport } from "./commandTransport.js";
-import type { RelaySessionClientOptions } from "./relaySessionClientOptions.js";
-import type { SessionClientTelemetryEvent } from "./sessionClientTelemetryEvent.js";
+import type {
+  RelaySessionClientOptions,
+  RelayWebSocket,
+} from "./relaySessionClientOptions.js";
 import type { ParsedServerFrame } from "./wireFrame.js";
 import type {
   ConsumerCommand,
   ConsumerResponse,
 } from "@conduit/session-contracts";
 const transportVersionField = "v";
+
 class RelayWebSocketTransport implements CommandTransport {
   private readonly handleEvent: (event: ConduitRuntimeEvent) => void;
   private readonly options: RelaySessionClientOptions;
@@ -26,8 +30,8 @@ class RelayWebSocketTransport implements CommandTransport {
     PromiseWithResolvers<ConsumerResponse>
   >();
   private channel: RelayCipherChannel | null = null;
-  private connecting: Promise<WebSocket> | null = null;
-  private socket: WebSocket | null = null;
+  private connecting: Promise<RelayWebSocket> | null = null;
+  private socket: RelayWebSocket | null = null;
   public constructor(
     options: RelaySessionClientOptions,
     handleEvent: (event: ConduitRuntimeEvent) => void,
@@ -104,7 +108,7 @@ class RelayWebSocketTransport implements CommandTransport {
     const encrypted = await this.requireChannel().encryptUtf8(frame);
     return encrypted;
   }
-  private async openSocket(): Promise<WebSocket> {
+  private async openSocket(): Promise<RelayWebSocket> {
     if (this.socket?.readyState === WebSocket.OPEN && this.channel !== null) {
       return this.socket;
     }
@@ -116,7 +120,7 @@ class RelayWebSocketTransport implements CommandTransport {
     const socket = await this.connecting;
     return socket;
   }
-  private async connectSocket(): Promise<WebSocket> {
+  private async connectSocket(): Promise<RelayWebSocket> {
     const route = relaySocketRoute(this.options.offer);
     this.logConnectStart();
     const socket = this.createSocket(route.url, route.protocol);
@@ -129,7 +133,7 @@ class RelayWebSocketTransport implements CommandTransport {
       throw error;
     }
   }
-  private createSocket(url: string, protocol: string): WebSocket {
+  private createSocket(url: string, protocol: string): RelayWebSocket {
     const Socket = this.options.WebSocketImpl ?? WebSocket;
     const socket = new Socket(url, [protocol]);
     this.socket = socket;
@@ -137,28 +141,25 @@ class RelayWebSocketTransport implements CommandTransport {
     return socket;
   }
   private async openConnectedSocket(
-    socket: WebSocket,
+    socket: RelayWebSocket,
     connectionId: string,
   ): Promise<void> {
     await this.waitForOpen(socket);
     await this.sendHandshake(socket, connectionId);
   }
-
-  private handleConnectFailure(socket: WebSocket): void {
+  private handleConnectFailure(socket: RelayWebSocket): void {
     this.connecting = null;
     this.channel = null;
     socket.close();
   }
-
-  private bindSocketEvents(socket: WebSocket): void {
+  private bindSocketEvents(socket: RelayWebSocket): void {
     socket.addEventListener("message", (event: MessageEvent) => {
       void this.handleMessage(event);
     });
-    socket.addEventListener("close", () => {
-      this.handleClose();
+    socket.addEventListener("close", (event: CloseEvent) => {
+      this.handleClose(event);
     });
   }
-
   private logConnectStart(): void {
     this.emitTelemetry({
       event_name: "session_client.relay.socket.connect.start",
@@ -166,9 +167,8 @@ class RelayWebSocketTransport implements CommandTransport {
       level: "debug",
     });
   }
-
   private async sendHandshake(
-    socket: WebSocket,
+    socket: RelayWebSocket,
     connectionId: string,
   ): Promise<void> {
     const offer = this.options.offer;
@@ -183,9 +183,8 @@ class RelayWebSocketTransport implements CommandTransport {
     this.channel = handshake.channel;
     socket.send(JSON.stringify(handshake.handshake));
   }
-
-  private async waitForOpen(socket: WebSocket): Promise<WebSocket> {
-    const deferred = createDeferred<WebSocket>();
+  private async waitForOpen(socket: RelayWebSocket): Promise<RelayWebSocket> {
+    const deferred = createDeferred<RelayWebSocket>();
     socket.addEventListener("open", () => {
       this.emitTelemetry({
         event_name: "session_client.relay.socket.connect.finish",
@@ -207,19 +206,19 @@ class RelayWebSocketTransport implements CommandTransport {
       });
       deferred.reject(new Error("relay websocket failed to connect"));
     });
-    socket.addEventListener("close", () => {
-      deferred.reject(new Error("relay websocket closed before open"));
+    socket.addEventListener("close", (event: CloseEvent) => {
+      deferred.reject(
+        relayCloseError(event, "relay websocket closed before open"),
+      );
     });
     const openedSocket = await deferred.promise;
     return openedSocket;
   }
-
   private trackResponse(id: string): PromiseWithResolvers<ConsumerResponse> {
     const deferred = createDeferred<ConsumerResponse>();
     this.pending.set(id, deferred);
     return deferred;
   }
-
   private async handleMessage(event: MessageEvent): Promise<void> {
     if (typeof event.data !== "string") {
       return;
@@ -230,7 +229,6 @@ class RelayWebSocketTransport implements CommandTransport {
       this.closeAfterMessageFailure(error);
     }
   }
-
   private async handleEncryptedMessage(data: string): Promise<void> {
     const frame = readRelayCipherFrame(JSON.parse(data));
     const plaintext = await this.requireChannel().decryptUtf8(frame);
@@ -245,7 +243,6 @@ class RelayWebSocketTransport implements CommandTransport {
     }
     this.handleServerFrame(parsed);
   }
-
   private closeAfterMessageFailure(error: unknown): void {
     this.emitTelemetry({
       event_name: "session_client.relay.message.decrypt_failed",
@@ -254,7 +251,6 @@ class RelayWebSocketTransport implements CommandTransport {
     });
     this.socket?.close();
   }
-
   private handleServerFrame(frame: ParsedServerFrame): void {
     if (frame.type === "response") {
       this.pending.get(frame.id)?.resolve(frame.response);
@@ -263,37 +259,40 @@ class RelayWebSocketTransport implements CommandTransport {
     }
     this.handleEvent(frame.event);
   }
-
-  private handleClose(): void {
+  private handleClose(event?: CloseEvent): void {
     const pendingCount = this.pending.size;
+    const error = relayCloseError(event, "relay websocket closed");
     this.channel = null;
     this.socket = null;
     this.connecting = null;
     for (const pending of this.pending.values()) {
-      pending.reject(new Error("relay websocket closed"));
+      pending.reject(error);
     }
     this.pending.clear();
     this.emitTelemetry({
       event_name: "session_client.relay.socket.closed",
-      fields: { pending_count: pendingCount },
+      fields: {
+        close_code: event?.code ?? null,
+        close_reason: event?.reason ?? null,
+        error,
+        pending_count: pendingCount,
+      },
       level: "warn",
     });
   }
-
   private requireChannel(): RelayCipherChannel {
     if (this.channel === null) {
       throw new Error("relay cipher channel is not established");
     }
     return this.channel;
   }
-
-  private emitTelemetry(event: SessionClientTelemetryEvent): void {
+  private emitTelemetry(
+    event: Parameters<
+      NonNullable<RelaySessionClientOptions["onTelemetryEvent"]>
+    >[0],
+  ): void {
     this.options.onTelemetryEvent?.(event);
   }
 }
 
 export { RelayWebSocketTransport };
-export type {
-  RelayConnectionOffer,
-  RelaySessionClientOptions,
-} from "./relaySessionClientOptions.js";

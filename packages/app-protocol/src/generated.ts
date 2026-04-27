@@ -324,6 +324,9 @@ const AcpSessionUpdateSchema = z.discriminatedUnion("sessionUpdate", [
 ]);
 type AcpSessionUpdate = z.infer<typeof AcpSessionUpdateSchema>;
 
+const ConduitTranscriptEventSourceSchema = z.union([z.literal("provider"), z.literal("conduit")]);
+type ConduitTranscriptEventSource = z.infer<typeof ConduitTranscriptEventSourceSchema>;
+
 const ConduitTranscriptItemStatusSchema = z.union([z.literal("complete"), z.literal("streaming"), z.literal("cancelled"), z.literal("failed")]);
 type ConduitTranscriptItemStatus = z.infer<typeof ConduitTranscriptItemStatusSchema>;
 
@@ -342,6 +345,7 @@ const ConduitTranscriptItemSchema = z.union([z.object({
   data: z.unknown(),
   id: z.string(),
   kind: z.literal("event"),
+  source: ConduitTranscriptEventSourceSchema,
   status: z.union([ConduitTranscriptItemStatusSchema, z.null()]).optional(),
   stopReason: z.union([z.string(), z.null()]).optional(),
   turnId: z.union([z.string(), z.null()]).optional(),
@@ -608,6 +612,7 @@ export {
   AcpContentChunkSchema,
   AcpToolCallSchema,
   AcpSessionUpdateSchema,
+  ConduitTranscriptEventSourceSchema,
   ConduitTranscriptItemStatusSchema,
   ConduitTranscriptMessageRoleSchema,
   ConduitTranscriptItemSchema,
@@ -687,6 +692,7 @@ export type {
   AcpContentChunk,
   AcpToolCall,
   AcpSessionUpdate,
+  ConduitTranscriptEventSource,
   ConduitTranscriptItemStatus,
   ConduitTranscriptMessageRole,
   ConduitTranscriptItem,

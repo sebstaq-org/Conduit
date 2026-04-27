@@ -303,6 +303,31 @@ pub(crate) fn event_data_field(
         .and_then(Value::as_i64))
 }
 
+pub(crate) fn assert_event_data_string(
+    value: &Value,
+    variant: &str,
+    field: &str,
+    expected: &str,
+) -> TestResult<()> {
+    let items = value
+        .get("items")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("missing items: {value}"))?;
+    let event = items
+        .iter()
+        .find(|item| item.get("variant").and_then(Value::as_str) == Some(variant))
+        .ok_or_else(|| format!("missing event variant {variant}: {items:?}"))?;
+    if event
+        .get("data")
+        .and_then(|data| data.get(field))
+        .and_then(Value::as_str)
+        == Some(expected)
+    {
+        return Ok(());
+    }
+    Err(format!("event {variant} field {field} mismatch: {event}").into())
+}
+
 pub(crate) fn assert_prompt_turn_status(value: &Value, status: &str) -> TestResult<()> {
     let items = value
         .get("items")

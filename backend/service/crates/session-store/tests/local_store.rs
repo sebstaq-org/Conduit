@@ -445,6 +445,7 @@ fn prompt_turn_replace_preserves_surrounding_timeline_items() -> TestResult<()> 
             transcript_update(10, "agent_message_chunk", "first streamed"),
             transcript_update(11, "agent_message_chunk", " answer"),
         ],
+        conduit_events: &[],
         status: TranscriptItemStatus::Streaming,
         stop_reason: None,
     })?;
@@ -486,6 +487,7 @@ fn prompt_turn_replace_rejects_missing_turn_without_append_fallback() -> TestRes
         turn_id: "missing-turn",
         prompt: &[json!({ "type": "text", "text": "prompt" })],
         updates: &[transcript_update(10, "agent_message_chunk", "agent")],
+        conduit_events: &[],
         status: TranscriptItemStatus::Streaming,
         stop_reason: None,
     });

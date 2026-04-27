@@ -10,18 +10,9 @@ import {
   parseRelayEnvelope,
 } from "@conduit/relay-transport";
 import { expect } from "vitest";
-
-type TestSocket = Pick<WebSocket, "addEventListener" | "close" | "send">;
-
-interface RelayTestHarness {
-  readonly endpoint: string;
-  readonly fetchJson: (path: string) => Promise<unknown>;
-  readonly openRejectedSocket: (
-    url: string,
-    capability?: string,
-  ) => Promise<void>;
-  readonly openSocket: (url: string, capability: string) => Promise<TestSocket>;
-}
+import { runRelayLargeServerFrameScenario } from "./relayLargeFrameScenario.js";
+import { waitForMessage } from "./relayTestHarnessCore.js";
+import type { RelayTestHarness, TestSocket } from "./relayTestHarnessCore.js";
 
 const plaintextFromClient = "PLAINTEXT_CLIENT_MARKER_DO_NOT_LEAK";
 const plaintextFromServer = "PLAINTEXT_SERVER_MARKER_DO_NOT_LEAK";
@@ -219,33 +210,6 @@ async function waitForEnvelope(
   throw new Error(`relay envelope ${type} for ${connectionId} not observed`);
 }
 
-function waitForMessage(
-  socket: TestSocket,
-  label = "relay message",
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error(`timed out waiting for ${label}`));
-      }
-    }, 5000);
-    socket.addEventListener("message", (event: MessageEvent) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      if (typeof event.data !== "string") {
-        reject(new Error("relay test expected string websocket frame"));
-        return;
-      }
-      resolve(event.data);
-    });
-  });
-}
-
 function relayWebSocketProtocol(capability: string): string {
   return buildRelayWebSocketProtocol(capability);
 }
@@ -253,6 +217,7 @@ function relayWebSocketProtocol(capability: string): string {
 export {
   relayWebSocketProtocol,
   runRelayClientCloseCleansDataScenario,
+  runRelayLargeServerFrameScenario,
   runRelayHealthCheck,
   runRelayRoundtripScenario,
   waitForMessage,

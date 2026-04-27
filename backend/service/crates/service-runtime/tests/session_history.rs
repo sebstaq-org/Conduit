@@ -13,11 +13,11 @@ use serde as _;
 use serde_json::{Value, json};
 use service_runtime::{RuntimeEventKind, ServiceRuntime};
 use session_history_support::{
-    assert_invalid_params, assert_items, assert_prompt_content, assert_prompt_turn_status,
-    assert_provider_error, assert_timeline_event_advanced, assert_turn_stop_reason,
-    event_data_field, history_fixture_updates, number_field, open_session, open_session_with_cwd,
-    prompt_open_session, read_history, seed_session_load_updates, session_load_requests,
-    string_field, transcript_update,
+    assert_event_data_string, assert_invalid_params, assert_items, assert_prompt_content,
+    assert_prompt_turn_status, assert_provider_error, assert_timeline_event_advanced,
+    assert_turn_stop_reason, event_data_field, history_fixture_updates, number_field, open_session,
+    open_session_with_cwd, prompt_open_session, read_history, seed_session_load_updates,
+    session_load_requests, string_field, transcript_update,
 };
 use std::sync::{Arc, Mutex};
 use support::{FakeFactory, FakeState, TestResult, assert_ok, command, runtime};
@@ -511,10 +511,11 @@ fn session_prompt_open_session_provider_error_appends_failed_turn() -> TestResul
         &[
             ("message", "agent", Some("loaded")),
             ("message", "user", Some("boom")),
-            ("message", "agent", Some("")),
+            ("event", "turn_error", None),
         ],
     )?;
-    assert_prompt_turn_status(&latest.result, "failed")
+    assert_prompt_turn_status(&latest.result, "failed")?;
+    assert_event_data_string(&latest.result, "turn_error", "message", "provider failed")
 }
 
 #[test]

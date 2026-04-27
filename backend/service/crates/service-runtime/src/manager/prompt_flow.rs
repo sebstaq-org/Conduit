@@ -4,13 +4,13 @@ use crate::error::string_param;
 use crate::event::RuntimeEventKind;
 use crate::manager_helpers::{content_blocks_param, prompt_lifecycle, prompt_status};
 use crate::manager_response::{append_snapshot_updates_if_missing, store_lock_error};
-use crate::{ProviderFactory, Result};
+use crate::{ProviderFactory, Result, RuntimeError};
 use acp_core::{ProviderSnapshot, TranscriptUpdateSnapshot};
 use acp_discovery::ProviderId;
 use serde_json::{Value, json};
 use session_store::{
-    OpenSessionKey, PromptTurnAppend, PromptTurnMutation, PromptTurnReplace, TranscriptItem,
-    TranscriptItemStatus,
+    ConduitLocalTranscriptEvent, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
+    PromptTurnReplace, TranscriptItem, TranscriptItemStatus,
 };
 
 struct SessionPromptTarget {
@@ -29,6 +29,7 @@ struct PromptTurnContext<'a> {
 struct PromptTurnProjection<'a> {
     context: PromptTurnContext<'a>,
     updates: &'a [TranscriptUpdateSnapshot],
+    conduit_events: &'a [ConduitLocalTranscriptEvent],
     status: TranscriptItemStatus,
     stop_reason: Option<&'a str>,
 }
@@ -59,7 +60,7 @@ where
         let provider = target.key.provider;
         let prompt = content_blocks_param("session/prompt", params, "prompt")?;
         if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
-            self.append_failed_prompt_turn(provider, &target, &prompt)?;
+            self.append_failed_prompt_turn(provider, &target, &prompt, &error)?;
             return Err(error);
         }
         let prompt_turn = self.begin_prompt_turn(provider, &target, &prompt)?;
@@ -70,16 +71,17 @@ where
             turn_id: &prompt_turn.turn_id,
             prompt: &prompt,
         };
-        let run = self.run_provider_prompt_turn(context, &mut observed_updates)?;
+        let run = match self.run_provider_prompt_turn(context, &mut observed_updates) {
+            Ok(run) => run,
+            Err(error) => {
+                self.replace_failed_prompt_turn_with_error(context, &observed_updates, &error)?;
+                return Err(error);
+            }
+        };
         let result = match run.result {
             Ok(result) => result,
             Err(error) => {
-                self.replace_prompt_turn_from_updates(PromptTurnProjection {
-                    context,
-                    updates: &observed_updates,
-                    status: TranscriptItemStatus::Failed,
-                    stop_reason: None,
-                })?;
+                self.replace_failed_prompt_turn_with_error(context, &observed_updates, &error)?;
                 return Err(error);
             }
         };
@@ -92,10 +94,27 @@ where
         self.replace_prompt_turn_from_updates(PromptTurnProjection {
             context,
             updates: &observed_updates,
+            conduit_events: &[],
             status: prompt_status(lifecycle),
             stop_reason: lifecycle.and_then(|value| value.stop_reason.as_deref()),
         })?;
         Ok(ConsumerResponse::success_without_snapshot(id, result))
+    }
+
+    fn replace_failed_prompt_turn_with_error(
+        &mut self,
+        context: PromptTurnContext<'_>,
+        updates: &[TranscriptUpdateSnapshot],
+        error: &RuntimeError,
+    ) -> Result<()> {
+        let conduit_events = [prompt_error_event(context.provider, error)];
+        self.replace_prompt_turn_from_updates(PromptTurnProjection {
+            context,
+            updates,
+            conduit_events: &conduit_events,
+            status: TranscriptItemStatus::Failed,
+            stop_reason: None,
+        })
     }
 
     fn session_prompt_target(&self, params: &Value) -> Result<SessionPromptTarget> {
@@ -147,6 +166,7 @@ where
                     let projection = PromptTurnProjection {
                         context,
                         updates: observed_updates,
+                        conduit_events: &[],
                         status: TranscriptItemStatus::Streaming,
                         stop_reason: None,
                     };
@@ -176,6 +196,7 @@ where
                     turn_id: projection.context.turn_id,
                     prompt: projection.context.prompt,
                     updates: projection.updates,
+                    conduit_events: projection.conduit_events,
                     status: projection.status,
                     stop_reason: projection.stop_reason,
                 })?
@@ -240,7 +261,9 @@ where
         provider: ProviderId,
         target: &SessionPromptTarget,
         prompt: &[Value],
+        error: &RuntimeError,
     ) -> Result<()> {
+        let conduit_events = [prompt_error_event(provider, error)];
         let mutation = {
             let _store_lock = self.store_lock.lock().map_err(store_lock_error)?;
             self.local_store
@@ -248,6 +271,7 @@ where
                     open_session_id: &target.open_session_id,
                     prompt,
                     updates: &[],
+                    conduit_events: &conduit_events,
                     status: TranscriptItemStatus::Failed,
                     stop_reason: None,
                 })?
@@ -260,6 +284,17 @@ where
             items: &mutation.items,
         });
         Ok(())
+    }
+}
+
+fn prompt_error_event(provider: ProviderId, error: &RuntimeError) -> ConduitLocalTranscriptEvent {
+    ConduitLocalTranscriptEvent {
+        variant: "turn_error".to_owned(),
+        data: json!({
+            "provider": provider.as_str(),
+            "errorCode": error.code(),
+            "message": error.to_string()
+        }),
     }
 }
 

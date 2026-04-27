@@ -1,6 +1,6 @@
 import { RelayWebSocketTransport } from "./transport/relayWebSocketTransport.js";
 import { WebSocketSessionClient } from "./webSocketSessionClient.js";
-import type { RelaySessionClientOptions } from "./transport/relayWebSocketTransport.js";
+import type { RelaySessionClientOptions } from "./transport/relaySessionClientOptions.js";
 import type { SessionClientPort } from "./sessionClientPort.js";
 
 const createRelaySessionClient = (
@@ -10,7 +10,7 @@ const createRelaySessionClient = (
   const transport = new RelayWebSocketTransport(options, (event) => {
     client?.handleRuntimeEvent(event);
   });
-  client = new WebSocketSessionClient(options, transport);
+  client = new WebSocketSessionClient({}, transport);
   return client;
 };
 
