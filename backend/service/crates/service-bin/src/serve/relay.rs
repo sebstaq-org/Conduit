@@ -19,7 +19,7 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, mpsc};
-use tokio::time::{Duration, sleep, timeout};
+use tokio::time::{Duration, Instant, interval, sleep, timeout};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
 use tokio_tungstenite::tungstenite::http::{HeaderValue, Request};
@@ -31,6 +31,8 @@ type RelayResult<T> = std::result::Result<T, RelayConnectorError>;
 
 const CONTROL_RETRY_INITIAL_MS: u64 = 500;
 const CONTROL_RETRY_MAX_MS: u64 = 30_000;
+const CONTROL_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+const CONTROL_IDLE_RECONNECT: Duration = Duration::from_secs(20);
 const RELAY_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,13 +215,35 @@ async fn run_control_socket(endpoint: &str, home: &Path, runtime: RelayRuntime) 
         relay_server_id = %routing.server_id,
         ok = true
     );
-    while let Some(message) = socket.next().await {
-        let message = message?;
-        if let Message::Text(text) = message {
-            handle_control_frame(endpoint, home, &routing, runtime.clone(), &text).await?;
+    let mut heartbeat = interval(CONTROL_HEARTBEAT_INTERVAL);
+    heartbeat.tick().await;
+    let mut last_control_activity = Instant::now();
+    loop {
+        tokio::select! {
+            _ = heartbeat.tick() => {
+                if last_control_activity.elapsed() >= CONTROL_IDLE_RECONNECT {
+                    tracing::info!(
+                        event_name = "relay.control.idle_reconnect",
+                        source = "service-bin",
+                        relay_server_id = %routing.server_id,
+                        idle_ms = last_control_activity.elapsed().as_millis() as u64
+                    );
+                    return Ok(());
+                }
+                socket.send(Message::Ping(Vec::new().into())).await?;
+            }
+            message = socket.next() => {
+                let Some(message) = message else {
+                    return Ok(());
+                };
+                let message = message?;
+                last_control_activity = Instant::now();
+                if let Message::Text(text) = message {
+                    handle_control_frame(endpoint, home, &routing, runtime.clone(), &text).await?;
+                }
+            }
         }
     }
-    Ok(())
 }
 
 async fn handle_control_frame(
