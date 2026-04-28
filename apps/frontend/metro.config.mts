@@ -1,8 +1,8 @@
-import { getDefaultConfig } from "expo/metro-config.js";
 import { existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { getBundleModeMetroConfig } from "react-native-worklets/bundleMode/index.js";
+import { getSentryExpoConfig } from "@sentry/react-native/metro.js";
 
 const projectRoot = import.meta.dirname;
 const require = createRequire(import.meta.url);
@@ -29,7 +29,9 @@ function readBundleModeEnabled(value: unknown): boolean {
   return staticFeatureFlags.BUNDLE_MODE_ENABLED === true;
 }
 
-const config = getDefaultConfig(projectRoot);
+const config = getSentryExpoConfig(projectRoot, {
+  includeWebReplay: false,
+});
 const packageJson: unknown = require("./package.json");
 const isBundleModeEnabled = readBundleModeEnabled(packageJson);
 const workletsModulePath = path.join("react-native-worklets", ".worklets");

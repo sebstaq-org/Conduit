@@ -7,6 +7,7 @@ import { PROVIDERS } from "@conduit/session-model";
 interface ConduitRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
+  readonly runtimeSurface?: string;
   readonly sessionWsUrl?: string;
 }
 
@@ -56,6 +57,7 @@ function runtimeConfigEntries(
   return [
     ["clientLogUrl", optionalString(value.clientLogUrl)],
     ["logProfile", optionalString(value.logProfile)],
+    ["runtimeSurface", optionalString(value.runtimeSurface)],
     ["sessionWsUrl", optionalString(value.sessionWsUrl)],
   ];
 }

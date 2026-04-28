@@ -63,6 +63,7 @@ interface DesktopDaemonStatus {
 interface DesktopRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
+  readonly runtimeSurface?: string;
   readonly sessionWsUrl?: string;
 }
 

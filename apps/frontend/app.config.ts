@@ -36,7 +36,7 @@ function requireBoolean(value: unknown, field: string): boolean {
   throw new Error(`Missing required Expo config boolean: ${field}`);
 }
 
-function readPlatforms(config: ExpoConfig): ExpoPlatform[] {
+function readPlatforms(config: Partial<ExpoConfig>): ExpoPlatform[] {
   if (config.platforms !== undefined) {
     return config.platforms;
   }
@@ -53,16 +53,47 @@ function isNotDevClientPlugin(plugin: ExpoPlugin): boolean {
   return plugin !== "expo-dev-client";
 }
 
-function readPlugins(config: ExpoConfig, variant: AppVariant): ExpoPlugin[] {
-  const plugins = (config.plugins ?? []).filter((plugin) =>
-    isNotDevClientPlugin(plugin),
-  );
-
-  if (variant !== "dev") {
-    return plugins;
+function isNotSentryPlugin(plugin: ExpoPlugin): boolean {
+  if (Array.isArray(plugin)) {
+    const [name] = plugin;
+    return (
+      name !== "@sentry/react-native" && name !== "@sentry/react-native/expo"
+    );
   }
 
-  return [...plugins, ["expo-dev-client", { launchMode: "most-recent" }]];
+  return (
+    plugin !== "@sentry/react-native" && plugin !== "@sentry/react-native/expo"
+  );
+}
+
+function sentryPlugin(): ExpoPlugin {
+  return [
+    "@sentry/react-native/expo",
+    {
+      organization: "sebstaq",
+      project: "conduit",
+      url: "https://sentry.io/",
+    },
+  ];
+}
+
+function readPlugins(
+  config: Partial<ExpoConfig>,
+  variant: AppVariant,
+): ExpoPlugin[] {
+  const plugins = (config.plugins ?? [])
+    .filter((plugin) => isNotDevClientPlugin(plugin))
+    .filter((plugin) => isNotSentryPlugin(plugin));
+
+  if (variant !== "dev") {
+    return [...plugins, sentryPlugin()];
+  }
+
+  return [
+    ...plugins,
+    sentryPlugin(),
+    ["expo-dev-client", { launchMode: "most-recent" }],
+  ];
 }
 
 function androidPackageForVariant(
@@ -77,7 +108,7 @@ function androidPackageForVariant(
 }
 
 function createAndroidConfig(
-  config: ExpoConfig,
+  config: Partial<ExpoConfig>,
   variant: AppVariant,
 ): NonNullable<ExpoConfig["android"]> {
   const androidConfig: NonNullable<ExpoConfig["android"]> = {};
@@ -106,7 +137,7 @@ function createIosEncryptionConfigTarget(): NonNullable<
 }
 
 function createIosConfig(
-  config: ExpoConfig,
+  config: Partial<ExpoConfig>,
   variant: AppVariant,
 ): NonNullable<ExpoConfig["ios"]> {
   const iosEncryptionConfig = Object.assign(
@@ -137,7 +168,7 @@ function createIosConfig(
 }
 
 function createExperimentsConfig(
-  config: ExpoConfig,
+  config: Partial<ExpoConfig>,
 ): NonNullable<ExpoConfig["experiments"]> {
   const experimentsConfig: NonNullable<ExpoConfig["experiments"]> = {};
 
@@ -151,7 +182,7 @@ function createEasConfigTarget(): NonNullable<ExpoConfig["extra"]> {
 }
 
 function createExtraConfig(
-  config: ExpoConfig,
+  config: Partial<ExpoConfig>,
   variant: AppVariant,
 ): NonNullable<ExpoConfig["extra"]> {
   const easConfig = Object.assign(createEasConfigTarget(), config.extra?.eas, {
@@ -169,7 +200,10 @@ function createExtraConfig(
   });
 }
 
-function appNameForVariant(config: ExpoConfig, variant: AppVariant): string {
+function appNameForVariant(
+  config: Partial<ExpoConfig>,
+  variant: AppVariant,
+): string {
   if (variant === "dev") {
     return "Conduit (Dev)";
   }
@@ -189,8 +223,8 @@ export default function createExpoConfig({
   config,
 }: ConfigContext): ExpoConfig {
   const variant = resolveVariant();
-  const expoConfig: ExpoConfig = {};
   const scheme = requireString(config.scheme, "scheme");
+  const expoConfig: Partial<ExpoConfig> = {};
 
   return Object.assign(expoConfig, config, {
     name: appNameForVariant(config, variant),
@@ -205,5 +239,5 @@ export default function createExpoConfig({
     plugins: readPlugins(config, variant),
     experiments: createExperimentsConfig(config),
     extra: createExtraConfig(config, variant),
-  });
+  }) as ExpoConfig;
 }

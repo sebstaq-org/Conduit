@@ -5,8 +5,11 @@ describe("frontend environment access", () => {
   afterEach(() => {
     delete globalThis.CONDUIT_RUNTIME_CONFIG;
     delete process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL;
+    delete process.env.EXPO_PUBLIC_CONDUIT_DIST;
     delete process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE;
+    delete process.env.EXPO_PUBLIC_CONDUIT_RELEASE;
     delete process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
+    delete process.env.EXPO_PUBLIC_SENTRY_DSN;
   });
 
   it("reads statically referenced Expo environment variables", () => {
@@ -33,6 +36,17 @@ describe("frontend environment access", () => {
     expect(frontendEnvValue("EXPO_PUBLIC_CONDUIT_LOG_PROFILE")).toBe("stage");
     expect(frontendEnvValue("EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL")).toBe(
       "http://127.0.0.1:4274/api/client-log",
+    );
+  });
+
+  it("reads Sentry public DSN from Expo environment only", () => {
+    process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
+    globalThis.CONDUIT_RUNTIME_CONFIG = {
+      logProfile: "stage",
+    };
+
+    expect(frontendEnvValue("EXPO_PUBLIC_SENTRY_DSN")).toBe(
+      "https://public@example.com/1",
     );
   });
 });

@@ -7,6 +7,7 @@
     "test": "pnpm --workspace-root run build && pnpm --workspace-root run desktop:build && cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test",
     "test:headed": "pnpm --workspace-root run build && pnpm --workspace-root run desktop:build && cargo build --manifest-path ../../backend/service/Cargo.toml -p service-bin && playwright test --headed",
     "repro:ios-sim:markdown-crash": "node --experimental-strip-types src/iosSimulatorMarkdownCrash.ts --expect-crash",
+    "test:sentry-runtime-live": "node --experimental-strip-types src/sentryRuntimeLive.ts",
     "test:ios-sim:markdown": "node --experimental-strip-types src/iosSimulatorMarkdownCrash.ts",
     "test:ios-sim": "node --experimental-strip-types src/iosSimulatorSmoke.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"

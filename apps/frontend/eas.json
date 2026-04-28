@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "dev"
       },
       "ios": {
         "simulator": true
@@ -18,7 +19,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "dev"
       },
       "ios": {
         "simulator": false
@@ -28,7 +30,8 @@
       "developmentClient": false,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "stage"
+        "APP_VARIANT": "stage",
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage"
       },
       "ios": {
         "simulator": true
@@ -39,6 +42,7 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "stage",
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage",
         "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE": "true",
         "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO": "markdown-crash-repro"
       },
@@ -50,7 +54,8 @@
       "developmentClient": false,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "stage"
+        "APP_VARIANT": "stage",
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage"
       },
       "ios": {
         "simulator": false

@@ -1,28 +1,22 @@
 import { frontendEnvValue } from "./frontend-env";
-import { postRecords, shouldRetryIngest } from "./frontend-logger-ingest";
-import { sanitizeUnknown } from "./frontend-logger-serialize";
+import { FileLogSink } from "./frontend-logger-file-sink";
+import { frontendRuntimeMetadata } from "./frontend-runtime-metadata";
+import { sanitizeLogField, sanitizeUnknown } from "./frontend-logger-serialize";
+import { createSentryLogSink } from "./frontend-logger-sentry";
 import type {
   FrontendLogFields,
   FrontendLogLevel,
   FrontendLogProfile,
   FrontendLogRecord,
+  FrontendLogSink,
 } from "./frontend-logger-types";
 
 const WS_URL_ENV = "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL";
-const MAX_BATCH_SIZE = 64;
-const MAX_QUEUE_SIZE = 4096;
-const FLUSH_INTERVAL_MS = 1000;
-const RETRY_DELAY_MS = 2000;
 
-const queue: FrontendLogRecord[] = [];
-
-let flushInFlight = false;
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let globalHandlersInstalled = false;
 let initialized = false;
 let profile: FrontendLogProfile = "prod";
-let sinkUrl: string | null = null;
-let triggerFlush: (() => void) | null = null;
+let sinks: FrontendLogSink[] = [];
 
 function normalizeProfile(raw: string | undefined): FrontendLogProfile {
   if (raw !== undefined) {
@@ -55,7 +49,7 @@ function parseWsUrl(): URL | null {
   const wsUrl = configuredWsUrl.trim();
   if (wsUrl.length === 0) {
     throw new Error(
-      `${WS_URL_ENV} must not be empty when frontend logging is enabled.`,
+      `${WS_URL_ENV} must not be empty when frontend file logging is enabled.`,
     );
   }
   return new URL(wsUrl);
@@ -108,89 +102,26 @@ function recordWithFields(
   eventName: string,
   fields: FrontendLogFields,
 ): FrontendLogRecord {
+  const runtimeMetadata = frontendRuntimeMetadata();
   const record: FrontendLogRecord = {
     event_name: eventName,
     level,
     log_profile: profile,
+    runtime_platform: runtimeMetadata.runtime_platform,
+    runtime_surface: runtimeMetadata.runtime_surface,
     source: "frontend",
     timestamp: new Date().toISOString(),
   };
   for (const [key, value] of Object.entries(fields)) {
-    record[key] = sanitizeUnknown(value);
+    record[key] = sanitizeLogField(key, value);
   }
   return record;
 }
 
-function enqueueRecord(record: FrontendLogRecord): void {
-  if (queue.length >= MAX_QUEUE_SIZE) {
-    queue.shift();
+function emitRecord(record: FrontendLogRecord, error?: unknown): void {
+  for (const sink of sinks) {
+    sink.write(record, error);
   }
-  queue.push(record);
-}
-
-function requeueRecords(records: FrontendLogRecord[]): void {
-  while (records.length > 0 && queue.length < MAX_QUEUE_SIZE) {
-    const record = records.pop();
-    if (record !== undefined) {
-      queue.unshift(record);
-    }
-  }
-}
-
-async function tryFlushRecords(records: FrontendLogRecord[]): Promise<boolean> {
-  if (sinkUrl === null) {
-    return false;
-  }
-  try {
-    await postRecords(records, sinkUrl);
-    return false;
-  } catch (error) {
-    const shouldRetry = shouldRetryIngest(error);
-    if (shouldRetry) {
-      requeueRecords(records);
-    }
-    return shouldRetry;
-  }
-}
-
-function scheduleDeferredFlush(shouldRetry: boolean): void {
-  if (queue.length === 0 || flushTimer !== null) {
-    return;
-  }
-  let delayMs = 0;
-  if (shouldRetry) {
-    delayMs = RETRY_DELAY_MS;
-  }
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    if (triggerFlush !== null) {
-      triggerFlush();
-    }
-  }, delayMs);
-}
-
-async function flushQueue(): Promise<void> {
-  if (flushInFlight || queue.length === 0) {
-    return;
-  }
-  flushInFlight = true;
-  const records = queue.splice(0, MAX_BATCH_SIZE);
-  const shouldRetry = await tryFlushRecords(records);
-  flushInFlight = false;
-  scheduleDeferredFlush(shouldRetry);
-}
-triggerFlush = (): void => {
-  void flushQueue();
-};
-
-function scheduleFlush(delayMs: number): void {
-  if (flushTimer !== null) {
-    return;
-  }
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    void flushQueue();
-  }, delayMs);
 }
 
 function emitInitializedRecord(
@@ -198,11 +129,12 @@ function emitInitializedRecord(
   eventName: string,
   fields: FrontendLogFields,
 ): void {
-  if (sinkUrl === null) {
-    return;
+  emitRecord(recordWithFields(level, eventName, fields));
+  for (const sink of sinks) {
+    if (sink instanceof FileLogSink) {
+      sink.flushImmediately();
+    }
   }
-  enqueueRecord(recordWithFields(level, eventName, fields));
-  scheduleFlush(0);
 }
 
 function installGlobalHandlers(): void {
@@ -229,51 +161,69 @@ function installGlobalHandlers(): void {
   globalHandlersInstalled = true;
 }
 
+function createLogSinks(
+  resolvedProfile: FrontendLogProfile,
+): FrontendLogSink[] {
+  const nextSinks: FrontendLogSink[] = [];
+  const sentrySink = createSentryLogSink(resolvedProfile);
+  if (sentrySink !== null) {
+    nextSinks.push(sentrySink);
+  }
+  if (resolvedProfile !== "dev" && resolvedProfile !== "stage") {
+    return nextSinks;
+  }
+  const fileSinkUrl = configuredClientLogUrl();
+  if (fileSinkUrl !== null) {
+    nextSinks.push(new FileLogSink(fileSinkUrl));
+  }
+  return nextSinks;
+}
+
 function initializeFrontendLogging(): void {
   if (initialized) {
     return;
   }
   initialized = true;
   profile = normalizeProfile(configuredLogProfile());
-  if (profile !== "dev" && profile !== "stage") {
-    return;
-  }
-  sinkUrl = configuredClientLogUrl();
+  sinks = createLogSinks(profile);
   installGlobalHandlers();
   emitInitializedRecord("info", "frontend.logging.initialized", {
     log_profile: profile,
+    sink_count: sinks.length,
   });
 }
 
-function logEvent(
-  level: FrontendLogLevel,
-  eventName: string,
-  fields: FrontendLogFields = {},
-): void {
+interface LogEventOptions {
+  readonly error?: unknown;
+  readonly eventName: string;
+  readonly fields: FrontendLogFields;
+  readonly level: FrontendLogLevel;
+}
+
+function logEvent({ error, eventName, fields, level }: LogEventOptions): void {
   if (!initialized) {
     initializeFrontendLogging();
   }
-  if (sinkUrl === null) {
+  if (sinks.length === 0) {
     return;
   }
-  enqueueRecord(recordWithFields(level, eventName, fields));
-  scheduleFlush(FLUSH_INTERVAL_MS);
+  emitRecord(recordWithFields(level, eventName, fields), error);
 }
 
 function logDebug(eventName: string, fields: FrontendLogFields = {}): void {
-  logEvent("debug", eventName, fields);
+  logEvent({ eventName, fields, level: "debug" });
 }
 
 function logInfo(eventName: string, fields: FrontendLogFields = {}): void {
-  logEvent("info", eventName, fields);
+  logEvent({ eventName, fields, level: "info" });
 }
 
 function logWarn(eventName: string, fields: FrontendLogFields = {}): void {
-  logEvent("warn", eventName, fields);
+  logEvent({ eventName, fields, level: "warn" });
 }
 
 function logError(eventName: string, fields: FrontendLogFields = {}): void {
-  logEvent("error", eventName, fields);
+  logEvent({ eventName, fields, level: "error" });
 }
 
 function logFailure(
@@ -286,7 +236,7 @@ function logFailure(
     mergedFields[key] = value;
   }
   mergedFields.error = sanitizeUnknown(error);
-  logEvent("error", eventName, mergedFields);
+  logEvent({ error, eventName, fields: mergedFields, level: "error" });
 }
 
 export {

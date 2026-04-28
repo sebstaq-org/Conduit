@@ -6,9 +6,15 @@ interface FrontendLogRecord {
   event_name: string;
   level: FrontendLogLevel;
   log_profile: FrontendLogProfile;
+  runtime_platform: "electron" | "native" | "web";
+  runtime_surface: "desktop_app" | "mobile_app" | "web_app";
   source: "frontend";
   timestamp: string;
   [field: string]: unknown;
+}
+
+interface FrontendLogSink {
+  write(record: FrontendLogRecord, error?: unknown): void;
 }
 
 export type {
@@ -16,4 +22,5 @@ export type {
   FrontendLogLevel,
   FrontendLogProfile,
   FrontendLogRecord,
+  FrontendLogSink,
 };
