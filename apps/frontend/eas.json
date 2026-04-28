@@ -31,7 +31,8 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "stage",
-        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage"
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "ios": {
         "simulator": true
@@ -43,6 +44,7 @@
       "env": {
         "APP_VARIANT": "stage",
         "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE": "true",
         "EXPO_PUBLIC_CONDUIT_PLAN_INTERACTION_DEV_FIXTURE_SCENARIO": "markdown-crash-repro"
       },
@@ -55,7 +57,8 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "stage",
-        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage"
+        "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": "stage",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "ios": {
         "simulator": false

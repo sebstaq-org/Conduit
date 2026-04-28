@@ -260,6 +260,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.28.5
         version: 7.28.5(@babel/core@7.29.0)
+      '@sentry/cli':
+        specifier: 2.58.4
+        version: 2.58.4(encoding@0.1.13)
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.14
