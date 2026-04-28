@@ -1,10 +1,13 @@
 import { skipToken } from "@reduxjs/toolkit/query";
 import { useCallback } from "react";
+import { useSelector } from "react-redux";
 import {
   useLoadOlderSessionTimelineMutation,
   useReadSessionTimelineQuery,
 } from "./api-hooks";
 import type { SessionHistoryWindow } from "@conduit/session-client";
+import { withPendingPromptMessages } from "./session-pending-prompts";
+import type { RootState } from "./store";
 
 interface SessionTimelineView {
   exhausted: boolean;
@@ -17,6 +20,16 @@ interface SessionTimelineView {
   loadOlderIfNeeded: () => void;
 }
 
+function timelineHistoryWithPending(
+  history: SessionHistoryWindow | undefined,
+  pendingPrompts: Parameters<typeof withPendingPromptMessages>[1],
+): SessionHistoryWindow | undefined {
+  if (history === undefined) {
+    return undefined;
+  }
+  return withPendingPromptMessages(history, pendingPrompts);
+}
+
 function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
   let timelineQueryArg: typeof skipToken | { openSessionId: string } =
     skipToken;
@@ -25,6 +38,16 @@ function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
   }
   const timelineQuery = useReadSessionTimelineQuery(timelineQueryArg);
   const [loadOlder] = useLoadOlderSessionTimelineMutation();
+  const pendingPrompts = useSelector((state: RootState) => {
+    if (openSessionId === null) {
+      return [];
+    }
+    return state.sessionPendingPrompts.byOpenSessionId[openSessionId] ?? [];
+  });
+  const history = timelineHistoryWithPending(
+    timelineQuery.data?.history,
+    pendingPrompts,
+  );
 
   const loadOlderIfNeeded = useCallback((): void => {
     if (openSessionId === null || timelineQuery.data === undefined) {
@@ -45,7 +68,7 @@ function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
 
   return {
     exhausted: timelineQuery.data?.pagination.exhausted ?? false,
-    history: timelineQuery.data?.history,
+    history,
     isError: timelineQuery.isError,
     isFetching: timelineQuery.isFetching,
     isFetchingOlder: timelineQuery.data?.pagination.isFetchingOlder ?? false,

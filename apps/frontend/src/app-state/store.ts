@@ -20,6 +20,7 @@ import {
   activeSessionCleared,
   sessionSelectionReducer,
 } from "./session-selection";
+import { sessionPendingPromptsReducer } from "./session-pending-prompts";
 import { sessionPromptTurnsReducer } from "./session-prompt-turns";
 import { configureSessionClientForHost } from "./session-client";
 
@@ -27,6 +28,7 @@ const store = configureStore({
   reducer: {
     [conduitApi.reducerPath]: conduitApi.reducer,
     hostRegistry: hostRegistryReducer,
+    sessionPendingPrompts: sessionPendingPromptsReducer,
     sessionPromptTurns: sessionPromptTurnsReducer,
     sessionSelection: sessionSelectionReducer,
   },

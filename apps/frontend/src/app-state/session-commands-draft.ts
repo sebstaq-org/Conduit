@@ -14,6 +14,7 @@ interface DraftConfigSyncState {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   openSessionId: string;
+  revision: number;
 }
 
 function requireDraftProvider(
@@ -28,12 +29,14 @@ function requireDraftProvider(
 function initialDraftConfigSyncState(
   configOptions: SessionConfigOption[] | null,
   openSessionId: string,
+  revision: number,
 ): DraftConfigSyncState {
   return {
     configOptions,
     configSyncBlocked: false,
     configSyncError: null,
     openSessionId,
+    revision,
   };
 }
 
@@ -98,6 +101,7 @@ async function reopenDraftSession(args: {
 }): Promise<{
   configOptions: SessionConfigOption[] | null;
   openSessionId: string;
+  revision: number;
 }> {
   const provider = requireDraftProvider(args.activeSession);
   logInfo("frontend.session.draft_sync.reopen.start", {
@@ -122,6 +126,7 @@ async function reopenDraftSession(args: {
   return {
     configOptions: reopened.configOptions ?? null,
     openSessionId: reopened.openSessionId,
+    revision: reopened.revision,
   };
 }
 
@@ -134,6 +139,7 @@ function syncErrorState(
     configSyncBlocked: true,
     configSyncError: queryErrorMessage(error),
     openSessionId: state.openSessionId,
+    revision: state.revision,
   };
 }
 
@@ -164,6 +170,7 @@ async function syncDraftConfigAfterPrompt(args: {
       configSyncBlocked: false,
       configSyncError: null,
       openSessionId: reopened.openSessionId,
+      revision: reopened.revision,
     };
   } catch (error) {
     logFailure("frontend.session.draft_sync.failed", error, {

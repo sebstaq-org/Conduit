@@ -1,5 +1,10 @@
+import { skipToken } from "@reduxjs/toolkit/query";
 import type { ProviderId } from "@conduit/session-client";
-import { conduitApi, draftSessionProviderSelected } from "@/app-state";
+import {
+  conduitApi,
+  draftSessionProviderSelected,
+  useReadSessionTimelineQuery,
+} from "@/app-state";
 import type { ActiveSession, AppDispatch } from "@/app-state";
 
 const PROVIDER_CONFIG_DRAFT_POLLING_INTERVAL_MS = 1000;
@@ -26,4 +31,26 @@ function createHandleProviderSelect(
   };
 }
 
-export { createHandleProviderSelect, providerConfigPollingInterval };
+function openSessionTimelineArg(
+  activeSession: ActiveSession | null,
+): typeof skipToken | { openSessionId: string } {
+  if (activeSession?.kind !== "open") {
+    return skipToken;
+  }
+  return { openSessionId: activeSession.openSessionId };
+}
+
+function useActiveSessionTimelineRevision(
+  activeSession: ActiveSession | null,
+): number | null {
+  const { data } = useReadSessionTimelineQuery(
+    openSessionTimelineArg(activeSession),
+  );
+  return data?.history.revision ?? null;
+}
+
+export {
+  createHandleProviderSelect,
+  providerConfigPollingInterval,
+  useActiveSessionTimelineRevision,
+};

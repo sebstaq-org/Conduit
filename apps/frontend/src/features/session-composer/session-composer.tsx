@@ -33,6 +33,7 @@ import {
 import {
   createHandleProviderSelect,
   providerConfigPollingInterval,
+  useActiveSessionTimelineRevision,
 } from "./session-composer-provider-config-refresh";
 import { createSessionComposerSendHandler } from "./session-composer-submit";
 
@@ -55,6 +56,7 @@ interface SessionComposerRuntime {
   newSession: ReturnType<typeof useNewSessionMutation>[0];
   newSessionError: boolean;
   newSessionLoading: boolean;
+  openSessionBaseRevision: number | null;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   promptSessionError: boolean;
@@ -145,6 +147,7 @@ function buildSessionComposerController(args: {
       canSend: args.canSend,
       dispatch: args.runtime.dispatch,
       newSession: args.runtime.newSession,
+      openSessionBaseRevision: args.runtime.openSessionBaseRevision,
       openSession: args.runtime.openSession,
       promptSession: args.runtime.promptSession,
       setDraft: args.setDraft,
@@ -174,6 +177,8 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
   const [promptSession, promptSessionState] = usePromptSessionMutation();
   const [setSessionConfigOption, setSessionConfigOptionState] =
     useSetSessionConfigOptionMutation();
+  const openSessionBaseRevision =
+    useActiveSessionTimelineRevision(activeSession);
   const {
     data: providersConfigSnapshot,
     isError: providersConfigSnapshotError,
@@ -188,6 +193,7 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
     newSession,
     newSessionError: newSessionState.isError,
     newSessionLoading: newSessionState.isLoading,
+    openSessionBaseRevision,
     openSession,
     promptSession,
     promptSessionError: promptSessionState.isError,

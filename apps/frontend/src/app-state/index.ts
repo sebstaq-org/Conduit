@@ -68,6 +68,7 @@ export {
   sessionPromptTurnStarted,
 } from "./session-prompt-turns";
 export type { SessionPromptTurnIdentity } from "./session-prompt-turns";
+export { pendingPromptSubmitted } from "./session-pending-prompts";
 export { useSessionTimeline } from "./session-timeline";
 export {
   usePlanInteractionSource,

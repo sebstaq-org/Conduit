@@ -1,6 +1,7 @@
 import {
   activeSessionOpened,
   conduitApi,
+  pendingPromptSubmitted,
   sessionPromptTurnFinished,
   sessionPromptTurnStarted,
   submitPrompt,
@@ -20,6 +21,7 @@ interface CreateSessionComposerSendHandlerArgs {
   canSend: boolean;
   dispatch: AppDispatch;
   newSession: ReturnType<typeof useNewSessionMutation>[0];
+  openSessionBaseRevision: number | null;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   setDraft: (draft: string) => void;
@@ -60,6 +62,7 @@ function createSessionComposerSendHandler({
   canSend,
   dispatch,
   newSession,
+  openSessionBaseRevision,
   openSession,
   promptSession,
   setDraft,
@@ -73,6 +76,7 @@ function createSessionComposerSendHandler({
     void submitPrompt({
       activeSession,
       newSession,
+      openSessionBaseRevision,
       openSession,
       onDraftPromptCommitted: createDraftCommitCallback({
         activeSession,
@@ -83,6 +87,8 @@ function createSessionComposerSendHandler({
       onPromptTurnStarted: (identity) =>
         dispatch(sessionPromptTurnStarted(identity)),
       onFailure: showPromptFailureToast,
+      onPromptSubmitted: (submitted) =>
+        dispatch(pendingPromptSubmitted(submitted)),
       promptSession,
       setDraft,
       setSessionConfigOption,
