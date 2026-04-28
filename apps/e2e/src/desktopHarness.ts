@@ -75,7 +75,7 @@ async function startDesktopE2eHarness(
       env: {
         ...desktopE2eBaseEnv(),
         CI: "1",
-        CONDUIT_DESKTOP_APP_BASE_URL: "conduit://pair",
+        CONDUIT_DESKTOP_APP_BASE_URL: "conduit-dev://pair",
         CONDUIT_DESKTOP_BACKEND_HOST: "127.0.0.1",
         CONDUIT_DESKTOP_BACKEND_LOG_PATH: join(runRoot, "logs", "backend.log"),
         CONDUIT_DESKTOP_BACKEND_PORT: String(backendPort),

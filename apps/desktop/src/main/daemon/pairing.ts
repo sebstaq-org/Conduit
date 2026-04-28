@@ -98,4 +98,4 @@ async function fetchDesktopPairingOffer(
   };
 }
 
-export { fetchDesktopPairingOffer };
+export { fetchDesktopPairingOffer, mobilePairingUrl };

@@ -42,6 +42,15 @@ describe("connection offer parser", () => {
     ).toEqual(offer);
   });
 
+  it("decodes an offer query parameter", () => {
+    expect(
+      parseConnectionOfferUrl(
+        `conduit-dev://pair?offer=${encodeOffer(offer)}`,
+        validNow,
+      ),
+    ).toEqual(offer);
+  });
+
   it("decodes without atob or Buffer globals", () => {
     const encoded = encodeOffer(offer);
     vi.stubGlobal("atob", null);
@@ -57,6 +66,27 @@ describe("connection offer parser", () => {
 });
 
 describe("connection offer parser rejection", () => {
+  it("rejects missing, empty, and ambiguous offer payloads", () => {
+    expect(() =>
+      parseConnectionOfferUrl("conduit-dev://pair", validNow),
+    ).toThrow(/missing offer payload/);
+    expect(() =>
+      parseConnectionOfferUrl("conduit-dev://pair?offer=", validNow),
+    ).toThrow(/payload is empty/);
+    expect(() =>
+      parseConnectionOfferUrl(
+        `conduit-dev://pair?offer=${encodeOffer(offer)}&offer=${encodeOffer(offer)}`,
+        validNow,
+      ),
+    ).toThrow(/multiple offer values/);
+    expect(() =>
+      parseConnectionOfferUrl(
+        `conduit-dev://pair?offer=${encodeOffer(offer)}#offer=${encodeOffer(offer)}`,
+        validNow,
+      ),
+    ).toThrow(/multiple offer values/);
+  });
+
   it("rejects unsupported top-level fields", () => {
     expect(() =>
       readConnectionOffer(

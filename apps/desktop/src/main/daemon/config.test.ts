@@ -40,7 +40,7 @@ function withManagedDesktopEnv(): void {
 
 function expectManagedUrlConfig(): void {
   expect(readDesktopDaemonConfig()).toMatchObject({
-    appBaseUrl: "conduit://pair",
+    appBaseUrl: "conduit-dev://pair",
     backendHost: "127.0.0.1",
     backendPort: 4174,
     frontend: {
@@ -56,6 +56,7 @@ function expectManagedUrlConfig(): void {
 
 function expectManagedStaticConfig(): void {
   expect(readDesktopDaemonConfig()).toMatchObject({
+    appBaseUrl: "conduit://pair",
     frontend: {
       kind: "static",
       webDir: "/repo/stage/web",

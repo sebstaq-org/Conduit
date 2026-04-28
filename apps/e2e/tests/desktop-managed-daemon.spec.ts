@@ -74,9 +74,9 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   const mobileUrl = await page
     .getByRole("textbox", { name: "Mobile pairing link" })
     .inputValue();
-  expect(mobileUrl).toMatch(/^conduit:\/\/pair\?offer=/u);
+  expect(mobileUrl).toMatch(/^conduit-dev:\/\/pair\?offer=/u);
 
-  const offer = parseConnectionOfferUrl(mobileUrlAsFragment(mobileUrl));
+  const offer = parseConnectionOfferUrl(mobileUrl);
   const client = createRelaySessionClient({ offer });
   await client.updatePresence(mobilePresence());
   await expectEventuallySettings(client);
@@ -136,9 +136,7 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   const restartedMobileUrl = await page
     .getByRole("textbox", { name: "Mobile pairing link" })
     .inputValue();
-  const restartedOffer = parseConnectionOfferUrl(
-    mobileUrlAsFragment(restartedMobileUrl),
-  );
+  const restartedOffer = parseConnectionOfferUrl(restartedMobileUrl);
   const reconnectedClient = createRelaySessionClient({ offer: restartedOffer });
   await reconnectedClient.updatePresence(mobilePresence());
   await expectEventuallySettings(reconnectedClient);
@@ -147,6 +145,32 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   ).toBeVisible({ timeout: 15000 });
   reconnectedClient.close();
   await closePopover(page);
+});
+
+test("desktop reports recovery when the managed daemon exits", async () => {
+  const activeHarness = await requireHarness();
+  const page = activeHarness.page;
+  const beforeStatus = await readDesktopStatus(page);
+  if (beforeStatus.pid === null) {
+    throw new Error("desktop daemon pid was not available before kill");
+  }
+
+  process.kill(beforeStatus.pid, "SIGTERM");
+  await expect
+    .poll(async () => await readDesktopStatus(page), { timeout: 15000 })
+    .toMatchObject({
+      backendHealthy: false,
+      lastExit: expect.stringMatching(/exited code=.*signal=/iu),
+      running: false,
+    });
+
+  await restartDesktopDaemon(page);
+  await expect
+    .poll(async () => await readDesktopStatus(page), { timeout: 30000 })
+    .toMatchObject({
+      backendHealthy: true,
+      running: true,
+    });
 });
 
 test("desktop renders streaming markdown through Streamdown", async () => {
@@ -210,14 +234,6 @@ async function requireHarness(): Promise<DesktopE2eHarness> {
     harness = await startDesktopE2eHarness();
   }
   return harness;
-}
-
-function mobileUrlAsFragment(mobileUrl: string): string {
-  const offer = new URL(mobileUrl).searchParams.get("offer");
-  if (offer === null || offer.length === 0) {
-    throw new Error("mobile pairing URL is missing offer query parameter");
-  }
-  return `conduit://pair#offer=${offer}`;
 }
 
 async function openDesktopPairingPopover(page: Page): Promise<void> {

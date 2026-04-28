@@ -40,6 +40,13 @@ function logProfile(): DesktopDaemonConfig["logProfile"] {
   throw new Error("CONDUIT_DESKTOP_LOG_PROFILE must be dev or stage");
 }
 
+function defaultAppBaseUrl(profile: DesktopDaemonConfig["logProfile"]): string {
+  if (profile === "dev") {
+    return "conduit-dev://pair";
+  }
+  return "conduit://pair";
+}
+
 function frontendConfig(): DesktopDaemonConfig["frontend"] {
   const url = envValue("CONDUIT_FRONTEND_URL");
   const webDir = envValue("CONDUIT_DESKTOP_WEB_DIR");
@@ -64,8 +71,10 @@ function frontendConfig(): DesktopDaemonConfig["frontend"] {
 
 function readDesktopDaemonConfig(): DesktopDaemonConfig {
   const home = requiredEnv("CONDUIT_DESKTOP_HOME");
+  const profile = logProfile();
   return {
-    appBaseUrl: envValue("CONDUIT_DESKTOP_APP_BASE_URL") ?? "conduit://pair",
+    appBaseUrl:
+      envValue("CONDUIT_DESKTOP_APP_BASE_URL") ?? defaultAppBaseUrl(profile),
     backendHost: envValue("CONDUIT_DESKTOP_BACKEND_HOST") ?? "127.0.0.1",
     backendLogPath:
       envValue("CONDUIT_DESKTOP_BACKEND_LOG_PATH") ??
@@ -74,7 +83,7 @@ function readDesktopDaemonConfig(): DesktopDaemonConfig {
     backendPort: envPort("CONDUIT_DESKTOP_BACKEND_PORT", 4174),
     frontend: frontendConfig(),
     home,
-    logProfile: logProfile(),
+    logProfile: profile,
     providerFixtures: envValue("CONDUIT_DESKTOP_PROVIDER_FIXTURES"),
     relayEndpoint: requiredEnv("CONDUIT_DESKTOP_RELAY_ENDPOINT"),
     serviceBinPath: requiredEnv("CONDUIT_DESKTOP_SERVICE_BIN"),

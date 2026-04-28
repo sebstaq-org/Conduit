@@ -379,11 +379,11 @@ test("pair route refreshes the offer field for a new deep link", async ({
 
   await page.goto(`${activeHarness.frontendUrl}/pair?offer=${firstOffer}`);
   await expect(page.getByLabel("Pairing link")).toHaveValue(
-    `conduit://pair#offer=${firstOffer}`,
+    `conduit://pair?offer=${firstOffer}`,
   );
   await page.goto(`${activeHarness.frontendUrl}/pair?offer=${secondOffer}`);
   await expect(page.getByLabel("Pairing link")).toHaveValue(
-    `conduit://pair#offer=${secondOffer}`,
+    `conduit://pair?offer=${secondOffer}`,
   );
 });
 
