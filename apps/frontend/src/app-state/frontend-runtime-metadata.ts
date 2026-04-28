@@ -22,8 +22,16 @@ function runtimeSurface(): FrontendRuntimeSurface {
   if (configuredSurface === "desktop_app") {
     return configuredSurface;
   }
-  if (isReactNativeRuntime() || globalThis.document === undefined) {
+  if (configuredSurface !== undefined) {
+    throw new Error(
+      `Unsupported Conduit runtime surface: ${configuredSurface}`,
+    );
+  }
+  if (isReactNativeRuntime()) {
     return "mobile_app";
+  }
+  if (globalThis.document === undefined) {
+    throw new Error("Unable to determine Conduit frontend runtime surface.");
   }
   return "web_app";
 }

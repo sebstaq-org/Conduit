@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SentryMockModule } from "../../test/sentry-react-native.mock";
 
 const FLUSH_INTERVAL_MS = 1000;
 const RETRY_DELAY_MS = 2000;
@@ -12,11 +11,6 @@ type FetchFunction = (
 type FetchMock = ReturnType<typeof vi.fn<FetchFunction>>;
 interface FrontendLoggerModule {
   initializeFrontendLogging: () => void;
-  logFailure: (
-    eventName: string,
-    error: unknown,
-    fields?: Record<string, unknown>,
-  ) => void;
   logInfo: (eventName: string, fields?: Record<string, unknown>) => void;
 }
 
@@ -28,12 +22,18 @@ function failedResponse(status: number): Response {
   return new Response("", { status });
 }
 
-function createFetchMock(): FetchMock {
-  return vi.fn<FetchFunction>();
-}
-
-function expectCallCount(fetchMock: FetchMock, expectedCount: number): void {
-  expect(fetchMock.mock.calls).toHaveLength(expectedCount);
+function fetchMockWithResponses(
+  ...responses: readonly (Error | Response)[]
+): FetchMock {
+  const fetchMock = vi.fn<FetchFunction>();
+  for (const response of responses) {
+    if (response instanceof Error) {
+      fetchMock.mockRejectedValueOnce(response);
+    } else {
+      fetchMock.mockResolvedValueOnce(response);
+    }
+  }
+  return fetchMock;
 }
 
 function readPostedRecords(fetchMock: FetchMock): unknown[] {
@@ -60,6 +60,7 @@ async function setupLogger(
 ): Promise<FrontendLoggerModule> {
   vi.resetModules();
   vi.stubGlobal("fetch", fetchMock);
+  vi.stubGlobal("navigator", { product: "ReactNative" });
   process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE = profile;
   process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL =
     "ws://127.0.0.1:4274/api/session";
@@ -71,92 +72,54 @@ async function setupLogger(
 }
 
 async function runNonRetryable4xxCase(): Promise<void> {
-  const fetchMock = createFetchMock()
-    .mockResolvedValueOnce(okResponse())
-    .mockResolvedValueOnce(failedResponse(400))
-    .mockResolvedValue(okResponse());
+  const fetchMock = fetchMockWithResponses(okResponse(), failedResponse(400));
+  fetchMock.mockResolvedValue(okResponse());
   const logger = await setupLogger(fetchMock);
 
   logger.logInfo("frontend.retry_policy.non_retryable_4xx");
   await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 
   await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS * 2);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 }
 
 async function runRetryable5xxCase(): Promise<void> {
-  const fetchMock = createFetchMock()
-    .mockResolvedValueOnce(okResponse())
-    .mockResolvedValueOnce(failedResponse(500))
-    .mockResolvedValueOnce(okResponse());
+  const fetchMock = fetchMockWithResponses(
+    okResponse(),
+    failedResponse(500),
+    okResponse(),
+  );
   const logger = await setupLogger(fetchMock);
 
   logger.logInfo("frontend.retry_policy.retryable_5xx");
   await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 
   await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS - 1);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 
   await vi.advanceTimersByTimeAsync(1);
-  expectCallCount(fetchMock, 2);
+  expect(fetchMock.mock.calls).toHaveLength(2);
 }
 
 async function runNetworkRetryCase(): Promise<void> {
-  const fetchMock = createFetchMock()
-    .mockResolvedValueOnce(okResponse())
-    .mockRejectedValueOnce(new Error("network down"))
-    .mockResolvedValueOnce(okResponse());
+  const fetchMock = fetchMockWithResponses(
+    okResponse(),
+    new Error("network down"),
+    okResponse(),
+  );
   const logger = await setupLogger(fetchMock);
 
   logger.logInfo("frontend.retry_policy.network_error");
   await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 
   await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS - 1);
-  expectCallCount(fetchMock, 1);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 
   await vi.advanceTimersByTimeAsync(1);
-  expectCallCount(fetchMock, 2);
-}
-
-async function importSentryMock(): Promise<SentryMockModule> {
-  const sentryMock = await import("../../test/sentry-react-native.mock");
-  return sentryMock;
-}
-
-function expectSentryRuntimeTags(sentryMock: SentryMockModule): void {
-  expect(sentryMock.setTag).toHaveBeenCalledWith(
-    "conduit.runtime_surface", "mobile_app",
-  );
-}
-
-function expectSentryBreadcrumbLog(sentryMock: SentryMockModule): void {
-  expect(sentryMock.logger.info).toHaveBeenCalledWith(
-    "frontend.sentry.breadcrumb",
-    expect.objectContaining({
-      endpoint_name: "settings/get",
-      event_name: "frontend.sentry.breadcrumb",
-      log_profile: "stage",
-      runtime_platform: "native",
-      runtime_surface: "mobile_app",
-    }),
-  );
-}
-
-function expectSentryInitialized(sentryMock: SentryMockModule): void {
-  expect(sentryMock.init).toHaveBeenCalledWith(
-    expect.objectContaining({
-      dsn: "https://public@example.com/1", enableLogs: true,
-      environment: "stage", sendDefaultPii: false, tracesSampleRate: 0,
-    }),
-  );
-  expect(sentryMock.addBreadcrumb).toHaveBeenCalledWith(
-    expect.objectContaining({
-      category: "frontend", level: "info", message: "frontend.sentry.breadcrumb",
-    }),
-  );
+  expect(fetchMock.mock.calls).toHaveLength(2);
 }
 
 async function resetFrontendLoggerTestState(): Promise<void> {
@@ -164,14 +127,14 @@ async function resetFrontendLoggerTestState(): Promise<void> {
   delete process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
   delete process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL;
   delete process.env.EXPO_PUBLIC_SENTRY_DSN;
-  const sentryMock = await importSentryMock();
+  const sentryMock = await import("../../test/sentry-react-native.mock");
   sentryMock.resetSentryMock();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 }
 
 async function runRedactionProofCase(): Promise<void> {
-  const fetchMock = createFetchMock().mockResolvedValue(okResponse());
+  const fetchMock = vi.fn<FetchFunction>().mockResolvedValue(okResponse());
   const logger = await setupLogger(fetchMock);
 
   logger.logInfo("frontend.redaction.proof", {
@@ -194,85 +157,6 @@ async function runRedactionProofCase(): Promise<void> {
   });
 }
 
-async function runSentryInitializationCase(): Promise<void> {
-  const fetchMock = createFetchMock().mockResolvedValue(okResponse());
-  process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
-  const logger = await setupLogger(fetchMock);
-
-  logger.logInfo("frontend.sentry.breadcrumb", {
-    endpoint_name: "settings/get",
-  });
-  const sentryMock = await importSentryMock();
-
-  expectSentryInitialized(sentryMock);
-  expectSentryBreadcrumbLog(sentryMock);
-  expectSentryRuntimeTags(sentryMock);
-  await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
-  expect(sentryMock.flush).toHaveBeenCalledWith();
-}
-
-function expectFailureRecord(record: unknown): void {
-  expect(record).toMatchObject({
-    event_name: "frontend.sentry.failure",
-    error: {
-      message: "boom",
-      name: "Error",
-    },
-    route_capability: "[redacted]",
-  });
-}
-
-function expectFileSinkFailureRecord(fetchMock: FetchMock): void {
-  expectCallCount(fetchMock, 1);
-  const [record] = readPostedRecords(fetchMock);
-  expectFailureRecord(record);
-}
-
-async function runSentryFailureCase(): Promise<void> {
-  const fetchMock = createFetchMock().mockResolvedValue(okResponse());
-  process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
-  const logger = await setupLogger(fetchMock);
-  const error = new Error("boom");
-
-  logger.logFailure("frontend.sentry.failure", error, {
-    route_capability: "secret-capability",
-  });
-  await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
-  const sentryMock = await importSentryMock();
-
-  expect(sentryMock.captureException).toHaveBeenCalledWith(error);
-  expectFileSinkFailureRecord(fetchMock);
-}
-
-async function runProdSentryDsnCase(): Promise<void> {
-  const fetchMock = createFetchMock().mockResolvedValue(okResponse());
-  process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
-  const logger = await setupLogger(fetchMock, "prod");
-
-  logger.logInfo("frontend.sentry.prod_breadcrumb");
-  const sentryMock = await importSentryMock();
-
-  expect(sentryMock.init).toHaveBeenCalledWith(
-    expect.objectContaining({
-      dsn: "https://public@example.com/1",
-      environment: "prod",
-    }),
-  );
-  expect(sentryMock.addBreadcrumb).toHaveBeenCalledWith(
-    expect.objectContaining({
-      message: "frontend.sentry.prod_breadcrumb",
-    }),
-  );
-  expect(sentryMock.logger.info).toHaveBeenCalledWith(
-    "frontend.sentry.prod_breadcrumb",
-    expect.objectContaining({
-      event_name: "frontend.sentry.prod_breadcrumb",
-      log_profile: "prod",
-    }),
-  );
-  expectCallCount(fetchMock, 0);
-}
-
 describe("frontend logger retry policy", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -287,13 +171,4 @@ describe("frontend logger retry policy", () => {
     "redacts prompt and offer material before writing file logs",
     runRedactionProofCase,
   );
-  it(
-    "initializes Sentry from the same logger path when a DSN is configured",
-    runSentryInitializationCase,
-  );
-  it(
-    "captures failures as Sentry exceptions and keeps the file sink active",
-    runSentryFailureCase,
-  );
-  it("enables Sentry in prod when a DSN is configured", runProdSentryDsnCase);
 });

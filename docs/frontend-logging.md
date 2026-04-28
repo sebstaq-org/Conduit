@@ -27,3 +27,14 @@ keeps desktop local log files as another sink behind the same logger path.
 The logger redacts prompt/content/input/text fields, bearer-style credentials,
 route capabilities, tokens, secrets, cookies, private keys, and pairing offer URLs
 before any sink receives a record.
+
+Runtime tags are explicit. Electron sets `desktop_app/electron` through the
+desktop runtime config, React Native sets `mobile_app/native` through
+`navigator.product === "ReactNative"`, and DOM web sets `web_app/web`. Unknown
+non-DOM runtimes fail instead of being mislabeled.
+
+The opt-in live proof is
+`rtk doppler run --project conduit --config dev -- pnpm --filter @conduit/e2e run test:sentry-runtime-live`.
+It exports the real frontend web app, opens desktop and mobile-shaped runtimes,
+and queries Sentry Logs for both runtime records. The token used for
+`SENTRY_AUTH_TOKEN` must have `org:read` access to query Sentry Explore Logs.

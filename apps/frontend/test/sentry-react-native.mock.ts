@@ -36,10 +36,16 @@ const flush = vi.fn<() => Promise<boolean>>();
 flush.mockResolvedValue(true);
 const init = vi.fn<(options: Record<string, unknown>) => void>();
 const logger = {
-  debug: vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
-  error: vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
-  info: vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
-  warn: vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
+  debug:
+    vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
+  error:
+    vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
+  info: vi.fn<
+    (message: string, attributes?: Record<string, unknown>) => void
+  >(),
+  warn: vi.fn<
+    (message: string, attributes?: Record<string, unknown>) => void
+  >(),
 };
 const setTag = vi.fn<(name: string, value: string) => void>();
 const withScope = vi.fn<(callback: SentryScopeCallback) => void>((callback) => {
