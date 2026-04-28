@@ -21,6 +21,15 @@ pub(super) struct TextConnectionRuntime {
     pub(super) connection_kind: &'static str,
 }
 
+pub(super) struct RelayRuntimeContext {
+    pub(super) actor: RuntimeActor,
+    pub(super) generation: u64,
+    pub(super) presence: Arc<presence::PresenceStore>,
+    pub(super) presence_session_id: String,
+    pub(super) sessions: Arc<RelaySessionManager>,
+    pub(super) watches: SharedWatchState,
+}
+
 impl TextConnectionRuntime {
     pub(super) fn direct(state: &ServeState) -> Self {
         Self {
@@ -34,25 +43,18 @@ impl TextConnectionRuntime {
         }
     }
 
-    pub(super) fn relay(
-        actor: RuntimeActor,
-        presence: Arc<presence::PresenceStore>,
-        presence_session_id: String,
-        generation: u64,
-        sessions: Arc<RelaySessionManager>,
-        watches: SharedWatchState,
-    ) -> Self {
+    pub(super) fn relay(context: RelayRuntimeContext) -> Self {
         Self {
-            actor,
+            actor: context.actor,
             close_presence_on_connection_close: false,
-            presence: Some(presence),
+            presence: Some(context.presence),
             relay_session: Some(RelayTextSession {
-                connection_id: presence_session_id.clone(),
-                generation,
-                sessions,
+                connection_id: context.presence_session_id.clone(),
+                generation: context.generation,
+                sessions: context.sessions,
             }),
-            presence_session_id: Some(presence_session_id),
-            watches: Some(watches),
+            presence_session_id: Some(context.presence_session_id),
+            watches: Some(context.watches),
             connection_kind: "relay",
         }
     }

@@ -1,4 +1,8 @@
-import { CLIENT_PENDING_TIMEOUT_MS, CLOSE_POLICY } from "./limits.js";
+import {
+  CLIENT_PENDING_TIMEOUT_MS,
+  CLOSE_NORMAL,
+  CLOSE_POLICY,
+} from "./limits.js";
 import { controlFrame } from "./frames.js";
 import { safeClose, safeSend } from "./socketSafety.js";
 import type { RelayConnection } from "./relayState.js";
@@ -32,6 +36,27 @@ function notifyControl(
   if (controlSocket !== null) {
     safeSend(controlSocket, controlFrame(type, connectionId));
   }
+}
+
+function notifyPendingClients(
+  connections: Map<string, RelayConnection>,
+  controlSocket: WorkerWebSocket | null,
+): void {
+  for (const [connectionId, { clientSocket, dataSocket }] of connections) {
+    if (clientSocket !== null && dataSocket === null) {
+      notifyControl(controlSocket, "client_waiting", connectionId);
+    }
+  }
+}
+
+function recycleDataSocket(connection: RelayConnection): void {
+  safeClose(
+    connection.dataSocket,
+    CLOSE_NORMAL,
+    "relay data socket recycled before client command",
+  );
+  connection.dataSocket = null;
+  connection.state = { kind: "waitingForData" };
 }
 
 function armPendingTimer(
@@ -76,4 +101,6 @@ export {
   connectionFor,
   deleteIfIdle,
   notifyControl,
+  notifyPendingClients,
+  recycleDataSocket,
 };

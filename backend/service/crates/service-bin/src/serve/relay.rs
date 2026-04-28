@@ -3,7 +3,7 @@
 use super::actor::RuntimeActor;
 use super::presence::PresenceStore;
 use super::relay_session::{RelayDataLease, RelaySessionManager};
-use super::text_connection::{TextConnectionRuntime, run_text_connection};
+use super::text_connection::{RelayRuntimeContext, TextConnectionRuntime, run_text_connection};
 use crate::identity::load_daemon_secret_key_b64;
 use futures_util::{SinkExt, StreamExt};
 use remote_access::{
@@ -368,14 +368,14 @@ async fn run_data_socket(
     let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel();
     let runtime_connection_id = super::NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
     let runtime_task = tokio::spawn(run_text_connection(
-        TextConnectionRuntime::relay(
-            runtime.actor.clone(),
-            Arc::clone(&runtime.presence),
-            connection_id.to_owned(),
-            lease.generation,
-            Arc::clone(&runtime.sessions),
-            Arc::clone(&lease.watches),
-        ),
+        TextConnectionRuntime::relay(RelayRuntimeContext {
+            actor: runtime.actor.clone(),
+            generation: lease.generation,
+            presence: Arc::clone(&runtime.presence),
+            presence_session_id: connection_id.to_owned(),
+            sessions: Arc::clone(&runtime.sessions),
+            watches: Arc::clone(&lease.watches),
+        }),
         inbound_receiver,
         outbound_text,
         runtime_connection_id,

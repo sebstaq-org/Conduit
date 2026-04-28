@@ -1,4 +1,5 @@
 import { decodeBase64Bytes, decodeBase64UrlJson } from "./base64.js";
+import { extractOfferPayload } from "./connection-offer-url.js";
 import type {
   AcceptConnectionOfferResult,
   ConnectionHostProfile,
@@ -9,8 +10,6 @@ import type {
 
 const CONNECTION_OFFER_VERSION = 1 as const;
 const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
-const OFFER_FRAGMENT_MARKER = "#offer=";
-const OFFER_QUERY_PARAM = "offer";
 const AUTHORIZATION_BOUNDARY = "relay-handshake";
 const DEFAULT_HOST_DISPLAY_NAME = "Conduit Desktop";
 const OFFER_KEYS =
@@ -192,51 +191,6 @@ function parseConnectionOfferUrl(
     throw new Error("pairing offer payload is empty");
   }
   return readConnectionOffer(JSON.parse(decodeBase64UrlJson(encoded)), now);
-}
-
-function parsedUrl(value: string): URL | null {
-  try {
-    return new URL(value);
-  } catch {
-    return null;
-  }
-}
-
-function queryOfferValues(url: URL | null): string[] {
-  return url?.searchParams.getAll(OFFER_QUERY_PARAM) ?? [];
-}
-
-function fragmentOfferValue(value: string): string | null {
-  const firstMarkerIndex = value.indexOf(OFFER_FRAGMENT_MARKER);
-  if (firstMarkerIndex === -1) {
-    return null;
-  }
-  const secondMarkerIndex = value.indexOf(
-    OFFER_FRAGMENT_MARKER,
-    firstMarkerIndex + OFFER_FRAGMENT_MARKER.length,
-  );
-  if (secondMarkerIndex !== -1) {
-    throw new Error("pairing offer URL contains multiple offer values");
-  }
-  return value.slice(firstMarkerIndex + OFFER_FRAGMENT_MARKER.length).trim();
-}
-
-function extractOfferPayload(urlOrFragment: string): string {
-  const value = urlOrFragment.trim();
-  const queryValues = queryOfferValues(parsedUrl(value));
-  if (queryValues.length > 1) {
-    throw new Error("pairing offer URL contains multiple offer values");
-  }
-  const queryValue = queryValues[0];
-  const fragmentValue = fragmentOfferValue(value);
-  if (queryValue !== undefined && fragmentValue !== null) {
-    throw new Error("pairing offer URL contains multiple offer values");
-  }
-  const encoded = queryValue ?? fragmentValue;
-  if (encoded === undefined || encoded === null) {
-    throw new Error("pairing offer URL is missing offer payload");
-  }
-  return encoded.trim();
 }
 
 function evaluateConnectionOfferTrust(

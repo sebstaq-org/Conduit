@@ -49,29 +49,46 @@ function presenceClients(connectedClients: number): DesktopPresenceSnapshot {
   };
 }
 
+function mobileConnection(
+  connectedClients: number,
+): DesktopDaemonStatus["mobileConnection"] {
+  if (connectedClients > 0) {
+    return {
+      connectionId: "conn_test",
+      generation: 1,
+      lastError: null,
+      staleAt: "2026-04-25T00:00:45Z",
+      status: "connected",
+      transport: "relay",
+      verifiedAt: "2026-04-25T00:00:00Z",
+    };
+  }
+  return {
+    connectionId: null,
+    generation: null,
+    lastError: null,
+    staleAt: null,
+    status: "idle",
+    transport: "relay",
+    verifiedAt: null,
+  };
+}
+
 function healthyStatus(connectedClients: number): DesktopDaemonStatus {
   const presence = presenceClients(connectedClients);
-  const mobileConnection = {
-    connectionId: connectedClients > 0 ? "conn_test" : null,
-    generation: connectedClients > 0 ? 1 : null,
-    lastError: null,
-    staleAt: connectedClients > 0 ? "2026-04-25T00:00:45Z" : null,
-    status: connectedClients > 0 ? ("connected" as const) : ("idle" as const),
-    transport: "relay" as const,
-    verifiedAt: connectedClients > 0 ? "2026-04-25T00:00:00Z" : null,
-  };
+  const connection = mobileConnection(connectedClients);
   return {
     appBaseUrl: "conduit://pair",
     backendHealthy: true,
     daemon: {
-      mobileConnection,
+      mobileConnection: connection,
       pairingConfigured: true,
       presence,
       relayEndpoint: "ws://relay.test",
       serverId: "srv_host",
     },
     lastExit: null,
-    mobileConnection,
+    mobileConnection: connection,
     pairingConfigured: true,
     pid: 123,
     presence,

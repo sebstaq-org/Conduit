@@ -335,6 +335,8 @@ export default defineConfig({
         "packages/cloudflare-relay/src/serviceRelayMutationScenario.ts",
         "packages/cloudflare-relay/src/serviceRelayProcess.ts",
         "packages/cloudflare-relay/src/serviceRelayTestUtils.ts",
+        "packages/cloudflare-relay/src/serviceRelayE2eScenarios.ts",
+        "packages/cloudflare-relay/src/serviceRelayExpiredHandshake.ts",
         "packages/cloudflare-relay/src/relayTestHarness.ts",
         "packages/cloudflare-relay/src/relayLargeFrameScenario.ts",
         "packages/cloudflare-relay/src/relayTestHarnessCore.ts",

@@ -61,6 +61,15 @@ function daemonNeedsRecovery(
   );
 }
 
+function presentationIndicator(
+  status: DesktopPairingStatusSnapshot | null,
+): ConnectionStatusKind {
+  if (status !== null) {
+    return indicatorForMobileConnection(status.mobileConnection);
+  }
+  return "idle";
+}
+
 function desktopPairingPresentation({
   actionError,
   pending,
@@ -93,13 +102,9 @@ function desktopPairingPresentation({
   const connectedClientCount = connectedPresenceClients(
     status?.presence ?? null,
   );
-  const indicator =
-    status === null
-      ? "idle"
-      : indicatorForMobileConnection(status.mobileConnection);
   return {
     connectedClientCount,
-    indicator,
+    indicator: presentationIndicator(status),
     recoveryVisible: false,
     showMobilePairing: true,
   };

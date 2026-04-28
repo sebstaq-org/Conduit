@@ -108,7 +108,9 @@ describe("connection offer parser rejection", () => {
       ),
     ).toThrow(/authorization/);
   });
+});
 
+describe("connection offer time rejection", () => {
   it("rejects expired offers", () => {
     expect(() =>
       readConnectionOffer(

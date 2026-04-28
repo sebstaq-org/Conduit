@@ -1,13 +1,14 @@
 import {
   CLOSE_BUFFER_LIMIT,
-  CLOSE_NORMAL,
   CLOSE_POLICY,
   CLOSE_REPLACED,
-  MAX_BUFFERED_BYTES,
   MAX_FRAME_BYTES,
 } from "./limits.js";
 import { frameBytes } from "./frames.js";
+import { flushClientBuffer } from "./relayBuffer.js";
+import { handleRelayClientMessage } from "./relayClientMessages.js";
 import { emptySnapshot } from "./relayState.js";
+import { closeDataSocketForTest } from "./relayTestControls.js";
 import { safeClose, safeSend } from "./socketSafety.js";
 import {
   relayProtocolForResponse,
@@ -19,6 +20,7 @@ import {
   connectionFor,
   deleteIfIdle,
   notifyControl,
+  notifyPendingClients,
 } from "./relayConnectionLifecycle.js";
 import type { RelayConnection } from "./relayState.js";
 import type { RelayMessage } from "./socketSafety.js";
@@ -32,7 +34,7 @@ class RelayDurableObject {
     const socketKind = url.searchParams.get("socketKind");
     const connectionId = url.searchParams.get("connectionId") ?? undefined;
     if (socketKind === "testCloseData" && connectionId !== undefined) {
-      return this.testCloseDataSocket(connectionId);
+      return closeDataSocketForTest(this.connections, connectionId);
     }
     if (socketKind === "testSnapshot") {
       return Response.json(this.testSnapshot);
@@ -49,15 +51,6 @@ class RelayDurableObject {
     }
     return new Response("invalid relay socket", { status: 400 });
   }
-  private testCloseDataSocket(connectionId: string): Response {
-    const connection = this.connections.get(connectionId);
-    safeClose(
-      connection?.dataSocket ?? null,
-      CLOSE_POLICY,
-      "relay test closed data socket",
-    );
-    return Response.json({ ok: true });
-  }
   private acceptControlSocket(protocol: string): Response {
     const sockets = new WebSocketPair();
     const client = sockets[0];
@@ -66,7 +59,7 @@ class RelayDurableObject {
     safeClose(this.controlSocket, CLOSE_REPLACED, "control socket replaced");
     this.controlSocket = server;
     this.testSnapshot.controlSocketCount += 1;
-    this.notifyPendingClients();
+    notifyPendingClients(this.connections, this.controlSocket);
     server.addEventListener("close", () => {
       if (this.controlSocket === server) {
         this.controlSocket = null;
@@ -78,15 +71,6 @@ class RelayDurableObject {
       }
     });
     return websocketResponse(client, protocol);
-  }
-
-  private notifyPendingClients(): void {
-    for (const [connectionId, { clientSocket, dataSocket }] of this
-      .connections) {
-      if (clientSocket !== null && dataSocket === null) {
-        notifyControl(this.controlSocket, "client_waiting", connectionId);
-      }
-    }
   }
 
   private acceptClientSocket(connectionId: string, protocol: string): Response {
@@ -144,7 +128,12 @@ class RelayDurableObject {
     connection.state = { kind: "connected", serverResponded: false };
     this.testSnapshot.dataSocketCount += 1;
     clearPendingTimer(connection);
-    this.flushClientBuffer(connectionId, connection);
+    flushClientBuffer({
+      connection,
+      connectionId,
+      connections: this.connections,
+      controlSocket: this.controlSocket,
+    });
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
       this.handleDataMessage(connectionId, server, event.data);
     });
@@ -163,48 +152,15 @@ class RelayDurableObject {
     message: RelayMessage,
   ): void {
     const connection = connectionFor(this.connections, connectionId);
-    if (connection.clientSocket !== socket) {
-      return;
-    }
-    const bytes = frameBytes(message);
-    this.testSnapshot.clientMessageCount += 1;
-    this.testSnapshot.totalClientBytes += bytes;
-    if (bytes > MAX_FRAME_BYTES) {
-      safeClose(
-        connection.clientSocket,
-        CLOSE_BUFFER_LIMIT,
-        "relay frame too large",
-      );
-      return;
-    }
-    if (connection.dataSocket !== null) {
-      if (
-        connection.state.kind === "connected" &&
-        connection.state.serverResponded
-      ) {
-        this.recycleDataSocket(connectionId, connection);
-        this.queueClientMessage(
-          connectionId,
-          connection,
-          message,
-          bytes,
-          false,
-        );
-        notifyControl(this.controlSocket, "data_closed", connectionId);
-        notifyControl(this.controlSocket, "client_waiting", connectionId);
-        return;
-      }
-      if (safeSend(connection.dataSocket, message)) {
-        return;
-      }
-      connection.dataSocket = null;
-      connection.state = { kind: "waitingForData" };
-      this.queueClientMessage(connectionId, connection, message, bytes, false);
-      notifyControl(this.controlSocket, "data_closed", connectionId);
-      notifyControl(this.controlSocket, "client_waiting", connectionId);
-      return;
-    }
-    this.queueClientMessage(connectionId, connection, message, bytes);
+    handleRelayClientMessage({
+      connection,
+      connectionId,
+      connections: this.connections,
+      controlSocket: this.controlSocket,
+      message,
+      socket,
+      snapshot: this.testSnapshot,
+    });
   }
 
   private handleDataMessage(
@@ -248,54 +204,6 @@ class RelayDurableObject {
     connection.state = { kind: "connected", serverResponded: true };
   }
 
-  private queueClientMessage(
-    connectionId: string,
-    connection: RelayConnection,
-    message: RelayMessage,
-    bytes: number,
-    notifyWaiting = true,
-  ): void {
-    if (connection.bufferedBytes + bytes > MAX_BUFFERED_BYTES) {
-      safeClose(
-        connection.clientSocket,
-        CLOSE_BUFFER_LIMIT,
-        "relay buffered data limit exceeded",
-      );
-      return;
-    }
-    connection.clientBuffer.push({ bytes, message });
-    connection.bufferedBytes += bytes;
-    if (notifyWaiting) {
-      notifyControl(this.controlSocket, "client_waiting", connectionId);
-    }
-    armPendingTimer(this.connections, connectionId, connection);
-  }
-
-  private flushClientBuffer(
-    connectionId: string,
-    connection: RelayConnection,
-  ): void {
-    if (connection.dataSocket === null) {
-      return;
-    }
-    while (connection.clientBuffer.length > 0) {
-      const queued = connection.clientBuffer[0];
-      if (queued === undefined) {
-        break;
-      }
-      if (!safeSend(connection.dataSocket, queued.message)) {
-        connection.dataSocket = null;
-        connection.state = { kind: "waitingForData" };
-        notifyControl(this.controlSocket, "data_closed", connectionId);
-        armPendingTimer(this.connections, connectionId, connection);
-        return;
-      }
-      connection.clientBuffer.shift();
-      connection.bufferedBytes -= queued.bytes;
-    }
-    connection.bufferedBytes = 0;
-  }
-
   private handleClientClose(connectionId: string, socket: WebSocket): void {
     const connection = this.connections.get(connectionId);
     if (connection?.clientSocket !== socket) {
@@ -326,19 +234,6 @@ class RelayDurableObject {
       armPendingTimer(this.connections, connectionId, connection);
     }
     deleteIfIdle(this.connections, connectionId, connection);
-  }
-
-  private recycleDataSocket(
-    connectionId: string,
-    connection: RelayConnection,
-  ): void {
-    safeClose(
-      connection.dataSocket,
-      CLOSE_NORMAL,
-      "relay data socket recycled before client command",
-    );
-    connection.dataSocket = null;
-    connection.state = { kind: "waitingForData" };
   }
 }
 

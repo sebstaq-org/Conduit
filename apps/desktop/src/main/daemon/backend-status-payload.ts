@@ -47,26 +47,37 @@ function stringValue(value: unknown): string | null {
   return null;
 }
 
-function readMobileConnection(value: unknown): DesktopMobileConnection | null {
-  if (!isRecord(value)) {
+function generationValue(value: unknown): number | null {
+  if (value === null) {
     return null;
   }
+  return numberValue(value);
+}
+
+function isMobileConnectionStatus(
+  status: string | null,
+): status is DesktopMobileConnection["status"] {
+  return (
+    status === "idle" ||
+    status === "waiting" ||
+    status === "connected" ||
+    status === "reconnecting" ||
+    status === "disconnected"
+  );
+}
+
+function readMobileConnectionFields(
+  value: Record<string, unknown>,
+): DesktopMobileConnection | null {
   const status = stringValue(value.status);
   const connectionId = optionalStringValue(value.connectionId);
-  const generation =
-    value.generation === null ? null : numberValue(value.generation);
+  const generation = generationValue(value.generation);
   const lastError = optionalStringValue(value.lastError);
   const staleAt = optionalStringValue(value.staleAt);
   const transport = stringValue(value.transport);
   const verifiedAt = optionalStringValue(value.verifiedAt);
   if (
-    !(
-      status === "idle" ||
-      status === "waiting" ||
-      status === "connected" ||
-      status === "reconnecting" ||
-      status === "disconnected"
-    ) ||
+    !isMobileConnectionStatus(status) ||
     connectionId === undefined ||
     (generation === null && value.generation !== null) ||
     lastError === undefined ||
@@ -85,6 +96,13 @@ function readMobileConnection(value: unknown): DesktopMobileConnection | null {
     transport,
     verifiedAt,
   };
+}
+
+function readMobileConnection(value: unknown): DesktopMobileConnection | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  return readMobileConnectionFields(value);
 }
 
 function readDaemonStatusPayload(value: unknown): DaemonStatusPayload | null {
