@@ -20,6 +20,7 @@ const desktopEnvKeys = [
   "CONDUIT_DESKTOP_STORE_PATH",
   "CONDUIT_DESKTOP_WEB_DIR",
   "CONDUIT_FRONTEND_URL",
+  "EXPO_PUBLIC_SENTRY_DSN",
 ] as const;
 
 function withDesktopEnv(env: Record<string, string>): void {
@@ -51,6 +52,7 @@ function expectManagedUrlConfig(): void {
     logProfile: "dev",
     relayEndpoint: "http://127.0.0.1:8787/relay",
     serviceBinPath: "/repo/backend/service-bin",
+    sentryDsn: null,
   });
 }
 
@@ -62,6 +64,7 @@ function expectManagedStaticConfig(): void {
       webDir: "/repo/stage/web",
     },
     logProfile: "stage",
+    sentryDsn: "https://public@example.com/1",
   });
 }
 
@@ -88,7 +91,18 @@ describe("desktop daemon config", () => {
     withManagedDesktopEnv();
     process.env.CONDUIT_DESKTOP_LOG_PROFILE = "stage";
     process.env.CONDUIT_DESKTOP_WEB_DIR = "/repo/stage/web";
+    process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
 
     expectManagedStaticConfig();
+  });
+
+  it("requires Sentry DSN for stage desktop logging", () => {
+    withManagedDesktopEnv();
+    process.env.CONDUIT_DESKTOP_LOG_PROFILE = "stage";
+    process.env.CONDUIT_DESKTOP_WEB_DIR = "/repo/stage/web";
+
+    expect(() => readDesktopDaemonConfig()).toThrow(
+      "EXPO_PUBLIC_SENTRY_DSN is required for stage desktop Sentry logging",
+    );
   });
 });

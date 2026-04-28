@@ -1,7 +1,8 @@
 import { clipboard, ipcMain } from "electron";
 import { fetchDesktopPairingOffer } from "./pairing.js";
+import { createDesktopRuntimeConfig } from "./runtime-config.js";
 import type { DesktopDaemonController } from "./backend.js";
-import type { DesktopDaemonConfig, DesktopRuntimeConfig } from "./types.js";
+import type { DesktopDaemonConfig } from "./types.js";
 
 const desktopIpcChannels = {
   copyText: "conduitDesktop:copyText",
@@ -10,15 +11,6 @@ const desktopIpcChannels = {
   getRuntimeConfig: "conduitDesktop:getRuntimeConfig",
   restartDaemon: "conduitDesktop:restartDaemon",
 } as const;
-
-function runtimeConfig(config: DesktopDaemonConfig): DesktopRuntimeConfig {
-  return {
-    clientLogUrl: `http://${config.backendHost}:${String(config.backendPort)}/api/client-log`,
-    logProfile: config.logProfile,
-    runtimeSurface: "desktop_app",
-    sessionWsUrl: `ws://${config.backendHost}:${String(config.backendPort)}/api/session`,
-  };
-}
 
 function bindDesktopDaemonIpc(request: {
   readonly config: DesktopDaemonConfig;
@@ -32,7 +24,7 @@ function bindDesktopDaemonIpc(request: {
     return true;
   });
   ipcMain.on(desktopIpcChannels.getRuntimeConfig, (event) => {
-    event.returnValue = runtimeConfig(request.config);
+    event.returnValue = createDesktopRuntimeConfig(request.config);
   });
   ipcMain.handle(desktopIpcChannels.getDaemonStatus, async () => {
     const status = await request.daemon.status();

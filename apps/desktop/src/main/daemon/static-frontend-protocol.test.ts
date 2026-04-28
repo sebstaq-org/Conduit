@@ -28,6 +28,7 @@ function staticConfig(webDir: string): DesktopDaemonConfig {
     providerFixtures: null,
     relayEndpoint: "https://relay.example.test",
     serviceBinPath: "/repo/service-bin",
+    sentryDsn: "https://public@example.com/1",
     storePath: null,
   };
 }
@@ -67,6 +68,7 @@ describe("desktop static frontend protocol", () => {
     const text = await response.text();
     expect(text).toContain("globalThis.CONDUIT_RUNTIME_CONFIG");
     expect(text).toContain('"runtimeSurface":"desktop_app"');
+    expect(text).toContain('"sentryDsn":"https://public@example.com/1"');
     expect(text).toContain("ws://127.0.0.1:4274/api/session");
   });
 
