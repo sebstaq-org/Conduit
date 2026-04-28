@@ -1,5 +1,6 @@
 import {
   CLOSE_BUFFER_LIMIT,
+  CLOSE_NORMAL,
   CLOSE_POLICY,
   CLOSE_REPLACED,
   MAX_BUFFERED_BYTES,
@@ -94,6 +95,9 @@ class RelayDurableObject {
     const server = sockets[1];
     server.accept();
     const connection = connectionFor(this.connections, connectionId);
+    if (connection.clientSocket !== null) {
+      notifyControl(this.controlSocket, "client_closed", connectionId);
+    }
     this.replaceClientSocket(connection);
     connection.clientSocket = server;
     this.testSnapshot.clientSocketCount += 1;
@@ -123,6 +127,7 @@ class RelayDurableObject {
       "relay data socket replaced by client reconnect",
     );
     connection.dataSocket = null;
+    connection.dataSocketHasSentToClient = false;
     connection.clientBuffer.length = 0;
     connection.bufferedBytes = 0;
     clearPendingTimer(connection);
@@ -136,9 +141,10 @@ class RelayDurableObject {
     const connection = connectionFor(this.connections, connectionId);
     safeClose(connection.dataSocket, CLOSE_REPLACED, "data socket replaced");
     connection.dataSocket = server;
+    connection.dataSocketHasSentToClient = false;
     this.testSnapshot.dataSocketCount += 1;
     clearPendingTimer(connection);
-    this.flushClientBuffer(connection);
+    this.flushClientBuffer(connectionId, connection);
     server.addEventListener("message", (event: MessageEvent<RelayMessage>) => {
       this.handleDataMessage(connectionId, server, event.data);
     });
@@ -172,7 +178,17 @@ class RelayDurableObject {
       return;
     }
     if (connection.dataSocket !== null) {
-      safeSend(connection.dataSocket, message);
+      if (connection.dataSocketHasSentToClient) {
+        this.recycleDataSocket(connectionId, connection);
+        this.queueClientMessage(connectionId, connection, message, bytes);
+        return;
+      }
+      if (safeSend(connection.dataSocket, message)) {
+        return;
+      }
+      connection.dataSocket = null;
+      connection.dataSocketHasSentToClient = false;
+      this.queueClientMessage(connectionId, connection, message, bytes);
       return;
     }
     this.queueClientMessage(connectionId, connection, message, bytes);
@@ -202,7 +218,21 @@ class RelayDurableObject {
       safeClose(connection.dataSocket, CLOSE_POLICY, "relay client missing");
       return;
     }
-    safeSend(connection.clientSocket, message);
+    if (!safeSend(connection.clientSocket, message)) {
+      connection.clientSocket = null;
+      connection.clientBuffer.length = 0;
+      connection.bufferedBytes = 0;
+      clearPendingTimer(connection);
+      notifyControl(this.controlSocket, "client_closed", connectionId);
+      safeClose(
+        connection.dataSocket,
+        CLOSE_POLICY,
+        "relay client socket closed",
+      );
+      deleteIfIdle(this.connections, connectionId, connection);
+      return;
+    }
+    connection.dataSocketHasSentToClient = true;
   }
 
   private queueClientMessage(
@@ -225,14 +255,28 @@ class RelayDurableObject {
     armPendingTimer(this.connections, connectionId, connection);
   }
 
-  private flushClientBuffer(connection: RelayConnection): void {
+  private flushClientBuffer(
+    connectionId: string,
+    connection: RelayConnection,
+  ): void {
     if (connection.dataSocket === null) {
       return;
     }
-    for (const queued of connection.clientBuffer) {
-      safeSend(connection.dataSocket, queued.message);
+    while (connection.clientBuffer.length > 0) {
+      const queued = connection.clientBuffer[0];
+      if (queued === undefined) {
+        break;
+      }
+      if (!safeSend(connection.dataSocket, queued.message)) {
+        connection.dataSocket = null;
+        connection.dataSocketHasSentToClient = false;
+        notifyControl(this.controlSocket, "data_closed", connectionId);
+        armPendingTimer(this.connections, connectionId, connection);
+        return;
+      }
+      connection.clientBuffer.shift();
+      connection.bufferedBytes -= queued.bytes;
     }
-    connection.clientBuffer.length = 0;
     connection.bufferedBytes = 0;
   }
 
@@ -260,18 +304,25 @@ class RelayDurableObject {
       return;
     }
     connection.dataSocket = null;
+    connection.dataSocketHasSentToClient = false;
     notifyControl(this.controlSocket, "data_closed", connectionId);
     if (connection.clientSocket !== null) {
-      safeClose(
-        connection.clientSocket,
-        CLOSE_POLICY,
-        "relay data socket closed",
-      );
-      connection.clientSocket = null;
-      connection.clientBuffer.length = 0;
-      connection.bufferedBytes = 0;
+      armPendingTimer(this.connections, connectionId, connection);
     }
     deleteIfIdle(this.connections, connectionId, connection);
+  }
+
+  private recycleDataSocket(
+    connectionId: string,
+    connection: RelayConnection,
+  ): void {
+    safeClose(
+      connection.dataSocket,
+      CLOSE_NORMAL,
+      "relay data socket recycled before client command",
+    );
+    connection.dataSocket = null;
+    connection.dataSocketHasSentToClient = false;
   }
 }
 

@@ -15,11 +15,13 @@ function safeClose(
   }
 }
 
-function safeSend(socket: WorkerWebSocket, message: RelayMessage): void {
+function safeSend(socket: WorkerWebSocket, message: RelayMessage): boolean {
   try {
     socket.send(message);
+    return true;
   } catch {
     safeClose(socket, CLOSE_POLICY, "relay socket send failed");
+    return false;
   }
 }
 

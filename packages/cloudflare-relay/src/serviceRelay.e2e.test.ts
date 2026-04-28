@@ -123,7 +123,9 @@ describe("service-bin relay runtime e2e", () => {
     const offer = await fetchOffer(currentRun.port);
     const client = createRelaySessionClient({ offer });
 
-    await expect(client.updatePresence(mobilePresence())).resolves.toBeUndefined();
+    await expect(
+      client.updatePresence(mobilePresence()),
+    ).resolves.toBeUndefined();
     await expect(client.getSettings()).resolves.toMatchObject({});
     await expectDaemonStatusInvariant(currentRun.port, true);
 
@@ -135,7 +137,9 @@ describe("service-bin relay runtime e2e", () => {
 
     currentRun = await restartRelayServiceRun(currentRun, relayEndpoint);
     await waitForHealth(currentRun.port);
-    await expect(client.updatePresence(mobilePresence())).resolves.toBeUndefined();
+    await expect(
+      client.updatePresence(mobilePresence()),
+    ).resolves.toBeUndefined();
     await expect(client.getSettings()).resolves.toMatchObject({});
     await expectDaemonStatusInvariant(currentRun.port, true);
     client.close();
@@ -243,6 +247,23 @@ describe("service-bin relay runtime e2e", () => {
     },
     120000,
   );
+
+  const liveEndpointIt = liveRelayEndpoint !== undefined ? it : it.skip;
+  liveEndpointIt(
+    "keeps deployed Cloudflare relay presence connected across real commands",
+    async () => {
+      await runLiveServicePresenceSmoke(liveRelayEndpoint ?? "");
+    },
+    120000,
+  );
+
+  liveEndpointIt(
+    "survives deployed Cloudflare relay reconnect churn",
+    async () => {
+      await runLiveServiceReconnectChurn(liveRelayEndpoint ?? "");
+    },
+    180000,
+  );
 });
 
 async function runServiceRelayScenario(
@@ -261,7 +282,12 @@ async function runServiceRelayScenario(
     onTelemetryEvent: (event) => telemetry.push(event),
   });
 
+  await expect(
+    client.updatePresence(mobilePresence()),
+  ).resolves.toBeUndefined();
+  await expectDaemonStatusInvariant(currentRun.port, true);
   await expect(client.getSettings()).resolves.toMatchObject({});
+  await expectDaemonStatusInvariant(currentRun.port, true);
   await expect(client.listProjects()).resolves.toMatchObject({});
   await expect(client.getSessionGroups()).resolves.toMatchObject({});
   let sessionIndexEvents = 0;
@@ -275,8 +301,11 @@ async function runServiceRelayScenario(
   await closeRelayDataSocket(relayEndpoint, relayAdminToken, offer);
   await delay(300);
 
+  await expectDaemonStatusInvariant(currentRun.port, true);
   await expect(client.getSettings()).resolves.toMatchObject({});
+  await expectDaemonStatusInvariant(currentRun.port, true);
   await closeCapturedSockets(capturedSockets);
+  await expectDaemonStatusInvariant(currentRun.port, false);
 
   currentRun = await restartRelayServiceRun(currentRun, relayEndpoint);
   await waitForHealth(currentRun.port);
@@ -285,6 +314,61 @@ async function runServiceRelayScenario(
 
   expect(sessionIndexEvents).toBeGreaterThanOrEqual(0);
   expect(JSON.stringify(telemetry)).not.toContain("PLAINTEXT");
+}
+
+async function runLiveServicePresenceSmoke(
+  relayEndpoint: string,
+): Promise<void> {
+  currentRun = await startRelayServiceRun(relayEndpoint);
+  await waitForHealth(currentRun.port);
+
+  const offer = await fetchOffer(currentRun.port);
+  const telemetry: unknown[] = [];
+  const client = createRelaySessionClient({
+    offer,
+    onTelemetryEvent: (event) => telemetry.push(event),
+  });
+
+  await expect(
+    client.updatePresence(mobilePresence()),
+  ).resolves.toBeUndefined();
+  await expectDaemonStatusInvariant(currentRun.port, true);
+  await expect(client.getSettings()).resolves.toMatchObject({});
+  await expectDaemonStatusInvariant(currentRun.port, true);
+  await expect(client.listProjects()).resolves.toMatchObject({});
+  await expectDaemonStatusInvariant(currentRun.port, true);
+
+  client.close();
+  await expectDaemonStatusInvariant(currentRun.port, false);
+  expect(JSON.stringify(telemetry)).not.toContain("PLAINTEXT");
+}
+
+async function runLiveServiceReconnectChurn(
+  relayEndpoint: string,
+): Promise<void> {
+  currentRun = await startRelayServiceRun(relayEndpoint);
+  await waitForHealth(currentRun.port);
+  const offer = await fetchOffer(currentRun.port);
+
+  for (let index = 0; index < 20; index += 1) {
+    const client = createRelaySessionClient({ offer });
+    await expect(
+      client.updatePresence({
+        clientId: `live-reconnect-mobile-${index + 1}`,
+        deviceKind: "mobile",
+        displayName: `Live Reconnect ${index + 1}`,
+      }),
+      `live reconnect ${index + 1} presence update`,
+    ).resolves.toBeUndefined();
+    await expectDaemonStatusInvariant(currentRun.port, true);
+    await expect(
+      client.getSettings(),
+      `live reconnect ${index + 1} settings`,
+    ).resolves.toMatchObject({});
+    await expectDaemonStatusInvariant(currentRun.port, true);
+    client.close();
+    await expectDaemonStatusInvariant(currentRun.port, false);
+  }
 }
 
 function startLocalRelayServer(): Promise<string> {
@@ -377,10 +461,9 @@ async function fetchDaemonStatusSummary(port: number): Promise<{
     throw new TypeError("daemon status did not include mobilePeerConnected");
   }
   const mobileConnectedRows = payload.presence.clients.filter(
-    (client) =>
-      client.deviceKind === "mobile" && client.connected === true,
+    (client) => client.deviceKind === "mobile" && client.connected === true,
   ).length;
-  if (payload.mobilePeerConnected !== (mobileConnectedRows > 0)) {
+  if (payload.mobilePeerConnected !== mobileConnectedRows > 0) {
     throw new Error(
       `daemon status invariant failed: mobilePeerConnected=${String(
         payload.mobilePeerConnected,

@@ -10,6 +10,7 @@ interface RelayConnection {
   bufferedBytes: number;
   readonly clientBuffer: QueuedMessage[];
   clientSocket: WorkerWebSocket | null;
+  dataSocketHasSentToClient: boolean;
   dataSocket: WorkerWebSocket | null;
   pendingTimer: ReturnType<typeof setTimeout> | null;
 }

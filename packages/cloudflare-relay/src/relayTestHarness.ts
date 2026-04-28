@@ -119,10 +119,6 @@ async function runRelayRoundtripScenario(
   data.close();
   await waitForEnvelope(control, "data_closed", connectionId);
 
-  const reconnectClientWaiting = waitForMessage(
-    control,
-    "roundtrip reconnect control",
-  );
   const reconnectClient = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
       capability: clientCapability,
@@ -132,10 +128,8 @@ async function runRelayRoundtripScenario(
     }),
     clientCapability,
   );
-  expect(parseRelayEnvelope(await reconnectClientWaiting)).toMatchObject({
-    connectionId,
-    type: "client_waiting",
-  });
+  await waitForEnvelope(control, "client_closed", connectionId);
+  await waitForEnvelope(control, "client_waiting", connectionId);
   const reconnectHandshake = await createRelayClientHandshake({
     context,
     daemonPublicKeyB64: daemonKeys.publicKeyB64,

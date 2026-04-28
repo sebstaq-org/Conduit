@@ -145,6 +145,11 @@ impl PresenceStore {
             .clients
             .lock()
             .map_err(|error| format!("presence store is unavailable: {error}"))?;
+        if let Some(session_id) = session_id {
+            for existing in clients.values_mut() {
+                existing.active_sessions.remove(session_id);
+            }
+        }
         let client = clients
             .entry(client_id.clone())
             .or_insert_with(|| PresenceClient {

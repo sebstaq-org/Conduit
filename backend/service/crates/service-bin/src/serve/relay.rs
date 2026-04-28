@@ -2,7 +2,9 @@
 
 use super::actor::RuntimeActor;
 use super::presence::PresenceStore;
-use super::text_connection::{TextConnectionRuntime, run_text_connection};
+use super::text_connection::{
+    SharedWatchState, TextConnectionRuntime, WatchState, run_text_connection,
+};
 use crate::identity::load_daemon_secret_key_b64;
 use futures_util::{SinkExt, StreamExt};
 use remote_access::{
@@ -71,13 +73,13 @@ impl RelayControlBackoff {
 struct ConnectorState {
     active_connections: Mutex<HashMap<String, ActiveRelayConnection>>,
     channels: Mutex<std::collections::HashMap<String, RelayCipherChannel>>,
+    watches: Mutex<HashMap<String, SharedWatchState>>,
     next_generation: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
 struct ActiveRelayConnection {
     generation: u64,
-    presence_session_id: String,
 }
 
 #[derive(Clone)]
@@ -303,9 +305,6 @@ async fn handle_data_socket_finished(
     active_connection: &ActiveRelayConnection,
     result: RelayResult<()>,
 ) {
-    runtime
-        .presence
-        .mark_session_closed(&active_connection.presence_session_id);
     remove_active_connection(runtime, connection_id, Some(active_connection.generation)).await;
     if let Err(error) = result {
         tracing::warn!(
@@ -323,9 +322,16 @@ async fn handle_data_closed(runtime: &RelayRuntime, connection_id: &str) {
 
 async fn handle_client_closed(runtime: &RelayRuntime, connection_id: &str) {
     handle_data_closed(runtime, connection_id).await;
+    runtime.presence.mark_session_closed(connection_id);
     runtime
         .connector_state
         .channels
+        .lock()
+        .await
+        .remove(connection_id);
+    runtime
+        .connector_state
+        .watches
         .lock()
         .await
         .remove(connection_id);
@@ -339,10 +345,7 @@ async fn mark_connection_active(
         .next_generation
         .fetch_add(1, Ordering::Relaxed)
         .saturating_add(1);
-    let active_connection = ActiveRelayConnection {
-        generation,
-        presence_session_id: format!("{connection_id}#{generation}"),
-    };
+    let active_connection = ActiveRelayConnection { generation };
     let mut active = connector_state.active_connections.lock().await;
     active.insert(connection_id.to_owned(), active_connection.clone());
     active_connection
@@ -353,7 +356,7 @@ async fn remove_active_connection(
     connection_id: &str,
     generation: Option<u64>,
 ) {
-    let removed = {
+    let _removed = {
         let mut active = runtime.connector_state.active_connections.lock().await;
         let should_remove = active.get(connection_id).is_some_and(|active| {
             generation.is_none_or(|generation| active.generation == generation)
@@ -364,11 +367,6 @@ async fn remove_active_connection(
             None
         }
     };
-    if let Some(removed) = removed {
-        runtime
-            .presence
-            .mark_session_closed(&removed.presence_session_id);
-    }
 }
 
 #[expect(
@@ -382,7 +380,7 @@ async fn run_data_socket(
     routing: RelayRouting,
     runtime: RelayRuntime,
     connection_id: &str,
-    active_connection: ActiveRelayConnection,
+    _active_connection: ActiveRelayConnection,
 ) -> RelayResult<()> {
     let now = OffsetDateTime::now_utc();
     let Some(offer) = lookup_relay_offer(home, connection_id, now)? else {
@@ -429,11 +427,13 @@ async fn run_data_socket(
     let (inbound_text, inbound_receiver) = mpsc::unbounded_channel();
     let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel();
     let runtime_connection_id = super::NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+    let watches = relay_watch_state(&runtime.connector_state, connection_id).await;
     let runtime_task = tokio::spawn(run_text_connection(
         TextConnectionRuntime::relay(
             runtime.actor.clone(),
             Arc::clone(&runtime.presence),
-            active_connection.presence_session_id.clone(),
+            connection_id.to_owned(),
+            watches,
         ),
         inbound_receiver,
         outbound_text,
@@ -462,9 +462,11 @@ async fn run_data_socket(
                     &text,
                 )? {
                     cipher = reset_cipher;
+                    cache_relay_cipher(&runtime, connection_id, &cipher).await;
                     continue;
                 }
                 let plaintext = cipher.decrypt_utf8(&text)?;
+                cache_relay_cipher(&runtime, connection_id, &cipher).await;
                 if inbound_text.send(plaintext).is_err() {
                     break;
                 }
@@ -474,6 +476,7 @@ async fn run_data_socket(
                     break;
                 };
                 let frame = cipher.encrypt_utf8(&outbound)?;
+                cache_relay_cipher(&runtime, connection_id, &cipher).await;
                 sender.send(Message::Text(frame.into())).await?;
             }
         }
@@ -486,6 +489,31 @@ async fn run_data_socket(
         .await
         .insert(connection_id.to_owned(), cipher);
     Ok(())
+}
+
+async fn cache_relay_cipher(
+    runtime: &RelayRuntime,
+    connection_id: &str,
+    cipher: &RelayCipherChannel,
+) {
+    runtime
+        .connector_state
+        .channels
+        .lock()
+        .await
+        .insert(connection_id.to_owned(), cipher.clone());
+}
+
+async fn relay_watch_state(
+    connector_state: &Arc<ConnectorState>,
+    connection_id: &str,
+) -> SharedWatchState {
+    let mut watches = connector_state.watches.lock().await;
+    Arc::clone(
+        watches
+            .entry(connection_id.to_owned())
+            .or_insert_with(|| Arc::new(Mutex::new(WatchState::default()))),
+    )
 }
 
 async fn open_relay_cipher(

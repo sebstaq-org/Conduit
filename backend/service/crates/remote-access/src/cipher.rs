@@ -27,6 +27,7 @@ pub struct RelayCipherContext {
 }
 
 /// Server-side relay cipher channel after accepting a client handshake.
+#[derive(Clone)]
 pub struct RelayCipherChannel {
     context: RelayCipherContext,
     decrypt_key: Aes256Gcm,

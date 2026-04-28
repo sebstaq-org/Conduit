@@ -12,8 +12,10 @@ use tokio::sync::{Mutex, mpsc};
 #[derive(Clone)]
 pub(super) struct TextConnectionRuntime {
     pub(super) actor: RuntimeActor,
+    pub(super) close_presence_on_connection_close: bool,
     pub(super) presence: Option<Arc<presence::PresenceStore>>,
     pub(super) presence_session_id: Option<String>,
+    pub(super) watches: Option<SharedWatchState>,
     pub(super) connection_kind: &'static str,
 }
 
@@ -21,8 +23,10 @@ impl TextConnectionRuntime {
     pub(super) fn direct(state: &ServeState) -> Self {
         Self {
             actor: state.actor.clone(),
+            close_presence_on_connection_close: true,
             presence: Some(Arc::clone(&state.presence)),
             presence_session_id: None,
+            watches: None,
             connection_kind: "direct",
         }
     }
@@ -31,17 +35,20 @@ impl TextConnectionRuntime {
         actor: RuntimeActor,
         presence: Arc<presence::PresenceStore>,
         presence_session_id: String,
+        watches: SharedWatchState,
     ) -> Self {
         Self {
             actor,
+            close_presence_on_connection_close: false,
             presence: Some(presence),
             presence_session_id: Some(presence_session_id),
+            watches: Some(watches),
             connection_kind: "relay",
         }
     }
 }
 
-type SharedWatchState = Arc<Mutex<WatchState>>;
+pub(super) type SharedWatchState = Arc<Mutex<WatchState>>;
 type OutboundSender = mpsc::UnboundedSender<OutboundFrame>;
 
 #[derive(Debug)]
@@ -59,11 +66,14 @@ pub(super) enum OutboundFrame {
     reason = "Connection loop coordinates inbound command frames, outbound runtime frames, and lifecycle telemetry."
 )]
 pub(super) async fn run_text_connection(
-    runtime: TextConnectionRuntime,
+    mut runtime: TextConnectionRuntime,
     mut inbound_receiver: mpsc::UnboundedReceiver<String>,
     outbound_text: mpsc::UnboundedSender<String>,
     connection_id: u64,
 ) {
+    if runtime.close_presence_on_connection_close && runtime.presence_session_id.is_none() {
+        runtime.presence_session_id = Some(format!("direct:{connection_id}"));
+    }
     tracing::info!(
         event_name = "session_socket.connection.open",
         source = "service-bin",
@@ -71,7 +81,10 @@ pub(super) async fn run_text_connection(
         connection_kind = runtime.connection_kind
     );
     let (outbound, mut outbound_receiver) = mpsc::unbounded_channel();
-    let watches = Arc::new(Mutex::new(WatchState::default()));
+    let watches = runtime
+        .watches
+        .clone()
+        .unwrap_or_else(|| Arc::new(Mutex::new(WatchState::default())));
     let event_forwarder = tokio::spawn(forward_live_events(
         runtime.actor.subscribe(),
         Arc::clone(&watches),
@@ -118,7 +131,8 @@ pub(super) async fn run_text_connection(
         }
     }
     event_forwarder.abort();
-    if let (Some(presence), Some(session_id)) = (
+    if let (true, Some(presence), Some(session_id)) = (
+        runtime.close_presence_on_connection_close,
         runtime.presence.as_ref(),
         runtime.presence_session_id.as_deref(),
     ) {
