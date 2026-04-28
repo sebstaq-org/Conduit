@@ -5,6 +5,15 @@ import type { DesktopPairingStatusSnapshot } from "./desktop-pairing-status";
 function healthyStatus(connectedClients: number): DesktopPairingStatusSnapshot {
   return {
     backendHealthy: true,
+    mobileConnection: {
+      connectionId: connectedClients > 0 ? "conn_test" : null,
+      generation: connectedClients > 0 ? 1 : null,
+      lastError: null,
+      staleAt: connectedClients > 0 ? "2026-04-25T00:00:45Z" : null,
+      status: connectedClients > 0 ? "connected" : "idle",
+      transport: "relay",
+      verifiedAt: connectedClients > 0 ? "2026-04-25T00:00:00Z" : null,
+    },
     pairingConfigured: true,
     presence: {
       clients: Array.from({ length: connectedClients }, (_value, index) => ({
@@ -122,6 +131,15 @@ it("surfaces recovery controls instead of daemon copy when backend is unavailabl
       pending: null,
       status: {
         backendHealthy: false,
+        mobileConnection: {
+          connectionId: null,
+          generation: null,
+          lastError: null,
+          staleAt: null,
+          status: "idle",
+          transport: "relay",
+          verifiedAt: null,
+        },
         pairingConfigured: false,
         presence: null,
         relayConfigured: true,

@@ -1,5 +1,6 @@
 use super::actor::RuntimeActor;
 use super::presence;
+use super::relay_session::RelaySessionManager;
 use super::wire::{ClientCommandFrame, server_event_frame_text, server_response_frame_text};
 use crate::serve::ServeState;
 use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
@@ -14,6 +15,7 @@ pub(super) struct TextConnectionRuntime {
     pub(super) actor: RuntimeActor,
     pub(super) close_presence_on_connection_close: bool,
     pub(super) presence: Option<Arc<presence::PresenceStore>>,
+    pub(super) relay_session: Option<RelayTextSession>,
     pub(super) presence_session_id: Option<String>,
     pub(super) watches: Option<SharedWatchState>,
     pub(super) connection_kind: &'static str,
@@ -25,6 +27,7 @@ impl TextConnectionRuntime {
             actor: state.actor.clone(),
             close_presence_on_connection_close: true,
             presence: Some(Arc::clone(&state.presence)),
+            relay_session: None,
             presence_session_id: None,
             watches: None,
             connection_kind: "direct",
@@ -35,12 +38,19 @@ impl TextConnectionRuntime {
         actor: RuntimeActor,
         presence: Arc<presence::PresenceStore>,
         presence_session_id: String,
+        generation: u64,
+        sessions: Arc<RelaySessionManager>,
         watches: SharedWatchState,
     ) -> Self {
         Self {
             actor,
             close_presence_on_connection_close: false,
             presence: Some(presence),
+            relay_session: Some(RelayTextSession {
+                connection_id: presence_session_id.clone(),
+                generation,
+                sessions,
+            }),
             presence_session_id: Some(presence_session_id),
             watches: Some(watches),
             connection_kind: "relay",
@@ -50,6 +60,13 @@ impl TextConnectionRuntime {
 
 pub(super) type SharedWatchState = Arc<Mutex<WatchState>>;
 type OutboundSender = mpsc::UnboundedSender<OutboundFrame>;
+
+#[derive(Clone)]
+pub(super) struct RelayTextSession {
+    connection_id: String,
+    generation: u64,
+    sessions: Arc<RelaySessionManager>,
+}
 
 #[derive(Debug)]
 pub(super) enum OutboundFrame {
@@ -207,6 +224,12 @@ async fn dispatch_client_frame(
             .lock()
             .await
             .apply_command(&command_name, &response.result);
+        if let Some(relay_session) = runtime.relay_session.as_ref() {
+            relay_session
+                .sessions
+                .mark_verified(&relay_session.connection_id, relay_session.generation)
+                .await;
+        }
     }
     log_command_finish(
         connection_id,

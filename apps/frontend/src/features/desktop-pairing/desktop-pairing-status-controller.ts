@@ -40,7 +40,7 @@ function pollIntervalMs(mode: PollMode): number {
 }
 
 function hasConnectedPresenceClient(status: DesktopDaemonStatus): boolean {
-  return status.presence?.clients.some((client) => client.connected) === true;
+  return status.mobileConnection.status === "connected";
 }
 
 function createPollContext(

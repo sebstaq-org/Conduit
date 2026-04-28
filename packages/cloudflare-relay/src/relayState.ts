@@ -6,13 +6,22 @@ interface QueuedMessage {
   readonly message: RelayMessage;
 }
 
+type RelayConnectionState =
+  | {
+      readonly kind: "waitingForData";
+    }
+  | {
+      readonly kind: "connected";
+      readonly serverResponded: boolean;
+    };
+
 interface RelayConnection {
   bufferedBytes: number;
   readonly clientBuffer: QueuedMessage[];
   clientSocket: WorkerWebSocket | null;
-  dataSocketHasSentToClient: boolean;
   dataSocket: WorkerWebSocket | null;
   pendingTimer: ReturnType<typeof setTimeout> | null;
+  state: RelayConnectionState;
 }
 
 interface RelayTestSnapshot {
@@ -38,4 +47,9 @@ function emptySnapshot(): RelayTestSnapshot {
 }
 
 export { emptySnapshot };
-export type { QueuedMessage, RelayConnection, RelayTestSnapshot };
+export type {
+  QueuedMessage,
+  RelayConnection,
+  RelayConnectionState,
+  RelayTestSnapshot,
+};

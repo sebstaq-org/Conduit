@@ -16,9 +16,9 @@ function connectionFor(
     bufferedBytes: 0,
     clientBuffer: [],
     clientSocket: null,
-    dataSocketHasSentToClient: false,
     dataSocket: null,
     pendingTimer: null,
+    state: { kind: "waitingForData" },
   };
   connections.set(connectionId, created);
   return created;

@@ -180,9 +180,9 @@ describe("service-bin relay runtime e2e", () => {
     await expect(winner.getSettings()).resolves.toMatchObject({});
     await expectDaemonStatusInvariant(currentRun.port, true);
 
-    clients.forEach((client) => {
+    for (const client of clients) {
       client.close();
-    });
+    }
     winner.close();
     await expectDaemonStatusInvariant(currentRun.port, false);
   }, 180000);
@@ -249,7 +249,7 @@ describe("service-bin relay runtime e2e", () => {
     120000,
   );
 
-  const liveEndpointIt = liveRelayEndpoint !== undefined ? it : it.skip;
+  const liveEndpointIt = liveRelayEndpoint === undefined ? it.skip : it;
   liveEndpointIt(
     "keeps deployed Cloudflare relay presence connected across real commands",
     async () => {
@@ -302,7 +302,10 @@ async function runServiceRelayScenario(
   await closeRelayDataSocket(relayEndpoint, relayAdminToken, offer);
   await delay(300);
 
-  await expectDaemonStatusInvariant(currentRun.port, true);
+  await expectDaemonStatusSummary(currentRun.port, {
+    mobileConnectedRows: 1,
+    mobileConnectionStatus: "reconnecting",
+  });
   await expect(client.getSettings()).resolves.toMatchObject({});
   await expectDaemonStatusInvariant(currentRun.port, true);
   await closeCapturedSockets(capturedSockets);
@@ -426,12 +429,22 @@ async function expectDaemonStatusInvariant(
   port: number,
   expectedConnected: boolean,
 ): Promise<void> {
+  await expectDaemonStatusSummary(port, {
+    mobileConnectedRows: expectedConnected ? 1 : 0,
+    mobileConnectionStatus: expectedConnected ? "connected" : "disconnected",
+  });
+}
+
+async function expectDaemonStatusSummary(
+  port: number,
+  expected: {
+    readonly mobileConnectedRows: number;
+    readonly mobileConnectionStatus: string;
+  },
+): Promise<void> {
   await expect
-    .poll(async () => await fetchDaemonStatusSummary(port), { timeout: 15000 })
-    .toMatchObject({
-      mobilePeerConnected: expectedConnected,
-      mobileConnectedRows: expectedConnected ? 1 : 0,
-    });
+    .poll(() => fetchDaemonStatusSummary(port), { timeout: 15000 })
+    .toMatchObject(expected);
 }
 
 async function fetchPresenceConnected(port: number): Promise<boolean> {
@@ -440,8 +453,8 @@ async function fetchPresenceConnected(port: number): Promise<boolean> {
 }
 
 async function fetchDaemonStatusSummary(port: number): Promise<{
+  readonly mobileConnectionStatus: string;
   readonly mobileConnectedRows: number;
-  readonly mobilePeerConnected: boolean;
 }> {
   const response = await fetch(`http://127.0.0.1:${port}/api/daemon/status`);
   if (!response.ok) {
@@ -450,7 +463,9 @@ async function fetchDaemonStatusSummary(port: number): Promise<{
     );
   }
   const payload = (await response.json()) as {
-    mobilePeerConnected?: unknown;
+    mobileConnection?: {
+      status?: unknown;
+    };
     presence?: {
       clients?: { connected?: unknown; deviceKind?: unknown }[];
     };
@@ -458,22 +473,17 @@ async function fetchDaemonStatusSummary(port: number): Promise<{
   if (!Array.isArray(payload.presence?.clients)) {
     throw new TypeError("daemon status did not include presence clients");
   }
-  if (typeof payload.mobilePeerConnected !== "boolean") {
-    throw new TypeError("daemon status did not include mobilePeerConnected");
+  if (typeof payload.mobileConnection?.status !== "string") {
+    throw new TypeError(
+      "daemon status did not include mobileConnection.status",
+    );
   }
   const mobileConnectedRows = payload.presence.clients.filter(
     (client) => client.deviceKind === "mobile" && client.connected === true,
   ).length;
-  if (payload.mobilePeerConnected !== mobileConnectedRows > 0) {
-    throw new Error(
-      `daemon status invariant failed: mobilePeerConnected=${String(
-        payload.mobilePeerConnected,
-      )} mobileConnectedRows=${String(mobileConnectedRows)}`,
-    );
-  }
   return {
+    mobileConnectionStatus: payload.mobileConnection.status,
     mobileConnectedRows,
-    mobilePeerConnected: payload.mobilePeerConnected,
   };
 }
 
@@ -492,15 +502,14 @@ async function rejectsWithin(
   promise: Promise<unknown>,
   ms: number,
 ): Promise<string> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined = undefined;
   try {
     await Promise.race([
       promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`operation did not reject within ${ms}ms`)),
-          ms,
-        );
+      new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`operation did not reject within ${ms}ms`));
+        }, ms);
       }),
     ]);
   } catch (error) {

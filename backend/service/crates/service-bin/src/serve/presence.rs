@@ -111,14 +111,6 @@ impl PresenceStore {
         }
     }
 
-    pub(super) fn mobile_connected(&self, now: SystemTime) -> bool {
-        self.clients.lock().is_ok_and(|clients| {
-            clients.values().any(|client| {
-                client.device_kind == PresenceDeviceKind::Mobile && client.connected(now)
-            })
-        })
-    }
-
     pub(super) fn snapshot_json(&self, server_id: &str, now: SystemTime) -> Value {
         let snapshot = self.snapshot(server_id, now);
         match serde_json::to_value(snapshot) {

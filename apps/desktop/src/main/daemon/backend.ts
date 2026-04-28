@@ -161,8 +161,15 @@ class DesktopDaemonController {
       backendHealthy: daemon !== null,
       daemon,
       lastExit: this.#lastExit,
-      mobilePeerConnected:
-        daemon?.presence.clients.some((client) => client.connected) ?? false,
+      mobileConnection: daemon?.mobileConnection ?? {
+        connectionId: null,
+        generation: null,
+        lastError: null,
+        staleAt: null,
+        status: "idle",
+        transport: "relay",
+        verifiedAt: null,
+      },
       pairingConfigured: daemon?.pairingConfigured ?? false,
       pid: this.#backendProcess?.pid ?? null,
       presence: daemon?.presence ?? null,

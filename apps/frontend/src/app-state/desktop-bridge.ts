@@ -15,18 +15,35 @@ interface DesktopPresenceSnapshot {
   };
 }
 
+type DesktopMobileConnectionStatus =
+  | "idle"
+  | "waiting"
+  | "connected"
+  | "reconnecting"
+  | "disconnected";
+
+interface DesktopMobileConnection {
+  readonly connectionId: string | null;
+  readonly generation: number | null;
+  readonly lastError: string | null;
+  readonly staleAt: string | null;
+  readonly status: DesktopMobileConnectionStatus;
+  readonly transport: "relay";
+  readonly verifiedAt: string | null;
+}
+
 interface DesktopDaemonStatus {
   readonly appBaseUrl: string;
   readonly backendHealthy: boolean;
   readonly daemon: {
-    readonly mobilePeerConnected: boolean;
+    readonly mobileConnection: DesktopMobileConnection;
     readonly pairingConfigured: boolean;
     readonly presence: DesktopPresenceSnapshot;
     readonly relayEndpoint: string | null;
     readonly serverId: string;
   } | null;
   readonly lastExit: string | null;
-  readonly mobilePeerConnected: boolean;
+  readonly mobileConnection: DesktopMobileConnection;
   readonly pairingConfigured: boolean;
   readonly pid: number | null;
   readonly presence: DesktopPresenceSnapshot | null;
@@ -77,6 +94,8 @@ export { desktopBridge, desktopBridgeAvailable };
 export type {
   ConduitDesktopBridge,
   DesktopDaemonStatus,
+  DesktopMobileConnection,
+  DesktopMobileConnectionStatus,
   DesktopPairingOffer,
   DesktopPresenceClient,
   DesktopPresenceSnapshot,

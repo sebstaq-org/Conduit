@@ -2,9 +2,8 @@
 
 use super::actor::RuntimeActor;
 use super::presence::PresenceStore;
-use super::text_connection::{
-    SharedWatchState, TextConnectionRuntime, WatchState, run_text_connection,
-};
+use super::relay_session::{RelayDataLease, RelaySessionManager};
+use super::text_connection::{TextConnectionRuntime, run_text_connection};
 use crate::identity::load_daemon_secret_key_b64;
 use futures_util::{SinkExt, StreamExt};
 use remote_access::{
@@ -13,14 +12,13 @@ use remote_access::{
     build_relay_websocket_url, load_or_create_relay_routing, lookup_relay_offer,
     mark_relay_offer_accepted, parse_relay_control_frame,
 };
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering;
 use thiserror::Error;
 use time::OffsetDateTime;
 use tokio::net::TcpStream;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, interval, sleep, timeout};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
@@ -69,24 +67,11 @@ impl RelayControlBackoff {
     }
 }
 
-#[derive(Default)]
-struct ConnectorState {
-    active_connections: Mutex<HashMap<String, ActiveRelayConnection>>,
-    channels: Mutex<std::collections::HashMap<String, RelayCipherChannel>>,
-    watches: Mutex<HashMap<String, SharedWatchState>>,
-    next_generation: AtomicU64,
-}
-
-#[derive(Debug, Clone)]
-struct ActiveRelayConnection {
-    generation: u64,
-}
-
 #[derive(Clone)]
 struct RelayRuntime {
     actor: RuntimeActor,
-    connector_state: Arc<ConnectorState>,
     presence: Arc<PresenceStore>,
+    sessions: Arc<RelaySessionManager>,
 }
 
 #[derive(Debug, Error)]
@@ -113,11 +98,11 @@ pub(super) fn spawn_relay_connector(
     endpoint: String,
     home: PathBuf,
     actor: RuntimeActor,
-    mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<PresenceStore>,
+    sessions: Arc<RelaySessionManager>,
 ) {
     tokio::spawn(async move {
-        run_connector(endpoint, home, actor, mobile_peer_connections, presence).await;
+        run_connector(endpoint, home, actor, presence, sessions).await;
     });
 }
 
@@ -125,14 +110,13 @@ async fn run_connector(
     endpoint: String,
     home: PathBuf,
     actor: RuntimeActor,
-    _mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<PresenceStore>,
+    sessions: Arc<RelaySessionManager>,
 ) {
-    let connector_state = Arc::new(ConnectorState::default());
     let runtime = RelayRuntime {
         actor,
-        connector_state,
         presence,
+        sessions,
     };
     let mut backoff = RelayControlBackoff::default();
     loop {
@@ -281,14 +265,13 @@ async fn handle_client_waiting(
     runtime: RelayRuntime,
     connection_id: String,
 ) {
-    let Some(active_connection) =
-        try_mark_connection_active(&runtime.connector_state, &connection_id).await
-    else {
+    runtime.sessions.mark_client_waiting(&connection_id).await;
+    let Some(lease) = runtime.sessions.begin_data_socket(&connection_id).await else {
         tracing::info!(
             event_name = "relay.data.spawn.skipped",
             source = "service-bin",
             connection_id = %connection_id,
-            reason = "active_connection_exists"
+            reason = "active_session_exists"
         );
         return;
     };
@@ -296,90 +279,39 @@ async fn handle_client_waiting(
     let home = home.to_path_buf();
     let routing = routing.clone();
     tokio::spawn(async move {
-        let result = run_data_socket(
-            &endpoint,
-            &home,
-            routing,
-            runtime.clone(),
-            &connection_id,
-            active_connection.clone(),
-        )
-        .await;
-        handle_data_socket_finished(&runtime, &connection_id, &active_connection, result).await;
+        let result =
+            run_data_socket(&endpoint, &home, routing, runtime.clone(), lease.clone()).await;
+        handle_data_socket_finished(&runtime, lease, result).await;
     });
 }
 
 async fn handle_data_socket_finished(
     runtime: &RelayRuntime,
-    connection_id: &str,
-    active_connection: &ActiveRelayConnection,
+    lease: RelayDataLease,
     result: RelayResult<()>,
 ) {
-    remove_active_connection(runtime, connection_id, Some(active_connection.generation)).await;
+    let error_message = result.as_ref().err().map(ToString::to_string);
+    runtime
+        .sessions
+        .finish_data_socket(&lease, None, error_message)
+        .await;
     if let Err(error) = result {
         tracing::warn!(
             event_name = "relay.data.failed",
             source = "service-bin",
-            connection_id = %connection_id,
+            connection_id = %lease.connection_id,
             error = ?error
         );
     }
 }
 
 async fn handle_data_closed(runtime: &RelayRuntime, connection_id: &str) {
-    remove_active_connection(runtime, connection_id, None).await;
+    runtime.sessions.mark_data_closed(connection_id).await;
 }
 
 async fn handle_client_closed(runtime: &RelayRuntime, connection_id: &str) {
-    handle_data_closed(runtime, connection_id).await;
+    runtime.sessions.mark_client_closed(connection_id).await;
     runtime.presence.mark_session_closed(connection_id);
-    runtime
-        .connector_state
-        .channels
-        .lock()
-        .await
-        .remove(connection_id);
-    runtime
-        .connector_state
-        .watches
-        .lock()
-        .await
-        .remove(connection_id);
-}
-
-async fn try_mark_connection_active(
-    connector_state: &Arc<ConnectorState>,
-    connection_id: &str,
-) -> Option<ActiveRelayConnection> {
-    let mut active = connector_state.active_connections.lock().await;
-    if active.contains_key(connection_id) {
-        return None;
-    }
-    let generation = connector_state
-        .next_generation
-        .fetch_add(1, Ordering::Relaxed)
-        .saturating_add(1);
-    let active_connection = ActiveRelayConnection { generation };
-    active.insert(connection_id.to_owned(), active_connection.clone());
-    Some(active_connection)
-}
-
-async fn remove_active_connection(
-    runtime: &RelayRuntime,
-    connection_id: &str,
-    generation: Option<u64>,
-) {
-    let _removed = {
-        let mut active = runtime.connector_state.active_connections.lock().await;
-        let should_remove = active.get(connection_id).is_some_and(|active| {
-            generation.is_none_or(|generation| active.generation == generation)
-        });
-        if should_remove {
-            active.remove(connection_id)
-        } else {
-            None
-        }
-    };
 }
 
 #[expect(
@@ -392,9 +324,9 @@ async fn run_data_socket(
     home: &Path,
     routing: RelayRouting,
     runtime: RelayRuntime,
-    connection_id: &str,
-    _active_connection: ActiveRelayConnection,
+    lease: RelayDataLease,
 ) -> RelayResult<()> {
+    let connection_id = lease.connection_id.as_str();
     let now = OffsetDateTime::now_utc();
     let Some(offer) = lookup_relay_offer(home, connection_id, now)? else {
         tracing::warn!(
@@ -414,12 +346,7 @@ async fn run_data_socket(
     })?;
     let (socket, _response) = connect_relay_socket(&data_url, &routing.daemon_capability).await?;
     let (mut sender, mut receiver) = socket.split();
-    let cached_cipher = runtime
-        .connector_state
-        .channels
-        .lock()
-        .await
-        .remove(connection_id);
+    let cached_cipher = lease.cached_cipher.clone();
     let (mut cipher, initial_plaintext) = open_relay_cipher(
         &mut receiver,
         home,
@@ -440,13 +367,14 @@ async fn run_data_socket(
     let (inbound_text, inbound_receiver) = mpsc::unbounded_channel();
     let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel();
     let runtime_connection_id = super::NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
-    let watches = relay_watch_state(&runtime.connector_state, connection_id).await;
     let runtime_task = tokio::spawn(run_text_connection(
         TextConnectionRuntime::relay(
             runtime.actor.clone(),
             Arc::clone(&runtime.presence),
             connection_id.to_owned(),
-            watches,
+            lease.generation,
+            Arc::clone(&runtime.sessions),
+            Arc::clone(&lease.watches),
         ),
         inbound_receiver,
         outbound_text,
@@ -475,11 +403,17 @@ async fn run_data_socket(
                     &text,
                 )? {
                     cipher = reset_cipher;
-                    cache_relay_cipher(&runtime, connection_id, &cipher).await;
+                    runtime
+                        .sessions
+                        .cache_cipher(connection_id, lease.generation, &cipher)
+                        .await;
                     continue;
                 }
                 let plaintext = cipher.decrypt_utf8(&text)?;
-                cache_relay_cipher(&runtime, connection_id, &cipher).await;
+                runtime
+                    .sessions
+                    .cache_cipher(connection_id, lease.generation, &cipher)
+                    .await;
                 if inbound_text.send(plaintext).is_err() {
                     break;
                 }
@@ -489,44 +423,20 @@ async fn run_data_socket(
                     break;
                 };
                 let frame = cipher.encrypt_utf8(&outbound)?;
-                cache_relay_cipher(&runtime, connection_id, &cipher).await;
+                runtime
+                    .sessions
+                    .cache_cipher(connection_id, lease.generation, &cipher)
+                    .await;
                 sender.send(Message::Text(frame.into())).await?;
             }
         }
     }
     runtime_task.abort();
     runtime
-        .connector_state
-        .channels
-        .lock()
-        .await
-        .insert(connection_id.to_owned(), cipher);
+        .sessions
+        .finish_data_socket(&lease, Some(cipher), None)
+        .await;
     Ok(())
-}
-
-async fn cache_relay_cipher(
-    runtime: &RelayRuntime,
-    connection_id: &str,
-    cipher: &RelayCipherChannel,
-) {
-    runtime
-        .connector_state
-        .channels
-        .lock()
-        .await
-        .insert(connection_id.to_owned(), cipher.clone());
-}
-
-async fn relay_watch_state(
-    connector_state: &Arc<ConnectorState>,
-    connection_id: &str,
-) -> SharedWatchState {
-    let mut watches = connector_state.watches.lock().await;
-    Arc::clone(
-        watches
-            .entry(connection_id.to_owned())
-            .or_insert_with(|| Arc::new(Mutex::new(WatchState::default()))),
-    )
 }
 
 async fn open_relay_cipher(

@@ -63,7 +63,7 @@ test("desktop starts daemon, exposes QR pairing, relays commands, and survives r
   expect(beforeStatus.running).toBe(true);
   expect(beforeStatus.backendHealthy).toBe(true);
   expect(beforeStatus.relayConfigured).toBe(true);
-  expect(beforeStatus.mobilePeerConnected).toBe(false);
+  expect(beforeStatus.mobileConnection.status).toBe("idle");
   expect(beforeStatus.daemon?.presence.clients).toEqual([]);
 
   await openDesktopPairingPopover(page);
@@ -268,7 +268,9 @@ async function readDesktopStatus(page: Page): Promise<{
     };
   } | null;
   readonly lastExit: string | null;
-  readonly mobilePeerConnected: boolean;
+  readonly mobileConnection: {
+    readonly status: string;
+  };
   readonly pid: number | null;
   readonly relayConfigured: boolean;
   readonly restartCount: number;
@@ -287,7 +289,9 @@ async function readDesktopStatus(page: Page): Promise<{
                 };
               } | null;
               readonly lastExit: string | null;
-              readonly mobilePeerConnected: boolean;
+              readonly mobileConnection: {
+                readonly status: string;
+              };
               readonly pid: number | null;
               readonly relayConfigured: boolean;
               readonly restartCount: number;

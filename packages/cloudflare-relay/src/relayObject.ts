@@ -127,7 +127,7 @@ class RelayDurableObject {
       "relay data socket replaced by client reconnect",
     );
     connection.dataSocket = null;
-    connection.dataSocketHasSentToClient = false;
+    connection.state = { kind: "waitingForData" };
     connection.clientBuffer.length = 0;
     connection.bufferedBytes = 0;
     clearPendingTimer(connection);
@@ -141,7 +141,7 @@ class RelayDurableObject {
     const connection = connectionFor(this.connections, connectionId);
     safeClose(connection.dataSocket, CLOSE_REPLACED, "data socket replaced");
     connection.dataSocket = server;
-    connection.dataSocketHasSentToClient = false;
+    connection.state = { kind: "connected", serverResponded: false };
     this.testSnapshot.dataSocketCount += 1;
     clearPendingTimer(connection);
     this.flushClientBuffer(connectionId, connection);
@@ -178,7 +178,10 @@ class RelayDurableObject {
       return;
     }
     if (connection.dataSocket !== null) {
-      if (connection.dataSocketHasSentToClient) {
+      if (
+        connection.state.kind === "connected" &&
+        connection.state.serverResponded
+      ) {
         this.recycleDataSocket(connectionId, connection);
         this.queueClientMessage(
           connectionId,
@@ -195,7 +198,7 @@ class RelayDurableObject {
         return;
       }
       connection.dataSocket = null;
-      connection.dataSocketHasSentToClient = false;
+      connection.state = { kind: "waitingForData" };
       this.queueClientMessage(connectionId, connection, message, bytes, false);
       notifyControl(this.controlSocket, "data_closed", connectionId);
       notifyControl(this.controlSocket, "client_waiting", connectionId);
@@ -242,7 +245,7 @@ class RelayDurableObject {
       deleteIfIdle(this.connections, connectionId, connection);
       return;
     }
-    connection.dataSocketHasSentToClient = true;
+    connection.state = { kind: "connected", serverResponded: true };
   }
 
   private queueClientMessage(
@@ -282,7 +285,7 @@ class RelayDurableObject {
       }
       if (!safeSend(connection.dataSocket, queued.message)) {
         connection.dataSocket = null;
-        connection.dataSocketHasSentToClient = false;
+        connection.state = { kind: "waitingForData" };
         notifyControl(this.controlSocket, "data_closed", connectionId);
         armPendingTimer(this.connections, connectionId, connection);
         return;
@@ -317,7 +320,7 @@ class RelayDurableObject {
       return;
     }
     connection.dataSocket = null;
-    connection.dataSocketHasSentToClient = false;
+    connection.state = { kind: "waitingForData" };
     notifyControl(this.controlSocket, "data_closed", connectionId);
     if (connection.clientSocket !== null) {
       armPendingTimer(this.connections, connectionId, connection);
@@ -335,7 +338,7 @@ class RelayDurableObject {
       "relay data socket recycled before client command",
     );
     connection.dataSocket = null;
-    connection.dataSocketHasSentToClient = false;
+    connection.state = { kind: "waitingForData" };
   }
 }
 

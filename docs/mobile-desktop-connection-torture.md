@@ -4,7 +4,7 @@
 
 Primary torture runs target dev only: desktop dev, iOS dev simulator, the dev bundle id `com.sebstaq.conduit.dev`, the dev scheme `conduit-dev://pair`, isolated dev home/store/logs, and the live relay endpoint. Stage is a later release smoke after the dev flow is robust and merged.
 
-The first gate is pairing. A run cannot enter torture until a desktop-generated `conduit-dev://pair?offer=...` link opens the dev iOS app, the app accepts the offer, `/api/daemon/status` reports `mobilePeerConnected: true`, and both desktop and mobile render connected.
+The first gate is pairing. A run cannot enter torture until a desktop-generated `conduit-dev://pair?offer=...` link opens the dev iOS app, the app accepts the offer, `/api/daemon/status` reports `mobileConnection.status: "connected"`, and both desktop and mobile render connected.
 
 Use these commands as the dev baseline, with paths/ports isolated per run:
 

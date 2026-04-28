@@ -63,6 +63,7 @@ async fn socket_handler_accepts_following_command_while_prompt_response_is_pendi
         actor: actor.clone(),
         close_presence_on_connection_close: false,
         presence: None,
+        relay_session: None,
         presence_session_id: None,
         watches: None,
         connection_kind: "direct",
