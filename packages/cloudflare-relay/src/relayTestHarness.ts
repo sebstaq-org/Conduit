@@ -28,7 +28,9 @@ async function runRelayHealthCheck(harness: RelayTestHarness): Promise<void> {
 async function runRelayRoundtripScenario(
   harness: RelayTestHarness,
   suffix: string,
+  options: { reconnect?: boolean } = {},
 ): Promise<void> {
+  const reconnect = options.reconnect ?? true;
   const daemonCapability = generateRelayCapability();
   const clientCapability = generateRelayCapability();
   const relayServerId = deriveRelayServerId(daemonCapability);
@@ -119,6 +121,12 @@ async function runRelayRoundtripScenario(
   data.close();
   await waitForEnvelope(control, "data_closed", connectionId);
 
+  if (!reconnect) {
+    client.close();
+    control.close();
+    return;
+  }
+
   const reconnectClient = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
       capability: clientCapability,
@@ -128,7 +136,6 @@ async function runRelayRoundtripScenario(
     }),
     clientCapability,
   );
-  await waitForEnvelope(control, "client_closed", connectionId);
   await waitForEnvelope(control, "client_waiting", connectionId);
   const reconnectHandshake = await createRelayClientHandshake({
     context,
@@ -219,6 +226,10 @@ async function runRelayClientCloseCleansDataScenario(
     daemonCapability,
   );
 
+  client.send("client close probe");
+  await expect(waitForMessage(data, "client close probe")).resolves.toBe(
+    "client close probe",
+  );
   client.close();
 
   await waitForEnvelope(control, "client_closed", connectionId);

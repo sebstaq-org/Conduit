@@ -281,7 +281,17 @@ async fn handle_client_waiting(
     runtime: RelayRuntime,
     connection_id: String,
 ) {
-    let active_connection = mark_connection_active(&runtime.connector_state, &connection_id).await;
+    let Some(active_connection) =
+        try_mark_connection_active(&runtime.connector_state, &connection_id).await
+    else {
+        tracing::info!(
+            event_name = "relay.data.spawn.skipped",
+            source = "service-bin",
+            connection_id = %connection_id,
+            reason = "active_connection_exists"
+        );
+        return;
+    };
     let endpoint = endpoint.to_owned();
     let home = home.to_path_buf();
     let routing = routing.clone();
@@ -337,18 +347,21 @@ async fn handle_client_closed(runtime: &RelayRuntime, connection_id: &str) {
         .remove(connection_id);
 }
 
-async fn mark_connection_active(
+async fn try_mark_connection_active(
     connector_state: &Arc<ConnectorState>,
     connection_id: &str,
-) -> ActiveRelayConnection {
+) -> Option<ActiveRelayConnection> {
+    let mut active = connector_state.active_connections.lock().await;
+    if active.contains_key(connection_id) {
+        return None;
+    }
     let generation = connector_state
         .next_generation
         .fetch_add(1, Ordering::Relaxed)
         .saturating_add(1);
     let active_connection = ActiveRelayConnection { generation };
-    let mut active = connector_state.active_connections.lock().await;
     active.insert(connection_id.to_owned(), active_connection.clone());
-    active_connection
+    Some(active_connection)
 }
 
 async fn remove_active_connection(

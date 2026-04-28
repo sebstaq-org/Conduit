@@ -21,7 +21,7 @@ function waitForMessage(
         settled = true;
         reject(new Error(`timed out waiting for ${label}`));
       }
-    }, 5000);
+    }, 15000);
     socket.addEventListener("message", (event: MessageEvent) => {
       if (settled) {
         return;

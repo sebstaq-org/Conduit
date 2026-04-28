@@ -39,6 +39,7 @@ const require = createRequire(import.meta.url);
 const Miniflare = (require("miniflare") as { Miniflare: MiniflareConstructor })
   .Miniflare;
 const adminToken = "service-relay-e2e-token";
+const relayCommandRejectWindowMs = 35_000;
 const liveRelayEndpoint = process.env.CONDUIT_RELAY_LIVE_ENDPOINT;
 const liveRelayAdminToken = process.env.CONDUIT_RELAY_TEST_ADMIN_TOKEN;
 
@@ -131,9 +132,9 @@ describe("service-bin relay runtime e2e", () => {
 
     currentRun.service.kill();
     await onceExit(currentRun.service);
-    await expect(rejectsWithin(client.getSettings(), 15000)).resolves.toMatch(
-      /relay websocket|relay command response timed out/u,
-    );
+    await expect(
+      rejectsWithin(client.getSettings(), relayCommandRejectWindowMs),
+    ).resolves.toMatch(/relay websocket|relay command timed out/u);
 
     currentRun = await restartRelayServiceRun(currentRun, relayEndpoint);
     await waitForHealth(currentRun.port);

@@ -180,7 +180,15 @@ class RelayDurableObject {
     if (connection.dataSocket !== null) {
       if (connection.dataSocketHasSentToClient) {
         this.recycleDataSocket(connectionId, connection);
-        this.queueClientMessage(connectionId, connection, message, bytes);
+        this.queueClientMessage(
+          connectionId,
+          connection,
+          message,
+          bytes,
+          false,
+        );
+        notifyControl(this.controlSocket, "data_closed", connectionId);
+        notifyControl(this.controlSocket, "client_waiting", connectionId);
         return;
       }
       if (safeSend(connection.dataSocket, message)) {
@@ -188,7 +196,9 @@ class RelayDurableObject {
       }
       connection.dataSocket = null;
       connection.dataSocketHasSentToClient = false;
-      this.queueClientMessage(connectionId, connection, message, bytes);
+      this.queueClientMessage(connectionId, connection, message, bytes, false);
+      notifyControl(this.controlSocket, "data_closed", connectionId);
+      notifyControl(this.controlSocket, "client_waiting", connectionId);
       return;
     }
     this.queueClientMessage(connectionId, connection, message, bytes);
@@ -240,6 +250,7 @@ class RelayDurableObject {
     connection: RelayConnection,
     message: RelayMessage,
     bytes: number,
+    notifyWaiting = true,
   ): void {
     if (connection.bufferedBytes + bytes > MAX_BUFFERED_BYTES) {
       safeClose(
@@ -251,7 +262,9 @@ class RelayDurableObject {
     }
     connection.clientBuffer.push({ bytes, message });
     connection.bufferedBytes += bytes;
-    notifyControl(this.controlSocket, "client_waiting", connectionId);
+    if (notifyWaiting) {
+      notifyControl(this.controlSocket, "client_waiting", connectionId);
+    }
     armPendingTimer(this.connections, connectionId, connection);
   }
 
