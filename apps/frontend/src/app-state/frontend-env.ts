@@ -11,6 +11,7 @@ interface FrontendEnv {
 interface ConduitRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
+  readonly runtimeSurface?: string;
   readonly sessionWsUrl?: string;
 }
 

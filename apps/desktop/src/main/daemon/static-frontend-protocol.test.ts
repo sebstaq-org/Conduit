@@ -66,6 +66,7 @@ describe("desktop static frontend protocol", () => {
     expect(response.status).toBe(200);
     const text = await response.text();
     expect(text).toContain("globalThis.CONDUIT_RUNTIME_CONFIG");
+    expect(text).toContain('"runtimeSurface":"desktop_app"');
     expect(text).toContain("ws://127.0.0.1:4274/api/session");
   });
 

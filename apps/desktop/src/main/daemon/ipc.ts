@@ -15,6 +15,7 @@ function runtimeConfig(config: DesktopDaemonConfig): DesktopRuntimeConfig {
   return {
     clientLogUrl: `http://${config.backendHost}:${String(config.backendPort)}/api/client-log`,
     logProfile: config.logProfile,
+    runtimeSurface: "desktop_app",
     sessionWsUrl: `ws://${config.backendHost}:${String(config.backendPort)}/api/session`,
   };
 }

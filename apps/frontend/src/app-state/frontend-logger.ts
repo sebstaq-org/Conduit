@@ -1,5 +1,6 @@
 import { frontendEnvValue } from "./frontend-env";
 import { FileLogSink } from "./frontend-logger-file-sink";
+import { frontendRuntimeMetadata } from "./frontend-runtime-metadata";
 import { sanitizeLogField, sanitizeUnknown } from "./frontend-logger-serialize";
 import { createSentryLogSink } from "./frontend-logger-sentry";
 import type {
@@ -101,10 +102,13 @@ function recordWithFields(
   eventName: string,
   fields: FrontendLogFields,
 ): FrontendLogRecord {
+  const runtimeMetadata = frontendRuntimeMetadata();
   const record: FrontendLogRecord = {
     event_name: eventName,
     level,
     log_profile: profile,
+    runtime_platform: runtimeMetadata.runtime_platform,
+    runtime_surface: runtimeMetadata.runtime_surface,
     source: "frontend",
     timestamp: new Date().toISOString(),
   };

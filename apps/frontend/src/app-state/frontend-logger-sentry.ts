@@ -138,6 +138,8 @@ function scheduleSentryLogFlush(): void {
 
 function writeSentryRecord(record: FrontendLogRecord, error?: unknown): void {
   const context = contextFromRecord(record);
+  setTag("conduit.runtime_platform", record.runtime_platform);
+  setTag("conduit.runtime_surface", record.runtime_surface);
   sentryLogger[record.level](record.event_name, context);
   scheduleSentryLogFlush();
   addBreadcrumb({

@@ -126,6 +126,39 @@ async function importSentryMock(): Promise<SentryMockModule> {
   return sentryMock;
 }
 
+function expectSentryRuntimeTags(sentryMock: SentryMockModule): void {
+  expect(sentryMock.setTag).toHaveBeenCalledWith(
+    "conduit.runtime_surface", "mobile_app",
+  );
+}
+
+function expectSentryBreadcrumbLog(sentryMock: SentryMockModule): void {
+  expect(sentryMock.logger.info).toHaveBeenCalledWith(
+    "frontend.sentry.breadcrumb",
+    expect.objectContaining({
+      endpoint_name: "settings/get",
+      event_name: "frontend.sentry.breadcrumb",
+      log_profile: "stage",
+      runtime_platform: "native",
+      runtime_surface: "mobile_app",
+    }),
+  );
+}
+
+function expectSentryInitialized(sentryMock: SentryMockModule): void {
+  expect(sentryMock.init).toHaveBeenCalledWith(
+    expect.objectContaining({
+      dsn: "https://public@example.com/1", enableLogs: true,
+      environment: "stage", sendDefaultPii: false, tracesSampleRate: 0,
+    }),
+  );
+  expect(sentryMock.addBreadcrumb).toHaveBeenCalledWith(
+    expect.objectContaining({
+      category: "frontend", level: "info", message: "frontend.sentry.breadcrumb",
+    }),
+  );
+}
+
 async function resetFrontendLoggerTestState(): Promise<void> {
   delete process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE;
   delete process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL;
@@ -171,30 +204,9 @@ async function runSentryInitializationCase(): Promise<void> {
   });
   const sentryMock = await importSentryMock();
 
-  expect(sentryMock.init).toHaveBeenCalledWith(
-    expect.objectContaining({
-      dsn: "https://public@example.com/1",
-      enableLogs: true,
-      environment: "stage",
-      sendDefaultPii: false,
-      tracesSampleRate: 0,
-    }),
-  );
-  expect(sentryMock.addBreadcrumb).toHaveBeenCalledWith(
-    expect.objectContaining({
-      category: "frontend",
-      level: "info",
-      message: "frontend.sentry.breadcrumb",
-    }),
-  );
-  expect(sentryMock.logger.info).toHaveBeenCalledWith(
-    "frontend.sentry.breadcrumb",
-    expect.objectContaining({
-      endpoint_name: "settings/get",
-      event_name: "frontend.sentry.breadcrumb",
-      log_profile: "stage",
-    }),
-  );
+  expectSentryInitialized(sentryMock);
+  expectSentryBreadcrumbLog(sentryMock);
+  expectSentryRuntimeTags(sentryMock);
   await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
   expect(sentryMock.flush).toHaveBeenCalledWith();
 }
