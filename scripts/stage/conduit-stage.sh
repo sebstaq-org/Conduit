@@ -442,7 +442,23 @@ install_desktop_entry() {
   local applications_dir
   applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   local desktop_file="$applications_dir/conduit-stage.desktop"
+  local icon_file="$STAGE_ROOT/conduit-stage.svg"
   run mkdir -p "$applications_dir"
+  run mkdir -p "$STAGE_ROOT"
+  cat >"$icon_file" <<'EOF'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="stage-bg" x1="18" y1="14" x2="110" y2="114" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="0.52" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#stage-bg)"/>
+  <path d="M38 64c0-17.7 11.9-30 29.1-30 10 0 18.8 4.4 24.2 12.1l-10.7 8.1c-3.3-4.5-7.5-6.7-13.1-6.7-9.1 0-15.1 6.6-15.1 16.5s6 16.5 15.1 16.5c5.6 0 9.8-2.2 13.1-6.7l10.7 8.1C85.9 89.6 77.1 94 67.1 94 49.9 94 38 81.7 38 64Z" fill="#f8fafc"/>
+  <path d="M34 104h60" stroke="#facc15" stroke-width="8" stroke-linecap="round"/>
+</svg>
+EOF
   cat >"$desktop_file" <<EOF
 [Desktop Entry]
 Type=Application
@@ -450,8 +466,10 @@ Name=Conduit Stage
 Comment=Run isolated Conduit Electron stage build
 Exec=env CONDUIT_STAGE_RELAY_ENDPOINT=${RELAY_ENDPOINT} ${RUNNER_PATH} open
 Terminal=false
-Icon=utilities-terminal
+Icon=${icon_file}
 Categories=Development;
+StartupNotify=true
+StartupWMClass=conduit-stage
 EOF
   printf "Desktop entry installed: %s\n" "$desktop_file"
 }
