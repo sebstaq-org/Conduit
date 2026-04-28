@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  baselinePollIntervalMs,
   createDesktopPairingStatusController,
   presencePollIntervalMs,
 } from "./desktop-pairing-status-controller";
@@ -23,6 +24,11 @@ interface StaleStatusSetup {
   readonly bridge: ConduitDesktopBridge;
   readonly controller: DesktopPairingStatusController;
   readonly oldStatus: PromiseWithResolvers<DesktopDaemonStatus>;
+  readonly unsubscribe: () => void;
+}
+
+interface FailedPollingSetup {
+  readonly controller: DesktopPairingStatusController;
   readonly unsubscribe: () => void;
 }
 
@@ -130,6 +136,18 @@ function createStaleStatusSetup(): StaleStatusSetup {
   };
 }
 
+function createFailedPollingSetup(): FailedPollingSetup {
+  const controller = createDesktopPairingStatusController();
+  const getDaemonStatus = vi.fn<GetDaemonStatus>();
+  getDaemonStatus.mockResolvedValueOnce(healthyStatus(1));
+  getDaemonStatus.mockRejectedValueOnce(new Error("daemon status failed"));
+  const unsubscribe = controller.subscribe(
+    createBridge(getDaemonStatus),
+    vi.fn<() => void>(),
+  );
+  return { controller, unsubscribe };
+}
+
 async function flushPromises(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -186,4 +204,18 @@ it("keeps one owned presence polling loop and cancels it on unmount", async () =
   expect(vi.getTimerCount()).toBe(1);
   setup.unsubscribe();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it("clears stale connected status when daemon polling fails", async () => {
+  // Per user contract: desktop green must come from a fresh daemon status, not a stale cached snapshot.
+  vi.useFakeTimers();
+  const setup = createFailedPollingSetup();
+  await flushPromises();
+  expectMobilePeerConnected(setup.controller.getSnapshot());
+
+  await vi.advanceTimersByTimeAsync(baselinePollIntervalMs);
+  await flushPromises();
+
+  expect(setup.controller.getSnapshot()).toBeNull();
+  setup.unsubscribe();
 });

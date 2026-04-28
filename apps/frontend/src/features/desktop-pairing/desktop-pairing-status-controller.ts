@@ -146,6 +146,13 @@ class DesktopPairingStatusControllerImpl implements DesktopPairingStatusControll
     }
   }
 
+  private clearSnapshot(): void {
+    if (this.snapshot !== null) {
+      this.snapshot = null;
+      this.notify();
+    }
+  }
+
   private commitRefresh(
     nextBridge: ConduitDesktopBridge,
     refreshGeneration: number,
@@ -185,7 +192,11 @@ class DesktopPairingStatusControllerImpl implements DesktopPairingStatusControll
       this.replaceStatus(nextStatus);
       return true;
     } catch {
-      return this.canCommit(context);
+      if (!this.canCommit(context)) {
+        return false;
+      }
+      this.clearSnapshot();
+      return true;
     }
   };
 

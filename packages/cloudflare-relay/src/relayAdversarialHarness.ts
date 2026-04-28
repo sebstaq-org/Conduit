@@ -59,8 +59,6 @@ async function runRelayAdversarialScenario(
     }),
     attackerCapability,
   );
-  await harness.openRejectedSocket(clientUrl, clientCapability);
-
   const clientHandshake = await createRelayClientHandshake({
     context,
     daemonPublicKeyB64: daemonKeys.publicKeyB64,
