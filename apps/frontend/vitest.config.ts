@@ -31,6 +31,10 @@ const workspaceAliases = {
     import.meta.dirname,
     "../../packages/session-model/src/index.ts",
   ),
+  "@sentry/react-native": resolve(
+    import.meta.dirname,
+    "test/sentry-react-native.mock.ts",
+  ),
 };
 
 export default defineConfig({

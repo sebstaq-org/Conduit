@@ -11,9 +11,14 @@ interface FrontendLogRecord {
   [field: string]: unknown;
 }
 
+interface FrontendLogSink {
+  write(record: FrontendLogRecord, error?: unknown): void;
+}
+
 export type {
   FrontendLogFields,
   FrontendLogLevel,
   FrontendLogProfile,
   FrontendLogRecord,
+  FrontendLogSink,
 };

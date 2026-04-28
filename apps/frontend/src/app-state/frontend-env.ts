@@ -1,7 +1,10 @@
 interface FrontendEnv {
   readonly EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL?: string;
+  readonly EXPO_PUBLIC_CONDUIT_DIST?: string;
   readonly EXPO_PUBLIC_CONDUIT_LOG_PROFILE?: string;
+  readonly EXPO_PUBLIC_CONDUIT_RELEASE?: string;
   readonly EXPO_PUBLIC_CONDUIT_SESSION_WS_URL?: string;
+  readonly EXPO_PUBLIC_SENTRY_DSN?: string;
   readonly NODE_ENV?: string;
 }
 
@@ -28,16 +31,25 @@ function frontendEnvValue(name: keyof FrontendEnv): string | undefined {
         process.env.EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL
       );
     }
+    case "EXPO_PUBLIC_CONDUIT_DIST": {
+      return process.env.EXPO_PUBLIC_CONDUIT_DIST;
+    }
     case "EXPO_PUBLIC_CONDUIT_LOG_PROFILE": {
       return (
         runtimeConfig?.logProfile ?? process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE
       );
+    }
+    case "EXPO_PUBLIC_CONDUIT_RELEASE": {
+      return process.env.EXPO_PUBLIC_CONDUIT_RELEASE;
     }
     case "EXPO_PUBLIC_CONDUIT_SESSION_WS_URL": {
       return (
         runtimeConfig?.sessionWsUrl ??
         process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL
       );
+    }
+    case "EXPO_PUBLIC_SENTRY_DSN": {
+      return process.env.EXPO_PUBLIC_SENTRY_DSN;
     }
     case "NODE_ENV": {
       return process.env.NODE_ENV;
