@@ -45,7 +45,6 @@ struct ServeState {
     relay_endpoint: Option<String>,
     app_base_url: String,
     telemetry_health: TelemetryHealth,
-    mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<presence::PresenceStore>,
 }
 
@@ -223,7 +222,6 @@ fn router_with_actor(
             relay_endpoint,
             app_base_url,
             telemetry_health,
-            mobile_peer_connections,
             presence,
         }))
 }
@@ -265,17 +263,16 @@ async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoRespons
         Ok(status) => {
             let mut payload = json!(status);
             if let Some(object) = payload.as_object_mut() {
+                let now = std::time::SystemTime::now();
                 object.insert(
                     "mobilePeerConnected".to_owned(),
-                    json!(state.mobile_peer_connections.load(Ordering::Relaxed) > 0),
+                    json!(state.presence.mobile_connected(now)),
                 );
                 if let Some(server_id) = object.get("serverId").and_then(serde_json::Value::as_str)
                 {
                     object.insert(
                         "presence".to_owned(),
-                        state
-                            .presence
-                            .snapshot_json(server_id, std::time::SystemTime::now()),
+                        state.presence.snapshot_json(server_id, now),
                     );
                 }
             }

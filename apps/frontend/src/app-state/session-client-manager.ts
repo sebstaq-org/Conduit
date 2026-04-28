@@ -68,9 +68,18 @@ class SessionClientManager implements SessionClientPort {
     onTelemetryEvent: (event: SessionClientTelemetryEvent) => void,
   ): number {
     this.client.close();
+    const relayTelemetry = (event: SessionClientTelemetryEvent): void => {
+      if (
+        event.event_name === "session_client.relay.socket.closed" ||
+        event.event_name === "session_client.relay.socket.connect.finish"
+      ) {
+        this.lastPresenceUpdateMs = 0;
+      }
+      onTelemetryEvent(event);
+    };
     this.client = createRelaySessionClient({
       offer: relayOfferFromHostProfile(host),
-      onTelemetryEvent,
+      onTelemetryEvent: relayTelemetry,
     });
     this.resetPresence();
     return this.bumpConfigurationRevision();

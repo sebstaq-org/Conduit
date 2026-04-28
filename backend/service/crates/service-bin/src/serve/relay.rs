@@ -11,10 +11,10 @@ use remote_access::{
     build_relay_websocket_url, load_or_create_relay_routing, lookup_relay_offer,
     mark_relay_offer_accepted, parse_relay_control_frame,
 };
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use thiserror::Error;
 use time::OffsetDateTime;
 use tokio::net::TcpStream;
@@ -69,16 +69,21 @@ impl RelayControlBackoff {
 
 #[derive(Default)]
 struct ConnectorState {
-    active_connections: Mutex<HashSet<String>>,
+    active_connections: Mutex<HashMap<String, ActiveRelayConnection>>,
     channels: Mutex<std::collections::HashMap<String, RelayCipherChannel>>,
-    mobile_peers: Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>,
+    next_generation: AtomicU64,
+}
+
+#[derive(Debug, Clone)]
+struct ActiveRelayConnection {
+    generation: u64,
+    presence_session_id: String,
 }
 
 #[derive(Clone)]
 struct RelayRuntime {
     actor: RuntimeActor,
     connector_state: Arc<ConnectorState>,
-    mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<PresenceStore>,
 }
 
@@ -118,14 +123,13 @@ async fn run_connector(
     endpoint: String,
     home: PathBuf,
     actor: RuntimeActor,
-    mobile_peer_connections: Arc<AtomicUsize>,
+    _mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<PresenceStore>,
 ) {
     let connector_state = Arc::new(ConnectorState::default());
     let runtime = RelayRuntime {
         actor,
         connector_state,
-        mobile_peer_connections,
         presence,
     };
     let mut backoff = RelayControlBackoff::default();
@@ -275,36 +279,34 @@ async fn handle_client_waiting(
     runtime: RelayRuntime,
     connection_id: String,
 ) {
-    if !mark_connection_active(&runtime.connector_state, &connection_id).await {
-        return;
-    }
+    let active_connection = mark_connection_active(&runtime.connector_state, &connection_id).await;
     let endpoint = endpoint.to_owned();
     let home = home.to_path_buf();
     let routing = routing.clone();
     tokio::spawn(async move {
-        let result =
-            run_data_socket(&endpoint, &home, routing, runtime.clone(), &connection_id).await;
-        handle_data_socket_finished(&runtime, &connection_id, result).await;
+        let result = run_data_socket(
+            &endpoint,
+            &home,
+            routing,
+            runtime.clone(),
+            &connection_id,
+            active_connection.clone(),
+        )
+        .await;
+        handle_data_socket_finished(&runtime, &connection_id, &active_connection, result).await;
     });
 }
 
 async fn handle_data_socket_finished(
     runtime: &RelayRuntime,
     connection_id: &str,
+    active_connection: &ActiveRelayConnection,
     result: RelayResult<()>,
 ) {
     runtime
-        .connector_state
-        .active_connections
-        .lock()
-        .await
-        .remove(connection_id);
-    mark_mobile_peer_disconnected(
-        &runtime.connector_state,
-        Arc::clone(&runtime.mobile_peer_connections),
-        connection_id,
-    )
-    .await;
+        .presence
+        .mark_session_closed(&active_connection.presence_session_id);
+    remove_active_connection(runtime, connection_id, Some(active_connection.generation)).await;
     if let Err(error) = result {
         tracing::warn!(
             event_name = "relay.data.failed",
@@ -316,18 +318,7 @@ async fn handle_data_socket_finished(
 }
 
 async fn handle_data_closed(runtime: &RelayRuntime, connection_id: &str) {
-    runtime
-        .connector_state
-        .active_connections
-        .lock()
-        .await
-        .remove(connection_id);
-    mark_mobile_peer_disconnected(
-        &runtime.connector_state,
-        Arc::clone(&runtime.mobile_peer_connections),
-        connection_id,
-    )
-    .await;
+    remove_active_connection(runtime, connection_id, None).await;
 }
 
 async fn handle_client_closed(runtime: &RelayRuntime, connection_id: &str) {
@@ -343,12 +334,41 @@ async fn handle_client_closed(runtime: &RelayRuntime, connection_id: &str) {
 async fn mark_connection_active(
     connector_state: &Arc<ConnectorState>,
     connection_id: &str,
-) -> bool {
+) -> ActiveRelayConnection {
+    let generation = connector_state
+        .next_generation
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1);
+    let active_connection = ActiveRelayConnection {
+        generation,
+        presence_session_id: format!("{connection_id}#{generation}"),
+    };
     let mut active = connector_state.active_connections.lock().await;
-    if active.contains(connection_id) {
-        return false;
+    active.insert(connection_id.to_owned(), active_connection.clone());
+    active_connection
+}
+
+async fn remove_active_connection(
+    runtime: &RelayRuntime,
+    connection_id: &str,
+    generation: Option<u64>,
+) {
+    let removed = {
+        let mut active = runtime.connector_state.active_connections.lock().await;
+        let should_remove = active.get(connection_id).is_some_and(|active| {
+            generation.is_none_or(|generation| active.generation == generation)
+        });
+        if should_remove {
+            active.remove(connection_id)
+        } else {
+            None
+        }
+    };
+    if let Some(removed) = removed {
+        runtime
+            .presence
+            .mark_session_closed(&removed.presence_session_id);
     }
-    active.insert(connection_id.to_owned())
 }
 
 #[expect(
@@ -362,6 +382,7 @@ async fn run_data_socket(
     routing: RelayRouting,
     runtime: RelayRuntime,
     connection_id: &str,
+    active_connection: ActiveRelayConnection,
 ) -> RelayResult<()> {
     let now = OffsetDateTime::now_utc();
     let Some(offer) = lookup_relay_offer(home, connection_id, now)? else {
@@ -405,14 +426,15 @@ async fn run_data_socket(
         );
         return Ok(());
     }
-    let peer_active = mobile_peer_flag(&runtime.connector_state, connection_id).await;
-    let _peer_guard =
-        MobilePeerConnectionGuard::new(Arc::clone(&runtime.mobile_peer_connections), peer_active);
     let (inbound_text, inbound_receiver) = mpsc::unbounded_channel();
     let (outbound_text, mut outbound_receiver) = mpsc::unbounded_channel();
     let runtime_connection_id = super::NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
     let runtime_task = tokio::spawn(run_text_connection(
-        TextConnectionRuntime::relay(runtime.actor.clone(), Arc::clone(&runtime.presence)),
+        TextConnectionRuntime::relay(
+            runtime.actor.clone(),
+            Arc::clone(&runtime.presence),
+            active_connection.presence_session_id.clone(),
+        ),
         inbound_receiver,
         outbound_text,
         runtime_connection_id,
@@ -464,70 +486,6 @@ async fn run_data_socket(
         .await
         .insert(connection_id.to_owned(), cipher);
     Ok(())
-}
-
-struct MobilePeerConnectionGuard {
-    active: Arc<AtomicBool>,
-    connections: Arc<AtomicUsize>,
-}
-
-impl MobilePeerConnectionGuard {
-    fn new(connections: Arc<AtomicUsize>, active: Arc<AtomicBool>) -> Self {
-        mark_mobile_peer_connected(&connections, &active);
-        Self {
-            active,
-            connections,
-        }
-    }
-
-    fn disconnect(&self) {
-        mark_mobile_peer_disconnected_flag(&self.connections, &self.active);
-    }
-}
-
-impl Drop for MobilePeerConnectionGuard {
-    fn drop(&mut self) {
-        self.disconnect();
-    }
-}
-
-async fn mobile_peer_flag(
-    connector_state: &Arc<ConnectorState>,
-    connection_id: &str,
-) -> Arc<AtomicBool> {
-    let mut peers = connector_state.mobile_peers.lock().await;
-    Arc::clone(
-        peers
-            .entry(connection_id.to_owned())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false))),
-    )
-}
-
-async fn mark_mobile_peer_disconnected(
-    connector_state: &Arc<ConnectorState>,
-    connections: Arc<AtomicUsize>,
-    connection_id: &str,
-) {
-    let active = connector_state
-        .mobile_peers
-        .lock()
-        .await
-        .remove(connection_id);
-    if let Some(active) = active {
-        mark_mobile_peer_disconnected_flag(&connections, &active);
-    }
-}
-
-fn mark_mobile_peer_connected(connections: &AtomicUsize, active: &AtomicBool) {
-    if !active.swap(true, Ordering::Relaxed) {
-        connections.fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-fn mark_mobile_peer_disconnected_flag(connections: &AtomicUsize, active: &AtomicBool) {
-    if active.swap(false, Ordering::Relaxed) {
-        connections.fetch_sub(1, Ordering::Relaxed);
-    }
 }
 
 async fn open_relay_cipher(

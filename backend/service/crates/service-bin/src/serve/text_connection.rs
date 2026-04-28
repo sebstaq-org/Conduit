@@ -13,6 +13,7 @@ use tokio::sync::{Mutex, mpsc};
 pub(super) struct TextConnectionRuntime {
     pub(super) actor: RuntimeActor,
     pub(super) presence: Option<Arc<presence::PresenceStore>>,
+    pub(super) presence_session_id: Option<String>,
     pub(super) connection_kind: &'static str,
 }
 
@@ -21,14 +22,20 @@ impl TextConnectionRuntime {
         Self {
             actor: state.actor.clone(),
             presence: Some(Arc::clone(&state.presence)),
+            presence_session_id: None,
             connection_kind: "direct",
         }
     }
 
-    pub(super) fn relay(actor: RuntimeActor, presence: Arc<presence::PresenceStore>) -> Self {
+    pub(super) fn relay(
+        actor: RuntimeActor,
+        presence: Arc<presence::PresenceStore>,
+        presence_session_id: String,
+    ) -> Self {
         Self {
             actor,
             presence: Some(presence),
+            presence_session_id: Some(presence_session_id),
             connection_kind: "relay",
         }
     }
@@ -111,6 +118,12 @@ pub(super) async fn run_text_connection(
         }
     }
     event_forwarder.abort();
+    if let (Some(presence), Some(session_id)) = (
+        runtime.presence.as_ref(),
+        runtime.presence_session_id.as_deref(),
+    ) {
+        presence.mark_session_closed(session_id);
+    }
     tracing::info!(
         event_name = "session_socket.connection.close",
         source = "service-bin",
@@ -165,6 +178,7 @@ async fn dispatch_client_frame(
                 store.handle_command(
                     &command,
                     presence::presence_transport(runtime.connection_kind),
+                    runtime.presence_session_id.as_deref(),
                 )
             }) {
                 Some(presence::PresenceCommandOutcome::Handled(response)) => *response,

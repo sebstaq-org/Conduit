@@ -117,6 +117,12 @@ class RelayDurableObject {
       CLOSE_REPLACED,
       "client socket replaced",
     );
+    safeClose(
+      connection.dataSocket,
+      CLOSE_REPLACED,
+      "relay data socket replaced by client reconnect",
+    );
+    connection.dataSocket = null;
     connection.clientBuffer.length = 0;
     connection.bufferedBytes = 0;
     clearPendingTimer(connection);
@@ -256,7 +262,14 @@ class RelayDurableObject {
     connection.dataSocket = null;
     notifyControl(this.controlSocket, "data_closed", connectionId);
     if (connection.clientSocket !== null) {
-      armPendingTimer(this.connections, connectionId, connection);
+      safeClose(
+        connection.clientSocket,
+        CLOSE_POLICY,
+        "relay data socket closed",
+      );
+      connection.clientSocket = null;
+      connection.clientBuffer.length = 0;
+      connection.bufferedBytes = 0;
     }
     deleteIfIdle(this.connections, connectionId, connection);
   }

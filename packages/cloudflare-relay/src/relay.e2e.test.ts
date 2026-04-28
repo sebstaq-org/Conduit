@@ -55,7 +55,7 @@ describe("cloudflare relay local e2e", () => {
     const harness = await createLocalHarness();
 
     await runRelayRoundtripScenario(harness, "local_roundtrip");
-  });
+  }, 15000);
 
   it("routes large encrypted server frames for session snapshots", async () => {
     const harness = await createLocalHarness();

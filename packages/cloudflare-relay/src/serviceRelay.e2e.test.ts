@@ -94,6 +94,94 @@ describe("service-bin relay runtime e2e", () => {
     client.close();
   }, 120000);
 
+  it("keeps daemon status coherent through repeated relay reconnects", async () => {
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    const offer = await fetchOffer(currentRun.port);
+
+    for (let index = 0; index < 20; index += 1) {
+      const client = createRelaySessionClient({ offer });
+      await expect(
+        client.updatePresence({
+          clientId: "service-relay-reconnect-mobile",
+          deviceKind: "mobile",
+          displayName: "Reconnect Mobile",
+        }),
+      ).resolves.toBeUndefined();
+      await expect(client.getSettings()).resolves.toMatchObject({});
+      await expectDaemonStatusInvariant(currentRun.port, true);
+      client.close();
+      await expectDaemonStatusInvariant(currentRun.port, false);
+    }
+  }, 180000);
+
+  it("recovers the same relay client object after backend restart", async () => {
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    const offer = await fetchOffer(currentRun.port);
+    const client = createRelaySessionClient({ offer });
+
+    await expect(client.updatePresence(mobilePresence())).resolves.toBeUndefined();
+    await expect(client.getSettings()).resolves.toMatchObject({});
+    await expectDaemonStatusInvariant(currentRun.port, true);
+
+    currentRun.service.kill();
+    await onceExit(currentRun.service);
+    await expect(rejectsWithin(client.getSettings(), 15000)).resolves.toMatch(
+      /relay websocket|relay command response timed out/u,
+    );
+
+    currentRun = await restartRelayServiceRun(currentRun, relayEndpoint);
+    await waitForHealth(currentRun.port);
+    await expect(client.updatePresence(mobilePresence())).resolves.toBeUndefined();
+    await expect(client.getSettings()).resolves.toMatchObject({});
+    await expectDaemonStatusInvariant(currentRun.port, true);
+    client.close();
+    await expectDaemonStatusInvariant(currentRun.port, false);
+  }, 180000);
+
+  it("converges same-offer overlap to one active relay client", async () => {
+    const relayEndpoint = await startLocalRelayServer();
+    currentRun = await startRelayServiceRun(relayEndpoint);
+    await waitForHealth(currentRun.port);
+    const offer = await fetchOffer(currentRun.port);
+
+    const clients = Array.from({ length: 6 }, () =>
+      createRelaySessionClient({ offer }),
+    );
+    const results = await Promise.allSettled(
+      clients.map(async (client, index) => {
+        await client.updatePresence({
+          clientId: `service-relay-overlap-${index + 1}`,
+          deviceKind: "mobile",
+          displayName: `Overlap ${index + 1}`,
+        });
+        await client.getSettings();
+      }),
+    );
+    expect(JSON.stringify(results)).not.toContain(
+      "relay websocket failed to connect",
+    );
+    const winner = createRelaySessionClient({ offer });
+    await expect(
+      winner.updatePresence({
+        clientId: "service-relay-overlap-winner",
+        deviceKind: "mobile",
+        displayName: "Overlap Winner",
+      }),
+    ).resolves.toBeUndefined();
+    await expect(winner.getSettings()).resolves.toMatchObject({});
+    await expectDaemonStatusInvariant(currentRun.port, true);
+
+    clients.forEach((client) => {
+      client.close();
+    });
+    winner.close();
+    await expectDaemonStatusInvariant(currentRun.port, false);
+  }, 180000);
+
   it("rejects a relay handshake delayed until after offer expiry", async () => {
     const relayEndpoint = await startLocalRelayServer();
     currentRun = await startRelayServiceRun(relayEndpoint);
@@ -249,7 +337,27 @@ async function expectPresenceConnected(
     .toBe(expected);
 }
 
+async function expectDaemonStatusInvariant(
+  port: number,
+  expectedConnected: boolean,
+): Promise<void> {
+  await expect
+    .poll(async () => await fetchDaemonStatusSummary(port), { timeout: 15000 })
+    .toMatchObject({
+      mobilePeerConnected: expectedConnected,
+      mobileConnectedRows: expectedConnected ? 1 : 0,
+    });
+}
+
 async function fetchPresenceConnected(port: number): Promise<boolean> {
+  const summary = await fetchDaemonStatusSummary(port);
+  return summary.mobileConnectedRows > 0;
+}
+
+async function fetchDaemonStatusSummary(port: number): Promise<{
+  readonly mobileConnectedRows: number;
+  readonly mobilePeerConnected: boolean;
+}> {
   const response = await fetch(`http://127.0.0.1:${port}/api/daemon/status`);
   if (!response.ok) {
     throw new Error(
@@ -257,12 +365,70 @@ async function fetchPresenceConnected(port: number): Promise<boolean> {
     );
   }
   const payload = (await response.json()) as {
-    presence?: { clients?: { connected?: unknown }[] };
+    mobilePeerConnected?: unknown;
+    presence?: {
+      clients?: { connected?: unknown; deviceKind?: unknown }[];
+    };
   };
   if (!Array.isArray(payload.presence?.clients)) {
     throw new TypeError("daemon status did not include presence clients");
   }
-  return payload.presence.clients.some((client) => client.connected === true);
+  if (typeof payload.mobilePeerConnected !== "boolean") {
+    throw new TypeError("daemon status did not include mobilePeerConnected");
+  }
+  const mobileConnectedRows = payload.presence.clients.filter(
+    (client) =>
+      client.deviceKind === "mobile" && client.connected === true,
+  ).length;
+  if (payload.mobilePeerConnected !== (mobileConnectedRows > 0)) {
+    throw new Error(
+      `daemon status invariant failed: mobilePeerConnected=${String(
+        payload.mobilePeerConnected,
+      )} mobileConnectedRows=${String(mobileConnectedRows)}`,
+    );
+  }
+  return {
+    mobileConnectedRows,
+    mobilePeerConnected: payload.mobilePeerConnected,
+  };
+}
+
+function onceExit(service: RelayServiceRun["service"]): Promise<void> {
+  if (service.exitCode !== null || service.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    service.once("exit", () => {
+      resolve();
+    });
+  });
+}
+
+async function rejectsWithin(
+  promise: Promise<unknown>,
+  ms: number,
+): Promise<string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`operation did not reject within ${ms}ms`)),
+          ms,
+        );
+      }),
+    ]);
+  } catch (error) {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+    return error instanceof Error ? error.message : String(error);
+  }
+  if (timer !== undefined) {
+    clearTimeout(timer);
+  }
+  throw new Error("operation unexpectedly resolved");
 }
 
 function mobilePresence(): {
