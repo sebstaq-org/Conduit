@@ -13,6 +13,7 @@ interface SentryMockModule {
   readonly addBreadcrumb: typeof addBreadcrumb;
   readonly captureException: typeof captureException;
   readonly captureMessage: typeof captureMessage;
+  readonly flush: typeof flush;
   readonly init: typeof init;
   readonly logger: typeof logger;
   readonly resetSentryMock: typeof resetSentryMock;
@@ -31,6 +32,8 @@ const scope = {
 const addBreadcrumb = vi.fn<(breadcrumb: Record<string, unknown>) => void>();
 const captureException = vi.fn<(error: unknown) => void>();
 const captureMessage = vi.fn<(message: string, level?: string) => void>();
+const flush = vi.fn<() => Promise<boolean>>();
+flush.mockResolvedValue(true);
 const init = vi.fn<(options: Record<string, unknown>) => void>();
 const logger = {
   debug: vi.fn<(message: string, attributes?: Record<string, unknown>) => void>(),
@@ -63,6 +66,7 @@ function resetSentryMock(): void {
   addBreadcrumb.mockClear();
   captureException.mockClear();
   captureMessage.mockClear();
+  flush.mockClear();
   init.mockClear();
   resetSentryLoggerMock();
   resetSentryScopeMock();
@@ -76,6 +80,7 @@ export {
   addBreadcrumb,
   captureException,
   captureMessage,
+  flush,
   init,
   logger,
   resetSentryMock,

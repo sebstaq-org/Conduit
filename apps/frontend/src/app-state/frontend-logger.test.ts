@@ -195,6 +195,8 @@ async function runSentryInitializationCase(): Promise<void> {
       log_profile: "stage",
     }),
   );
+  await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS);
+  expect(sentryMock.flush).toHaveBeenCalledWith();
 }
 
 function expectFailureRecord(record: unknown): void {

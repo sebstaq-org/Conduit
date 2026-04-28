@@ -2,6 +2,7 @@ import {
   addBreadcrumb,
   captureException,
   captureMessage,
+  flush,
   init,
   logger as sentryLogger,
   setTag,
@@ -23,8 +24,10 @@ interface SentryLogSinkConfig {
 
 const SENTRY_DSN_ENV = "EXPO_PUBLIC_SENTRY_DSN";
 const MAX_CONTEXT_FIELDS = 48;
+const SENTRY_LOG_FLUSH_DELAY_MS = 1000;
 
 let sentryInitialized = false;
+let sentryFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 function configuredSentryDsn(): string | null {
   const rawDsn = frontendEnvValue(SENTRY_DSN_ENV);
@@ -115,9 +118,28 @@ function initializeSentry(config: SentryLogSinkConfig): void {
   sentryInitialized = true;
 }
 
+async function flushSentryLogs(): Promise<void> {
+  sentryFlushTimer = null;
+  try {
+    await flush();
+  } catch {
+    // Sentry transport failures must not recurse into frontend logging.
+  }
+}
+
+function scheduleSentryLogFlush(): void {
+  if (sentryFlushTimer !== null) {
+    return;
+  }
+  sentryFlushTimer = setTimeout(() => {
+    void flushSentryLogs();
+  }, SENTRY_LOG_FLUSH_DELAY_MS);
+}
+
 function writeSentryRecord(record: FrontendLogRecord, error?: unknown): void {
   const context = contextFromRecord(record);
   sentryLogger[record.level](record.event_name, context);
+  scheduleSentryLogFlush();
   addBreadcrumb({
     category: "frontend",
     data: context,
