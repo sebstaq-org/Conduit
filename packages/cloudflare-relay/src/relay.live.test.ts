@@ -79,7 +79,9 @@ if (liveEndpoint === undefined) {
       const harness = createLiveHarness(liveEndpoint);
 
       await runRelayHealthCheck(harness);
-      await runRelayRoundtripScenario(harness, `live_${Date.now()}`);
+      await runRelayRoundtripScenario(harness, `live_${Date.now()}`, {
+        reconnect: false,
+      });
       await runRelayAdversarialScenario(harness, `live_attack_${Date.now()}`);
     }, 30000);
   });

@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { backendEnvironment } from "./backend-environment.js";
 import { readDaemonStatusPayload } from "./backend-status-payload.js";
 import { removePidFile, writePidFile } from "./pid-file.js";
 import type { ChildProcess } from "node:child_process";
@@ -161,8 +162,15 @@ class DesktopDaemonController {
       backendHealthy: daemon !== null,
       daemon,
       lastExit: this.#lastExit,
-      mobilePeerConnected:
-        daemon?.presence.clients.some((client) => client.connected) ?? false,
+      mobileConnection: daemon?.mobileConnection ?? {
+        connectionId: null,
+        generation: null,
+        lastError: null,
+        staleAt: null,
+        status: "idle",
+        transport: "relay",
+        verifiedAt: null,
+      },
       pairingConfigured: daemon?.pairingConfigured ?? false,
       pid: this.#backendProcess?.pid ?? null,
       presence: daemon?.presence ?? null,
@@ -187,7 +195,7 @@ class DesktopDaemonController {
       flags: "a",
     });
     const child = spawn(this.#config.serviceBinPath, this.#serveArgs(), {
-      env: this.#backendEnvironment(),
+      env: backendEnvironment(this.#config),
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout?.pipe(this.#backendLogStream, { end: false });
@@ -228,19 +236,6 @@ class DesktopDaemonController {
       args.push("--store-path", this.#config.storePath);
     }
     return args;
-  }
-
-  #backendEnvironment(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) {
-        env[key] = value;
-      }
-    }
-    env.CONDUIT_HOME = this.#config.home;
-    env.CONDUIT_LOG_PROFILE = this.#config.logProfile;
-    env.XDG_DATA_HOME = this.#config.home;
-    return env;
   }
 
   async #waitHealthy(): Promise<void> {

@@ -49,20 +49,46 @@ function presenceClients(connectedClients: number): DesktopPresenceSnapshot {
   };
 }
 
+function mobileConnection(
+  connectedClients: number,
+): DesktopDaemonStatus["mobileConnection"] {
+  if (connectedClients > 0) {
+    return {
+      connectionId: "conn_test",
+      generation: 1,
+      lastError: null,
+      staleAt: "2026-04-25T00:00:45Z",
+      status: "connected",
+      transport: "relay",
+      verifiedAt: "2026-04-25T00:00:00Z",
+    };
+  }
+  return {
+    connectionId: null,
+    generation: null,
+    lastError: null,
+    staleAt: null,
+    status: "idle",
+    transport: "relay",
+    verifiedAt: null,
+  };
+}
+
 function healthyStatus(connectedClients: number): DesktopDaemonStatus {
   const presence = presenceClients(connectedClients);
+  const connection = mobileConnection(connectedClients);
   return {
     appBaseUrl: "conduit://pair",
     backendHealthy: true,
     daemon: {
-      mobilePeerConnected: connectedClients > 0,
+      mobileConnection: connection,
       pairingConfigured: true,
       presence,
       relayEndpoint: "ws://relay.test",
       serverId: "srv_host",
     },
     lastExit: null,
-    mobilePeerConnected: connectedClients > 0,
+    mobileConnection: connection,
     pairingConfigured: true,
     pid: 123,
     presence,
@@ -114,11 +140,13 @@ function restartPresencePolling(setup: PollingSetup): void {
   setup.controller.startPresencePolling(setup.bridge);
 }
 
-function expectMobilePeerConnected(status: DesktopDaemonStatus | null): void {
+function expectMobileConnectionConnected(
+  status: DesktopDaemonStatus | null,
+): void {
   if (status === null) {
     throw new Error("expected desktop status snapshot");
   }
-  expect(status).toMatchObject({ mobilePeerConnected: true });
+  expect(status.mobileConnection.status).toBe("connected");
 }
 
 function createStaleStatusSetup(): StaleStatusSetup {
@@ -173,7 +201,7 @@ it("fetches daemon presence as soon as desktop UI subscribes", async () => {
   await flushPromises();
 
   expect(getDaemonStatus.mock.calls).toHaveLength(1);
-  expectMobilePeerConnected(controller.getSnapshot());
+  expectMobileConnectionConnected(controller.getSnapshot());
   unsubscribe();
 });
 
@@ -186,7 +214,7 @@ it("drops stale daemon status responses from an older generation", async () => {
   setup.oldStatus.resolve(healthyStatus(0));
   await flushPromises();
 
-  expectMobilePeerConnected(setup.controller.getSnapshot());
+  expectMobileConnectionConnected(setup.controller.getSnapshot());
   setup.unsubscribe();
 });
 
@@ -211,7 +239,7 @@ it("clears stale connected status when daemon polling fails", async () => {
   vi.useFakeTimers();
   const setup = createFailedPollingSetup();
   await flushPromises();
-  expectMobilePeerConnected(setup.controller.getSnapshot());
+  expectMobileConnectionConnected(setup.controller.getSnapshot());
 
   await vi.advanceTimersByTimeAsync(baselinePollIntervalMs);
   await flushPromises();

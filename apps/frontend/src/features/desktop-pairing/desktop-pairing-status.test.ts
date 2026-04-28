@@ -2,9 +2,35 @@ import { expect, it } from "vitest";
 import { desktopPairingPresentation } from "./desktop-pairing-status";
 import type { DesktopPairingStatusSnapshot } from "./desktop-pairing-status";
 
+function mobileConnection(
+  connectedClients: number,
+): DesktopPairingStatusSnapshot["mobileConnection"] {
+  if (connectedClients > 0) {
+    return {
+      connectionId: "conn_test",
+      generation: 1,
+      lastError: null,
+      staleAt: "2026-04-25T00:00:45Z",
+      status: "connected",
+      transport: "relay",
+      verifiedAt: "2026-04-25T00:00:00Z",
+    };
+  }
+  return {
+    connectionId: null,
+    generation: null,
+    lastError: null,
+    staleAt: null,
+    status: "idle",
+    transport: "relay",
+    verifiedAt: null,
+  };
+}
+
 function healthyStatus(connectedClients: number): DesktopPairingStatusSnapshot {
   return {
     backendHealthy: true,
+    mobileConnection: mobileConnection(connectedClients),
     pairingConfigured: true,
     presence: {
       clients: Array.from({ length: connectedClients }, (_value, index) => ({
@@ -122,6 +148,15 @@ it("surfaces recovery controls instead of daemon copy when backend is unavailabl
       pending: null,
       status: {
         backendHealthy: false,
+        mobileConnection: {
+          connectionId: null,
+          generation: null,
+          lastError: null,
+          staleAt: null,
+          status: "idle",
+          transport: "relay",
+          verifiedAt: null,
+        },
         pairingConfigured: false,
         presence: null,
         relayConfigured: true,

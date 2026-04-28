@@ -5,6 +5,7 @@ mod catalog;
 mod client_logs;
 mod presence;
 mod relay;
+mod relay_session;
 mod text_connection;
 mod wire;
 
@@ -27,7 +28,7 @@ use session_store::LocalStore;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use telemetry_support::TelemetryHealth;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -43,9 +44,9 @@ struct ServeState {
     client_log_sink: client_logs::ClientLogSink,
     product_home: PathBuf,
     relay_endpoint: Option<String>,
+    relay_sessions: Arc<relay_session::RelaySessionManager>,
     app_base_url: String,
     telemetry_health: TelemetryHealth,
-    mobile_peer_connections: Arc<AtomicUsize>,
     presence: Arc<presence::PresenceStore>,
 }
 
@@ -197,15 +198,15 @@ fn router_with_actor(
     telemetry_health: TelemetryHealth,
 ) -> Router {
     let client_log_sink = client_logs::ClientLogSink::detect();
-    let mobile_peer_connections = Arc::new(AtomicUsize::new(0));
     let presence = Arc::new(presence::PresenceStore::default());
+    let relay_sessions = Arc::new(relay_session::RelaySessionManager::default());
     if let Some(endpoint) = relay_endpoint.clone() {
         relay::spawn_relay_connector(
             endpoint,
             product_home.clone(),
             actor.clone(),
-            Arc::clone(&mobile_peer_connections),
             Arc::clone(&presence),
+            Arc::clone(&relay_sessions),
         );
     }
     Router::new()
@@ -221,9 +222,9 @@ fn router_with_actor(
             client_log_sink,
             product_home,
             relay_endpoint,
+            relay_sessions,
             app_base_url,
             telemetry_health,
-            mobile_peer_connections,
             presence,
         }))
 }
@@ -265,17 +266,16 @@ async fn daemon_status(State(state): State<Arc<ServeState>>) -> impl IntoRespons
         Ok(status) => {
             let mut payload = json!(status);
             if let Some(object) = payload.as_object_mut() {
+                let now = std::time::SystemTime::now();
                 object.insert(
-                    "mobilePeerConnected".to_owned(),
-                    json!(state.mobile_peer_connections.load(Ordering::Relaxed) > 0),
+                    "mobileConnection".to_owned(),
+                    json!(state.relay_sessions.snapshot(now).await),
                 );
                 if let Some(server_id) = object.get("serverId").and_then(serde_json::Value::as_str)
                 {
                     object.insert(
                         "presence".to_owned(),
-                        state
-                            .presence
-                            .snapshot_json(server_id, std::time::SystemTime::now()),
+                        state.presence.snapshot_json(server_id, now),
                     );
                 }
             }

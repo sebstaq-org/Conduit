@@ -1,5 +1,6 @@
 use super::actor::RuntimeActor;
 use super::presence;
+use super::relay_session::RelaySessionManager;
 use super::wire::{ClientCommandFrame, server_event_frame_text, server_response_frame_text};
 use crate::serve::ServeState;
 use service_runtime::consumer_protocol::{ConduitProtocolError, ConduitRuntimeEvent};
@@ -12,30 +13,62 @@ use tokio::sync::{Mutex, mpsc};
 #[derive(Clone)]
 pub(super) struct TextConnectionRuntime {
     pub(super) actor: RuntimeActor,
+    pub(super) close_presence_on_connection_close: bool,
     pub(super) presence: Option<Arc<presence::PresenceStore>>,
+    pub(super) relay_session: Option<RelayTextSession>,
+    pub(super) presence_session_id: Option<String>,
+    pub(super) watches: Option<SharedWatchState>,
     pub(super) connection_kind: &'static str,
+}
+
+pub(super) struct RelayRuntimeContext {
+    pub(super) actor: RuntimeActor,
+    pub(super) generation: u64,
+    pub(super) presence: Arc<presence::PresenceStore>,
+    pub(super) presence_session_id: String,
+    pub(super) sessions: Arc<RelaySessionManager>,
+    pub(super) watches: SharedWatchState,
 }
 
 impl TextConnectionRuntime {
     pub(super) fn direct(state: &ServeState) -> Self {
         Self {
             actor: state.actor.clone(),
+            close_presence_on_connection_close: true,
             presence: Some(Arc::clone(&state.presence)),
+            relay_session: None,
+            presence_session_id: None,
+            watches: None,
             connection_kind: "direct",
         }
     }
 
-    pub(super) fn relay(actor: RuntimeActor, presence: Arc<presence::PresenceStore>) -> Self {
+    pub(super) fn relay(context: RelayRuntimeContext) -> Self {
         Self {
-            actor,
-            presence: Some(presence),
+            actor: context.actor,
+            close_presence_on_connection_close: false,
+            presence: Some(context.presence),
+            relay_session: Some(RelayTextSession {
+                connection_id: context.presence_session_id.clone(),
+                generation: context.generation,
+                sessions: context.sessions,
+            }),
+            presence_session_id: Some(context.presence_session_id),
+            watches: Some(context.watches),
             connection_kind: "relay",
         }
     }
 }
 
-type SharedWatchState = Arc<Mutex<WatchState>>;
+pub(super) type SharedWatchState = Arc<Mutex<WatchState>>;
 type OutboundSender = mpsc::UnboundedSender<OutboundFrame>;
+
+#[derive(Clone)]
+pub(super) struct RelayTextSession {
+    connection_id: String,
+    generation: u64,
+    sessions: Arc<RelaySessionManager>,
+}
 
 #[derive(Debug)]
 pub(super) enum OutboundFrame {
@@ -52,11 +85,14 @@ pub(super) enum OutboundFrame {
     reason = "Connection loop coordinates inbound command frames, outbound runtime frames, and lifecycle telemetry."
 )]
 pub(super) async fn run_text_connection(
-    runtime: TextConnectionRuntime,
+    mut runtime: TextConnectionRuntime,
     mut inbound_receiver: mpsc::UnboundedReceiver<String>,
     outbound_text: mpsc::UnboundedSender<String>,
     connection_id: u64,
 ) {
+    if runtime.close_presence_on_connection_close && runtime.presence_session_id.is_none() {
+        runtime.presence_session_id = Some(format!("direct:{connection_id}"));
+    }
     tracing::info!(
         event_name = "session_socket.connection.open",
         source = "service-bin",
@@ -64,7 +100,10 @@ pub(super) async fn run_text_connection(
         connection_kind = runtime.connection_kind
     );
     let (outbound, mut outbound_receiver) = mpsc::unbounded_channel();
-    let watches = Arc::new(Mutex::new(WatchState::default()));
+    let watches = runtime
+        .watches
+        .clone()
+        .unwrap_or_else(|| Arc::new(Mutex::new(WatchState::default())));
     let event_forwarder = tokio::spawn(forward_live_events(
         runtime.actor.subscribe(),
         Arc::clone(&watches),
@@ -111,6 +150,13 @@ pub(super) async fn run_text_connection(
         }
     }
     event_forwarder.abort();
+    if let (true, Some(presence), Some(session_id)) = (
+        runtime.close_presence_on_connection_close,
+        runtime.presence.as_ref(),
+        runtime.presence_session_id.as_deref(),
+    ) {
+        presence.mark_session_closed(session_id);
+    }
     tracing::info!(
         event_name = "session_socket.connection.close",
         source = "service-bin",
@@ -165,6 +211,7 @@ async fn dispatch_client_frame(
                 store.handle_command(
                     &command,
                     presence::presence_transport(runtime.connection_kind),
+                    runtime.presence_session_id.as_deref(),
                 )
             }) {
                 Some(presence::PresenceCommandOutcome::Handled(response)) => *response,
@@ -179,6 +226,12 @@ async fn dispatch_client_frame(
             .lock()
             .await
             .apply_command(&command_name, &response.result);
+        if let Some(relay_session) = runtime.relay_session.as_ref() {
+            relay_session
+                .sessions
+                .mark_verified(&relay_session.connection_id, relay_session.generation)
+                .await;
+        }
     }
     log_command_finish(
         connection_id,

@@ -85,6 +85,14 @@ function startService(
       }),
     },
   );
+  if (process.env.CONDUIT_RELAY_E2E_SERVICE_LOGS === "1") {
+    child.stdout.on("data", (chunk: Buffer) => {
+      process.stderr.write(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      process.stderr.write(chunk);
+    });
+  }
   return child;
 }
 

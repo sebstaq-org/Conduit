@@ -1,4 +1,5 @@
 import { decodeBase64Bytes, decodeBase64UrlJson } from "./base64.js";
+import { extractOfferPayload } from "./connection-offer-url.js";
 import type {
   AcceptConnectionOfferResult,
   ConnectionHostProfile,
@@ -9,7 +10,6 @@ import type {
 
 const CONNECTION_OFFER_VERSION = 1 as const;
 const CONNECTION_OFFER_VERSION_FIELD = "v" as const;
-const OFFER_FRAGMENT_MARKER = "#offer=";
 const AUTHORIZATION_BOUNDARY = "relay-handshake";
 const DEFAULT_HOST_DISPLAY_NAME = "Conduit Desktop";
 const OFFER_KEYS =
@@ -186,15 +186,9 @@ function parseConnectionOfferUrl(
   urlOrFragment: string,
   now?: Date,
 ): ConnectionOfferV1 {
-  const markerIndex = urlOrFragment.indexOf(OFFER_FRAGMENT_MARKER);
-  if (markerIndex === -1) {
-    throw new Error("pairing offer URL is missing #offer= fragment");
-  }
-  const encoded = urlOrFragment
-    .slice(markerIndex + OFFER_FRAGMENT_MARKER.length)
-    .trim();
+  const encoded = extractOfferPayload(urlOrFragment);
   if (!encoded) {
-    throw new Error("pairing offer fragment is empty");
+    throw new Error("pairing offer payload is empty");
   }
   return readConnectionOffer(JSON.parse(decodeBase64UrlJson(encoded)), now);
 }

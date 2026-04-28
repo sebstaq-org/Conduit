@@ -1,9 +1,13 @@
 import type { PendingAction } from "./desktop-pairing-state";
-import type { DesktopPresenceSnapshot } from "@/app-state/desktop-bridge";
+import type {
+  DesktopMobileConnection,
+  DesktopPresenceSnapshot,
+} from "@/app-state/desktop-bridge";
 import type { ConnectionStatusKind } from "@/ui";
 
 interface DesktopPairingStatusSnapshot {
   readonly backendHealthy: boolean;
+  readonly mobileConnection: DesktopMobileConnection;
   readonly pairingConfigured: boolean;
   readonly presence: DesktopPresenceSnapshot | null;
   readonly relayConfigured: boolean;
@@ -30,6 +34,21 @@ function connectedPresenceClients(
   return presence?.clients.filter((client) => client.connected).length ?? 0;
 }
 
+function indicatorForMobileConnection(
+  connection: DesktopMobileConnection,
+): ConnectionStatusKind {
+  if (connection.status === "connected") {
+    return "connected";
+  }
+  if (connection.status === "waiting" || connection.status === "reconnecting") {
+    return "connecting";
+  }
+  if (connection.status === "disconnected") {
+    return "disconnected";
+  }
+  return "idle";
+}
+
 function daemonNeedsRecovery(
   status: DesktopPairingStatusSnapshot | null,
 ): boolean {
@@ -40,6 +59,15 @@ function daemonNeedsRecovery(
       !status.relayConfigured ||
       !status.pairingConfigured)
   );
+}
+
+function presentationIndicator(
+  status: DesktopPairingStatusSnapshot | null,
+): ConnectionStatusKind {
+  if (status !== null) {
+    return indicatorForMobileConnection(status.mobileConnection);
+  }
+  return "idle";
 }
 
 function desktopPairingPresentation({
@@ -74,17 +102,9 @@ function desktopPairingPresentation({
   const connectedClientCount = connectedPresenceClients(
     status?.presence ?? null,
   );
-  if (connectedClientCount > 0) {
-    return {
-      connectedClientCount,
-      indicator: "connected",
-      recoveryVisible: false,
-      showMobilePairing: true,
-    };
-  }
   return {
-    connectedClientCount: 0,
-    indicator: "idle",
+    connectedClientCount,
+    indicator: presentationIndicator(status),
     recoveryVisible: false,
     showMobilePairing: true,
   };

@@ -59,6 +59,7 @@ async function runRelayAdversarialScenario(
     }),
     attackerCapability,
   );
+
   const clientHandshake = await createRelayClientHandshake({
     context,
     daemonPublicKeyB64: daemonKeys.publicKeyB64,

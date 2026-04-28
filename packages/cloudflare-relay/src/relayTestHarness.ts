@@ -28,7 +28,9 @@ async function runRelayHealthCheck(harness: RelayTestHarness): Promise<void> {
 async function runRelayRoundtripScenario(
   harness: RelayTestHarness,
   suffix: string,
+  options: { reconnect?: boolean } = {},
 ): Promise<void> {
+  const reconnect = options.reconnect ?? true;
   const daemonCapability = generateRelayCapability();
   const clientCapability = generateRelayCapability();
   const relayServerId = deriveRelayServerId(daemonCapability);
@@ -118,11 +120,34 @@ async function runRelayRoundtripScenario(
 
   data.close();
   await waitForEnvelope(control, "data_closed", connectionId);
+
+  if (!reconnect) {
+    client.close();
+    control.close();
+    return;
+  }
+
+  const reconnectClient = await harness.openSocket(
+    buildRelayWebSocketUrl(harness.endpoint, {
+      capability: clientCapability,
+      connectionId,
+      role: "client",
+      serverId: relayServerId,
+    }),
+    clientCapability,
+  );
+  await waitForEnvelope(control, "client_waiting", connectionId);
+  const reconnectHandshake = await createRelayClientHandshake({
+    context,
+    daemonPublicKeyB64: daemonKeys.publicKeyB64,
+  });
   const reconnectFrame =
-    await clientHandshake.channel.encryptUtf8(reconnectPlaintext);
+    await reconnectHandshake.channel.encryptUtf8(reconnectPlaintext);
+  const rawReconnectHandshake = JSON.stringify(reconnectHandshake.handshake);
   const rawReconnectFrame = JSON.stringify(reconnectFrame);
   expect(rawReconnectFrame).not.toContain(reconnectPlaintext);
-  client.send(rawReconnectFrame);
+  reconnectClient.send(rawReconnectHandshake);
+  reconnectClient.send(rawReconnectFrame);
   const dataReconnect = await harness.openSocket(
     buildRelayWebSocketUrl(harness.endpoint, {
       capability: daemonCapability,
@@ -132,19 +157,32 @@ async function runRelayRoundtripScenario(
     }),
     daemonCapability,
   );
+  const rawReconnectHandshakeAtDaemon = await waitForMessage(
+    dataReconnect,
+    "roundtrip reconnect handshake",
+  );
+  expect(rawReconnectHandshakeAtDaemon).toBe(rawReconnectHandshake);
   const rawReconnectAtDaemon = await waitForMessage(
     dataReconnect,
     "roundtrip reconnect",
   );
   expect(rawReconnectAtDaemon).toBe(rawReconnectFrame);
+  const reconnectDaemonChannel = await acceptRelayClientHandshake({
+    context,
+    daemonSecretKeyB64: daemonKeys.secretKeyB64,
+    handshake: JSON.parse(
+      rawReconnectHandshakeAtDaemon,
+    ) as typeof reconnectHandshake.handshake,
+  });
   await expect(
-    daemonChannel.decryptUtf8(
+    reconnectDaemonChannel.decryptUtf8(
       JSON.parse(rawReconnectAtDaemon) as typeof reconnectFrame,
     ),
   ).resolves.toBe(reconnectPlaintext);
 
   dataReconnect.close();
   client.close();
+  reconnectClient.close();
   control.close();
 }
 
@@ -188,6 +226,10 @@ async function runRelayClientCloseCleansDataScenario(
     daemonCapability,
   );
 
+  client.send("client close probe");
+  await expect(waitForMessage(data, "client close probe")).resolves.toBe(
+    "client close probe",
+  );
   client.close();
 
   await waitForEnvelope(control, "client_closed", connectionId);

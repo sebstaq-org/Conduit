@@ -3,7 +3,7 @@
 use serde::Serialize;
 use serde_json::{Value, json};
 use service_runtime::{ConsumerError, ConsumerResponse};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
@@ -26,6 +26,7 @@ pub(super) enum PresenceTransport {
 
 #[derive(Debug, Clone)]
 struct PresenceClient {
+    active_sessions: HashSet<String>,
     client_id: String,
     display_name: String,
     device_kind: PresenceDeviceKind,
@@ -73,29 +74,41 @@ impl PresenceStore {
         &self,
         command: &service_runtime::ConsumerCommand,
         transport: PresenceTransport,
+        session_id: Option<&str>,
     ) -> PresenceCommandOutcome {
         if command.command != "presence/update" {
             return PresenceCommandOutcome::NotPresence;
         }
-        PresenceCommandOutcome::Handled(Box::new(match self.update(command, transport) {
-            Ok(result) => ConsumerResponse {
-                id: command.id.clone(),
-                ok: true,
-                result,
-                error: None,
-                snapshot: None,
+        PresenceCommandOutcome::Handled(Box::new(
+            match self.update(command, transport, session_id) {
+                Ok(result) => ConsumerResponse {
+                    id: command.id.clone(),
+                    ok: true,
+                    result,
+                    error: None,
+                    snapshot: None,
+                },
+                Err(message) => ConsumerResponse {
+                    id: command.id.clone(),
+                    ok: false,
+                    result: Value::Null,
+                    error: Some(ConsumerError {
+                        code: "invalid_presence".to_owned(),
+                        message,
+                    }),
+                    snapshot: None,
+                },
             },
-            Err(message) => ConsumerResponse {
-                id: command.id.clone(),
-                ok: false,
-                result: Value::Null,
-                error: Some(ConsumerError {
-                    code: "invalid_presence".to_owned(),
-                    message,
-                }),
-                snapshot: None,
-            },
-        }))
+        ))
+    }
+
+    pub(super) fn mark_session_closed(&self, session_id: &str) {
+        let Ok(mut clients) = self.clients.lock() else {
+            return;
+        };
+        for client in clients.values_mut() {
+            client.active_sessions.remove(session_id);
+        }
     }
 
     pub(super) fn snapshot_json(&self, server_id: &str, now: SystemTime) -> Value {
@@ -114,22 +127,38 @@ impl PresenceStore {
         &self,
         command: &service_runtime::ConsumerCommand,
         transport: PresenceTransport,
+        session_id: Option<&str>,
     ) -> Result<Value, String> {
         let client_id = required_string(&command.params, "clientId")?;
         let display_name = required_string(&command.params, "displayName")?;
         let device_kind = required_device_kind(&command.params)?;
         let now = SystemTime::now();
-        let client = PresenceClient {
-            client_id: client_id.clone(),
-            display_name,
-            device_kind,
-            last_seen_at: now,
-            transport,
-        };
-        self.clients
+        let mut clients = self
+            .clients
             .lock()
-            .map_err(|error| format!("presence store is unavailable: {error}"))?
-            .insert(client_id, client);
+            .map_err(|error| format!("presence store is unavailable: {error}"))?;
+        if let Some(session_id) = session_id {
+            for existing in clients.values_mut() {
+                existing.active_sessions.remove(session_id);
+            }
+        }
+        let client = clients
+            .entry(client_id.clone())
+            .or_insert_with(|| PresenceClient {
+                active_sessions: HashSet::new(),
+                client_id: client_id.clone(),
+                display_name: display_name.clone(),
+                device_kind,
+                last_seen_at: now,
+                transport,
+            });
+        client.display_name = display_name;
+        client.device_kind = device_kind;
+        client.last_seen_at = now;
+        client.transport = transport;
+        if let Some(session_id) = session_id {
+            client.active_sessions.insert(session_id.to_owned());
+        }
         Ok(json!({ "accepted": true }))
     }
 
@@ -156,16 +185,20 @@ impl PresenceStore {
 }
 
 impl PresenceClient {
+    fn connected(&self, now: SystemTime) -> bool {
+        !self.active_sessions.is_empty()
+            && now
+                .duration_since(self.last_seen_at)
+                .map(|age| age <= CLIENT_TIMEOUT)
+                .unwrap_or(true)
+    }
+
     fn snapshot(&self, now: SystemTime) -> PresenceClientSnapshot {
-        let connected = now
-            .duration_since(self.last_seen_at)
-            .map(|age| age <= CLIENT_TIMEOUT)
-            .unwrap_or(true);
         PresenceClientSnapshot {
             client_id: self.client_id.clone(),
             display_name: self.display_name.clone(),
             device_kind: self.device_kind,
-            connected,
+            connected: self.connected(now),
             last_seen_at: time::OffsetDateTime::from(self.last_seen_at).to_string(),
             transport: self.transport,
         }
@@ -225,8 +258,11 @@ mod tests {
     #[test]
     fn snapshot_marks_recent_client_connected() -> TestResult<()> {
         let store = PresenceStore::default();
-        let response = match store.handle_command(&presence_command("p1"), PresenceTransport::Relay)
-        {
+        let response = match store.handle_command(
+            &presence_command("p1"),
+            PresenceTransport::Relay,
+            Some("session-1"),
+        ) {
             super::PresenceCommandOutcome::Handled(response) => response,
             super::PresenceCommandOutcome::NotPresence => {
                 return Err("presence was not handled".into());
@@ -245,8 +281,11 @@ mod tests {
     #[test]
     fn snapshot_marks_stale_client_disconnected_after_timeout() -> TestResult<()> {
         let store = PresenceStore::default();
-        let response = match store.handle_command(&presence_command("p1"), PresenceTransport::Relay)
-        {
+        let response = match store.handle_command(
+            &presence_command("p1"),
+            PresenceTransport::Relay,
+            Some("session-1"),
+        ) {
             super::PresenceCommandOutcome::Handled(response) => response,
             super::PresenceCommandOutcome::NotPresence => {
                 return Err("presence was not handled".into());
@@ -268,12 +307,13 @@ mod tests {
         let store = PresenceStore::default();
         let mut command = presence_command("p1");
         command.params["deviceKind"] = json!("desktop");
-        let response = match store.handle_command(&command, PresenceTransport::Direct) {
-            super::PresenceCommandOutcome::Handled(response) => response,
-            super::PresenceCommandOutcome::NotPresence => {
-                return Err("presence was not handled".into());
-            }
-        };
+        let response =
+            match store.handle_command(&command, PresenceTransport::Direct, Some("session-1")) {
+                super::PresenceCommandOutcome::Handled(response) => response,
+                super::PresenceCommandOutcome::NotPresence => {
+                    return Err("presence was not handled".into());
+                }
+            };
         if !response.ok
             && response
                 .error

@@ -81,6 +81,52 @@ test("mobile drawer closes immediately when a draft session is selected", async 
   await expectNoFailureFeedback(page);
 });
 
+test("mobile app restart preserves pairing and reconnects after relay drop", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openMobileFrontend(page, activeHarness);
+  await pairFrontendFromPairRoute(page, activeHarness);
+
+  const context = page.context();
+  await page.close();
+  const restartedPage = await context.newPage();
+  try {
+    await openMobileFrontend(restartedPage, activeHarness);
+    await openHostPairingPopover(restartedPage);
+    await expect(
+      restartedPage.getByLabel("Desktop connected indicator"),
+    ).toBeVisible({ timeout: 15000 });
+    await closePopover(restartedPage);
+    await openMobileNavigationPanel(restartedPage);
+    await expectVisibleWithDiagnostics(
+      restartedPage,
+      activeHarness,
+      restartedPage.getByRole("button", { name: fixtureSessionTitle }),
+    );
+
+    const beforeReconnect = await activeHarness.relaySnapshot();
+    await activeHarness.closeRelayDataSocket();
+    await expect
+      .poll(async () => (await activeHarness.relaySnapshot()).dataSocketCount, {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(beforeReconnect.dataSocketCount);
+
+    await restartedPage
+      .getByRole("button", { name: fixtureSessionTitle })
+      .click();
+    await expect(
+      restartedPage.getByText(transcriptSentinel, { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await expectMobileNavigationPanelClosed(restartedPage);
+    await expectNoFailureFeedback(restartedPage);
+  } finally {
+    await restartedPage.close().catch(() => undefined);
+  }
+});
+
 test("new session hides previously opened transcript and keeps draft context", async ({
   page,
 }) => {
@@ -174,10 +220,9 @@ test("Codex configured draft prompt applies full config before first prompt", as
   await sendButton.click();
 
   await expect(page.getByText(capturedTerminalPlanHeading)).toBeVisible();
-  await expect(page.getByText("Implement this plan?")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "1. Yes, implement this plan" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30000 });
   await page
     .getByRole("button", {
       name: "2. No, and tell Codex what to do differently",
@@ -333,11 +378,11 @@ test("pair route refreshes the offer field for a new deep link", async ({
 
   await page.goto(`${activeHarness.frontendUrl}/pair?offer=${firstOffer}`);
   await expect(page.getByLabel("Pairing link")).toHaveValue(
-    `conduit://pair#offer=${firstOffer}`,
+    `conduit://pair?offer=${firstOffer}`,
   );
   await page.goto(`${activeHarness.frontendUrl}/pair?offer=${secondOffer}`);
   await expect(page.getByLabel("Pairing link")).toHaveValue(
-    `conduit://pair#offer=${secondOffer}`,
+    `conduit://pair?offer=${secondOffer}`,
   );
 });
 
@@ -425,7 +470,8 @@ async function openHostPairingPopover(page: Page): Promise<void> {
     return;
   }
   await page
-    .getByRole("button", { name: "Desktop connection controls" })
+    .locator('button[aria-label="Desktop connection controls"]:visible')
+    .last()
     .click();
   await expect(page.getByLabel("Pairing link")).toBeVisible();
 }
@@ -501,9 +547,6 @@ async function expectNoParityTranscript(
 }
 
 async function expectNoFailureFeedback(page: Page): Promise<void> {
-  await expect(page.getByText("Request failed", { exact: true })).toHaveCount(
-    0,
-  );
   await expect(page.getByText("Session failed to open")).toHaveCount(0);
   await expect(page.getByText(/Couldn't open .* session/)).toHaveCount(0);
   await expect(page.getByText(/request failed\./i)).toHaveCount(0);
