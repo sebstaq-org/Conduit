@@ -1,9 +1,9 @@
+use super::SdkConnection;
 use super::SdkHostActor;
 use crate::error::{AcpError, Result};
 use crate::initialize::{
     ProviderInitializeRequest, ProviderInitializeResponse, ProviderInitializeResult,
 };
-use agent_client_protocol::{self as acp, Agent as _};
 
 impl SdkHostActor {
     pub(super) fn initialize_result(&self) -> Option<ProviderInitializeResult> {
@@ -19,7 +19,8 @@ impl SdkHostActor {
         }
         let response = self
             .connection()?
-            .initialize(request.to_sdk_request())
+            .send_request(request.to_sdk_request())
+            .block_task()
             .await
             .map_err(|source| super::sdk_error(self.provider, "initialize", source))?;
         let result = ProviderInitializeResult {
@@ -30,10 +31,7 @@ impl SdkHostActor {
         Ok(result)
     }
 
-    pub(super) fn initialized_connection(
-        &self,
-        operation: &'static str,
-    ) -> Result<&acp::ClientSideConnection> {
+    pub(super) fn initialized_connection(&self, operation: &'static str) -> Result<&SdkConnection> {
         if self.initialize_result.is_none() {
             return Err(AcpError::NotInitialized {
                 provider: self.provider,

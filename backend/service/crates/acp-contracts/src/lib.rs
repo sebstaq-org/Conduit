@@ -35,11 +35,10 @@ mod tests {
     };
     use crate::{Error, Result};
     use agent_client_protocol_schema::{
-        AGENT_METHOD_NAMES, AgentResponse, AgentSide, CancelNotification, ClientRequest,
-        ClientSide, Implementation, InitializeRequest, InitializeResponse, JsonRpcMessage,
-        LoadSessionRequest, LoadSessionResponse, NewSessionRequest, NewSessionResponse,
-        Notification, OutgoingMessage, PromptResponse, ProtocolVersion, Request, Response,
-        SessionId, StopReason,
+        AGENT_METHOD_NAMES, AgentResponse, CancelNotification, ClientNotification, ClientRequest,
+        Implementation, InitializeRequest, InitializeResponse, JsonRpcMessage, LoadSessionRequest,
+        LoadSessionResponse, NewSessionRequest, NewSessionResponse, Notification, PromptResponse,
+        ProtocolVersion, Request, Response, SessionId, StopReason,
     };
     use serde_json::{json, to_value};
     use std::path::PathBuf;
@@ -97,15 +96,14 @@ mod tests {
     #[test]
     fn validates_initialize_request_and_response() -> Result<()> {
         let bundle = load_contract_bundle()?;
-        let request =
-            JsonRpcMessage::wrap(OutgoingMessage::<ClientSide, AgentSide>::Request(Request {
-                id: 1.into(),
-                method: Arc::from(AGENT_METHOD_NAMES.initialize),
-                params: Some(ClientRequest::InitializeRequest(
-                    InitializeRequest::new(ProtocolVersion::V1)
-                        .client_info(Implementation::new("conduit-phase-1", "0.5.0")),
-                )),
-            }));
+        let request = JsonRpcMessage::wrap(Request {
+            id: 1.into(),
+            method: Arc::from(AGENT_METHOD_NAMES.initialize),
+            params: Some(ClientRequest::InitializeRequest(
+                InitializeRequest::new(ProtocolVersion::V1)
+                    .client_info(Implementation::new("conduit-phase-1", "0.5.0")),
+            )),
+        });
         let request_value = serialize_value(request)?;
         let method = validate_locked_request_envelope(&bundle, &request_value)?;
         if method != LockedMethod::Initialize {
@@ -114,15 +112,13 @@ mod tests {
             ));
         }
 
-        let response = JsonRpcMessage::wrap(OutgoingMessage::<AgentSide, ClientSide>::Response(
-            Response::Result {
-                id: 1.into(),
-                result: AgentResponse::InitializeResponse(
-                    InitializeResponse::new(ProtocolVersion::V1)
-                        .agent_info(Implementation::new("agent", "0.11.4")),
-                ),
-            },
-        ));
+        let response = JsonRpcMessage::wrap(Response::Result {
+            id: 1.into(),
+            result: AgentResponse::InitializeResponse(
+                InitializeResponse::new(ProtocolVersion::V1)
+                    .agent_info(Implementation::new("agent", "0.12.0")),
+            ),
+        });
         let response_value = serialize_value(response)?;
         validate_locked_response_envelope(&bundle, LockedMethod::Initialize, &response_value)?;
         Ok(())
@@ -131,14 +127,13 @@ mod tests {
     #[test]
     fn validates_new_session_and_cancel_envelopes() -> Result<()> {
         let bundle = load_contract_bundle()?;
-        let new_session =
-            JsonRpcMessage::wrap(OutgoingMessage::<ClientSide, AgentSide>::Request(Request {
-                id: 2.into(),
-                method: Arc::from("session/new"),
-                params: Some(ClientRequest::NewSessionRequest(NewSessionRequest::new(
-                    PathBuf::from("/tmp"),
-                ))),
-            }));
+        let new_session = JsonRpcMessage::wrap(Request {
+            id: 2.into(),
+            method: Arc::from("session/new"),
+            params: Some(ClientRequest::NewSessionRequest(NewSessionRequest::new(
+                PathBuf::from("/tmp"),
+            ))),
+        });
         let new_session_value = serialize_value(new_session)?;
         let method = validate_locked_request_envelope(&bundle, &new_session_value)?;
         if method != LockedMethod::SessionNew {
@@ -147,27 +142,21 @@ mod tests {
             ));
         }
 
-        let response = JsonRpcMessage::wrap(OutgoingMessage::<AgentSide, ClientSide>::Response(
-            Response::Result {
-                id: 2.into(),
-                result: AgentResponse::NewSessionResponse(NewSessionResponse::new(SessionId::new(
-                    "session-1",
-                ))),
-            },
-        ));
+        let response = JsonRpcMessage::wrap(Response::Result {
+            id: 2.into(),
+            result: AgentResponse::NewSessionResponse(NewSessionResponse::new(SessionId::new(
+                "session-1",
+            ))),
+        });
         let response_value = serialize_value(response)?;
         validate_locked_response_envelope(&bundle, LockedMethod::SessionNew, &response_value)?;
 
-        let cancel = JsonRpcMessage::wrap(OutgoingMessage::<ClientSide, AgentSide>::Notification(
-            Notification {
-                method: Arc::from("session/cancel"),
-                params: Some(
-                    agent_client_protocol_schema::ClientNotification::CancelNotification(
-                        CancelNotification::new(SessionId::new("session-1")),
-                    ),
-                ),
-            },
-        ));
+        let cancel = JsonRpcMessage::wrap(Notification {
+            method: Arc::from("session/cancel"),
+            params: Some(ClientNotification::CancelNotification(
+                CancelNotification::new(SessionId::new("session-1")),
+            )),
+        });
         let cancel_value = serialize_value(cancel)?;
         validate_locked_cancel_notification(&bundle, &cancel_value)?;
         Ok(())
@@ -192,26 +181,22 @@ mod tests {
         Ok(())
     }
 
-    fn load_session_request(
-        cwd: PathBuf,
-    ) -> JsonRpcMessage<OutgoingMessage<ClientSide, AgentSide>> {
-        JsonRpcMessage::wrap(OutgoingMessage::<ClientSide, AgentSide>::Request(Request {
+    fn load_session_request(cwd: PathBuf) -> JsonRpcMessage<Request<ClientRequest>> {
+        JsonRpcMessage::wrap(Request {
             id: 3.into(),
             method: Arc::from("session/load"),
             params: Some(ClientRequest::LoadSessionRequest(LoadSessionRequest::new(
                 SessionId::new("session-1"),
                 cwd,
             ))),
-        }))
+        })
     }
 
-    fn load_session_response() -> JsonRpcMessage<OutgoingMessage<AgentSide, ClientSide>> {
-        JsonRpcMessage::wrap(OutgoingMessage::<AgentSide, ClientSide>::Response(
-            Response::Result {
-                id: 3.into(),
-                result: AgentResponse::LoadSessionResponse(LoadSessionResponse::new()),
-            },
-        ))
+    fn load_session_response() -> JsonRpcMessage<Response<AgentResponse>> {
+        JsonRpcMessage::wrap(Response::Result {
+            id: 3.into(),
+            result: AgentResponse::LoadSessionResponse(LoadSessionResponse::new()),
+        })
     }
 
     fn load_without_mcp_servers() -> serde_json::Value {
@@ -258,12 +243,10 @@ mod tests {
     #[test]
     fn validates_prompt_response() -> Result<()> {
         let bundle = load_contract_bundle()?;
-        let response = JsonRpcMessage::wrap(OutgoingMessage::<AgentSide, ClientSide>::Response(
-            Response::Result {
-                id: 3.into(),
-                result: AgentResponse::PromptResponse(PromptResponse::new(StopReason::EndTurn)),
-            },
-        ));
+        let response = JsonRpcMessage::wrap(Response::Result {
+            id: 3.into(),
+            result: AgentResponse::PromptResponse(PromptResponse::new(StopReason::EndTurn)),
+        });
         let response_value = serialize_value(response)?;
         validate_locked_response_envelope(&bundle, LockedMethod::SessionPrompt, &response_value)?;
         Ok(())

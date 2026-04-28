@@ -1,6 +1,6 @@
 //! Explicit ACP `initialize` lifecycle contract.
 
-use agent_client_protocol as acp;
+use agent_client_protocol::schema as acp;
 use serde::{Deserialize, Serialize};
 
 /// The official ACP method name used to initialize a provider connection.

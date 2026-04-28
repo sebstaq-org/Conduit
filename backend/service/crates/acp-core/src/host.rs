@@ -16,7 +16,7 @@ use acp_discovery::{
     ProcessEnvironment, ProviderDiscovery, ProviderId, discover_provider_with_environment,
     resolve_provider_command,
 };
-use agent_client_protocol as acp;
+use agent_client_protocol::schema as acp;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};

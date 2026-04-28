@@ -3,7 +3,7 @@
 use super::helpers::unexpected;
 use crate::Result;
 use acp_discovery::ProviderId;
-use agent_client_protocol as acp;
+use agent_client_protocol::schema as acp;
 use serde_json::{Value, to_value};
 
 pub(super) fn stop_reason_string(response: &acp::PromptResponse) -> Option<String> {
