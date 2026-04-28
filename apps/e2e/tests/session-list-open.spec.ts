@@ -81,6 +81,52 @@ test("mobile drawer closes immediately when a draft session is selected", async 
   await expectNoFailureFeedback(page);
 });
 
+test("mobile app restart preserves pairing and reconnects after relay drop", async ({
+  page,
+}) => {
+  const activeHarness = requireHarness();
+  await activeHarness.addProject(fixtureCwd);
+  await openMobileFrontend(page, activeHarness);
+  await pairFrontendFromPairRoute(page, activeHarness);
+
+  const context = page.context();
+  await page.close();
+  const restartedPage = await context.newPage();
+  try {
+    await openMobileFrontend(restartedPage, activeHarness);
+    await openHostPairingPopover(restartedPage);
+    await expect(
+      restartedPage.getByLabel("Desktop connected indicator"),
+    ).toBeVisible({ timeout: 15000 });
+    await closePopover(restartedPage);
+    await openMobileNavigationPanel(restartedPage);
+    await expectVisibleWithDiagnostics(
+      restartedPage,
+      activeHarness,
+      restartedPage.getByRole("button", { name: fixtureSessionTitle }),
+    );
+
+    const beforeReconnect = await activeHarness.relaySnapshot();
+    await activeHarness.closeRelayDataSocket();
+    await expect
+      .poll(async () => (await activeHarness.relaySnapshot()).dataSocketCount, {
+        timeout: 15000,
+      })
+      .toBeGreaterThan(beforeReconnect.dataSocketCount);
+
+    await restartedPage
+      .getByRole("button", { name: fixtureSessionTitle })
+      .click();
+    await expect(
+      restartedPage.getByText(transcriptSentinel, { exact: true }),
+    ).toBeVisible({ timeout: 15000 });
+    await expectMobileNavigationPanelClosed(restartedPage);
+    await expectNoFailureFeedback(restartedPage);
+  } finally {
+    await restartedPage.close().catch(() => undefined);
+  }
+});
+
 test("new session hides previously opened transcript and keeps draft context", async ({
   page,
 }) => {
@@ -425,7 +471,8 @@ async function openHostPairingPopover(page: Page): Promise<void> {
     return;
   }
   await page
-    .getByRole("button", { name: "Desktop connection controls" })
+    .locator('button[aria-label="Desktop connection controls"]:visible')
+    .last()
     .click();
   await expect(page.getByLabel("Pairing link")).toBeVisible();
 }
