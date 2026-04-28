@@ -23,7 +23,7 @@ dev and E2E.
 - `open`: start stage.
 - `logs [backend|frontend|electron|web]`: print stage logs.
 - `install-desktop-entry`: install `.desktop` launcher to run `open`; requires
-  the relay endpoint and writes it into the launcher command.
+  the relay endpoint and Sentry DSN and writes them into the launcher command.
 
 ## GitHub Actions Stage Promotion
 
@@ -46,6 +46,7 @@ the uploaded artifact on a self-hosted runner, restarts stage, and runs
 - Closing Electron sends `SIGTERM` to the child backend process and escalates to
   `SIGKILL` if the backend does not exit.
 - `CONDUIT_STAGE_RELAY_ENDPOINT` or `CONDUIT_RELAY_ENDPOINT` is required.
+- `EXPO_PUBLIC_SENTRY_DSN` is required when starting packaged desktop stage.
 
 ## Environment Overrides
 
@@ -55,4 +56,5 @@ the uploaded artifact on a self-hosted runner, restarts stage, and runs
 - `CONDUIT_STAGE_WS_URL`
 - `CONDUIT_STAGE_CLIENT_LOG_URL`
 - `CONDUIT_STAGE_RELAY_ENDPOINT`
+- `EXPO_PUBLIC_SENTRY_DSN`
 - `CONDUIT_STAGE_APP_BASE_URL`

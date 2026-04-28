@@ -18,6 +18,7 @@ interface DesktopDaemonConfig {
   readonly providerFixtures: string | null;
   readonly relayEndpoint: string;
   readonly serviceBinPath: string;
+  readonly sentryDsn: string | null;
   readonly storePath: string | null;
 }
 
@@ -81,6 +82,7 @@ interface DesktopRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
   readonly runtimeSurface?: string;
+  readonly sentryDsn?: string;
   readonly sessionWsUrl?: string;
 }
 

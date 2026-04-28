@@ -8,6 +8,7 @@ interface ConduitRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
   readonly runtimeSurface?: string;
+  readonly sentryDsn?: string;
   readonly sessionWsUrl?: string;
 }
 
@@ -58,6 +59,7 @@ function runtimeConfigEntries(
     ["clientLogUrl", optionalString(value.clientLogUrl)],
     ["logProfile", optionalString(value.logProfile)],
     ["runtimeSurface", optionalString(value.runtimeSurface)],
+    ["sentryDsn", optionalString(value.sentryDsn)],
     ["sessionWsUrl", optionalString(value.sessionWsUrl)],
   ];
 }

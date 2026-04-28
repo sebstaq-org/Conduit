@@ -47,6 +47,16 @@ function defaultAppBaseUrl(profile: DesktopDaemonConfig["logProfile"]): string {
   return "conduit://pair";
 }
 
+function sentryDsn(profile: DesktopDaemonConfig["logProfile"]): string | null {
+  const dsn = envValue("EXPO_PUBLIC_SENTRY_DSN");
+  if (profile === "stage" && dsn === null) {
+    throw new Error(
+      "EXPO_PUBLIC_SENTRY_DSN is required for stage desktop Sentry logging",
+    );
+  }
+  return dsn;
+}
+
 function frontendConfig(): DesktopDaemonConfig["frontend"] {
   const url = envValue("CONDUIT_FRONTEND_URL");
   const webDir = envValue("CONDUIT_DESKTOP_WEB_DIR");
@@ -87,6 +97,7 @@ function readDesktopDaemonConfig(): DesktopDaemonConfig {
     providerFixtures: envValue("CONDUIT_DESKTOP_PROVIDER_FIXTURES"),
     relayEndpoint: requiredEnv("CONDUIT_DESKTOP_RELAY_ENDPOINT"),
     serviceBinPath: requiredEnv("CONDUIT_DESKTOP_SERVICE_BIN"),
+    sentryDsn: sentryDsn(profile),
     storePath: envValue("CONDUIT_DESKTOP_STORE_PATH"),
   };
 }
