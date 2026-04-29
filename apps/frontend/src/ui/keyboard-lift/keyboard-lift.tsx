@@ -7,6 +7,9 @@ import { keyboardLiftStyle } from "./keyboard-lift.styles";
 const iosKeyboardVerticalOffset = 0;
 
 function keyboardLiftBehavior(): KeyboardAvoidingViewProps["behavior"] {
+  if (Platform.OS === "android") {
+    return "height";
+  }
   return "padding";
 }
 

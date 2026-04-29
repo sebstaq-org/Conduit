@@ -8,7 +8,7 @@ type KeyboardLiftPlatform =
 type KeyboardLiftMode = "avoid" | "plain";
 
 function keyboardLiftMode(platform: KeyboardLiftPlatform): KeyboardLiftMode {
-  if (platform === "ios") {
+  if (platform === "android" || platform === "ios") {
     return "avoid";
   }
   return "plain";
