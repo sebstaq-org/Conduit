@@ -120,6 +120,7 @@ function SessionComposerControls({
   return (
     <Box
       alignItems={sessionComposerRowAlignItems}
+      flexWrap="wrap"
       flexDirection={sessionComposerRowFlexDirection}
       gap={sessionComposerGap}
     >
