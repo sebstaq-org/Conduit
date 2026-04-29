@@ -1,6 +1,6 @@
 use crate::error::{AcpError, Result};
 use acp_discovery::{ProcessEnvironment, ProviderId};
-use agent_client_protocol as acp;
+use agent_client_protocol as acp_sdk;
 use std::sync::mpsc::Sender;
 
 pub(super) fn child_has_exited(child: &mut Option<tokio::process::Child>) -> bool {
@@ -35,7 +35,7 @@ pub(super) fn send_reply<T>(reply: Sender<Result<T>>, result: Result<T>) {
     let _result = reply.send(result);
 }
 
-pub(super) fn sdk_error(provider: ProviderId, operation: &str, source: acp::Error) -> AcpError {
+pub(super) fn sdk_error(provider: ProviderId, operation: &str, source: acp_sdk::Error) -> AcpError {
     AcpError::Sdk {
         provider,
         operation: operation.to_owned(),

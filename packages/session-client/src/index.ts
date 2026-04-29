@@ -29,6 +29,7 @@ export type {
 } from "@conduit/session-contracts";
 export type {
   ContentBlock,
+  LegacyProviderModels,
   ProviderId,
   SessionConfigOption,
   SessionGroupsQuery,

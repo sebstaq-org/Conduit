@@ -1,11 +1,11 @@
 [upstream]
 repository = "https://github.com/agentclientprotocol/agent-client-protocol"
-tag = "v0.11.4"
-commit = "f8662f197ecf813d8f372211af6c68c54578e7df"
+tag = "v0.12.0"
+commit = "6b962640bb2228f5aa378c9d6207b1197175bb84"
 
 [bundle]
 rust_crate = "agent-client-protocol-schema"
-rust_crate_version = "0.11.4"
+rust_crate_version = "0.12.0"
 protocol_version = 1
 
 [files.schema]

@@ -1,7 +1,7 @@
 {
   "captureKind": "provider",
   "contractBoundary": "provider-acp",
-  "curation": "Sanitized from Codex ACP config capture shape; session id, cwd, timestamps, and volatile Codex ids replaced with deterministic E2E values.",
+  "curation": "Sanitized from live Codex ACP multi-config session/prompt capture produced by conduit-cli; session id, cwd, timestamps, and volatile capture metadata replaced with deterministic E2E values while preserving current config option shape.",
   "cwd": "/tmp/conduit-e2e-fixture-project",
   "manualCapture": false,
   "operation": "session/set_config_option",
@@ -13,7 +13,7 @@
     "timestamp"
   ],
   "sessionId": "e2e-codex-new-session-0001",
-  "sourceCapture": "conduit-artifacts/manual/captures/codex/config-e2e-multi-2026-04-24",
-  "sourceProviderRawSha256": "b1ac1fe69afa5a509294449282ff86f99041b49e539f8c79b158a05d4bc020cc",
+  "sourceCapture": "conduit-artifacts/manual/phase-1-sdk-0.11.1/fixture-refresh-20260429T065336Z/session-prompt-multi-config",
+  "sourceProviderRawSha256": "ce92c77591021275cc8b275767f9f2396904d05483574f1ce383c818975387c8",
   "timestamp": "2026-01-01T00:00:00Z"
 }

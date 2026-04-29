@@ -3,7 +3,7 @@
 use crate::error::AcpError;
 use crate::snapshot::LiveSessionIdentity;
 use acp_discovery::ProviderId;
-use agent_client_protocol::{self as acp, SessionId};
+use agent_client_protocol::schema::{self as acp, SessionId};
 use serde_json::Value;
 
 pub(super) fn identity(provider: ProviderId, session_id: &SessionId) -> LiveSessionIdentity {
