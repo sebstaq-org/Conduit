@@ -95,17 +95,14 @@ function draftSelectedConfig(
   return activeSession.selectedConfigByProvider[activeSession.provider] ?? {};
 }
 
-function commitDraftIfConfigBlocked(args: {
+function commitDraftSession(args: {
   activeSession: Extract<ActiveSession, { kind: "draft" }>;
   onDraftPromptCommitted:
     | ((session: DraftCommittedSession) => void)
     | undefined;
   response: SessionNewResult;
   syncState: DraftConfigSyncState;
-}): boolean {
-  if (!args.syncState.configSyncBlocked) {
-    return false;
-  }
+}): void {
   args.onDraftPromptCommitted?.(
     committedDraftSession({
       activeSession: args.activeSession,
@@ -113,7 +110,6 @@ function commitDraftIfConfigBlocked(args: {
       syncState: args.syncState,
     }),
   );
-  return true;
 }
 
 async function promptOpenDraftSession(args: {
@@ -155,13 +151,6 @@ async function promptOpenDraftSession(args: {
     promptSession: args.promptSession,
     text: args.text,
   });
-  args.onDraftPromptCommitted?.(
-    committedDraftSession({
-      activeSession: args.activeSession,
-      response: args.response,
-      syncState: args.syncState,
-    }),
-  );
 }
 
 async function createDraftSession(args: {
@@ -251,14 +240,13 @@ async function submitDraftPrompt(args: SubmitDraftPromptArgs): Promise<void> {
     args,
     provider,
   );
-  if (
-    commitDraftIfConfigBlocked({
-      activeSession: args.activeSession,
-      onDraftPromptCommitted: args.onDraftPromptCommitted,
-      response,
-      syncState,
-    })
-  ) {
+  commitDraftSession({
+    activeSession: args.activeSession,
+    onDraftPromptCommitted: args.onDraftPromptCommitted,
+    response,
+    syncState,
+  });
+  if (syncState.configSyncBlocked) {
     return;
   }
   await submitSyncedDraftPrompt({

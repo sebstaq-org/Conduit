@@ -9,7 +9,7 @@ use self::prompt_lanes::{
     PromptLanes, cancel_provider_session, prompt_open_session_id, set_config_provider_session,
 };
 use self::provider_config_snapshot::{
-    ProviderConfigSnapshots, spawn_provider_config_snapshot_worker,
+    ProviderConfigSnapshotStatus, ProviderConfigSnapshots, spawn_provider_config_snapshot_worker,
 };
 use self::startup_hydration::spawn_startup_hydration_worker;
 use self::suggestion_refresh::spawn_suggestion_refresh_worker;
@@ -325,7 +325,7 @@ fn handle_request<F>(
         return;
     }
     if request.command.command == "session/new" {
-        prompt_lanes.dispatch_new_session(request);
+        handle_session_new_request(request, provider_config_snapshots, prompt_lanes);
         return;
     }
     if let Some(open_session_id) = prompt_open_session_id(&request.command) {
@@ -353,6 +353,47 @@ fn handle_request<F>(
             command = "runtime.dispatch"
         );
     }
+}
+
+fn handle_session_new_request<F>(
+    request: ActorRequest,
+    provider_config_snapshots: &ProviderConfigSnapshots,
+    prompt_lanes: &mut PromptLanes<F>,
+) where
+    F: Clone + ProviderFactory + 'static,
+{
+    if let Some(response) =
+        session_new_not_ready_response(&request.command, provider_config_snapshots)
+    {
+        let command_id = request.command.id.clone();
+        let response_status = request.respond_to.send(response);
+        if response_status.is_err() {
+            tracing::warn!(
+                event_name = "runtime_actor.response_channel_closed",
+                source = "service-bin",
+                command_id = %command_id,
+                command = "session/new"
+            );
+        }
+        return;
+    }
+    prompt_lanes.dispatch_new_session(request);
+}
+
+fn session_new_not_ready_response(
+    command: &ConsumerCommand,
+    provider_config_snapshots: &ProviderConfigSnapshots,
+) -> Option<ConsumerResponse> {
+    let status = provider_config_snapshots.provider_status(&command.provider)?;
+    if status == ProviderConfigSnapshotStatus::Ready {
+        return None;
+    }
+    let provider = command.provider.clone();
+    Some(failure(
+        command.id.clone(),
+        "provider_config_snapshot_not_ready",
+        &format!("provider {provider} config snapshot is {status:?}"),
+    ))
 }
 
 fn handle_provider_config_snapshot_request(
@@ -421,6 +462,7 @@ fn handle_grouped_sessions_request<F>(
 {
     let provider_target = request.command.provider.clone();
     let response = runtime.dispatch(request.command);
+    let should_refresh = response.ok;
     let response_status = request.respond_to.send(response);
     if response_status.is_err() {
         tracing::warn!(
@@ -429,8 +471,9 @@ fn handle_grouped_sessions_request<F>(
             command = "sessions/grouped",
             provider_target = %provider_target
         );
+    } else if should_refresh {
+        refreshes.request(&provider_target);
     }
-    refreshes.request(&provider_target);
 }
 
 fn failure(id: String, code: &str, message: &str) -> ConsumerResponse {

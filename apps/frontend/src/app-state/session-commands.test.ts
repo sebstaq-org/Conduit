@@ -212,12 +212,12 @@ it("tracks a draft prompt, commits the opened session, and clears the draft afte
 
   expect(calls).toEqual([
     "new:codex",
+    "commit:draft-session-1",
     "submitted:draft-open-session-1:0:asasas",
     "draft:",
     "start:codex:draft-session-1",
     "prompt:draft-open-session-1",
     "finish:codex:draft-session-1",
-    "commit:draft-session-1",
   ]);
 });
 
@@ -247,6 +247,7 @@ it("keeps the submitted draft cleared after draft prompt failure", async () => {
 
   expect(calls).toEqual([
     "new:codex",
+    "commit:draft-session-1",
     "submitted:draft-open-session-1:0:asasas",
     "draft:",
     "start:codex:draft-session-1",
