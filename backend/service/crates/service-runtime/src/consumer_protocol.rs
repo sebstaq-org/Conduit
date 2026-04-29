@@ -340,7 +340,9 @@ pub struct ConduitSessionNewResult {
     pub config_options: Option<Vec<acp::SessionConfigOption>>,
     /// Provider mode metadata.
     pub modes: Option<Value>,
-    /// Provider model metadata.
+    /// Legacy provider model metadata retained as opaque passthrough data.
+    ///
+    /// New provider configuration behavior must use ACP `config_options`.
     pub models: Option<Value>,
     /// Currently selected provider mode id.
     pub current_mode_id: Option<String>,
@@ -358,7 +360,9 @@ pub struct ConduitSessionOpenResult {
     pub config_options: Option<Vec<acp::SessionConfigOption>>,
     /// Provider mode metadata.
     pub modes: Option<Value>,
-    /// Provider model metadata.
+    /// Legacy provider model metadata retained as opaque passthrough data.
+    ///
+    /// New provider configuration behavior must use ACP `config_options`.
     pub models: Option<Value>,
     /// Currently selected provider mode id.
     pub current_mode_id: Option<String>,

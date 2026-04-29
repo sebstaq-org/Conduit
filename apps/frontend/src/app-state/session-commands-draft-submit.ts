@@ -1,4 +1,5 @@
 import type {
+  LegacyProviderModels,
   ProviderId,
   SessionConfigOption,
   SessionNewResult,
@@ -25,7 +26,7 @@ interface DraftCommittedSession {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   modes: unknown;
-  models: unknown;
+  models: LegacyProviderModels;
   openSessionId: string;
   provider: ProviderId;
   sessionId: string;
