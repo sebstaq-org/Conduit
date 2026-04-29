@@ -37,7 +37,11 @@ const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     new Tuple(
-      ...getDefaultMiddleware(),
+      ...getDefaultMiddleware({
+        serializableCheck: {
+          warnAfter: 128,
+        },
+      }),
       frontendLoggingMiddleware,
       conduitApi.middleware,
     ),
