@@ -93,6 +93,15 @@ describe("pending prompt timeline projection after backend ack", () => {
     expect(projected.items.map((item) => item.id)).toEqual(["turn-2-user"]);
   });
 
+  it("removes draft-session pending when the backend user item is already present at the base revision", () => {
+    const projected = withPendingPromptMessages(
+      history(5, [userItem("turn-2-user", "hello", "turn-2")]),
+      [pending("hello", 5)],
+    );
+
+    expect(projected.items.map((item) => item.id)).toEqual(["turn-2-user"]);
+  });
+
   it("does not remove pending for agent-only streaming updates", () => {
     const projected = withPendingPromptMessages(
       history(5, [agentItem("turn-2-agent", "reply", "turn-2")]),
@@ -108,7 +117,7 @@ describe("pending prompt timeline projection after backend ack", () => {
   it("handles repeated identical prompts by base revision", () => {
     const projected = withPendingPromptMessages(
       history(6, [userItem("turn-2-user", "hello", "turn-2")]),
-      [pending("hello", 4), pending("hello", 6)],
+      [pending("hello", 4), pending("hello", 6, "turn-2-user")],
     );
 
     expect(projected.items.map((item) => item.id)).toEqual([

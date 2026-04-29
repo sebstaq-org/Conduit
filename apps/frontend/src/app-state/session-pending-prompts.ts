@@ -64,11 +64,15 @@ function pendingPromptAcknowledged(
   history: SessionHistoryWindow,
   pending: PendingPromptMessage,
 ): boolean {
-  if (history.revision <= pending.baseRevision) {
-    return false;
+  let anchorIndex = -1;
+  if (pending.baseLastItemId !== null) {
+    anchorIndex = history.items.findIndex(
+      (item) => item.id === pending.baseLastItemId,
+    );
   }
-  return history.items.some((item) =>
-    isBackendUserPromptItem(item, pending.text),
+  return history.items.some(
+    (item, index) =>
+      index > anchorIndex && isBackendUserPromptItem(item, pending.text),
   );
 }
 
