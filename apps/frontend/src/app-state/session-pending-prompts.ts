@@ -113,7 +113,11 @@ function appendPendingItems(
 ): TranscriptItem[] {
   let items = history.items;
   for (const pending of visiblePendingPrompts) {
-    items = appendPendingAfterAnchor(items, pending, pendingPromptItem(pending));
+    items = appendPendingAfterAnchor(
+      items,
+      pending,
+      pendingPromptItem(pending),
+    );
   }
   return items;
 }

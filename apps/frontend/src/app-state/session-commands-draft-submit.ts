@@ -113,7 +113,9 @@ function commitDraftSession(args: {
   );
 }
 
-function lastHistoryItemId(history: SessionNewResult["history"]): string | null {
+function lastHistoryItemId(
+  history: SessionNewResult["history"],
+): string | null {
   return history.items.at(-1)?.id ?? null;
 }
 

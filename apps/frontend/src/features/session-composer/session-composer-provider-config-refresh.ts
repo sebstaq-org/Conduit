@@ -5,7 +5,11 @@ import {
   draftSessionProviderSelected,
   useReadSessionTimelineQuery,
 } from "@/app-state";
-import type { ActiveSession, AppDispatch, PromptTimelineBase } from "@/app-state";
+import type {
+  ActiveSession,
+  AppDispatch,
+  PromptTimelineBase,
+} from "@/app-state";
 
 const PROVIDER_CONFIG_DRAFT_POLLING_INTERVAL_MS = 1000;
 

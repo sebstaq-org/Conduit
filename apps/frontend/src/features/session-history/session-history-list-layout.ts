@@ -27,8 +27,5 @@ function createHistoryContentContainerStyle(args: {
   };
 }
 
-export {
-  createHistoryContentContainerStyle,
-  sessionHistoryBottomPadding,
-};
+export { createHistoryContentContainerStyle, sessionHistoryBottomPadding };
 export type { HistoryContentContainerStyle, SessionHistoryLayoutTheme };

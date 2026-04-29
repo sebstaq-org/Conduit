@@ -140,10 +140,7 @@ function renderSessionHistory(args: {
   if (state !== "ready" || args.timeline.history === undefined) {
     return renderHistoryByState(state);
   }
-  return renderReadyHistory(
-    args.timeline,
-    args.openSessionId,
-  );
+  return renderReadyHistory(args.timeline, args.openSessionId);
 }
 
 function SessionHistory(): React.JSX.Element {
