@@ -18,7 +18,7 @@ interface OpenActiveSession {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   modes: unknown;
-  models: LegacyProviderModels;
+  models: LegacyProviderModels | null;
 }
 
 interface DraftActiveSession {

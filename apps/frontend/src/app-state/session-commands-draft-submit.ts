@@ -26,7 +26,7 @@ interface DraftCommittedSession {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   modes: unknown;
-  models: LegacyProviderModels;
+  models: LegacyProviderModels | null;
   openSessionId: string;
   provider: ProviderId;
   sessionId: string;
@@ -79,7 +79,7 @@ function committedDraftSession(args: {
     configSyncBlocked: args.syncState.configSyncBlocked,
     configSyncError: args.syncState.configSyncError,
     modes: args.response.modes,
-    models: args.response.models,
+    models: args.response.models ?? null,
     openSessionId: args.syncState.openSessionId,
     provider: args.activeSession.provider,
     sessionId: args.response.sessionId,

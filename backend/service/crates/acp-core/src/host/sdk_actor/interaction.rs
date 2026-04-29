@@ -6,7 +6,7 @@ use crate::error::{AcpError, Result};
 use acp_discovery::ProviderId;
 use agent_client_protocol::schema as acp;
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 use std::sync::{LazyLock, Mutex};
 use tokio::sync::oneshot;
 
@@ -89,16 +89,17 @@ pub(super) fn register_pending_interaction(
         .lock()
         .map_err(|error| unexpected(provider, error.to_string()))?;
     registry.resolved.remove(&key);
-    if registry
-        .pending
-        .insert(key.clone(), PendingInteraction { response_tx })
-        .is_some()
-    {
-        return Err(AcpError::InvalidInteractionResponse {
-            provider,
-            interaction_id: key.interaction_id,
-            message: "interaction id collision while registering pending request",
-        });
+    match registry.pending.entry(key) {
+        Entry::Vacant(entry) => {
+            entry.insert(PendingInteraction { response_tx });
+        }
+        Entry::Occupied(entry) => {
+            return Err(AcpError::InvalidInteractionResponse {
+                provider,
+                interaction_id: entry.key().interaction_id.clone(),
+                message: "interaction id collision while registering pending request",
+            });
+        }
     }
     Ok(())
 }
@@ -284,5 +285,58 @@ mod tests {
             matches!(result, Err(AcpError::InvalidInteractionResponse { .. })),
             "expected invalid interaction response, got {result:?}"
         );
+    }
+
+    #[test]
+    fn register_collision_keeps_existing_pending_sender()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let session_id = "register-collision-keeps-existing-pending-sender";
+        let interaction_id = "interaction-1";
+        let (first_tx, mut first_rx) = oneshot::channel();
+        let (second_tx, mut second_rx) = oneshot::channel();
+
+        register_pending_interaction(
+            ProviderId::Codex,
+            session_id.to_owned(),
+            interaction_id.to_owned(),
+            first_tx,
+        )?;
+        let collision = register_pending_interaction(
+            ProviderId::Codex,
+            session_id.to_owned(),
+            interaction_id.to_owned(),
+            second_tx,
+        );
+
+        if !matches!(collision, Err(AcpError::InvalidInteractionResponse { .. })) {
+            return Err(
+                format!("expected invalid interaction collision, got {collision:?}").into(),
+            );
+        }
+        cancel_pending_interactions_for_session(ProviderId::Codex, session_id);
+
+        match first_rx.try_recv() {
+            Ok(response) => {
+                let payload = serde_json::to_value(response)?;
+                if payload.pointer("/outcome/outcome").and_then(Value::as_str) != Some("cancelled")
+                {
+                    return Err(format!(
+                        "expected first sender to receive cancellation: {payload}"
+                    )
+                    .into());
+                }
+            }
+            Err(error) => {
+                return Err(format!("expected first sender to remain registered: {error}").into());
+            }
+        }
+        match second_rx.try_recv() {
+            Err(oneshot::error::TryRecvError::Closed) => Ok(()),
+            Ok(value) => {
+                let payload = serde_json::to_value(value)?;
+                Err(format!("unexpected second sender response: {payload}").into())
+            }
+            Err(error) => Err(format!("unexpected second sender state: {error}").into()),
+        }
     }
 }
