@@ -90,11 +90,16 @@ function olderStatusLabel(
   return null;
 }
 
+interface SessionHistoryProps {
+  composerDockHeight: number;
+}
+
 function renderReadyHistory(
   timeline: Pick<
     ReturnType<typeof useSessionTimeline>,
     "history" | "isFetchingOlder" | "isOlderError" | "loadOlderIfNeeded"
   >,
+  composerDockHeight: number,
   openSessionId: string,
 ): React.JSX.Element {
   if (timeline.history === undefined) {
@@ -106,6 +111,7 @@ function renderReadyHistory(
   return (
     <Box flex={1} style={historyRootStyle}>
       <SessionHistoryList
+        composerDockHeight={composerDockHeight}
         history={timeline.history}
         onStartReached={handleStartReached}
         openSessionId={openSessionId}
@@ -130,6 +136,7 @@ function selectedOpenSessionId(
 
 function renderSessionHistory(args: {
   activeSession: ActiveSession | null;
+  composerDockHeight: number;
   openSessionId: string | null;
   timeline: ReturnType<typeof useSessionTimeline>;
 }): React.JSX.Element {
@@ -140,15 +147,26 @@ function renderSessionHistory(args: {
   if (state !== "ready" || args.timeline.history === undefined) {
     return renderHistoryByState(state);
   }
-  return renderReadyHistory(args.timeline, args.openSessionId);
+  return renderReadyHistory(
+    args.timeline,
+    args.composerDockHeight,
+    args.openSessionId,
+  );
 }
 
-function SessionHistory(): React.JSX.Element {
+function SessionHistory({
+  composerDockHeight,
+}: SessionHistoryProps): React.JSX.Element {
   const activeSession = useSelector(selectActiveSession);
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
 
-  return renderSessionHistory({ activeSession, openSessionId, timeline });
+  return renderSessionHistory({
+    activeSession,
+    composerDockHeight,
+    openSessionId,
+    timeline,
+  });
 }
 
 export { SessionHistory };

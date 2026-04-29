@@ -1,7 +1,9 @@
+import { useCallback, useRef } from "react";
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
+import type { FlashListRef } from "@shopify/flash-list";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
 import { createHistoryContentContainerStyle } from "./session-history-list-layout";
@@ -21,6 +23,7 @@ import type {
 } from "@conduit/session-client";
 
 interface SessionHistoryListProps {
+  composerDockHeight: number;
   history: SessionHistoryWindow;
   onStartReached: () => void;
   openSessionId: string;
@@ -151,7 +154,10 @@ function renderHistoryRow(
   return renderTranscriptItem(row.item, theme);
 }
 
-function createHistoryListContentContainerStyle(theme: Theme): {
+function createHistoryListContentContainerStyle(
+  theme: Theme,
+  composerDockHeight: number,
+): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
@@ -159,6 +165,7 @@ function createHistoryListContentContainerStyle(theme: Theme): {
 } {
   const historyListStyle = createHistoryListStyle(theme);
   return createHistoryContentContainerStyle({
+    composerDockHeight,
     maxWidth: historyListStyle.maxWidth,
     theme,
   });
@@ -169,24 +176,35 @@ function historyItemSeparator(theme: Theme): React.JSX.Element {
 }
 
 function SessionHistoryList({
+  composerDockHeight,
   history,
   onStartReached,
   openSessionId,
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const rows = sessionHistoryRows(history);
+  const listRef = useRef<FlashListRef<SessionHistoryListRow>>(null);
+  const handleLoad = useCallback((): void => {
+    listRef.current?.scrollToEnd({ animated: false });
+  }, []);
 
   return (
     <VirtualList
-      contentContainerStyle={createHistoryListContentContainerStyle(theme)}
+      contentContainerStyle={createHistoryListContentContainerStyle(
+        theme,
+        composerDockHeight,
+      )}
       data={rows}
       getItemType={rowType}
+      initialScrollIndex={Math.max(rows.length - 1, 0)}
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
       keyExtractor={(row) => row.key}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="never"
       listKey={openSessionId}
+      listRef={listRef}
       maintainVisibleContentPosition={historyVisibleContentPosition}
+      onLoad={handleLoad}
       onStartReached={onStartReached}
       onStartReachedThreshold={historyStartReachedThreshold}
       renderItem={({ item }) => renderHistoryRow(item, theme)}

@@ -18,6 +18,7 @@ import {
 import type {
   ActiveSession,
   AppDispatch,
+  PromptTimelineBase,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
 import type { Theme } from "@/theme";
@@ -32,7 +33,7 @@ import {
 import {
   createHandleProviderSelect,
   providerConfigPollingInterval,
-  useActiveSessionTimelineRevision,
+  useActiveSessionTimelineBase,
 } from "./session-composer-provider-config-refresh";
 import { createSessionComposerSendHandler } from "./session-composer-submit";
 
@@ -55,7 +56,7 @@ interface SessionComposerRuntime {
   newSession: ReturnType<typeof useNewSessionMutation>[0];
   newSessionError: boolean;
   newSessionLoading: boolean;
-  openSessionBaseRevision: number | null;
+  openSessionBase: PromptTimelineBase | null;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   promptSessionError: boolean;
@@ -145,7 +146,7 @@ function buildSessionComposerController(args: {
       canSend: args.canSend,
       dispatch: args.runtime.dispatch,
       newSession: args.runtime.newSession,
-      openSessionBaseRevision: args.runtime.openSessionBaseRevision,
+      openSessionBase: args.runtime.openSessionBase,
       openSession: args.runtime.openSession,
       promptSession: args.runtime.promptSession,
       setDraft: args.setDraft,
@@ -166,8 +167,7 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
   const [promptSession, promptSessionState] = usePromptSessionMutation();
   const [setSessionConfigOption, setSessionConfigOptionState] =
     useSetSessionConfigOptionMutation();
-  const openSessionBaseRevision =
-    useActiveSessionTimelineRevision(activeSession);
+  const openSessionBase = useActiveSessionTimelineBase(activeSession);
   const {
     data: providersConfigSnapshot,
     isError: providersConfigSnapshotError,
@@ -182,7 +182,7 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
     newSession,
     newSessionError: newSessionState.isError,
     newSessionLoading: newSessionState.isLoading,
-    openSessionBaseRevision,
+    openSessionBase,
     openSession,
     promptSession,
     promptSessionError: promptSessionState.isError,

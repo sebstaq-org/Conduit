@@ -48,6 +48,7 @@ interface SubmitDraftPromptArgs {
     | undefined;
   onPromptSubmitted?:
     | ((submitted: {
+        baseLastItemId: string | null;
         baseRevision: number;
         openSessionId: string;
         text: string;
@@ -112,6 +113,10 @@ function commitDraftSession(args: {
   );
 }
 
+function lastHistoryItemId(history: SessionNewResult["history"]): string | null {
+  return history.items.at(-1)?.id ?? null;
+}
+
 async function promptOpenDraftSession(args: {
   activeSession: Extract<ActiveSession, { kind: "draft" }>;
   onDraftPromptCommitted:
@@ -119,6 +124,7 @@ async function promptOpenDraftSession(args: {
     | undefined;
   onPromptSubmitted:
     | ((submitted: {
+        baseLastItemId: string | null;
         baseRevision: number;
         openSessionId: string;
         text: string;
@@ -138,6 +144,7 @@ async function promptOpenDraftSession(args: {
   text: string;
 }): Promise<void> {
   args.onPromptSubmitted?.({
+    baseLastItemId: lastHistoryItemId(args.response.history),
     baseRevision: args.syncState.revision,
     openSessionId: args.syncState.openSessionId,
     text: args.text,

@@ -15,7 +15,13 @@ interface SessionHistoryLayoutTheme {
   };
 }
 
-function sessionHistoryBottomPadding(theme: SessionHistoryLayoutTheme): number {
+function sessionHistoryBottomPaddingForDockHeight(
+  theme: SessionHistoryLayoutTheme,
+  composerDockHeight: number,
+): number {
+  if (composerDockHeight > 0) {
+    return theme.spacing.scrollBottom + composerDockHeight;
+  }
   return (
     theme.spacing.scrollBottom +
     theme.panel.composerSurfaceMinHeight +
@@ -23,17 +29,29 @@ function sessionHistoryBottomPadding(theme: SessionHistoryLayoutTheme): number {
   );
 }
 
+function sessionHistoryBottomPadding(theme: SessionHistoryLayoutTheme): number {
+  return sessionHistoryBottomPaddingForDockHeight(theme, 0);
+}
+
 function createHistoryContentContainerStyle(args: {
+  composerDockHeight: number;
   maxWidth: number;
   theme: SessionHistoryLayoutTheme;
 }): HistoryContentContainerStyle {
   return {
     alignSelf: "center",
     maxWidth: args.maxWidth,
-    paddingBottom: sessionHistoryBottomPadding(args.theme),
+    paddingBottom: sessionHistoryBottomPaddingForDockHeight(
+      args.theme,
+      args.composerDockHeight,
+    ),
     width: "100%",
   };
 }
 
-export { createHistoryContentContainerStyle, sessionHistoryBottomPadding };
+export {
+  createHistoryContentContainerStyle,
+  sessionHistoryBottomPadding,
+  sessionHistoryBottomPaddingForDockHeight,
+};
 export type { HistoryContentContainerStyle, SessionHistoryLayoutTheme };

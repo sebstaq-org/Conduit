@@ -8,7 +8,13 @@ import type { Theme } from "@/theme";
 import { createSessionComposerDockStyle } from "./session.styles";
 import { shouldRenderSessionComposerDock } from "./session-composer-dock.contract";
 
-function SessionComposerDock(): React.JSX.Element | null {
+interface SessionComposerDockProps {
+  onHeightChange: (height: number) => void;
+}
+
+function SessionComposerDock({
+  onHeightChange,
+}: SessionComposerDockProps): React.JSX.Element | null {
   const activeSession = useSelector(selectActiveSession);
   const planInteraction = usePlanInteractionSource();
   const safeAreaInsets = useSafeAreaInsets();
@@ -24,6 +30,9 @@ function SessionComposerDock(): React.JSX.Element | null {
         theme,
         safeAreaInsets.bottom,
       )}
+      onLayout={(event) => {
+        onHeightChange(event.nativeEvent.layout.height);
+      }}
     >
       <SessionComposer planInteraction={planInteraction} />
     </KeyboardDock>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { SessionHistory } from "@/features/session-history";
 import { Box } from "@/theme";
 import { KeyboardLift } from "@/ui";
@@ -20,6 +21,7 @@ const sessionScreenStyle: ViewStyle = { minHeight: 0 };
 
 function renderSessionViewport(
   onOpenNavigationPanel: SessionScreenProps["onOpenNavigationPanel"],
+  composerDockHeight: number,
 ): React.JSX.Element {
   return (
     <Box
@@ -32,7 +34,7 @@ function renderSessionViewport(
       {onOpenNavigationPanel !== undefined && (
         <SessionScreenTopBar onOpenNavigationPanel={onOpenNavigationPanel} />
       )}
-      <SessionHistory />
+      <SessionHistory composerDockHeight={composerDockHeight} />
     </Box>
   );
 }
@@ -40,6 +42,7 @@ function renderSessionViewport(
 function SessionScreen({
   onOpenNavigationPanel,
 }: SessionScreenProps): React.JSX.Element {
+  const [composerDockHeight, setComposerDockHeight] = useState(0);
   return (
     <KeyboardLift>
       <Box
@@ -47,8 +50,8 @@ function SessionScreen({
         flex={sessionScreenFlex}
         style={sessionScreenStyle}
       >
-        {renderSessionViewport(onOpenNavigationPanel)}
-        <SessionComposerDock />
+        {renderSessionViewport(onOpenNavigationPanel, composerDockHeight)}
+        <SessionComposerDock onHeightChange={setComposerDockHeight} />
       </Box>
     </KeyboardLift>
   );

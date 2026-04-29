@@ -44,7 +44,14 @@ function draftSessionResponse(): SessionNewResult {
   return {
     configOptions: null,
     history: {
-      items: [],
+      items: [
+        {
+          content: [{ text: "new", type: "text" }],
+          id: "draft-initial-item",
+          kind: "message",
+          role: "agent",
+        },
+      ],
       nextCursor: null,
       openSessionId: "draft-open-session-1",
       revision: 0,
@@ -126,7 +133,7 @@ function failureRecording(calls: string[]): PromptFailureCallback {
 function promptSubmittedRecording(calls: string[]): PromptSubmittedCallback {
   return (submitted): void => {
     calls.push(
-      `submitted:${submitted.openSessionId}:${submitted.baseRevision}:${submitted.text}`,
+      `submitted:${submitted.openSessionId}:${submitted.baseRevision}:${submitted.baseLastItemId}:${submitted.text}`,
     );
   };
 }
@@ -137,7 +144,7 @@ it("tracks an open-session prompt and clears the draft immediately", async () =>
   await submitPrompt({
     activeSession: openActiveSession(),
     newSession: unexpectedNewSession(),
-    openSessionBaseRevision: 7,
+    openSessionBase: { lastItemId: "open-last-item", revision: 7 },
     onFailure: failureRecording(calls),
     onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
@@ -150,7 +157,7 @@ it("tracks an open-session prompt and clears the draft immediately", async () =>
   });
 
   expect(calls).toEqual([
-    "submitted:open-session-1:7:asasas",
+    "submitted:open-session-1:7:open-last-item:asasas",
     "draft:",
     "start:codex:session-1",
     "prompt:open-session-1",
@@ -164,7 +171,7 @@ it("keeps the submitted draft cleared after open-session prompt failure", async 
   await submitPrompt({
     activeSession: openActiveSession(),
     newSession: unexpectedNewSession(),
-    openSessionBaseRevision: 7,
+    openSessionBase: { lastItemId: "open-last-item", revision: 7 },
     onFailure: failureRecording(calls),
     onPromptSubmitted: promptSubmittedRecording(calls),
     onPromptTurnFinished: promptTurnFinishedRecording(calls),
@@ -180,7 +187,7 @@ it("keeps the submitted draft cleared after open-session prompt failure", async 
   });
 
   expect(calls).toEqual([
-    "submitted:open-session-1:7:asasas",
+    "submitted:open-session-1:7:open-last-item:asasas",
     "draft:",
     "start:codex:session-1",
     "prompt:open-session-1",
@@ -195,7 +202,7 @@ it("tracks a draft prompt, commits the opened session, and clears the draft afte
   await submitPrompt({
     activeSession: draftActiveSession(),
     newSession: newSessionRecording(calls),
-    openSessionBaseRevision: null,
+    openSessionBase: null,
     onDraftPromptCommitted: (session) => {
       calls.push(`commit:${session.sessionId}`);
     },
@@ -213,7 +220,7 @@ it("tracks a draft prompt, commits the opened session, and clears the draft afte
   expect(calls).toEqual([
     "new:codex",
     "commit:draft-session-1",
-    "submitted:draft-open-session-1:0:asasas",
+    "submitted:draft-open-session-1:0:draft-initial-item:asasas",
     "draft:",
     "start:codex:draft-session-1",
     "prompt:draft-open-session-1",
@@ -227,7 +234,7 @@ it("keeps the submitted draft cleared after draft prompt failure", async () => {
   await submitPrompt({
     activeSession: draftActiveSession(),
     newSession: newSessionRecording(calls),
-    openSessionBaseRevision: null,
+    openSessionBase: null,
     onDraftPromptCommitted: (session) => {
       calls.push(`commit:${session.sessionId}`);
     },
@@ -248,7 +255,7 @@ it("keeps the submitted draft cleared after draft prompt failure", async () => {
   expect(calls).toEqual([
     "new:codex",
     "commit:draft-session-1",
-    "submitted:draft-open-session-1:0:asasas",
+    "submitted:draft-open-session-1:0:draft-initial-item:asasas",
     "draft:",
     "start:codex:draft-session-1",
     "prompt:draft-open-session-1",

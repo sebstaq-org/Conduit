@@ -1,16 +1,23 @@
 import { FlashList } from "@shopify/flash-list";
-import type { FlashListProps, ListRenderItemInfo } from "@shopify/flash-list";
+import type {
+  FlashListProps,
+  FlashListRef,
+  ListRenderItemInfo,
+} from "@shopify/flash-list";
 
 interface VirtualListProps<Item> {
   contentContainerStyle?: FlashListProps<Item>["contentContainerStyle"];
   data: FlashListProps<Item>["data"];
   getItemType?: FlashListProps<Item>["getItemType"];
+  initialScrollIndex?: FlashListProps<Item>["initialScrollIndex"];
   ItemSeparatorComponent?: FlashListProps<Item>["ItemSeparatorComponent"];
   keyExtractor: (item: Item, index: number) => string;
   keyboardDismissMode?: FlashListProps<Item>["keyboardDismissMode"];
   keyboardShouldPersistTaps?: FlashListProps<Item>["keyboardShouldPersistTaps"];
   listKey?: string;
+  listRef?: React.Ref<FlashListRef<Item>> | undefined;
   maintainVisibleContentPosition?: FlashListProps<Item>["maintainVisibleContentPosition"];
+  onLoad?: FlashListProps<Item>["onLoad"];
   onStartReached?: FlashListProps<Item>["onStartReached"];
   onStartReachedThreshold?: FlashListProps<Item>["onStartReachedThreshold"];
   renderItem: (info: ListRenderItemInfo<Item>) => React.ReactElement | null;
@@ -22,12 +29,15 @@ function VirtualList<Item>({
   contentContainerStyle,
   data,
   getItemType,
+  initialScrollIndex,
   ItemSeparatorComponent,
   keyExtractor,
   keyboardDismissMode,
   keyboardShouldPersistTaps,
   listKey,
+  listRef,
   maintainVisibleContentPosition,
+  onLoad,
   onStartReached,
   onStartReachedThreshold,
   renderItem,
@@ -39,15 +49,18 @@ function VirtualList<Item>({
       contentContainerStyle={contentContainerStyle}
       data={data}
       getItemType={getItemType}
+      initialScrollIndex={initialScrollIndex}
       ItemSeparatorComponent={ItemSeparatorComponent}
       key={listKey}
       keyExtractor={keyExtractor}
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
+      onLoad={onLoad}
       onStartReached={onStartReached}
       onStartReachedThreshold={onStartReachedThreshold}
       renderItem={renderItem}
+      ref={listRef}
       showsVerticalScrollIndicator={showsVerticalScrollIndicator}
       style={style}
     />
