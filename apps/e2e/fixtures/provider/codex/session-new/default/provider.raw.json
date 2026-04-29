@@ -2,20 +2,23 @@
   "configOptions": [
     {
       "category": "mode",
-      "currentValue": "full-access",
+      "currentValue": "auto",
       "description": "Choose an approval and sandboxing preset for your session",
       "id": "mode",
       "name": "Approval Preset",
       "options": [
         {
+          "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
           "name": "Read Only",
           "value": "read-only"
         },
         {
+          "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
           "name": "Default",
           "value": "auto"
         },
         {
+          "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
           "name": "Full Access",
           "value": "full-access"
         }
@@ -42,18 +45,55 @@
     },
     {
       "category": "model",
-      "currentValue": "gpt-5.4",
+      "currentValue": "gpt-5.5",
       "description": "Choose which model Codex should use",
       "id": "model",
       "name": "Model",
       "options": [
         {
+          "description": "Frontier model for complex coding, research, and real-world work.",
+          "name": "GPT-5.5",
+          "value": "gpt-5.5"
+        },
+        {
+          "description": "Strong model for everyday coding.",
           "name": "gpt-5.4",
           "value": "gpt-5.4"
         },
         {
+          "description": "Frontier agentic coding model.",
+          "name": "gpt-5.2-codex",
+          "value": "gpt-5.2-codex"
+        },
+        {
+          "description": "Codex-optimized flagship for deep and fast reasoning.",
+          "name": "gpt-5.1-codex-max",
+          "value": "gpt-5.1-codex-max"
+        },
+        {
+          "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
           "name": "GPT-5.4-Mini",
           "value": "gpt-5.4-mini"
+        },
+        {
+          "description": "Coding-optimized model.",
+          "name": "gpt-5.3-codex",
+          "value": "gpt-5.3-codex"
+        },
+        {
+          "description": "Ultra-fast coding model.",
+          "name": "GPT-5.3-Codex-Spark",
+          "value": "gpt-5.3-codex-spark"
+        },
+        {
+          "description": "Optimized for professional work and long-running agents.",
+          "name": "gpt-5.2",
+          "value": "gpt-5.2"
+        },
+        {
+          "description": "Optimized for codex. Cheaper, faster, but less capable.",
+          "name": "gpt-5.1-codex-mini",
+          "value": "gpt-5.1-codex-mini"
         }
       ],
       "type": "select"
@@ -66,47 +106,48 @@
       "name": "Reasoning Effort",
       "options": [
         {
+          "description": "Fast responses with lighter reasoning",
+          "name": "Low",
+          "value": "low"
+        },
+        {
+          "description": "Balances speed and reasoning depth for everyday tasks",
           "name": "Medium",
           "value": "medium"
         },
         {
+          "description": "Greater reasoning depth for complex problems",
           "name": "High",
           "value": "high"
+        },
+        {
+          "description": "Extra high reasoning depth for complex problems",
+          "name": "Xhigh",
+          "value": "xhigh"
         }
       ],
       "type": "select"
     }
   ],
-  "currentModeId": "full-access",
   "modes": {
     "availableModes": [
       {
+        "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
         "id": "read-only",
         "name": "Read Only"
       },
       {
+        "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
         "id": "auto",
         "name": "Default"
       },
       {
+        "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
         "id": "full-access",
         "name": "Full Access"
       }
     ],
-    "currentModeId": "full-access"
-  },
-  "models": {
-    "availableModels": [
-      {
-        "modelId": "gpt-5.4/high",
-        "name": "gpt-5.4 (high)"
-      },
-      {
-        "modelId": "gpt-5.4-mini/medium",
-        "name": "GPT-5.4-Mini (medium)"
-      }
-    ],
-    "currentModelId": "gpt-5.4/high"
+    "currentModeId": "auto"
   },
   "sessionId": "e2e-codex-new-session-0001"
 }
