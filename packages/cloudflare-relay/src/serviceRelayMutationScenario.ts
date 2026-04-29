@@ -16,7 +16,7 @@ async function runRelaySessionMutationScenario(
   });
 
   const snapshot = await waitForCodexConfigSnapshot(client);
-  expect(configValue(snapshot.configOptions, "model")).toBe("gpt-5.4");
+  expect(configValue(snapshot.configOptions, "model")).toBe("gpt-5.5");
   expect(configValue(snapshot.configOptions, "reasoning_effort")).toBe("high");
   expect(configValue(snapshot.configOptions, "collaboration_mode")).toBe(
     "default",
