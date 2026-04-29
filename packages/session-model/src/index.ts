@@ -37,12 +37,10 @@ type ProviderId = z.infer<typeof ProviderIdSchema>;
  * New provider configuration behavior must use ACP session config options.
  */
 declare const legacyProviderModelsBrand: unique symbol;
-type LegacyProviderModels = {
+interface LegacyProviderModels {
   readonly [legacyProviderModelsBrand]: "LegacyProviderModels";
-};
-const LegacyProviderModelsSchema = z
-  .unknown()
-  .transform((value): LegacyProviderModels => value as LegacyProviderModels);
+}
+const LegacyProviderModelsSchema = z.custom<LegacyProviderModels>();
 type ConnectionState = "disconnected" | "ready";
 interface ProviderDescriptor {
   id: ProviderId;
