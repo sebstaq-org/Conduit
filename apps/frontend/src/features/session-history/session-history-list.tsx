@@ -4,6 +4,7 @@ import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
+import { createHistoryContentContainerStyle } from "./session-history-list-layout";
 import {
   createHistoryListStyle,
   createHistoryUserBubbleStyle,
@@ -40,8 +41,8 @@ type SessionHistoryListRow =
 const historyViewportStyle = { flex: 1, minHeight: 0 } as const;
 const historyStartReachedThreshold = 2;
 const historyVisibleContentPosition = {
-  animateAutoScrollToBottom: false,
-  autoscrollToBottomThreshold: 0.2,
+  animateAutoScrollToBottom: true,
+  autoscrollToBottomThreshold: 1,
   autoscrollToTopThreshold: 0.2,
   startRenderingFromBottom: true,
 } as const;
@@ -150,19 +151,17 @@ function renderHistoryRow(
   return renderTranscriptItem(row.item, theme);
 }
 
-function createHistoryContentContainerStyle(theme: Theme): {
+function createHistoryListContentContainerStyle(theme: Theme): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
   width: "100%";
 } {
   const historyListStyle = createHistoryListStyle(theme);
-  return {
-    alignSelf: historyListStyle.alignSelf,
+  return createHistoryContentContainerStyle({
     maxWidth: historyListStyle.maxWidth,
-    paddingBottom: theme.spacing.scrollBottom,
-    width: historyListStyle.width,
-  };
+    theme,
+  });
 }
 
 function historyItemSeparator(theme: Theme): React.JSX.Element {
@@ -179,7 +178,7 @@ function SessionHistoryList({
 
   return (
     <VirtualList
-      contentContainerStyle={createHistoryContentContainerStyle(theme)}
+      contentContainerStyle={createHistoryListContentContainerStyle(theme)}
       data={rows}
       getItemType={rowType}
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
