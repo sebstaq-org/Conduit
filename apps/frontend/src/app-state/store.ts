@@ -38,6 +38,10 @@ const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     new Tuple(
       ...getDefaultMiddleware({
+        immutableCheck: {
+          ignoredPaths: [conduitApi.reducerPath],
+          warnAfter: 128,
+        },
         serializableCheck: {
           ignoredPaths: [conduitApi.reducerPath],
           warnAfter: 128,
