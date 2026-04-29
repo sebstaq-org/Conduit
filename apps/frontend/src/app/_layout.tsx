@@ -1,5 +1,4 @@
 import { wrap as wrapSentryRoot } from "@sentry/react-native";
-import { closeMenu as closeDevClientMenu } from "expo-dev-client";
 // @ts-expect-error react-native-get-random-values is an untyped native polyfill.
 import randomValuesPolyfill from "react-native-get-random-values";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,7 +11,6 @@ import { RootLayoutStore } from "@/shell/root-layout-store";
 import { rootLayoutGestureHandlerRootStyle } from "@/shell/root-layout.styles";
 
 initializeFrontendLogging();
-void closeDevClientMenu;
 void randomValuesPolyfill;
 
 function RootLayout(): React.JSX.Element {

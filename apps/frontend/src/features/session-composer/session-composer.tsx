@@ -9,7 +9,6 @@ import {
   canSubmitPrompt,
   draftSessionConfigOptionSelected,
   selectActiveSession,
-  selectSessionPromptTurnStreaming,
   useGetProvidersConfigSnapshotQuery,
   useNewSessionMutation,
   useOpenSessionMutation,
@@ -19,7 +18,6 @@ import {
 import type {
   ActiveSession,
   AppDispatch,
-  RootState,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
 import type { Theme } from "@/theme";
@@ -28,6 +26,7 @@ import {
   resolveDraftProviderReady,
   resolveDraftSnapshotEntry,
   resolveErrorMessage,
+  resolveSessionComposerWorking,
   resolveVisibleConfigOptions,
 } from "./session-composer-logic";
 import {
@@ -61,7 +60,6 @@ interface SessionComposerRuntime {
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   promptSessionError: boolean;
   promptSessionLoading: boolean;
-  promptTurnWorking: boolean;
   providersConfigSnapshot: ProvidersConfigSnapshotResult | undefined;
   providersConfigSnapshotError: boolean;
   setSessionConfigOption: ReturnType<
@@ -105,11 +103,11 @@ function createHandleConfigOptionSelect(args: {
 }
 
 function isSessionPromptBusy(runtime: SessionComposerRuntime): boolean {
-  if (runtime.activeSession?.kind === "draft") {
-    return runtime.newSessionLoading || runtime.promptSessionLoading;
-  }
-
-  return runtime.promptTurnWorking;
+  return resolveSessionComposerWorking({
+    activeSession: runtime.activeSession,
+    newSessionLoading: runtime.newSessionLoading,
+    promptSessionLoading: runtime.promptSessionLoading,
+  });
 }
 
 function buildSessionComposerController(args: {
@@ -163,15 +161,6 @@ function buildSessionComposerController(args: {
 function useSessionComposerRuntime(): SessionComposerRuntime {
   const dispatch = useDispatch<AppDispatch>();
   const activeSession = useSelector(selectActiveSession);
-  const promptTurnWorking = useSelector((state: RootState) => {
-    if (activeSession?.kind !== "open") {
-      return false;
-    }
-    return selectSessionPromptTurnStreaming(state, {
-      provider: activeSession.provider,
-      sessionId: activeSession.sessionId,
-    });
-  });
   const [newSession, newSessionState] = useNewSessionMutation();
   const [openSession] = useOpenSessionMutation();
   const [promptSession, promptSessionState] = usePromptSessionMutation();
@@ -198,7 +187,6 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
     promptSession,
     promptSessionError: promptSessionState.isError,
     promptSessionLoading: promptSessionState.isLoading,
-    promptTurnWorking,
     providersConfigSnapshot,
     providersConfigSnapshotError,
     setSessionConfigOption,

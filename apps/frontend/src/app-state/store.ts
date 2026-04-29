@@ -21,7 +21,10 @@ import {
   sessionSelectionReducer,
 } from "./session-selection";
 import { sessionPendingPromptsReducer } from "./session-pending-prompts";
-import { sessionPromptTurnsReducer } from "./session-prompt-turns";
+import {
+  sessionPromptTurnsCleared,
+  sessionPromptTurnsReducer,
+} from "./session-prompt-turns";
 import { configureSessionClientForHost } from "./session-client";
 
 const store = configureStore({
@@ -58,6 +61,12 @@ function startHostRegistryHydration(): void {
   void hydrateHostRegistry();
 }
 
+function dispatchSessionTransportReset(): void {
+  store.dispatch(activeSessionCleared());
+  store.dispatch(sessionPromptTurnsCleared());
+  store.dispatch(conduitApi.util.resetApiState());
+}
+
 function syncSessionTransport(state: RootState): void {
   if (!state.hostRegistry.hydrated) {
     return;
@@ -69,8 +78,7 @@ function syncSessionTransport(state: RootState): void {
   }
   configureSessionClientForHost(activeHost);
   configuredHostKey = nextHostKey;
-  store.dispatch(activeSessionCleared());
-  store.dispatch(conduitApi.util.resetApiState());
+  dispatchSessionTransportReset();
 }
 
 async function persistHostRegistrySnapshot(

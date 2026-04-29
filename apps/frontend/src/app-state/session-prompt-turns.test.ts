@@ -3,8 +3,10 @@
 import { expect, it } from "vitest";
 import {
   selectSessionPromptTurnStreaming,
+  sessionPromptTurnCleared,
   sessionPromptTurnFinished,
   sessionPromptTurnStarted,
+  sessionPromptTurnsCleared,
   sessionPromptTurnsReducer,
 } from "./session-prompt-turns";
 
@@ -84,6 +86,48 @@ it("keeps streaming until every matching prompt turn has finished", () => {
   expect(
     twiceFinished.activeCountByProvider.codex?.["session-1"],
   ).toBeUndefined();
+});
+
+it("clears a stale prompt turn without balancing every start", () => {
+  let state = sessionPromptTurnsReducer(
+    undefined,
+    sessionPromptTurnStarted({
+      provider: "codex",
+      sessionId: "session-1",
+    }),
+  );
+  state = sessionPromptTurnsReducer(
+    state,
+    sessionPromptTurnStarted({
+      provider: "codex",
+      sessionId: "session-2",
+    }),
+  );
+
+  const cleared = sessionPromptTurnsReducer(
+    state,
+    sessionPromptTurnCleared({
+      provider: "codex",
+      sessionId: "session-1",
+    }),
+  );
+
+  expect(cleared.activeCountByProvider.codex?.["session-1"]).toBeUndefined();
+  expect(cleared.activeCountByProvider.codex?.["session-2"]).toBe(1);
+});
+
+it("clears every prompt turn on transport reset", () => {
+  const state = sessionPromptTurnsReducer(
+    undefined,
+    sessionPromptTurnStarted({
+      provider: "codex",
+      sessionId: "session-1",
+    }),
+  );
+
+  const cleared = sessionPromptTurnsReducer(state, sessionPromptTurnsCleared());
+
+  expect(cleared.activeCountByProvider).toEqual({});
 });
 
 it("selects streaming status from the root session prompt turn state", () => {

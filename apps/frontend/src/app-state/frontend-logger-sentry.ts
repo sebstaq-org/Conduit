@@ -18,7 +18,8 @@ import type {
 } from "./frontend-logger-types";
 
 interface SentryLogSinkConfig {
-  readonly dsn: string;
+  readonly dsn: string | undefined;
+  readonly enabled: boolean;
   readonly profile: FrontendLogProfile;
 }
 
@@ -107,6 +108,7 @@ function initializeSentry(config: SentryLogSinkConfig): void {
     attachStacktrace: true,
     dist: configuredDist(),
     dsn: config.dsn,
+    enabled: config.enabled,
     enableCaptureFailedRequests: false,
     enableLogs: true,
     environment: config.profile,
@@ -169,10 +171,14 @@ function createSentryLogSink(
   profile: FrontendLogProfile,
 ): FrontendLogSink | null {
   const dsn = configuredSentryDsn();
+  initializeSentry({
+    dsn: dsn ?? undefined,
+    enabled: dsn !== null,
+    profile,
+  });
   if (dsn === null) {
     return null;
   }
-  initializeSentry({ dsn, profile });
   return {
     write: writeSentryRecord,
   };

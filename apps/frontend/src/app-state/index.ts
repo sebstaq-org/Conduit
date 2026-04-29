@@ -64,8 +64,10 @@ export {
 export type { ActiveSession } from "./session-selection";
 export {
   selectSessionPromptTurnStreaming,
+  sessionPromptTurnCleared,
   sessionPromptTurnFinished,
   sessionPromptTurnStarted,
+  sessionPromptTurnsCleared,
 } from "./session-prompt-turns";
 export type { SessionPromptTurnIdentity } from "./session-prompt-turns";
 export { pendingPromptSubmitted } from "./session-pending-prompts";
