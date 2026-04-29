@@ -39,6 +39,7 @@ const store = configureStore({
     new Tuple(
       ...getDefaultMiddleware({
         serializableCheck: {
+          ignoredPaths: [conduitApi.reducerPath],
           warnAfter: 128,
         },
       }),
