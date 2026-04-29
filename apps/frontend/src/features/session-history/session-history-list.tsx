@@ -3,7 +3,7 @@ import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
-import type { FlashListRef } from "@shopify/flash-list";
+import type { FlashListProps, FlashListRef } from "@shopify/flash-list";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
 import { createHistoryContentContainerStyle } from "./session-history-list-layout";
@@ -42,6 +42,7 @@ type SessionHistoryListRow =
 
 const historyViewportStyle = { flex: 1, minHeight: 0 } as const;
 const historyStartReachedThreshold = 2;
+const historyFollowEndThreshold = 240;
 const historyVisibleContentPosition = {
   animateAutoScrollToBottom: true,
   autoscrollToBottomThreshold: 1,
@@ -170,6 +171,39 @@ function historyItemSeparator(theme: Theme): React.JSX.Element {
   return <Box style={{ height: theme.spacing[historyListGap] }} />;
 }
 
+interface HistoryFollowEndHandlers {
+  handleContentSizeChange: NonNullable<
+    FlashListProps<SessionHistoryListRow>["onContentSizeChange"]
+  >;
+  handleLoad: NonNullable<FlashListProps<SessionHistoryListRow>["onLoad"]>;
+  handleScroll: NonNullable<FlashListProps<SessionHistoryListRow>["onScroll"]>;
+  listRef: React.RefObject<FlashListRef<SessionHistoryListRow> | null>;
+}
+
+function useHistoryFollowEnd(): HistoryFollowEndHandlers {
+  const listRef = useRef<FlashListRef<SessionHistoryListRow>>(null);
+  const followEndRef = useRef(true);
+
+  return {
+    handleContentSizeChange: () => {
+      if (followEndRef.current) {
+        listRef.current?.scrollToEnd({ animated: false });
+      }
+    },
+    handleLoad: () => {
+      listRef.current?.scrollToEnd({ animated: false });
+    },
+    handleScroll: (event) => {
+      const viewportHeight = event.nativeEvent.layoutMeasurement.height;
+      const offsetY = event.nativeEvent.contentOffset.y;
+      const contentHeight = event.nativeEvent.contentSize.height;
+      const distanceFromEnd = contentHeight - viewportHeight - offsetY;
+      followEndRef.current = distanceFromEnd <= historyFollowEndThreshold;
+    },
+    listRef,
+  };
+}
+
 function SessionHistoryList({
   history,
   onStartReached,
@@ -177,11 +211,7 @@ function SessionHistoryList({
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const rows = sessionHistoryRows(history);
-  const listRef = useRef<FlashListRef<SessionHistoryListRow>>(null);
-
-  function handleLoad(): void {
-    listRef.current?.scrollToEnd({ animated: false });
-  }
+  const followEnd = useHistoryFollowEnd();
 
   return (
     <VirtualList
@@ -193,12 +223,15 @@ function SessionHistoryList({
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="never"
       listKey={openSessionId}
-      listRef={listRef}
+      listRef={followEnd.listRef}
       maintainVisibleContentPosition={historyVisibleContentPosition}
-      onLoad={handleLoad}
+      onContentSizeChange={followEnd.handleContentSizeChange}
+      onLoad={followEnd.handleLoad}
+      onScroll={followEnd.handleScroll}
       onStartReached={onStartReached}
       onStartReachedThreshold={historyStartReachedThreshold}
       renderItem={({ item }) => renderHistoryRow(item, theme)}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator
       style={historyViewportStyle}
     />

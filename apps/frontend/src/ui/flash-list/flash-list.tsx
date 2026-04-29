@@ -16,10 +16,13 @@ interface VirtualListProps<Item> {
   listKey?: string;
   listRef?: React.Ref<FlashListRef<Item>> | undefined;
   maintainVisibleContentPosition?: FlashListProps<Item>["maintainVisibleContentPosition"];
+  onContentSizeChange?: FlashListProps<Item>["onContentSizeChange"];
   onLoad?: FlashListProps<Item>["onLoad"];
+  onScroll?: FlashListProps<Item>["onScroll"];
   onStartReached?: FlashListProps<Item>["onStartReached"];
   onStartReachedThreshold?: FlashListProps<Item>["onStartReachedThreshold"];
   renderItem: (info: ListRenderItemInfo<Item>) => React.ReactElement | null;
+  scrollEventThrottle?: FlashListProps<Item>["scrollEventThrottle"];
   showsVerticalScrollIndicator?: boolean;
   style?: FlashListProps<Item>["style"];
 }
@@ -35,10 +38,13 @@ function VirtualList<Item>({
   listKey,
   listRef,
   maintainVisibleContentPosition,
+  onContentSizeChange,
   onLoad,
+  onScroll,
   onStartReached,
   onStartReachedThreshold,
   renderItem,
+  scrollEventThrottle,
   showsVerticalScrollIndicator,
   style,
 }: VirtualListProps<Item>): React.JSX.Element {
@@ -53,11 +59,14 @@ function VirtualList<Item>({
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       maintainVisibleContentPosition={maintainVisibleContentPosition}
+      onContentSizeChange={onContentSizeChange}
       onLoad={onLoad}
+      onScroll={onScroll}
       onStartReached={onStartReached}
       onStartReachedThreshold={onStartReachedThreshold}
       renderItem={renderItem}
       ref={listRef}
+      scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={showsVerticalScrollIndicator}
       style={style}
     />
