@@ -43,7 +43,7 @@ const store = configureStore({
 type AppDispatch = typeof store.dispatch;
 type RootState = ReturnType<typeof store.getState>;
 
-let configuredHostKey = "__initial__";
+let configuredHostKey = hostProfileTransportKey(null);
 let persistedHostRegistryKey = "__initial__";
 
 async function hydrateHostRegistry(): Promise<void> {

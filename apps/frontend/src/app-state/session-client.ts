@@ -90,17 +90,17 @@ async function configureClientPresence(revision: number): Promise<void> {
 function configureSessionClientForHost(
   host: ConnectionHostProfile | null,
 ): void {
+  const url = optionalSessionClientUrl();
+  if (url !== null) {
+    sessionClientManager.configureDirect(url, logSessionClientTelemetry);
+    return;
+  }
   if (host !== null) {
     const revision = sessionClientManager.configureRelay(
       host,
       logSessionClientTelemetry,
     );
     void configureClientPresence(revision);
-    return;
-  }
-  const url = optionalSessionClientUrl();
-  if (url !== null) {
-    sessionClientManager.configureDirect(url, logSessionClientTelemetry);
     return;
   }
   sessionClientManager.configureUnconfigured(createUnconfiguredSessionClient());
