@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
@@ -23,7 +23,6 @@ import type {
 } from "@conduit/session-client";
 
 interface SessionHistoryListProps {
-  composerDockHeight: number;
   history: SessionHistoryWindow;
   onStartReached: () => void;
   openSessionId: string;
@@ -154,10 +153,7 @@ function renderHistoryRow(
   return renderTranscriptItem(row.item, theme);
 }
 
-function createHistoryListContentContainerStyle(
-  theme: Theme,
-  composerDockHeight: number,
-): {
+function createHistoryListContentContainerStyle(theme: Theme): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
@@ -165,7 +161,6 @@ function createHistoryListContentContainerStyle(
 } {
   const historyListStyle = createHistoryListStyle(theme);
   return createHistoryContentContainerStyle({
-    composerDockHeight,
     maxWidth: historyListStyle.maxWidth,
     theme,
   });
@@ -176,7 +171,6 @@ function historyItemSeparator(theme: Theme): React.JSX.Element {
 }
 
 function SessionHistoryList({
-  composerDockHeight,
   history,
   onStartReached,
   openSessionId,
@@ -184,19 +178,16 @@ function SessionHistoryList({
   const theme = useTheme<Theme>();
   const rows = sessionHistoryRows(history);
   const listRef = useRef<FlashListRef<SessionHistoryListRow>>(null);
-  const handleLoad = useCallback((): void => {
+
+  function handleLoad(): void {
     listRef.current?.scrollToEnd({ animated: false });
-  }, []);
+  }
 
   return (
     <VirtualList
-      contentContainerStyle={createHistoryListContentContainerStyle(
-        theme,
-        composerDockHeight,
-      )}
+      contentContainerStyle={createHistoryListContentContainerStyle(theme)}
       data={rows}
       getItemType={rowType}
-      initialScrollIndex={Math.max(rows.length - 1, 0)}
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
       keyExtractor={(row) => row.key}
       keyboardDismissMode="on-drag"

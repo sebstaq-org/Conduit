@@ -9,7 +9,6 @@ interface VirtualListProps<Item> {
   contentContainerStyle?: FlashListProps<Item>["contentContainerStyle"];
   data: FlashListProps<Item>["data"];
   getItemType?: FlashListProps<Item>["getItemType"];
-  initialScrollIndex?: FlashListProps<Item>["initialScrollIndex"];
   ItemSeparatorComponent?: FlashListProps<Item>["ItemSeparatorComponent"];
   keyExtractor: (item: Item, index: number) => string;
   keyboardDismissMode?: FlashListProps<Item>["keyboardDismissMode"];
@@ -29,7 +28,6 @@ function VirtualList<Item>({
   contentContainerStyle,
   data,
   getItemType,
-  initialScrollIndex,
   ItemSeparatorComponent,
   keyExtractor,
   keyboardDismissMode,
@@ -49,7 +47,6 @@ function VirtualList<Item>({
       contentContainerStyle={contentContainerStyle}
       data={data}
       getItemType={getItemType}
-      initialScrollIndex={initialScrollIndex}
       ItemSeparatorComponent={ItemSeparatorComponent}
       key={listKey}
       keyExtractor={keyExtractor}
