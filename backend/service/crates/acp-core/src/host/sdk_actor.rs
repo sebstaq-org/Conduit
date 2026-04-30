@@ -32,6 +32,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -167,6 +168,7 @@ impl SdkHostActor {
             .map_err(|source| AcpError::Spawn { provider, source })?;
         let outgoing = child_stdin(provider, &mut child)?;
         let incoming = child_stdout(provider, &mut child)?;
+        drain_child_stderr(provider, &mut child)?;
         Ok((acp_sdk::ByteStreams::new(outgoing, incoming), child))
     }
 
@@ -527,6 +529,46 @@ impl SdkHostActor {
         }
         ConnectionState::Ready
     }
+}
+
+fn drain_child_stderr(provider: ProviderId, child: &mut tokio::process::Child) -> Result<()> {
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| disconnected(provider, "stderr"))?;
+    tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    tracing::debug!(
+                        event_name = "acp_host.child_stderr.line",
+                        source = "acp-core",
+                        provider = %provider.as_str(),
+                        line_bytes = line.len()
+                    );
+                }
+                Ok(None) => {
+                    tracing::debug!(
+                        event_name = "acp_host.child_stderr.closed",
+                        source = "acp-core",
+                        provider = %provider.as_str()
+                    );
+                    break;
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        event_name = "acp_host.child_stderr.read_error",
+                        source = "acp-core",
+                        provider = %provider.as_str(),
+                        error_message = %error
+                    );
+                    break;
+                }
+            }
+        }
+    });
+    Ok(())
 }
 
 include!("sdk_actor_tail.rs");
