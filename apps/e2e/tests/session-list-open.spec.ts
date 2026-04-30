@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { fixtureCwd, startE2eHarness } from "../src/harness.js";
 import {
+  relayBackedBrowserE2eCiSkipReason,
+  relayBackedBrowserE2eRunsInRequiredCi,
+} from "../src/ciRelayPolicy.js";
+import {
   capturedTerminalPlanHeading,
   claudeParityPrompt,
   claudeParitySentinel,
@@ -22,6 +26,11 @@ import {
 import type { E2eHarness } from "../src/harness.js";
 
 let harness: E2eHarness | null = null;
+
+test.skip(
+  relayBackedBrowserE2eRunsInRequiredCi,
+  relayBackedBrowserE2eCiSkipReason,
+);
 
 test.beforeAll(async () => {
   harness = await startE2eHarness({ exposeDirectSessionUrl: false });
