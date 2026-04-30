@@ -1,11 +1,12 @@
 import { useRef } from "react";
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
-import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
 import type { FlashListProps, FlashListRef } from "@shopify/flash-list";
-import { transcriptItemLabel } from "./session-history-content";
-import { SessionHistoryMarkdown } from "./session-history-markdown";
+import {
+  SessionHistoryMarkdown,
+  transcriptItemLabel,
+} from "./session-history-rendering";
 import { createHistoryContentContainerStyle } from "./session-history-list-layout";
 import {
   createHistoryListStyle,
@@ -17,10 +18,18 @@ import {
   historyUserBubbleBackgroundColor,
   historyUserRowAlignItems,
 } from "./session-history.styles";
+import {
+  SessionHistoryToolCallRow,
+  isSessionHistoryToolCallProjection,
+  projectSessionHistoryItems,
+} from "./session-history-tool-call";
+import type { SessionHistoryProjectedItem } from "./session-history-tool-call";
 import type {
   SessionHistoryWindow,
   TranscriptItem,
 } from "@conduit/session-client";
+
+type HistoryTheme = Parameters<typeof createHistoryListStyle>[0];
 
 interface SessionHistoryListProps {
   history: SessionHistoryWindow;
@@ -35,7 +44,7 @@ type SessionHistoryListRow =
       label: string;
     }
   | {
-      item: TranscriptItem;
+      item: SessionHistoryProjectedItem;
       kind: "transcript";
       key: string;
     };
@@ -83,7 +92,7 @@ function renderAgentMessage(item: TranscriptItem): React.JSX.Element | null {
 
 function renderUserMessage(
   item: TranscriptItem,
-  theme: Theme,
+  theme: HistoryTheme,
 ): React.JSX.Element | null {
   if (item.kind !== "message") {
     return null;
@@ -103,9 +112,12 @@ function renderUserMessage(
 }
 
 function renderTranscriptItem(
-  item: TranscriptItem,
-  theme: Theme,
+  item: SessionHistoryProjectedItem,
+  theme: HistoryTheme,
 ): React.JSX.Element | null {
+  if (isSessionHistoryToolCallProjection(item)) {
+    return <SessionHistoryToolCallRow item={item} />;
+  }
   if (item.kind === "event") {
     return renderEventItem(item);
   }
@@ -124,7 +136,7 @@ function sessionHistoryRows(
   if (history.items.length === 0) {
     return [{ kind: "status", key: "status:empty", label: "No messages yet" }];
   }
-  return history.items.map((item) => ({
+  return projectSessionHistoryItems(history.items).map((item) => ({
     item,
     kind: "transcript",
     key: `item:${item.id}`,
@@ -134,6 +146,9 @@ function sessionHistoryRows(
 function rowType(row: SessionHistoryListRow): string {
   if (row.kind === "status") {
     return "status";
+  }
+  if (isSessionHistoryToolCallProjection(row.item)) {
+    return "tool-call";
   }
   if (row.item.kind === "event") {
     return "event";
@@ -146,7 +161,7 @@ function rowType(row: SessionHistoryListRow): string {
 
 function renderHistoryRow(
   row: SessionHistoryListRow,
-  theme: Theme,
+  theme: HistoryTheme,
 ): React.JSX.Element | null {
   if (row.kind === "status") {
     return <Text variant={historyStatusVariant}>{row.label}</Text>;
@@ -154,7 +169,7 @@ function renderHistoryRow(
   return renderTranscriptItem(row.item, theme);
 }
 
-function createHistoryListContentContainerStyle(theme: Theme): {
+function createHistoryListContentContainerStyle(theme: HistoryTheme): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
@@ -167,7 +182,7 @@ function createHistoryListContentContainerStyle(theme: Theme): {
   });
 }
 
-function historyItemSeparator(theme: Theme): React.JSX.Element {
+function historyItemSeparator(theme: HistoryTheme): React.JSX.Element {
   return <Box style={{ height: theme.spacing[historyListGap] }} />;
 }
 
@@ -209,7 +224,7 @@ function SessionHistoryList({
   onStartReached,
   openSessionId,
 }: SessionHistoryListProps): React.JSX.Element {
-  const theme = useTheme<Theme>();
+  const theme = useTheme<HistoryTheme>();
   const rows = sessionHistoryRows(history);
   const followEnd = useHistoryFollowEnd();
 

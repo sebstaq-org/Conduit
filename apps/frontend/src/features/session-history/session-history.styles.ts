@@ -27,6 +27,38 @@ interface HistoryUserTextStyle {
   lineHeight: number;
 }
 
+interface HistoryToolCallStyle {
+  backgroundColor: string;
+  borderColor: string;
+  borderRadius: number;
+  borderWidth: number;
+  gap: number;
+  maxWidth: "100%";
+  paddingHorizontal: number;
+  paddingVertical: number;
+}
+
+interface HistoryToolCallTitleStyle {
+  color: string;
+  fontSize: number;
+  fontWeight: "600";
+  lineHeight: number;
+}
+
+interface HistoryToolCallMetaStyle {
+  color: string;
+  fontSize: number;
+  fontWeight: "600";
+  lineHeight: number;
+}
+
+interface HistoryToolCallPreviewStyle {
+  color: string;
+  fontFamily: "monospace";
+  fontSize: number;
+  lineHeight: number;
+}
+
 function createHistoryAgentMarkdownStyle(theme: Theme): MarkdownStyle {
   return {
     code: {
@@ -101,9 +133,59 @@ function createHistoryUserTextStyle(theme: Theme): HistoryUserTextStyle {
   };
 }
 
+function createHistoryToolCallStyle(theme: Theme): HistoryToolCallStyle {
+  return {
+    backgroundColor: theme.colors.composerSurface,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.borderRadii.row,
+    borderWidth: 1,
+    gap: theme.spacing.xs,
+    maxWidth: "100%",
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  };
+}
+
+function createHistoryToolCallTitleStyle(
+  theme: Theme,
+): HistoryToolCallTitleStyle {
+  return {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  };
+}
+
+function createHistoryToolCallMetaStyle(
+  theme: Theme,
+): HistoryToolCallMetaStyle {
+  return {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 16,
+  };
+}
+
+function createHistoryToolCallPreviewStyle(
+  theme: Theme,
+): HistoryToolCallPreviewStyle {
+  return {
+    color: theme.colors.sessionAgentText,
+    fontFamily: "monospace",
+    fontSize: 12,
+    lineHeight: 17,
+  };
+}
+
 export {
   createHistoryAgentMarkdownStyle,
   createHistoryListStyle,
+  createHistoryToolCallMetaStyle,
+  createHistoryToolCallPreviewStyle,
+  createHistoryToolCallStyle,
+  createHistoryToolCallTitleStyle,
   createHistoryUserBubbleStyle,
   createHistoryUserTextStyle,
   historyAgentRowAlignItems,
@@ -112,3 +194,4 @@ export {
   historyUserBubbleBackgroundColor,
   historyUserRowAlignItems,
 };
+export type { HistoryToolCallPreviewStyle, HistoryToolCallStyle };
