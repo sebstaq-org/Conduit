@@ -22,7 +22,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use telemetry_support as _;
 use thiserror as _;
 use time as _;
@@ -271,8 +271,8 @@ fn provider_fixture_root() -> PathBuf {
 }
 
 fn wait_for_http(port: u16) -> TestResult<()> {
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    while std::time::Instant::now() < deadline {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
         if TcpStream::connect(("127.0.0.1", port)).is_ok() {
             return Ok(());
         }
@@ -291,6 +291,21 @@ fn get_json(port: u16, path: &str) -> TestResult<Value> {
 }
 
 fn get_raw(port: u16, path: &str) -> TestResult<String> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match get_raw_once(port, path) {
+            Ok(response) => return Ok(response),
+            Err(error) => {
+                if Instant::now() >= deadline {
+                    return Err(error);
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn get_raw_once(port: u16, path: &str) -> TestResult<String> {
     let mut stream = TcpStream::connect(("127.0.0.1", port))?;
     let request = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes())?;
