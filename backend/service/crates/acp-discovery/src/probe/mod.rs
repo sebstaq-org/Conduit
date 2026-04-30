@@ -11,8 +11,8 @@ use acp_contracts::{
     validate_locked_response_envelope,
 };
 use agent_client_protocol_schema::{
-    AGENT_METHOD_NAMES, AgentSide, ClientRequest, ClientSide, Implementation, InitializeRequest,
-    InitializeResponse, JsonRpcMessage, OutgoingMessage, ProtocolVersion, Request,
+    AGENT_METHOD_NAMES, AgentResponse, ClientRequest, Implementation, InitializeRequest,
+    InitializeResponse, JsonRpcMessage, ProtocolVersion, Request, Response,
 };
 use process::{
     build_diagnostics, read_initialize_response, send_initialize_request, spawn_provider_process,
@@ -256,7 +256,7 @@ fn probe_initialize(
     Ok(probe)
 }
 
-fn initialize_request() -> Result<JsonRpcMessage<OutgoingMessage<ClientSide, AgentSide>>> {
+fn initialize_request() -> Result<JsonRpcMessage<Request<ClientRequest>>> {
     let request = Request {
         id: 1.into(),
         method: Arc::from(AGENT_METHOD_NAMES.initialize),
@@ -265,18 +265,15 @@ fn initialize_request() -> Result<JsonRpcMessage<OutgoingMessage<ClientSide, Age
                 .client_info(Implementation::new("conduit-discovery", "0.5.0")),
         )),
     };
-    Ok(JsonRpcMessage::wrap(OutgoingMessage::Request(request)))
+    Ok(JsonRpcMessage::wrap(request))
 }
 
 fn decode_initialize_response(
     provider: ProviderId,
     envelope: &Value,
 ) -> Result<InitializeResponse> {
-    let typed = serde_json::from_value::<JsonRpcMessage<OutgoingMessage<AgentSide, ClientSide>>>(
-        envelope.clone(),
-    )
-    .map_err(|error| contract(provider, error.to_string()))?;
-    let JsonRpcMessage { .. } = typed;
+    serde_json::from_value::<JsonRpcMessage<Response<AgentResponse>>>(envelope.clone())
+        .map_err(|error| contract(provider, error.to_string()))?;
     let value =
         envelope
             .get("result")

@@ -1,6 +1,10 @@
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import type { ProviderId, SessionConfigOption } from "@conduit/session-client";
+import type {
+  LegacyProviderModels,
+  ProviderId,
+  SessionConfigOption,
+} from "@conduit/session-client";
 import type { RootState } from "./store";
 
 interface OpenActiveSession {
@@ -14,7 +18,7 @@ interface OpenActiveSession {
   configSyncBlocked: boolean;
   configSyncError: string | null;
   modes: unknown;
-  models: unknown;
+  models: LegacyProviderModels | null;
 }
 
 interface DraftActiveSession {

@@ -148,7 +148,11 @@ function SessionHistory(): React.JSX.Element {
   const openSessionId = selectedOpenSessionId(activeSession);
   const timeline = useSessionTimeline(openSessionId);
 
-  return renderSessionHistory({ activeSession, openSessionId, timeline });
+  return renderSessionHistory({
+    activeSession,
+    openSessionId,
+    timeline,
+  });
 }
 
 export { SessionHistory };

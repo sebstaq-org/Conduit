@@ -101,6 +101,7 @@ async fn new_session_prompt_does_not_block_following_history() -> TestResult<()>
         LocalStore::open_path(&path)?,
         Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
     );
+    wait_for_actor_provider_ready(&actor, "codex").await?;
     let new_session = actor
         .dispatch(command(
             "1",
@@ -224,6 +225,7 @@ async fn session_set_config_option_uses_prompt_lane_owner_runtime() -> TestResul
         LocalStore::open_path(&path)?,
         Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
     );
+    wait_for_actor_provider_ready(&actor, "codex").await?;
 
     let session_new = actor
         .dispatch(command(
@@ -264,6 +266,7 @@ async fn session_new_rejects_provider_session_owner_rebind() -> TestResult<()> {
         LocalStore::open_path(&path)?,
         Arc::new(move || Ok(LocalStore::open_path(&refresh_path)?)),
     );
+    wait_for_actor_provider_ready(&actor, "codex").await?;
 
     let first = actor
         .dispatch(command(
@@ -530,6 +533,35 @@ fn ensure_started_sessions(started_sessions: &[String; 2]) -> TestResult<()> {
         return Ok(());
     }
     Err(format!("unexpected started sessions: {started_sessions:?}").into())
+}
+
+async fn wait_for_actor_provider_ready(actor: &RuntimeActor, provider: &str) -> TestResult<()> {
+    for attempt in 0..100 {
+        let response = actor
+            .dispatch(command(
+                &format!("snapshot-{attempt}"),
+                "providers/config_snapshot",
+                "all",
+                json!({}),
+            ))
+            .await;
+        ensure_ok(&response)?;
+        let entries = response
+            .result
+            .get("entries")
+            .and_then(Value::as_array)
+            .ok_or("providers/config_snapshot missing entries")?;
+        let status = entries
+            .iter()
+            .find(|entry| entry.get("provider").and_then(Value::as_str) == Some(provider))
+            .and_then(|entry| entry.get("status"))
+            .and_then(Value::as_str);
+        if status == Some("ready") {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    Err(format!("provider {provider} did not become ready").into())
 }
 
 fn seed_open_session(path: &PathBuf, provider: ProviderId, session_id: &str) -> TestResult<String> {

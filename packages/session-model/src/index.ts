@@ -31,6 +31,16 @@ type GlobalSettingsUpdateRequest = z.infer<
 const PROVIDERS = ["claude", "copilot", "codex"] as const;
 const ProviderIdSchema = z.enum(PROVIDERS);
 type ProviderId = z.infer<typeof ProviderIdSchema>;
+/**
+ * Legacy provider model metadata retained as opaque passthrough data.
+ *
+ * New provider configuration behavior must use ACP session config options.
+ */
+declare const legacyProviderModelsBrand: unique symbol;
+interface LegacyProviderModels {
+  readonly [legacyProviderModelsBrand]: "LegacyProviderModels";
+}
+const LegacyProviderModelsSchema = z.custom<LegacyProviderModels>();
 type ConnectionState = "disconnected" | "ready";
 interface ProviderDescriptor {
   id: ProviderId;
@@ -354,7 +364,7 @@ const SessionNewResultSchema = z
     currentModeId: z.string().nullable().optional(),
     configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
     modes: z.unknown().nullable().optional(),
-    models: z.unknown().nullable().optional(),
+    models: LegacyProviderModelsSchema.nullable().optional(),
     history: SessionHistoryWindowSchema,
   })
   .strict();
@@ -365,7 +375,7 @@ const SessionOpenResultSchema = z
     currentModeId: z.string().nullable().optional(),
     configOptions: z.array(SessionConfigOptionSchema).nullable().optional(),
     modes: z.unknown().nullable().optional(),
-    models: z.unknown().nullable().optional(),
+    models: LegacyProviderModelsSchema.nullable().optional(),
     openSessionId: z.string(),
     revision: z.number(),
     items: z.array(TranscriptItemSchema),
@@ -397,7 +407,7 @@ const ProviderConfigSnapshotEntrySchema = z
     status: ProviderConfigSnapshotStatusSchema,
     configOptions: z.array(SessionConfigOptionSchema).nullable(),
     modes: z.unknown().nullable(),
-    models: z.unknown().nullable(),
+    models: LegacyProviderModelsSchema.nullable(),
     fetchedAt: z.string().nullable(),
     error: z.string().nullable(),
   })
@@ -487,6 +497,7 @@ export type {
   ConnectionState,
   LiveSessionIdentity,
   LiveSessionSnapshot,
+  LegacyProviderModels,
   PromptLifecycleSnapshot,
   PromptLifecycleState,
   LoadedTranscriptSnapshot,

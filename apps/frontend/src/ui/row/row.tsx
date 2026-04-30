@@ -72,14 +72,16 @@ function renderRowContent({
     <>
       {renderLeadingSlot({ leading, reserveLeadingSpace, theme })}
       {icon !== undefined && <IconSlot name={icon} />}
-      <Text
-        numberOfLines={rowLabelNumberOfLines}
-        variant={rowLabelVariant(muted)}
-      >
-        {label}
-      </Text>
-      {meta !== undefined && <Meta>{meta}</Meta>}
-      {trailing}
+      <Box flex={1} style={{ minWidth: 0 }}>
+        <Text
+          numberOfLines={rowLabelNumberOfLines}
+          variant={rowLabelVariant(muted)}
+        >
+          {label}
+        </Text>
+        {meta !== undefined && <Meta>{meta}</Meta>}
+      </Box>
+      {trailing !== undefined && <Box flexShrink={0}>{trailing}</Box>}
     </>
   );
 }

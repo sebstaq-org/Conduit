@@ -35,16 +35,19 @@ function SessionComposerActionRow({
     <Box
       alignItems={sessionComposerRowAlignItems}
       flexDirection={sessionComposerRowFlexDirection}
+      gap="sm"
       justifyContent={sessionComposerRowJustifyContent}
     >
-      <SessionComposerControls
-        configOptions={configOptions}
-        isDraft={isDraft}
-        isUpdatingConfig={isUpdatingConfig}
-        onConfigOptionSelect={onConfigOptionSelect}
-        onProviderSelect={onProviderSelect}
-        provider={provider}
-      />
+      <Box flex={1} style={{ minWidth: 0 }}>
+        <SessionComposerControls
+          configOptions={configOptions}
+          isDraft={isDraft}
+          isUpdatingConfig={isUpdatingConfig}
+          onConfigOptionSelect={onConfigOptionSelect}
+          onProviderSelect={onProviderSelect}
+          provider={provider}
+        />
+      </Box>
       <IconButton
         accessibilityLabel={sessionComposerSendAccessibilityLabel}
         appearance="filled"

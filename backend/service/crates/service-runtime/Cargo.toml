@@ -9,7 +9,7 @@ publish.workspace = true
 [dependencies]
 acp-core = { path = "../acp-core" }
 acp-discovery = { path = "../acp-discovery" }
-agent-client-protocol-schema = "=0.11.4"
+agent-client-protocol-schema = "=0.12.0"
 app-api = { path = "../app-api" }
 criterion = { version = "0.5.1", optional = true }
 schemars = "1"

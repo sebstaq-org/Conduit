@@ -21,19 +21,18 @@ struct SdkClient {
     updates: Arc<Mutex<PromptUpdateState>>,
 }
 
-#[async_trait::async_trait(?Send)]
-impl acp::Client for SdkClient {
+impl SdkClient {
     async fn request_permission(
         &self,
         args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
+    ) -> acp_sdk::Result<acp::RequestPermissionResponse> {
         let session_id = args.session_id.to_string();
         let tool_call_id = args.tool_call.tool_call_id.to_string();
         let question = question_details(&args)?;
         let (response_tx, response_rx) = oneshot::channel();
         {
             let mut updates = self.updates.lock().map_err(|error| {
-                acp::Error::internal_error().data(format!(
+                acp_sdk::Error::internal_error().data(format!(
                     "prompt update lock poisoned for {}: {error}",
                     self.provider
                 ))
@@ -48,9 +47,9 @@ impl acp::Client for SdkClient {
                 self.provider,
                 session_id.clone(),
                 interaction_id.clone(),
-                PendingInteraction { response_tx },
+                response_tx,
             )
-            .map_err(|error| acp::Error::internal_error().data(error.to_string()))?;
+            .map_err(|error| acp_sdk::Error::internal_error().data(error.to_string()))?;
             updates
                 .interaction_queue_by_tool_call
                 .entry(tool_call_id.clone())
@@ -70,16 +69,16 @@ impl acp::Client for SdkClient {
         }))
     }
 
-    async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
+    async fn session_notification(&self, args: acp::SessionNotification) -> acp_sdk::Result<()> {
         let mut updates = self.updates.lock().map_err(|error| {
-            acp::Error::internal_error().data(format!(
+            acp_sdk::Error::internal_error().data(format!(
                 "prompt update lock poisoned for {}: {error}",
                 self.provider
             ))
         })?;
         if updates.active_session.as_deref() == Some(&args.session_id.to_string()) {
             let update = to_value(&args.update).map_err(|error| {
-                acp::Error::internal_error().data(format!(
+                acp_sdk::Error::internal_error().data(format!(
                     "session update serialization failed for {}: {error}",
                     self.provider
                 ))
@@ -119,7 +118,7 @@ struct InteractionQuestion {
     options: Vec<ConduitInteractionOption>,
 }
 
-fn question_details(args: &acp::RequestPermissionRequest) -> acp::Result<InteractionQuestion> {
+fn question_details(args: &acp::RequestPermissionRequest) -> acp_sdk::Result<InteractionQuestion> {
     let raw_input = args.tool_call.fields.raw_input.as_ref();
     let id = required_question_string(raw_input, "/question/id", "question.id")?;
     let header = raw_input
@@ -145,7 +144,7 @@ fn question_details(args: &acp::RequestPermissionRequest) -> acp::Result<Interac
                 option.option_id.0.as_ref().to_owned(),
             ))
         })
-        .collect::<acp::Result<Vec<_>>>()?;
+        .collect::<acp_sdk::Result<Vec<_>>>()?;
     Ok(InteractionQuestion {
         id,
         header,
@@ -159,7 +158,7 @@ fn required_question_string(
     raw_input: Option<&Value>,
     pointer: &'static str,
     field: &'static str,
-) -> acp::Result<String> {
+) -> acp_sdk::Result<String> {
     raw_input
         .and_then(|value| value.pointer(pointer))
         .and_then(Value::as_str)
@@ -167,7 +166,7 @@ fn required_question_string(
         .ok_or_else(|| protocol_event_error(format!("request permission payload missing {field}")))
 }
 
-fn option_kind_string(kind: acp::PermissionOptionKind) -> acp::Result<String> {
+fn option_kind_string(kind: acp::PermissionOptionKind) -> acp_sdk::Result<String> {
     let value = to_value(kind).map_err(|error| {
         protocol_event_error(format!("permission option kind serialization failed: {error}"))
     })?;
@@ -193,7 +192,7 @@ fn interaction_request_update(
     tool_call_id: String,
     question: &InteractionQuestion,
     raw_input: Option<&Value>,
-) -> acp::Result<TranscriptUpdateSnapshot> {
+) -> acp_sdk::Result<TranscriptUpdateSnapshot> {
     let data = ConduitInteractionRequestData::new(ConduitInteractionRequestInput {
         interaction_id,
         tool_call_id,
@@ -217,7 +216,7 @@ fn interaction_resolution_update(
     updates: &mut PromptUpdateState,
     update: &acp::ToolCallUpdate,
     update_value: &Value,
-) -> acp::Result<Option<TranscriptUpdateSnapshot>> {
+) -> acp_sdk::Result<Option<TranscriptUpdateSnapshot>> {
     let Some(status) = interaction_terminal_status(update, update_value) else {
         return Ok(None);
     };
@@ -270,8 +269,8 @@ fn interaction_terminal_status(
     }
 }
 
-fn protocol_event_error(message: impl Into<String>) -> acp::Error {
-    acp::Error::internal_error().data(message.into())
+fn protocol_event_error(message: impl Into<String>) -> acp_sdk::Error {
+    acp_sdk::Error::internal_error().data(message.into())
 }
 
 fn record_update(updates: &mut PromptUpdateState, snapshot: TranscriptUpdateSnapshot) {
@@ -279,81 +278,6 @@ fn record_update(updates: &mut PromptUpdateState, snapshot: TranscriptUpdateSnap
         let _result = update_sender.send(snapshot.clone());
     }
     updates.updates.push(snapshot);
-}
-
-fn register_pending_interaction(
-    provider: ProviderId,
-    session_id: String,
-    interaction_id: String,
-    pending: PendingInteraction,
-) -> Result<()> {
-    let key = InteractionKey {
-        provider,
-        session_id,
-        interaction_id,
-    };
-    let mut registry = INTERACTION_REGISTRY
-        .lock()
-        .map_err(|error| unexpected(provider, error.to_string()))?;
-    registry.resolved.remove(&key);
-    if registry.pending.insert(key.clone(), pending).is_some() {
-        return Err(AcpError::InvalidInteractionResponse {
-            provider,
-            interaction_id: key.interaction_id,
-            message: "interaction id collision while registering pending request",
-        });
-    }
-    Ok(())
-}
-
-fn cancel_pending_interactions_for_provider(provider: ProviderId) {
-    let mut cancelled = Vec::new();
-    if let Ok(mut registry) = INTERACTION_REGISTRY.lock() {
-        let keys = registry
-            .pending
-            .keys()
-            .filter(|key| key.provider == provider)
-            .cloned()
-            .collect::<Vec<_>>();
-        for key in keys {
-            if let Some(pending) = registry.pending.remove(&key) {
-                cancelled.push((pending.response_tx, key.clone()));
-                registry.resolved.remove(&key);
-            }
-        }
-        registry.resolved.retain(|key| key.provider != provider);
-    }
-    for (response_tx, _key) in cancelled {
-        let _send_status = response_tx.send(acp::RequestPermissionResponse::new(
-            acp::RequestPermissionOutcome::Cancelled,
-        ));
-    }
-}
-
-fn cancel_pending_interactions_for_session(provider: ProviderId, session_id: &str) {
-    let mut cancelled = Vec::new();
-    if let Ok(mut registry) = INTERACTION_REGISTRY.lock() {
-        let keys = registry
-            .pending
-            .keys()
-            .filter(|key| key.provider == provider && key.session_id == session_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        for key in keys {
-            if let Some(pending) = registry.pending.remove(&key) {
-                cancelled.push(pending.response_tx);
-                registry.resolved.remove(&key);
-            }
-        }
-        registry
-            .resolved
-            .retain(|key| !(key.provider == provider && key.session_id == session_id));
-    }
-    for response_tx in cancelled {
-        let _send_status = response_tx.send(acp::RequestPermissionResponse::new(
-            acp::RequestPermissionOutcome::Cancelled,
-        ));
-    }
 }
 
 pub(super) struct ActorBootstrap {
@@ -393,58 +317,107 @@ fn run_actor_thread(bootstrap: ActorBootstrap) {
 }
 
 async fn run_actor(bootstrap: ActorBootstrap) {
-    let provider = bootstrap.provider;
-    match SdkHostActor::connect(
+    let ActorBootstrap {
         provider,
-        bootstrap.discovery,
-        bootstrap.launcher,
-        bootstrap.environment,
-    )
-    .await
+        discovery,
+        launcher,
+        environment,
+        commands,
+        init,
+    } = bootstrap;
+    let updates = Arc::new(Mutex::new(PromptUpdateState::default()));
+    let (transport, child) = match SdkHostActor::spawn_transport(provider, &launcher, &environment)
     {
-        Ok(mut actor) => {
-            send_reply(bootstrap.init, Ok(()));
-            actor.run(bootstrap.commands).await;
+        Ok(process) => process,
+        Err(error) => {
+            send_reply(init, Err(error));
+            return;
         }
-        Err(error) => send_reply(bootstrap.init, Err(error)),
+    };
+    let client = SdkClient {
+        provider,
+        updates: Arc::clone(&updates),
+    };
+    send_reply(init, Ok(()));
+    let result = connect_sdk_client(
+        SdkClientConnection {
+            provider,
+            discovery,
+            commands,
+            updates,
+            transport,
+            child,
+        },
+        client,
+    )
+    .await;
+    if let Err(error) = result {
+        tracing::warn!(
+            event_name = "acp_host.connection.finish",
+            source = "acp-core",
+            provider = %provider.as_str(),
+            ok = false,
+            error_message = %error
+        );
     }
 }
 
-fn spawn_sdk_connection(
+struct SdkClientConnection {
     provider: ProviderId,
-    launcher: &LauncherCommand,
-    environment: &ProcessEnvironment,
-    updates: &Arc<Mutex<PromptUpdateState>>,
-) -> Result<(acp::ClientSideConnection, tokio::process::Child)> {
-    let mut command = tokio::process::Command::new(&launcher.executable);
-    command
-        .args(&launcher.args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true);
-    apply_process_environment(&mut command, environment);
-    let mut child = command
-        .spawn()
-        .map_err(|source| AcpError::Spawn { provider, source })?;
-    let outgoing = child_stdin(provider, &mut child)?;
-    let incoming = child_stdout(provider, &mut child)?;
-    let client = SdkClient {
-        provider,
-        updates: Arc::clone(updates),
-    };
-    let (connection, io_task) =
-        acp::ClientSideConnection::new(client, outgoing, incoming, |future| {
-            tokio::task::spawn_local(future);
-        });
-    tokio::task::spawn_local(io_task);
-    Ok((connection, child))
+    discovery: ProviderDiscovery,
+    commands: UnboundedReceiver<HostCommand>,
+    updates: Arc<Mutex<PromptUpdateState>>,
+    transport: SdkTransport,
+    child: tokio::process::Child,
+}
+
+async fn connect_sdk_client(args: SdkClientConnection, client: SdkClient) -> acp_sdk::Result<()> {
+    acp_sdk::Client
+        .builder()
+        .on_receive_request(
+            {
+                let client = client.clone();
+                async move |request, responder, connection| {
+                    respond_to_permission_request(client.clone(), request, responder, connection)
+                }
+            },
+            acp_sdk::on_receive_request!(),
+        )
+        .on_receive_notification(
+            async move |notification, _connection| client.session_notification(notification).await,
+            acp_sdk::on_receive_notification!(),
+        )
+        .connect_with(args.transport, async move |connection| {
+            SdkHostActor::run_connected(ConnectedActor {
+                provider: args.provider,
+                discovery: args.discovery,
+                child: args.child,
+                connection,
+                updates: args.updates,
+                commands: args.commands,
+            })
+            .await
+            .map_err(|error| acp_sdk::Error::internal_error().data(error.to_string()))?;
+            Ok(())
+        })
+        .await
+}
+
+fn respond_to_permission_request(
+    client: SdkClient,
+    request: acp::RequestPermissionRequest,
+    responder: acp_sdk::Responder<acp::RequestPermissionResponse>,
+    connection: SdkConnection,
+) -> acp_sdk::Result<()> {
+    connection
+        .spawn(async move { responder.respond_with_result(client.request_permission(request).await) })?;
+    Ok(())
 }
 
 fn child_stdin(
     provider: ProviderId,
     child: &mut tokio::process::Child,
-) -> Result<tokio_util::compat::Compat<tokio::process::ChildStdin>> {
+) -> Result<SdkChildStdin> {
     child
         .stdin
         .take()
@@ -455,7 +428,7 @@ fn child_stdin(
 fn child_stdout(
     provider: ProviderId,
     child: &mut tokio::process::Child,
-) -> Result<tokio_util::compat::Compat<tokio::process::ChildStdout>> {
+) -> Result<SdkChildStdout> {
     child
         .stdout
         .take()
@@ -554,7 +527,7 @@ mod ui_event_data_tests {
         ConduitInteractionOption, ConduitInteractionRequestData, ConduitInteractionResolutionData,
         ConduitInteractionResolutionStatus,
     };
-    use agent_client_protocol as acp;
+    use agent_client_protocol::schema as acp;
     use serde_json::json;
     use std::collections::VecDeque;
     use std::error::Error;

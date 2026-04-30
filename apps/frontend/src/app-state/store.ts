@@ -21,7 +21,10 @@ import {
   sessionSelectionReducer,
 } from "./session-selection";
 import { sessionPendingPromptsReducer } from "./session-pending-prompts";
-import { sessionPromptTurnsReducer } from "./session-prompt-turns";
+import {
+  sessionPromptTurnsCleared,
+  sessionPromptTurnsReducer,
+} from "./session-prompt-turns";
 import { configureSessionClientForHost } from "./session-client";
 
 const store = configureStore({
@@ -34,7 +37,16 @@ const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     new Tuple(
-      ...getDefaultMiddleware(),
+      ...getDefaultMiddleware({
+        immutableCheck: {
+          ignoredPaths: [conduitApi.reducerPath],
+          warnAfter: 128,
+        },
+        serializableCheck: {
+          ignoredPaths: [conduitApi.reducerPath],
+          warnAfter: 128,
+        },
+      }),
       frontendLoggingMiddleware,
       conduitApi.middleware,
     ),
@@ -43,7 +55,7 @@ const store = configureStore({
 type AppDispatch = typeof store.dispatch;
 type RootState = ReturnType<typeof store.getState>;
 
-let configuredHostKey = "__initial__";
+let configuredHostKey = hostProfileTransportKey(null);
 let persistedHostRegistryKey = "__initial__";
 
 async function hydrateHostRegistry(): Promise<void> {
@@ -58,6 +70,12 @@ function startHostRegistryHydration(): void {
   void hydrateHostRegistry();
 }
 
+function dispatchSessionTransportReset(): void {
+  store.dispatch(activeSessionCleared());
+  store.dispatch(sessionPromptTurnsCleared());
+  store.dispatch(conduitApi.util.resetApiState());
+}
+
 function syncSessionTransport(state: RootState): void {
   if (!state.hostRegistry.hydrated) {
     return;
@@ -69,8 +87,7 @@ function syncSessionTransport(state: RootState): void {
   }
   configureSessionClientForHost(activeHost);
   configuredHostKey = nextHostKey;
-  store.dispatch(activeSessionCleared());
-  store.dispatch(conduitApi.util.resetApiState());
+  dispatchSessionTransportReset();
 }
 
 async function persistHostRegistrySnapshot(

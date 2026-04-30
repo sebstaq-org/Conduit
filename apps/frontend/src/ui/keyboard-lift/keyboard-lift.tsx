@@ -1,30 +1,27 @@
 import type { PropsWithChildren } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 import type { KeyboardAvoidingViewProps } from "react-native";
+import { keyboardLiftMode } from "./keyboard-lift.contract";
 import { keyboardLiftStyle } from "./keyboard-lift.styles";
 
-const androidKeyboardVerticalOffset = 64;
 const iosKeyboardVerticalOffset = 0;
 
 function keyboardLiftBehavior(): KeyboardAvoidingViewProps["behavior"] {
-  if (Platform.OS === "ios") {
-    return "padding";
-  }
   if (Platform.OS === "android") {
-    return "position";
+    return "height";
   }
-  return undefined;
+  return "padding";
 }
 
-function keyboardLiftVerticalOffset(): number {
-  if (Platform.OS === "ios") {
+function keyboardLiftVerticalOffset(platform: typeof Platform.OS): number {
+  if (platform === "ios") {
     return iosKeyboardVerticalOffset;
   }
-  return androidKeyboardVerticalOffset;
+  return 0;
 }
 
 function KeyboardLift({ children }: PropsWithChildren): React.JSX.Element {
-  if (Platform.OS !== "android" && Platform.OS !== "ios") {
+  if (keyboardLiftMode(Platform.OS) === "plain") {
     return <View style={keyboardLiftStyle}>{children}</View>;
   }
 
@@ -32,7 +29,7 @@ function KeyboardLift({ children }: PropsWithChildren): React.JSX.Element {
     <KeyboardAvoidingView
       behavior={keyboardLiftBehavior()}
       contentContainerStyle={keyboardLiftStyle}
-      keyboardVerticalOffset={keyboardLiftVerticalOffset()}
+      keyboardVerticalOffset={keyboardLiftVerticalOffset(Platform.OS)}
       style={keyboardLiftStyle}
     >
       {children}

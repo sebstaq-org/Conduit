@@ -5,12 +5,14 @@ import {
 } from "./session-composer.styles";
 
 interface SessionComposerInputProps {
+  disabled: boolean;
   draft: string;
   onSend: () => void;
   setDraft: (draft: string) => void;
 }
 
 function SessionComposerInput({
+  disabled,
   draft,
   onSend,
   setDraft,
@@ -18,6 +20,7 @@ function SessionComposerInput({
   return (
     <MultilineInput
       accessibilityLabel={sessionComposerAccessibilityLabel}
+      disabled={disabled}
       onChangeText={setDraft}
       onEnterWithoutShift={onSend}
       placeholder={sessionComposerPlaceholder}

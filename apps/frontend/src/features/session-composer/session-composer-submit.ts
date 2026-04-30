@@ -9,6 +9,7 @@ import {
 import type {
   ActiveSession,
   AppDispatch,
+  PromptTimelineBase,
   useNewSessionMutation,
   useOpenSessionMutation,
   usePromptSessionMutation,
@@ -21,7 +22,7 @@ interface CreateSessionComposerSendHandlerArgs {
   canSend: boolean;
   dispatch: AppDispatch;
   newSession: ReturnType<typeof useNewSessionMutation>[0];
-  openSessionBaseRevision: number | null;
+  openSessionBase: PromptTimelineBase | null;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   setDraft: (draft: string) => void;
@@ -62,7 +63,7 @@ function createSessionComposerSendHandler({
   canSend,
   dispatch,
   newSession,
-  openSessionBaseRevision,
+  openSessionBase,
   openSession,
   promptSession,
   setDraft,
@@ -76,7 +77,7 @@ function createSessionComposerSendHandler({
     void submitPrompt({
       activeSession,
       newSession,
-      openSessionBaseRevision,
+      openSessionBase,
       openSession,
       onDraftPromptCommitted: createDraftCommitCallback({
         activeSession,

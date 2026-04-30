@@ -70,6 +70,7 @@ interface SessionComposerStandardBodyProps {
   configOptions: SessionConfigOption[] | null;
   draft: string;
   isConfigUpdating: boolean;
+  isWorking: boolean;
   onConfigOptionSelect: (configId: string, value: string) => void;
   onProviderSelect: (provider: ProviderId) => void;
   onSend: () => void;
@@ -82,6 +83,7 @@ function renderStandardComposerBody({
   configOptions,
   draft,
   isConfigUpdating,
+  isWorking,
   onConfigOptionSelect,
   onProviderSelect,
   onSend,
@@ -89,7 +91,12 @@ function renderStandardComposerBody({
 }: SessionComposerStandardBodyProps): React.JSX.Element {
   return (
     <>
-      <SessionComposerInput draft={draft} onSend={onSend} setDraft={setDraft} />
+      <SessionComposerInput
+        disabled={isWorking}
+        draft={draft}
+        onSend={onSend}
+        setDraft={setDraft}
+      />
       <SessionComposerActionRow
         canSend={canSend}
         configOptions={configOptions}
@@ -126,6 +133,7 @@ function renderComposerBody(args: {
   configOptions: SessionConfigOption[] | null;
   draft: string;
   isConfigUpdating: boolean;
+  isWorking: boolean;
   onConfigOptionSelect: (configId: string, value: string) => void;
   onProviderSelect: (provider: ProviderId) => void;
   onSend: () => void;
@@ -162,6 +170,7 @@ function SessionComposerSurface(
     configOptions: props.configOptions,
     draft: props.draft,
     isConfigUpdating: props.isConfigUpdating,
+    isWorking: props.isWorking,
     onConfigOptionSelect: props.onConfigOptionSelect,
     onProviderSelect: props.onProviderSelect,
     onSend: props.onSend,

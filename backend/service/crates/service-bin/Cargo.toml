@@ -32,7 +32,7 @@ x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 [dev-dependencies]
 acp-core = { path = "../acp-core" }
 acp-discovery = { path = "../acp-discovery" }
-agent-client-protocol-schema = "=0.11.4"
+agent-client-protocol-schema = "=0.12.0"
 
 [lints]
 workspace = true

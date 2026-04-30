@@ -194,9 +194,9 @@ test.skip("Codex configured draft prompt applies full config before first prompt
   await page.getByLabel("Select provider for new session").click();
   await page.getByLabel("Codex").click();
   await expect(page.getByLabel("Approval Preset", { exact: true })).toHaveText(
-    "Full Access",
+    "Default",
   );
-  await expect(page.getByLabel("Model", { exact: true })).toHaveText("GPT-5.4");
+  await expect(page.getByLabel("Model", { exact: true })).toHaveText("GPT-5.5");
   await expect(page.getByLabel("Reasoning Effort", { exact: true })).toHaveText(
     "High",
   );

@@ -7,6 +7,7 @@ import type {
 } from "@conduit/session-client";
 
 interface PendingPromptMessage {
+  baseLastItemId: string | null;
   baseRevision: number;
   id: string;
   openSessionId: string;
@@ -15,6 +16,7 @@ interface PendingPromptMessage {
 }
 
 interface PendingPromptSubmittedPayload {
+  baseLastItemId: string | null;
   baseRevision: number;
   openSessionId: string;
   text: string;
@@ -62,11 +64,15 @@ function pendingPromptAcknowledged(
   history: SessionHistoryWindow,
   pending: PendingPromptMessage,
 ): boolean {
-  if (history.revision <= pending.baseRevision) {
-    return false;
+  let anchorIndex = -1;
+  if (pending.baseLastItemId !== null) {
+    anchorIndex = history.items.findIndex(
+      (item) => item.id === pending.baseLastItemId,
+    );
   }
-  return history.items.some((item) =>
-    isBackendUserPromptItem(item, pending.text),
+  return history.items.some(
+    (item, index) =>
+      index > anchorIndex && isBackendUserPromptItem(item, pending.text),
   );
 }
 
@@ -80,18 +86,54 @@ function pendingPromptItem(pending: PendingPromptMessage): TranscriptItem {
   };
 }
 
+function appendPendingAfterAnchor(
+  items: TranscriptItem[],
+  pending: PendingPromptMessage,
+  pendingItem: TranscriptItem,
+): TranscriptItem[] {
+  if (pending.baseLastItemId === null) {
+    return [...items, pendingItem];
+  }
+  const anchorIndex = items.findIndex(
+    (item) => item.id === pending.baseLastItemId,
+  );
+  if (anchorIndex === -1) {
+    return [...items, pendingItem];
+  }
+  return [
+    ...items.slice(0, anchorIndex + 1),
+    pendingItem,
+    ...items.slice(anchorIndex + 1),
+  ];
+}
+
+function appendPendingItems(
+  history: SessionHistoryWindow,
+  visiblePendingPrompts: PendingPromptMessage[],
+): TranscriptItem[] {
+  let items = history.items;
+  for (const pending of visiblePendingPrompts) {
+    items = appendPendingAfterAnchor(
+      items,
+      pending,
+      pendingPromptItem(pending),
+    );
+  }
+  return items;
+}
+
 function withPendingPromptMessages(
   history: SessionHistoryWindow,
   pendingPrompts: PendingPromptMessage[],
 ): SessionHistoryWindow {
-  const visiblePendingItems = pendingPrompts
-    .filter((pending) => !pendingPromptAcknowledged(history, pending))
-    .map((pending) => pendingPromptItem(pending));
-  if (visiblePendingItems.length === 0) {
+  const visiblePendingPrompts = pendingPrompts.filter(
+    (pending) => !pendingPromptAcknowledged(history, pending),
+  );
+  if (visiblePendingPrompts.length === 0) {
     return history;
   }
   return {
-    items: [...history.items, ...visiblePendingItems],
+    items: appendPendingItems(history, visiblePendingPrompts),
     nextCursor: history.nextCursor,
     openSessionId: history.openSessionId,
     revision: history.revision,
@@ -108,6 +150,7 @@ const sessionPendingPromptsSlice = createSlice({
     ): void => {
       state.sequence += 1;
       const pending: PendingPromptMessage = {
+        baseLastItemId: action.payload.baseLastItemId,
         baseRevision: action.payload.baseRevision,
         id: `pending-prompt:${action.payload.openSessionId}:${state.sequence}`,
         openSessionId: action.payload.openSessionId,

@@ -21,7 +21,7 @@ interface OpenSessionRowArgs {
 interface SubmitPromptArgs {
   activeSession: ActiveSession;
   newSession: NewSessionTrigger;
-  openSessionBaseRevision: number | null;
+  openSessionBase: PromptTimelineBase | null;
   openSession: OpenSessionTrigger;
   onDraftPromptCommitted?:
     | ((session: DraftCommittedSession) => void)
@@ -41,9 +41,15 @@ interface SubmitPromptArgs {
 }
 
 interface PromptSubmitted {
+  baseLastItemId: string | null;
   baseRevision: number;
   openSessionId: string;
   text: string;
+}
+
+interface PromptTimelineBase {
+  lastItemId: string | null;
+  revision: number;
 }
 
 interface OpenSessionFailure {
@@ -95,7 +101,8 @@ async function submitOpenActiveSessionPrompt(
     return;
   }
   args.onPromptSubmitted?.({
-    baseRevision: args.openSessionBaseRevision ?? 0,
+    baseLastItemId: args.openSessionBase?.lastItemId ?? null,
+    baseRevision: args.openSessionBase?.revision ?? 0,
     openSessionId: args.activeSession.openSessionId,
     text: args.text,
   });
@@ -179,4 +186,9 @@ export {
   openSessionRow,
   submitPrompt,
 };
-export type { OpenSessionFailure, PromptFailure, PromptSubmitted };
+export type {
+  OpenSessionFailure,
+  PromptFailure,
+  PromptSubmitted,
+  PromptTimelineBase,
+};

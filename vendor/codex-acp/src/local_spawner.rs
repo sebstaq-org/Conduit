@@ -151,10 +151,10 @@ impl AcpFs {
 
 impl codex_apply_patch::Fs for AcpFs {
     fn read_to_string(&self, path: &std::path::Path) -> std::io::Result<String> {
-        if !self.client_capabilities.lock().unwrap().fs.read_text_file {
-            return StdFs.read_to_string(path);
-        }
         let path = self.ensure_within_root(path)?;
+        if !self.client_capabilities.lock().unwrap().fs.read_text_file {
+            return StdFs.read_to_string(&path);
+        }
         let (tx, rx) = std::sync::mpsc::channel();
         self.local_spawner.spawn(FsTask::ReadFile {
             session_id: self.session_id.clone(),
@@ -167,10 +167,10 @@ impl codex_apply_patch::Fs for AcpFs {
     }
 
     fn write(&self, path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
-        if !self.client_capabilities.lock().unwrap().fs.write_text_file {
-            return StdFs.write(path, contents);
-        }
         let path = self.ensure_within_root(path)?;
+        if !self.client_capabilities.lock().unwrap().fs.write_text_file {
+            return StdFs.write(&path, contents);
+        }
         let (tx, rx) = std::sync::mpsc::channel();
         self.local_spawner.spawn(FsTask::WriteFile {
             session_id: self.session_id.clone(),
@@ -196,13 +196,13 @@ impl codex_core::codex::Fs for AcpFs {
                 + Send,
         >,
     > {
-        if !self.client_capabilities.lock().unwrap().fs.read_text_file {
-            return StdFs.file_buffer(path, limit);
-        }
         let path = match self.ensure_within_root(path) {
             Ok(path) => path,
             Err(e) => return Box::pin(async move { Err(e) }),
         };
+        if !self.client_capabilities.lock().unwrap().fs.read_text_file {
+            return StdFs.file_buffer(&path, limit);
+        }
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.local_spawner.spawn(FsTask::ReadFileLimit {
             session_id: self.session_id.clone(),
@@ -258,5 +258,69 @@ impl LocalSpawner {
         self.send
             .send(task)
             .expect("Thread with LocalSet has shut down.");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::HashMap,
+        fs,
+        sync::{Arc, Mutex},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    use agent_client_protocol::{ClientCapabilities, SessionId};
+    use codex_apply_patch::Fs;
+
+    use super::*;
+
+    #[test]
+    fn fallback_write_resolves_relative_paths_against_session_root() -> std::io::Result<()> {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "codex-acp-fs-root-{}-{unique}",
+            std::process::id()
+        ));
+        let process_cwd = std::env::temp_dir().join(format!(
+            "codex-acp-process-cwd-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("src"))?;
+        fs::create_dir_all(process_cwd.join("src"))?;
+
+        let session_id = SessionId::new("session-repro");
+        let session_roots = Arc::new(Mutex::new(HashMap::from([(
+            session_id.clone(),
+            root.clone(),
+        )])));
+        let fs_adapter = AcpFs::new(
+            session_id,
+            Arc::new(Mutex::new(ClientCapabilities::default())),
+            LocalSpawner::new(),
+            session_roots,
+        );
+
+        let original_cwd = std::env::current_dir()?;
+        std::env::set_current_dir(&process_cwd)?;
+        let write_result = fs_adapter.write(std::path::Path::new("src/repro.txt"), b"repro");
+        std::env::set_current_dir(original_cwd)?;
+        write_result?;
+
+        assert!(
+            root.join("src/repro.txt").exists(),
+            "relative fallback writes must land under the session root"
+        );
+        assert!(
+            !process_cwd.join("src/repro.txt").exists(),
+            "relative fallback writes must not land under the provider process cwd"
+        );
+
+        fs::remove_dir_all(root)?;
+        fs::remove_dir_all(process_cwd)?;
+        Ok(())
     }
 }

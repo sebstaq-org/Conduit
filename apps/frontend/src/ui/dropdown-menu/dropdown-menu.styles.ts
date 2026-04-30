@@ -8,7 +8,12 @@ interface DropdownMenuItemInteractionState {
 }
 
 const dropdownMenuContentAlign = "end" as const;
-const dropdownMenuContentSide = "bottom" as const;
+function dropdownMenuContentSide(): "bottom" | "top" {
+  if (Platform.OS === "web") {
+    return "bottom";
+  }
+  return "top";
+}
 const dropdownMenuContentSideOffset = 6;
 
 function createDropdownMenuContentStyle(theme: Theme): ViewStyle {

@@ -9,7 +9,6 @@ import {
   canSubmitPrompt,
   draftSessionConfigOptionSelected,
   selectActiveSession,
-  selectSessionPromptTurnStreaming,
   useGetProvidersConfigSnapshotQuery,
   useNewSessionMutation,
   useOpenSessionMutation,
@@ -19,7 +18,7 @@ import {
 import type {
   ActiveSession,
   AppDispatch,
-  RootState,
+  PromptTimelineBase,
   SessionComposerPlanInteractionController,
 } from "@/app-state";
 import type { Theme } from "@/theme";
@@ -28,12 +27,13 @@ import {
   resolveDraftProviderReady,
   resolveDraftSnapshotEntry,
   resolveErrorMessage,
+  resolveSessionComposerWorking,
   resolveVisibleConfigOptions,
 } from "./session-composer-logic";
 import {
   createHandleProviderSelect,
   providerConfigPollingInterval,
-  useActiveSessionTimelineRevision,
+  useActiveSessionTimelineBase,
 } from "./session-composer-provider-config-refresh";
 import { createSessionComposerSendHandler } from "./session-composer-submit";
 
@@ -56,12 +56,11 @@ interface SessionComposerRuntime {
   newSession: ReturnType<typeof useNewSessionMutation>[0];
   newSessionError: boolean;
   newSessionLoading: boolean;
-  openSessionBaseRevision: number | null;
+  openSessionBase: PromptTimelineBase | null;
   openSession: ReturnType<typeof useOpenSessionMutation>[0];
   promptSession: ReturnType<typeof usePromptSessionMutation>[0];
   promptSessionError: boolean;
   promptSessionLoading: boolean;
-  promptTurnWorking: boolean;
   providersConfigSnapshot: ProvidersConfigSnapshotResult | undefined;
   providersConfigSnapshotError: boolean;
   setSessionConfigOption: ReturnType<
@@ -105,11 +104,11 @@ function createHandleConfigOptionSelect(args: {
 }
 
 function isSessionPromptBusy(runtime: SessionComposerRuntime): boolean {
-  if (runtime.activeSession?.kind === "draft") {
-    return runtime.newSessionLoading || runtime.promptSessionLoading;
-  }
-
-  return runtime.promptTurnWorking;
+  return resolveSessionComposerWorking({
+    activeSession: runtime.activeSession,
+    newSessionLoading: runtime.newSessionLoading,
+    promptSessionLoading: runtime.promptSessionLoading,
+  });
 }
 
 function buildSessionComposerController(args: {
@@ -147,7 +146,7 @@ function buildSessionComposerController(args: {
       canSend: args.canSend,
       dispatch: args.runtime.dispatch,
       newSession: args.runtime.newSession,
-      openSessionBaseRevision: args.runtime.openSessionBaseRevision,
+      openSessionBase: args.runtime.openSessionBase,
       openSession: args.runtime.openSession,
       promptSession: args.runtime.promptSession,
       setDraft: args.setDraft,
@@ -163,22 +162,12 @@ function buildSessionComposerController(args: {
 function useSessionComposerRuntime(): SessionComposerRuntime {
   const dispatch = useDispatch<AppDispatch>();
   const activeSession = useSelector(selectActiveSession);
-  const promptTurnWorking = useSelector((state: RootState) => {
-    if (activeSession?.kind !== "open") {
-      return false;
-    }
-    return selectSessionPromptTurnStreaming(state, {
-      provider: activeSession.provider,
-      sessionId: activeSession.sessionId,
-    });
-  });
   const [newSession, newSessionState] = useNewSessionMutation();
   const [openSession] = useOpenSessionMutation();
   const [promptSession, promptSessionState] = usePromptSessionMutation();
   const [setSessionConfigOption, setSessionConfigOptionState] =
     useSetSessionConfigOptionMutation();
-  const openSessionBaseRevision =
-    useActiveSessionTimelineRevision(activeSession);
+  const openSessionBase = useActiveSessionTimelineBase(activeSession);
   const {
     data: providersConfigSnapshot,
     isError: providersConfigSnapshotError,
@@ -193,12 +182,11 @@ function useSessionComposerRuntime(): SessionComposerRuntime {
     newSession,
     newSessionError: newSessionState.isError,
     newSessionLoading: newSessionState.isLoading,
-    openSessionBaseRevision,
+    openSessionBase,
     openSession,
     promptSession,
     promptSessionError: promptSessionState.isError,
     promptSessionLoading: promptSessionState.isLoading,
-    promptTurnWorking,
     providersConfigSnapshot,
     providersConfigSnapshotError,
     setSessionConfigOption,

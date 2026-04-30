@@ -1,6 +1,7 @@
 //! Official ACP SDK actor for one provider connection.
 
 mod initialize;
+mod interaction;
 mod internals;
 
 use super::InteractionResponse;
@@ -17,18 +18,37 @@ use crate::{
     ConduitInteractionResolutionData, ConduitInteractionResolutionStatus,
 };
 use acp_discovery::{LauncherCommand, ProcessEnvironment, ProviderDiscovery, ProviderId};
-use agent_client_protocol::{self as acp, Agent as _};
+use agent_client_protocol as acp_sdk;
+use agent_client_protocol::schema as acp;
+use interaction::{
+    cancel_pending_interactions_for_provider, cancel_pending_interactions_for_session,
+    register_pending_interaction,
+};
 use internals::{apply_process_environment, child_has_exited, disconnected, sdk_error, send_reply};
-use serde_json::{Value, json, to_value};
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use serde_json::{Value, to_value};
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::sync::oneshot;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+
+type SdkConnection = acp_sdk::ConnectionTo<acp_sdk::Agent>;
+type SdkChildStdin = tokio_util::compat::Compat<tokio::process::ChildStdin>;
+type SdkChildStdout = tokio_util::compat::Compat<tokio::process::ChildStdout>;
+type SdkTransport = acp_sdk::ByteStreams<SdkChildStdin, SdkChildStdout>;
+
+struct ConnectedActor {
+    provider: ProviderId,
+    discovery: ProviderDiscovery,
+    child: tokio::process::Child,
+    connection: SdkConnection,
+    updates: Arc<Mutex<PromptUpdateState>>,
+    commands: UnboundedReceiver<HostCommand>,
+}
 
 pub(super) enum HostCommand {
     Initialize {
@@ -87,206 +107,18 @@ impl HostCommand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct InteractionKey {
-    provider: ProviderId,
-    session_id: String,
-    interaction_id: String,
-}
-
-struct PendingInteraction {
-    response_tx: oneshot::Sender<acp::RequestPermissionResponse>,
-}
-
-#[derive(Default)]
-struct InteractionRegistry {
-    pending: HashMap<InteractionKey, PendingInteraction>,
-    resolved: HashSet<InteractionKey>,
-}
-
-static INTERACTION_REGISTRY: LazyLock<Mutex<InteractionRegistry>> =
-    LazyLock::new(|| Mutex::new(InteractionRegistry::default()));
-
 pub(super) fn respond_interaction(
     provider: ProviderId,
     session_id: &str,
     interaction_id: &str,
     response: InteractionResponse,
 ) -> Result<()> {
-    let key = InteractionKey {
-        provider,
-        session_id: session_id.to_owned(),
-        interaction_id: interaction_id.to_owned(),
-    };
-    let pending = {
-        let mut registry = INTERACTION_REGISTRY
-            .lock()
-            .map_err(|error| unexpected(provider, error.to_string()))?;
-        if let Some(pending) = registry.pending.remove(&key) {
-            registry.resolved.insert(key.clone());
-            pending
-        } else if registry.resolved.contains(&key) {
-            return Err(AcpError::ResolvedInteraction {
-                provider,
-                session_id: session_id.to_owned(),
-                interaction_id: interaction_id.to_owned(),
-            });
-        } else {
-            return Err(AcpError::UnknownInteraction {
-                provider,
-                session_id: session_id.to_owned(),
-                interaction_id: interaction_id.to_owned(),
-            });
-        }
-    };
-    let payload = permission_response_from_interaction(provider, interaction_id, response)?;
-    pending
-        .response_tx
-        .send(payload)
-        .map_err(|_error| AcpError::ResolvedInteraction {
-            provider,
-            session_id: session_id.to_owned(),
-            interaction_id: interaction_id.to_owned(),
-        })?;
-    Ok(())
-}
-
-fn permission_response_from_interaction(
-    provider: ProviderId,
-    interaction_id: &str,
-    response: InteractionResponse,
-) -> Result<acp::RequestPermissionResponse> {
-    match response {
-        InteractionResponse::Selected { option_id } => {
-            if option_id.trim().is_empty() {
-                return Err(invalid_interaction_response(
-                    provider,
-                    interaction_id,
-                    "selected option id must be non-empty",
-                ));
-            }
-            Ok(acp::RequestPermissionResponse::new(
-                acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
-                    option_id,
-                )),
-            ))
-        }
-        InteractionResponse::AnswerOther {
-            option_id,
-            question_id,
-            text,
-        } => {
-            permission_response_answer_other(provider, interaction_id, option_id, question_id, text)
-        }
-        InteractionResponse::Cancelled => Ok(acp::RequestPermissionResponse::new(
-            acp::RequestPermissionOutcome::Cancelled,
-        )),
-    }
-}
-
-fn permission_response_answer_other(
-    provider: ProviderId,
-    interaction_id: &str,
-    option_id: String,
-    question_id: String,
-    text: String,
-) -> Result<acp::RequestPermissionResponse> {
-    if option_id.trim().is_empty() {
-        return Err(invalid_interaction_response(
-            provider,
-            interaction_id,
-            "answer-other option id must be non-empty",
-        ));
-    }
-    if question_id.trim().is_empty() {
-        return Err(invalid_interaction_response(
-            provider,
-            interaction_id,
-            "answer-other question id must be non-empty",
-        ));
-    }
-    if text.trim().is_empty() {
-        return Err(invalid_interaction_response(
-            provider,
-            interaction_id,
-            "answer-other text must be non-empty",
-        ));
-    }
-    let meta = serde_json::Map::from_iter([(
-        "request_user_input_response".to_owned(),
-        json!({
-            "answers": {
-                question_id: {
-                    "answers": [text]
-                }
-            }
-        }),
-    )]);
-    Ok(acp::RequestPermissionResponse::new(
-        acp::RequestPermissionOutcome::Selected(
-            acp::SelectedPermissionOutcome::new(option_id).meta(meta),
-        ),
-    ))
-}
-
-fn invalid_interaction_response(
-    provider: ProviderId,
-    interaction_id: &str,
-    message: &'static str,
-) -> AcpError {
-    AcpError::InvalidInteractionResponse {
-        provider,
-        interaction_id: interaction_id.to_owned(),
-        message,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn answer_other_response_includes_request_user_input_meta()
-    -> std::result::Result<(), Box<dyn std::error::Error>> {
-        let response = permission_response_from_interaction(
-            ProviderId::Codex,
-            "interaction-1",
-            InteractionResponse::AnswerOther {
-                option_id: "answer-other".to_owned(),
-                question_id: "plan_target".to_owned(),
-                text: "custom choice".to_owned(),
-            },
-        )?;
-        let payload = serde_json::to_value(response)?;
-        if payload
-            .pointer("/outcome/_meta/request_user_input_response/answers/plan_target/answers/0")
-            .and_then(Value::as_str)
-            == Some("custom choice")
-        {
-            return Ok(());
-        }
-        Err(format!("missing answer-other meta payload: {payload}").into())
-    }
-
-    #[test]
-    fn selected_response_requires_non_empty_option_id() {
-        let result = permission_response_from_interaction(
-            ProviderId::Codex,
-            "interaction-1",
-            InteractionResponse::Selected {
-                option_id: " ".to_owned(),
-            },
-        );
-        assert!(
-            matches!(result, Err(AcpError::InvalidInteractionResponse { .. })),
-            "expected invalid interaction response, got {result:?}"
-        );
-    }
+    interaction::respond_interaction(provider, session_id, interaction_id, response)
 }
 
 struct SdkHostActor {
     child: Option<tokio::process::Child>,
-    connection: Option<acp::ClientSideConnection>,
+    connection: Option<SdkConnection>,
     discovery: ProviderDiscovery,
     initialize_result: Option<ProviderInitializeResult>,
     last_prompt: Option<PromptLifecycleSnapshot>,
@@ -297,16 +129,14 @@ struct SdkHostActor {
 }
 
 impl SdkHostActor {
-    async fn connect(
+    fn new(
         provider: ProviderId,
         discovery: ProviderDiscovery,
-        launcher: LauncherCommand,
-        environment: ProcessEnvironment,
-    ) -> Result<Self> {
-        let updates = Arc::new(Mutex::new(PromptUpdateState::default()));
-        let (connection, child) =
-            spawn_sdk_connection(provider, &launcher, &environment, &updates)?;
-        Ok(Self {
+        child: tokio::process::Child,
+        connection: SdkConnection,
+        updates: Arc<Mutex<PromptUpdateState>>,
+    ) -> Self {
+        Self {
             child: Some(child),
             connection: Some(connection),
             discovery,
@@ -316,7 +146,40 @@ impl SdkHostActor {
             live_sessions: BTreeMap::new(),
             provider,
             updates,
-        })
+        }
+    }
+
+    fn spawn_transport(
+        provider: ProviderId,
+        launcher: &LauncherCommand,
+        environment: &ProcessEnvironment,
+    ) -> Result<(SdkTransport, tokio::process::Child)> {
+        let mut command = tokio::process::Command::new(&launcher.executable);
+        command
+            .args(&launcher.args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        apply_process_environment(&mut command, environment);
+        let mut child = command
+            .spawn()
+            .map_err(|source| AcpError::Spawn { provider, source })?;
+        let outgoing = child_stdin(provider, &mut child)?;
+        let incoming = child_stdout(provider, &mut child)?;
+        Ok((acp_sdk::ByteStreams::new(outgoing, incoming), child))
+    }
+
+    async fn run_connected(args: ConnectedActor) -> Result<()> {
+        let mut actor = Self::new(
+            args.provider,
+            args.discovery,
+            args.child,
+            args.connection,
+            args.updates,
+        );
+        actor.run(args.commands).await;
+        Ok(())
     }
 
     async fn run(&mut self, mut commands: UnboundedReceiver<HostCommand>) {
@@ -423,7 +286,8 @@ impl SdkHostActor {
         let cwd_text = cwd.display().to_string();
         let response = self
             .initialized_connection("session/new")?
-            .new_session(acp::NewSessionRequest::new(cwd))
+            .send_request(acp::NewSessionRequest::new(cwd))
+            .block_task()
             .await
             .map_err(|source| sdk_error(self.provider, "session/new", source))?;
         self.live_sessions.insert(
@@ -446,7 +310,8 @@ impl SdkHostActor {
         let request = acp::ListSessionsRequest::new().cwd(cwd).cursor(cursor);
         let response = self
             .initialized_connection("session/list")?
-            .list_sessions(request)
+            .send_request(request)
+            .block_task()
             .await
             .map_err(|source| sdk_error(self.provider, "session/list", source))?;
         for session in &response.sessions {
@@ -477,10 +342,11 @@ impl SdkHostActor {
         )?;
         let response = self
             .initialized_connection("session/load")?
-            .load_session(acp::LoadSessionRequest::new(
+            .send_request(acp::LoadSessionRequest::new(
                 session_id.clone(),
                 cwd.clone(),
             ))
+            .block_task()
             .await;
         let replay_updates = take_session_updates(&self.updates, self.provider)?;
         let response =
@@ -516,9 +382,10 @@ impl SdkHostActor {
         value: String,
     ) -> Result<acp::SetSessionConfigOptionResponse> {
         self.initialized_connection("session/set_config_option")?
-            .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+            .send_request(acp::SetSessionConfigOptionRequest::new(
                 session_id, config_id, value,
             ))
+            .block_task()
             .await
             .map_err(|source| sdk_error(self.provider, "session/set_config_option", source))
     }
@@ -548,7 +415,8 @@ impl SdkHostActor {
     ) -> Result<acp::PromptResponse> {
         let prompt = self
             .initialized_connection("session/prompt")?
-            .prompt(acp::PromptRequest::new(session_id.clone(), prompt));
+            .send_request(acp::PromptRequest::new(session_id.clone(), prompt))
+            .block_task();
         tokio::pin!(prompt);
         if let Some(after) = cancel_after {
             return self.cancel_during_prompt(session_id, after, prompt).await;
@@ -561,8 +429,7 @@ impl SdkHostActor {
     async fn cancel_prompt(&self, session_id: acp::SessionId) -> Result<()> {
         cancel_pending_interactions_for_session(self.provider, &session_id.to_string());
         self.initialized_connection("session/cancel")?
-            .cancel(acp::CancelNotification::new(session_id))
-            .await
+            .send_notification(acp::CancelNotification::new(session_id))
             .map_err(|source| sdk_error(self.provider, "session/cancel", source))
     }
 
@@ -571,7 +438,7 @@ impl SdkHostActor {
         session_id: &acp::SessionId,
         after: Duration,
         mut prompt: std::pin::Pin<
-            &mut impl std::future::Future<Output = acp::Result<acp::PromptResponse>>,
+            &mut impl std::future::Future<Output = acp_sdk::Result<acp::PromptResponse>>,
         >,
     ) -> Result<acp::PromptResponse> {
         tokio::select! {
@@ -641,7 +508,7 @@ impl SdkHostActor {
         })
     }
 
-    fn connection(&self) -> Result<&acp::ClientSideConnection> {
+    fn connection(&self) -> Result<&SdkConnection> {
         self.connection
             .as_ref()
             .ok_or_else(|| disconnected(self.provider, "official-sdk"))

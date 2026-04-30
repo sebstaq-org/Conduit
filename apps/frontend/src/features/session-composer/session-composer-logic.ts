@@ -193,11 +193,26 @@ function resolveErrorMessage(args: {
   return null;
 }
 
+function resolveSessionComposerWorking(args: {
+  activeSession: ActiveSession | null;
+  newSessionLoading: boolean;
+  promptSessionLoading: boolean;
+}): boolean {
+  if (args.activeSession?.kind === "draft") {
+    return args.newSessionLoading || args.promptSessionLoading;
+  }
+  if (args.activeSession?.kind === "open") {
+    return args.promptSessionLoading;
+  }
+  return false;
+}
+
 export type { DraftSnapshotEntry };
 export {
   resolveDraftProviderReady,
   resolveDraftSnapshotEntry,
   resolveErrorMessage,
   resolveDraftProviderMessage,
+  resolveSessionComposerWorking,
   resolveVisibleConfigOptions,
 };

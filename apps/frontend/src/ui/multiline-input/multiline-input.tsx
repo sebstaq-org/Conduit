@@ -39,6 +39,8 @@ function MultilineInput({
   return (
     <TextInput
       accessibilityLabel={accessibilityLabel}
+      autoCapitalize="none"
+      autoCorrect={false}
       editable={!disabled}
       multiline
       nativeID={nativeInputId(accessibilityLabel)}
@@ -47,6 +49,7 @@ function MultilineInput({
       placeholder={placeholder}
       placeholderTextColor={theme.colors.textMuted}
       selectionColor={theme.colors.textPrimary}
+      spellCheck={false}
       style={createMultilineInputStyle(theme)}
       value={value}
     />

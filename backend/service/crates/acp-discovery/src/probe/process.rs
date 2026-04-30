@@ -4,7 +4,7 @@ use crate::environment::ProcessEnvironment;
 use crate::error::{DiscoveryError, Result};
 use crate::probe::contract;
 use crate::provider::{LauncherCommand, ProviderId};
-use agent_client_protocol_schema::{AgentSide, ClientSide, JsonRpcMessage, OutgoingMessage};
+use agent_client_protocol_schema::{ClientRequest, JsonRpcMessage, Request};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -72,7 +72,7 @@ pub(super) fn send_initialize_request(
     provider: ProviderId,
     launcher: &LauncherCommand,
     stdin: &mut ChildStdin,
-    request: &JsonRpcMessage<OutgoingMessage<ClientSide, AgentSide>>,
+    request: &JsonRpcMessage<Request<ClientRequest>>,
 ) -> Result<()> {
     let request_line =
         serde_json::to_string(request).map_err(|error| contract(provider, error.to_string()))?;
