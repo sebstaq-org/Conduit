@@ -1,6 +1,6 @@
 use super::ServiceRuntime;
 use crate::command::ConsumerResponse;
-use crate::error::string_param;
+use crate::error::{optional_u64_param, string_param};
 use crate::event::RuntimeEventKind;
 use crate::manager_helpers::{content_blocks_param, prompt_lifecycle, prompt_status};
 use crate::manager_response::{append_snapshot_updates_if_missing, store_lock_error};
@@ -12,6 +12,7 @@ use session_store::{
     ConduitLocalTranscriptEvent, OpenSessionKey, PromptTurnAppend, PromptTurnMutation,
     PromptTurnReplace, TranscriptItem, TranscriptItemStatus,
 };
+use std::time::Duration;
 
 struct SessionPromptTarget {
     open_session_id: String,
@@ -24,6 +25,7 @@ struct PromptTurnContext<'a> {
     target: &'a SessionPromptTarget,
     turn_id: &'a str,
     prompt: &'a [Value],
+    cancel_after: Option<Duration>,
 }
 
 struct PromptTurnProjection<'a> {
@@ -59,6 +61,7 @@ where
         let target = self.session_prompt_target(params)?;
         let provider = target.key.provider;
         let prompt = content_blocks_param("session/prompt", params, "prompt")?;
+        let cancel_after = prompt_cancel_after(params)?;
         if let Err(error) = self.ensure_provider_session_loaded(&target.key) {
             self.append_failed_prompt_turn(provider, &target, &prompt, &error)?;
             return Err(error);
@@ -70,6 +73,7 @@ where
             target: &target,
             turn_id: &prompt_turn.turn_id,
             prompt: &prompt,
+            cancel_after,
         };
         let run = match self.run_provider_prompt_turn(context, &mut observed_updates) {
             Ok(run) => run,
@@ -160,6 +164,7 @@ where
         let result = provider_port.session_prompt(
             context.target.key.session_id.clone(),
             context.prompt.to_vec(),
+            context.cancel_after,
             &mut |update| {
                 observed_updates.push(update);
                 if projection_error.is_none() {
@@ -296,6 +301,21 @@ fn prompt_error_event(provider: ProviderId, error: &RuntimeError) -> ConduitLoca
             "message": error.to_string()
         }),
     }
+}
+
+fn prompt_cancel_after(params: &Value) -> Result<Option<Duration>> {
+    optional_u64_param("session/prompt", params, "cancelAfterMs")?
+        .map(|millis| {
+            if millis == 0 {
+                return Err(RuntimeError::InvalidParameter {
+                    command: "session/prompt",
+                    parameter: "cancelAfterMs",
+                    message: "must be positive",
+                });
+            }
+            Ok(Duration::from_millis(millis))
+        })
+        .transpose()
 }
 
 fn apply_projected_session_state_update(state: &mut Value, update: &Value) -> bool {

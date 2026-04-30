@@ -212,6 +212,23 @@ impl AppService {
             .prompt_content_blocks(session_id, prompt, update_sink)
     }
 
+    /// Sends one ACP content-block prompt and schedules a cancel notification.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the underlying live ACP host cannot complete the
+    /// prompt or the scheduled `session/cancel`.
+    pub fn prompt_content_blocks_with_cancel(
+        &mut self,
+        session_id: &str,
+        prompt: Vec<serde_json::Value>,
+        cancel_after: Duration,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<PromptResponse> {
+        self.host
+            .prompt_content_blocks_with_cancel(session_id, prompt, cancel_after, update_sink)
+    }
+
     /// Sends one text-only prompt and schedules a cancel notification.
     ///
     /// # Errors

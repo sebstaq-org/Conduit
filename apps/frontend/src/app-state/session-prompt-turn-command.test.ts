@@ -27,6 +27,7 @@ function promptSessionRecording(calls: string[]): PromptSession {
 
 function expectPromptSessionRequest(promptSession: PromptSession): void {
   expect(promptSession).toHaveBeenCalledWith({
+    cancelAfterMs: 2_700_000,
     openSessionId: "open-session-1",
     prompt: [{ text: "asasas", type: "text" }],
   });

@@ -56,6 +56,7 @@ it("tracks live plan interaction prompts with the prompt turn lifecycle", async 
   });
 
   expect(promptSession).toHaveBeenCalledWith({
+    cancelAfterMs: 2_700_000,
     openSessionId: "open-session-1",
     prompt: [{ text: "Implement plan", type: "text" }],
   });

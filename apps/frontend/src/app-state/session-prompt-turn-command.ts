@@ -1,4 +1,5 @@
 import type { PromptSessionMutationArg } from "./api";
+import { SESSION_PROMPT_CANCEL_AFTER_MS } from "./session-api-session-query-types";
 import type { SessionPromptTurnIdentity } from "./session-prompt-turns";
 
 interface PromptSessionResult {
@@ -33,6 +34,7 @@ async function promptTrackedOpenSession({
   onPromptTurnStarted?.(identity);
   try {
     await promptSession({
+      cancelAfterMs: SESSION_PROMPT_CANCEL_AFTER_MS,
       openSessionId,
       prompt: [{ text, type: "text" }],
     }).unwrap();

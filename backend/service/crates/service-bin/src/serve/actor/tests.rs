@@ -309,6 +309,7 @@ impl ProviderPort for BlockingRefreshProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
@@ -391,6 +392,7 @@ impl ProviderPort for SnapshotIsolationProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
@@ -484,6 +486,7 @@ impl ProviderPort for BlockingSnapshotProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))

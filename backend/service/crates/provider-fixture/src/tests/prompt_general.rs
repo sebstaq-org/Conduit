@@ -32,6 +32,7 @@ fn session_prompt_replays_updates_and_lifecycle() -> TestResult<()> {
     let response = port.session_prompt(
         "session-1".to_owned(),
         vec![json!({ "type": "text", "text": "hello" })],
+        None,
         &mut |update| updates.push(update),
     )?;
 
@@ -74,6 +75,7 @@ fn session_prompt_rejects_prompt_mismatch() -> TestResult<()> {
         .session_prompt(
             "session-1".to_owned(),
             vec![json!({ "type": "text", "text": "actual" })],
+            None,
             &mut |_| {},
         )
         .err()
@@ -108,6 +110,7 @@ fn session_prompt_failure_fixture_returns_provider_error() -> TestResult<()> {
         .session_prompt(
             "session-1".to_owned(),
             vec![json!({ "type": "text", "text": "hello" })],
+            None,
             &mut |_| {},
         )
         .err()
@@ -155,6 +158,7 @@ fn session_prompt_selects_matching_prompt_for_same_session() -> TestResult<()> {
     let _response = port.session_prompt(
         "session-1".to_owned(),
         vec![json!({ "type": "text", "text": "second" })],
+        None,
         &mut |update| updates.push(update),
     )?;
 
@@ -215,6 +219,7 @@ fn session_prompt_prefers_matching_config_fixture_for_same_prompt() -> TestResul
     let _response = port.session_prompt(
         "session-1".to_owned(),
         vec![json!({ "type": "text", "text": "hello" })],
+        None,
         &mut |update| updates.push(update),
     )?;
 
@@ -248,6 +253,7 @@ fn session_prompt_requires_config_prelude_when_fixture_declares_it() -> TestResu
         .session_prompt(
             "session-1".to_owned(),
             vec![json!({ "type": "text", "text": "hello" })],
+            None,
             &mut |_| {},
         )
         .err()
@@ -299,6 +305,7 @@ fn session_prompt_rejects_wrong_config_prelude_value() -> TestResult<()> {
         .session_prompt(
             "session-1".to_owned(),
             vec![json!({ "type": "text", "text": "hello" })],
+            None,
             &mut |_| {},
         )
         .err()
@@ -350,6 +357,7 @@ fn session_prompt_replays_after_required_config_prelude() -> TestResult<()> {
     let response = port.session_prompt(
         "session-1".to_owned(),
         vec![json!({ "type": "text", "text": "hello" })],
+        None,
         &mut |update| updates.push(update),
     )?;
 
@@ -382,6 +390,7 @@ fn session_prompt_requires_all_config_preludes_when_fixture_declares_them() -> T
         .session_prompt(
             "session-1".to_owned(),
             vec![json!({ "type": "text", "text": "hello" })],
+            None,
             &mut |_| {},
         )
         .err()
@@ -401,6 +410,7 @@ fn session_prompt_requires_all_config_preludes_when_fixture_declares_them() -> T
     let _response = port.session_prompt(
         "session-1".to_owned(),
         vec![json!({ "type": "text", "text": "hello" })],
+        None,
         &mut |update| updates.push(update),
     )?;
     if !updates

@@ -216,6 +216,7 @@ const SessionHistoryRequestSchema = z
 type SessionHistoryRequest = z.infer<typeof SessionHistoryRequestSchema>;
 const SessionPromptRequestSchema = z
   .object({
+    cancelAfterMs: z.number().int().positive().optional(),
     openSessionId: z.string(),
     prompt: z.array(ContentBlockSchema),
   })

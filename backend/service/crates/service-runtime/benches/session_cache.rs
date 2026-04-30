@@ -240,6 +240,7 @@ impl ProviderPort for FakeProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> service_runtime::Result<Value> {
         Ok(json!({

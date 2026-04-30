@@ -339,6 +339,7 @@ impl ProviderPort for BlockingPromptProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<serde_json::Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<serde_json::Value> {
         let _send_status = self.started.send(());

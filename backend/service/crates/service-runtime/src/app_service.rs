@@ -10,6 +10,7 @@ use app_api::AppService;
 use serde::Serialize;
 use serde_json::{Value, json, to_value};
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Factory that connects real `app-api` provider services.
 #[derive(Debug, Clone, Default)]
@@ -83,12 +84,21 @@ impl ProviderPort for AppServicePort {
         &mut self,
         session_id: String,
         prompt: Vec<Value>,
+        cancel_after: Option<Duration>,
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
-        serialize(
-            self.service
+        let result = match cancel_after {
+            Some(cancel_after) => self.service.prompt_content_blocks_with_cancel(
+                &session_id,
+                prompt,
+                cancel_after,
+                update_sink,
+            ),
+            None => self
+                .service
                 .prompt_content_blocks(&session_id, prompt, update_sink),
-        )
+        };
+        serialize(result)
     }
 
     fn session_cancel(&mut self, session_id: String) -> Result<Value> {

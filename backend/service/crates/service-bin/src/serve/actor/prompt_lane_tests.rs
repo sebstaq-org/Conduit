@@ -365,6 +365,7 @@ impl ProviderPort for BlockingPromptProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         let _send_status = self.started.send(session_id.clone());
@@ -473,6 +474,7 @@ impl ProviderPort for LaneAffinityProvider {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))

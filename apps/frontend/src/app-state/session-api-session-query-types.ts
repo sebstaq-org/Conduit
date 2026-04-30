@@ -25,9 +25,12 @@ interface ReadSessionHistoryQueryArg {
 }
 
 interface PromptSessionMutationArg {
+  cancelAfterMs?: number;
   openSessionId: string;
   prompt: ContentBlock[];
 }
+
+const SESSION_PROMPT_CANCEL_AFTER_MS = 45 * 60 * 1000;
 
 interface SetSessionConfigOptionMutationArg {
   provider: ProviderId;
@@ -44,3 +47,5 @@ export type {
   SetSessionConfigOptionMutationArg,
   SessionSetConfigOptionResult,
 };
+
+export { SESSION_PROMPT_CANCEL_AFTER_MS };

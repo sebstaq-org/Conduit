@@ -301,6 +301,23 @@ impl AcpHost {
         self.prompt(session_id, prompt, None, update_sink)
     }
 
+    /// Sends one ACP content-block prompt and schedules a cancel notification.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when content blocks cannot be decoded into the official
+    /// ACP schema, the provider rejects or fails `session/prompt`, or the
+    /// scheduled official SDK `session/cancel` notification fails.
+    pub fn prompt_content_blocks_with_cancel(
+        &mut self,
+        session_id: &str,
+        prompt: Vec<Value>,
+        cancel_after: Duration,
+        update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
+    ) -> Result<acp::PromptResponse> {
+        self.prompt(session_id, prompt, Some(cancel_after), update_sink)
+    }
+
     /// Sends one `session/cancel` notification on the current connection.
     ///
     /// # Errors

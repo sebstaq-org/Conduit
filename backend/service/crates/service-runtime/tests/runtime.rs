@@ -451,6 +451,81 @@ fn prompt_dispatch_rejects_raw_session_id_product_path() -> TestResult<()> {
 }
 
 #[test]
+fn prompt_dispatch_forwards_cancel_after_to_provider() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+    assert_ok(&runtime.dispatch(command("init", "initialize", "codex", json!({}))))?;
+    let opened = runtime.dispatch(command(
+        "new",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo" }),
+    ));
+    assert_ok(&opened)?;
+    let open_session_id = opened
+        .result
+        .pointer("/history/openSessionId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("session/new missing openSessionId: {opened:?}"))?;
+
+    let response = runtime.dispatch(command(
+        "prompt",
+        "session/prompt",
+        "all",
+        json!({
+            "cancelAfterMs": 1234,
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "hello" }]
+        }),
+    ));
+
+    assert_ok(&response)?;
+    let cancel_after = state
+        .lock()
+        .map_err(|error| format!("state poisoned: {error}"))?
+        .prompt_cancel_after
+        .get(&(ProviderId::Codex, "session-1".to_owned()))
+        .copied()
+        .flatten();
+    if cancel_after == Some(std::time::Duration::from_millis(1234)) {
+        return Ok(());
+    }
+    Err(format!("expected cancelAfterMs to reach provider, got {cancel_after:?}").into())
+}
+
+#[test]
+fn prompt_dispatch_rejects_zero_cancel_after() -> TestResult<()> {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let mut runtime = runtime(Arc::clone(&state))?;
+    assert_ok(&runtime.dispatch(command("init", "initialize", "codex", json!({}))))?;
+    let opened = runtime.dispatch(command(
+        "new",
+        "session/new",
+        "codex",
+        json!({ "cwd": "/repo" }),
+    ));
+    assert_ok(&opened)?;
+    let open_session_id = opened
+        .result
+        .pointer("/history/openSessionId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("session/new missing openSessionId: {opened:?}"))?;
+
+    let response = runtime.dispatch(command(
+        "prompt",
+        "session/prompt",
+        "all",
+        json!({
+            "cancelAfterMs": 0,
+            "openSessionId": open_session_id,
+            "prompt": [{ "type": "text", "text": "hello" }]
+        }),
+    ));
+
+    assert_invalid_params(&response)
+}
+
+#[test]
 fn cancel_dispatch_records_cancel_without_final_state() -> TestResult<()> {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let mut runtime = runtime(state)?;

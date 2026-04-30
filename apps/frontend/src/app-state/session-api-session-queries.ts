@@ -265,14 +265,19 @@ async function readSessionHistoryQuery({
 }
 
 async function promptSessionQuery({
+  cancelAfterMs,
   openSessionId,
   prompt,
 }: PromptSessionMutationArg): QueryResult<null> {
   try {
-    await sessionClient.promptSession({ openSessionId, prompt });
+    await sessionClient.promptSession({ cancelAfterMs, openSessionId, prompt });
     return { data: null };
   } catch (error) {
-    return toQueryException(error, { openSessionId }, "promptSessionQuery");
+    return toQueryException(
+      error,
+      { cancelAfterMs: cancelAfterMs ?? null, openSessionId },
+      "promptSessionQuery",
+    );
   }
 }
 

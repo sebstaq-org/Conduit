@@ -8,6 +8,7 @@ use acp_core::{
 use acp_discovery::ProviderId;
 use serde_json::Value;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Factory for connecting provider runtimes.
 pub trait ProviderFactory: Send {
@@ -81,6 +82,7 @@ pub trait ProviderPort: Send {
         &mut self,
         session_id: String,
         prompt: Vec<Value>,
+        cancel_after: Option<Duration>,
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value>;
 

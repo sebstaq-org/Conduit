@@ -21,7 +21,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing as _;
 use tracing_subscriber as _;
 
@@ -45,6 +45,7 @@ pub(crate) struct FakeState {
     pub(crate) prompt_agent_text: HashMap<(ProviderId, String), Vec<String>>,
     pub(crate) prompt_updates: HashMap<(ProviderId, String), Vec<TranscriptUpdateSnapshot>>,
     pub(crate) prompt_errors: HashMap<(ProviderId, String), String>,
+    pub(crate) prompt_cancel_after: HashMap<(ProviderId, String), Option<Duration>>,
     pub(crate) prompt_lifecycle_missing: HashSet<(ProviderId, String)>,
     pub(crate) prompt_stop_reason: HashMap<(ProviderId, String), String>,
     pub(crate) interaction_responses: Vec<(ProviderId, String, String, Value)>,
@@ -257,6 +258,7 @@ impl ProviderPort for FakeProvider {
         &mut self,
         session_id: String,
         prompt: Vec<Value>,
+        cancel_after: Option<Duration>,
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         let mut state = self
@@ -267,6 +269,9 @@ impl ProviderPort for FakeProvider {
         state
             .operations
             .push((self.provider, "session/prompt".to_owned()));
+        state
+            .prompt_cancel_after
+            .insert((self.provider, session_id.clone()), cancel_after);
         if let Some(error) = state
             .prompt_errors
             .get(&(self.provider, session_id.clone()))

@@ -257,6 +257,7 @@ impl ProviderPort for FixtureProviderPort {
         &mut self,
         session_id: String,
         prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         self.require_initialized("session/prompt")?;

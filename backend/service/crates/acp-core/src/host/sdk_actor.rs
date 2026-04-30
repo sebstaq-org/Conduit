@@ -41,6 +41,7 @@ type SdkConnection = acp_sdk::ConnectionTo<acp_sdk::Agent>;
 type SdkChildStdin = tokio_util::compat::Compat<tokio::process::ChildStdin>;
 type SdkChildStdout = tokio_util::compat::Compat<tokio::process::ChildStdout>;
 type SdkTransport = acp_sdk::ByteStreams<SdkChildStdin, SdkChildStdout>;
+const PROMPT_CANCEL_GRACE: Duration = Duration::from_secs(10);
 
 struct ConnectedActor {
     provider: ProviderId,
@@ -402,9 +403,16 @@ impl SdkHostActor {
         self.ensure_known_session(&session_id)?;
         let prompt = prompt_content_blocks(self.provider, prompt)?;
         self.start_prompt(&session_id, updates)?;
-        let response = self
+        let response = match self
             .prompt_with_optional_cancel(&session_id, prompt, cancel_after)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                self.finish_prompt_cancelled(&session_id)?;
+                return Err(error);
+            }
+        };
         self.finish_prompt(&session_id, &response)?;
         Ok(response)
     }
@@ -449,7 +457,7 @@ impl SdkHostActor {
             }
             () = tokio::time::sleep(after) => {
                 self.cancel_prompt(session_id.clone()).await?;
-                prompt.await.map_err(|source| sdk_error(self.provider, "session/prompt", source))
+                await_prompt_after_cancel(self.provider, after, PROMPT_CANCEL_GRACE, prompt).await
             }
         }
     }
@@ -500,6 +508,19 @@ impl SdkHostActor {
         Ok(())
     }
 
+    fn finish_prompt_cancelled(&mut self, session_id: &acp::SessionId) -> Result<()> {
+        let updates = take_session_updates(&self.updates, self.provider)?;
+        self.last_prompt = Some(PromptLifecycleSnapshot {
+            identity: identity(self.provider, session_id),
+            state: PromptLifecycleState::Cancelled,
+            stop_reason: Some("timeout".to_owned()),
+            raw_update_count: updates.raw_update_count,
+            agent_text_chunks: updates.agent_text_chunks,
+            updates: updates.updates,
+        });
+        Ok(())
+    }
+
     fn ensure_known_session(&self, session_id: &acp::SessionId) -> Result<()> {
         if self.live_sessions.contains_key(&session_id.to_string()) {
             return Ok(());
@@ -528,6 +549,28 @@ impl SdkHostActor {
             return ConnectionState::Connected;
         }
         ConnectionState::Ready
+    }
+}
+
+async fn await_prompt_after_cancel(
+    provider: ProviderId,
+    after: Duration,
+    grace: Duration,
+    mut prompt: std::pin::Pin<
+        &mut impl std::future::Future<Output = acp_sdk::Result<acp::PromptResponse>>,
+    >,
+) -> Result<acp::PromptResponse> {
+    tokio::select! {
+        response = &mut prompt => {
+            response.map_err(|source| sdk_error(provider, "session/prompt", source))
+        }
+        () = tokio::time::sleep(grace) => {
+            Err(AcpError::Timeout {
+                provider,
+                operation: "session/prompt".to_owned(),
+                timeout: after + grace,
+            })
+        }
     }
 }
 
@@ -569,6 +612,50 @@ fn drain_child_stderr(provider: ProviderId, child: &mut tokio::process::Child) -
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::future::pending;
+
+    #[tokio::test]
+    async fn await_prompt_after_cancel_times_out_when_provider_stays_pending()
+    -> std::result::Result<(), String> {
+        let prompt = pending::<acp_sdk::Result<acp::PromptResponse>>();
+        tokio::pin!(prompt);
+
+        let result = await_prompt_after_cancel(
+            ProviderId::Codex,
+            Duration::from_millis(7),
+            Duration::from_millis(1),
+            prompt,
+        )
+        .await;
+
+        match result {
+            Ok(response) => Err(format!("expected timeout, got response {response:?}")),
+            Err(AcpError::Timeout {
+                provider,
+                operation,
+                timeout,
+            }) => {
+                if provider != ProviderId::Codex {
+                    return Err(format!("expected codex provider, got {provider:?}"));
+                }
+                if operation != "session/prompt" {
+                    return Err(format!(
+                        "expected session/prompt operation, got {operation}"
+                    ));
+                }
+                if timeout != Duration::from_millis(8) {
+                    return Err(format!("expected 8ms timeout, got {timeout:?}"));
+                }
+                Ok(())
+            }
+            Err(other) => Err(format!("expected timeout, got {other:?}")),
+        }
+    }
 }
 
 include!("sdk_actor_tail.rs");

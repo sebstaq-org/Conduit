@@ -50,6 +50,7 @@ fn committed_claude_parity_fixtures_replay_prompt_config_and_load() -> TestResul
     let prompted = port.session_prompt(
         "e2e-claude-new-session-0001".to_owned(),
         vec![json!({ "type": "text", "text": CLAUDE_PARITY_PROMPT })],
+        None,
         &mut |update| updates.push(update),
     )?;
     assert_json_string(&prompted, "/stopReason", "end_turn", "claude prompt")?;
@@ -102,6 +103,7 @@ fn committed_copilot_parity_fixtures_replay_prompt_config_and_load() -> TestResu
     let prompted = port.session_prompt(
         "e2e-copilot-new-session-0001".to_owned(),
         vec![json!({ "type": "text", "text": COPILOT_PARITY_PROMPT })],
+        None,
         &mut |update| updates.push(update),
     )?;
     assert_json_string(&prompted, "/stopReason", "end_turn", "copilot prompt")?;
@@ -125,6 +127,7 @@ fn assert_prompt_requires_config(
         .session_prompt(
             session_id.to_owned(),
             vec![json!({ "type": "text", "text": prompt })],
+            None,
             &mut |update| updates.push(update),
         )
         .err()

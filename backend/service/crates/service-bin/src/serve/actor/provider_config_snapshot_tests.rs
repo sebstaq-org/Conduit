@@ -207,6 +207,7 @@ impl ProviderPort for StartupRaceSnapshotProbePort {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
@@ -282,6 +283,7 @@ impl ProviderPort for SnapshotProbePort {
         &mut self,
         session_id: String,
         _prompt: Vec<Value>,
+        _cancel_after: Option<std::time::Duration>,
         _update_sink: &mut dyn FnMut(TranscriptUpdateSnapshot),
     ) -> Result<Value> {
         Ok(json!({ "sessionId": session_id, "stopReason": "end_turn" }))
