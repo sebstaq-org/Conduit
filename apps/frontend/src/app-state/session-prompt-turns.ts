@@ -53,6 +53,23 @@ const sessionPromptTurnsSlice = createSlice({
       }
       sessions[action.payload.sessionId] = activeCount - 1;
     },
+    sessionPromptTurnCleared: (
+      state,
+      action: PayloadAction<SessionPromptTurnIdentity>,
+    ): void => {
+      const sessions = state.activeCountByProvider[action.payload.provider];
+      if (sessions === undefined) {
+        return;
+      }
+      state.activeCountByProvider[action.payload.provider] = Object.fromEntries(
+        Object.entries(sessions).filter(
+          ([sessionId]) => sessionId !== action.payload.sessionId,
+        ),
+      );
+    },
+    sessionPromptTurnsCleared: (state): void => {
+      state.activeCountByProvider = {};
+    },
     sessionPromptTurnStarted: (
       state,
       action: PayloadAction<SessionPromptTurnIdentity>,
@@ -77,14 +94,20 @@ function selectSessionPromptTurnStreaming(
   );
 }
 
-const { sessionPromptTurnFinished, sessionPromptTurnStarted } =
-  sessionPromptTurnsSlice.actions;
+const {
+  sessionPromptTurnCleared,
+  sessionPromptTurnFinished,
+  sessionPromptTurnStarted,
+  sessionPromptTurnsCleared,
+} = sessionPromptTurnsSlice.actions;
 const sessionPromptTurnsReducer = sessionPromptTurnsSlice.reducer;
 
 export {
   selectSessionPromptTurnStreaming,
+  sessionPromptTurnCleared,
   sessionPromptTurnFinished,
   sessionPromptTurnStarted,
+  sessionPromptTurnsCleared,
   sessionPromptTurnsReducer,
 };
 export type {

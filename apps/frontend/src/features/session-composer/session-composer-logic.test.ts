@@ -9,6 +9,7 @@ import {
   resolveDraftProviderReady,
   resolveDraftSnapshotEntry,
   resolveErrorMessage,
+  resolveSessionComposerWorking,
   resolveVisibleConfigOptions,
 } from "./session-composer-logic";
 
@@ -21,6 +22,22 @@ function draftCodexSession(): ActiveSession {
     cwd: "/workspace/conduit",
     provider: "codex",
     selectedConfigByProvider: {},
+  };
+}
+
+function openCodexSession(): ActiveSession {
+  return {
+    kind: "open",
+    configOptions: null,
+    configSyncBlocked: false,
+    configSyncError: null,
+    cwd: "/workspace/conduit",
+    modes: null,
+    models: null,
+    openSessionId: "open-session-1",
+    provider: "codex",
+    sessionId: "session-1",
+    title: null,
   };
 }
 
@@ -156,6 +173,60 @@ it("enables the same draft composer once the provider snapshot becomes ready", (
       snapshot: providersSnapshot("ready", [selectOption()]),
     }),
   ).toBeNull();
+});
+
+it("keeps open-session composer working tied to the prompt mutation", () => {
+  expect(
+    booleanLabel(
+      resolveSessionComposerWorking({
+        activeSession: openCodexSession(),
+        newSessionLoading: false,
+        promptSessionLoading: false,
+      }),
+    ),
+  ).toBe("false");
+  expect(
+    booleanLabel(
+      resolveSessionComposerWorking({
+        activeSession: openCodexSession(),
+        newSessionLoading: false,
+        promptSessionLoading: true,
+      }),
+    ),
+  ).toBe("true");
+});
+
+it("keeps draft composer working while session creation or prompt submit runs", () => {
+  expect(
+    booleanLabel(
+      resolveSessionComposerWorking({
+        activeSession: draftCodexSession(),
+        newSessionLoading: true,
+        promptSessionLoading: false,
+      }),
+    ),
+  ).toBe("true");
+  expect(
+    booleanLabel(
+      resolveSessionComposerWorking({
+        activeSession: draftCodexSession(),
+        newSessionLoading: false,
+        promptSessionLoading: true,
+      }),
+    ),
+  ).toBe("true");
+});
+
+it("keeps idle draft composer idle", () => {
+  expect(
+    booleanLabel(
+      resolveSessionComposerWorking({
+        activeSession: draftCodexSession(),
+        newSessionLoading: false,
+        promptSessionLoading: false,
+      }),
+    ),
+  ).toBe("false");
 });
 
 it("surfaces provider config errors for selected draft providers", () => {

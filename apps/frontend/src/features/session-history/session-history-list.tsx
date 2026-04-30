@@ -1,9 +1,12 @@
+import { useRef } from "react";
 import { useTheme } from "@shopify/restyle";
 import { Box, Text } from "@/theme";
 import type { Theme } from "@/theme";
 import { VirtualList } from "@/ui";
+import type { FlashListProps, FlashListRef } from "@shopify/flash-list";
 import { transcriptItemLabel } from "./session-history-content";
 import { SessionHistoryMarkdown } from "./session-history-markdown";
+import { createHistoryContentContainerStyle } from "./session-history-list-layout";
 import {
   createHistoryListStyle,
   createHistoryUserBubbleStyle,
@@ -39,9 +42,10 @@ type SessionHistoryListRow =
 
 const historyViewportStyle = { flex: 1, minHeight: 0 } as const;
 const historyStartReachedThreshold = 2;
+const historyFollowEndThreshold = 240;
 const historyVisibleContentPosition = {
-  animateAutoScrollToBottom: false,
-  autoscrollToBottomThreshold: 0.2,
+  animateAutoScrollToBottom: true,
+  autoscrollToBottomThreshold: 1,
   autoscrollToTopThreshold: 0.2,
   startRenderingFromBottom: true,
 } as const;
@@ -150,23 +154,54 @@ function renderHistoryRow(
   return renderTranscriptItem(row.item, theme);
 }
 
-function createHistoryContentContainerStyle(theme: Theme): {
+function createHistoryListContentContainerStyle(theme: Theme): {
   alignSelf: "center";
   maxWidth: number;
   paddingBottom: number;
   width: "100%";
 } {
   const historyListStyle = createHistoryListStyle(theme);
-  return {
-    alignSelf: historyListStyle.alignSelf,
+  return createHistoryContentContainerStyle({
     maxWidth: historyListStyle.maxWidth,
-    paddingBottom: theme.spacing.scrollBottom,
-    width: historyListStyle.width,
-  };
+    theme,
+  });
 }
 
 function historyItemSeparator(theme: Theme): React.JSX.Element {
   return <Box style={{ height: theme.spacing[historyListGap] }} />;
+}
+
+interface HistoryFollowEndHandlers {
+  handleContentSizeChange: NonNullable<
+    FlashListProps<SessionHistoryListRow>["onContentSizeChange"]
+  >;
+  handleLoad: NonNullable<FlashListProps<SessionHistoryListRow>["onLoad"]>;
+  handleScroll: NonNullable<FlashListProps<SessionHistoryListRow>["onScroll"]>;
+  listRef: React.RefObject<FlashListRef<SessionHistoryListRow> | null>;
+}
+
+function useHistoryFollowEnd(): HistoryFollowEndHandlers {
+  const listRef = useRef<FlashListRef<SessionHistoryListRow>>(null);
+  const followEndRef = useRef(true);
+
+  return {
+    handleContentSizeChange: () => {
+      if (followEndRef.current) {
+        listRef.current?.scrollToEnd({ animated: false });
+      }
+    },
+    handleLoad: () => {
+      listRef.current?.scrollToEnd({ animated: false });
+    },
+    handleScroll: (event) => {
+      const viewportHeight = event.nativeEvent.layoutMeasurement.height;
+      const offsetY = event.nativeEvent.contentOffset.y;
+      const contentHeight = event.nativeEvent.contentSize.height;
+      const distanceFromEnd = contentHeight - viewportHeight - offsetY;
+      followEndRef.current = distanceFromEnd <= historyFollowEndThreshold;
+    },
+    listRef,
+  };
 }
 
 function SessionHistoryList({
@@ -176,10 +211,11 @@ function SessionHistoryList({
 }: SessionHistoryListProps): React.JSX.Element {
   const theme = useTheme<Theme>();
   const rows = sessionHistoryRows(history);
+  const followEnd = useHistoryFollowEnd();
 
   return (
     <VirtualList
-      contentContainerStyle={createHistoryContentContainerStyle(theme)}
+      contentContainerStyle={createHistoryListContentContainerStyle(theme)}
       data={rows}
       getItemType={rowType}
       ItemSeparatorComponent={() => historyItemSeparator(theme)}
@@ -187,10 +223,15 @@ function SessionHistoryList({
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="never"
       listKey={openSessionId}
+      listRef={followEnd.listRef}
       maintainVisibleContentPosition={historyVisibleContentPosition}
+      onContentSizeChange={followEnd.handleContentSizeChange}
+      onLoad={followEnd.handleLoad}
+      onScroll={followEnd.handleScroll}
       onStartReached={onStartReached}
       onStartReachedThreshold={historyStartReachedThreshold}
       renderItem={({ item }) => renderHistoryRow(item, theme)}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator
       style={historyViewportStyle}
     />

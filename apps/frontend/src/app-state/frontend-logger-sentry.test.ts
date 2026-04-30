@@ -24,12 +24,19 @@ function okResponse(): Response {
   return new Response(null, { status: 204 });
 }
 
-function configureLoggerTestRuntime(profile: string): void {
+function configureLoggerTestRuntime(
+  profile: string,
+  withSentryDsn = true,
+): void {
   vi.stubGlobal("navigator", { product: "ReactNative" });
   process.env.EXPO_PUBLIC_CONDUIT_LOG_PROFILE = profile;
   process.env.EXPO_PUBLIC_CONDUIT_SESSION_WS_URL =
     "ws://127.0.0.1:4274/api/session";
-  process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
+  if (withSentryDsn) {
+    process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
+  } else {
+    delete process.env.EXPO_PUBLIC_SENTRY_DSN;
+  }
 }
 
 function readPostedRecords(fetchMock: FetchMock): unknown[] {
@@ -53,9 +60,10 @@ function readPostedRecords(fetchMock: FetchMock): unknown[] {
 async function setupLogger(
   fetchMock: FetchMock,
   profile = "stage",
+  withSentryDsn = true,
 ): Promise<FrontendLoggerModule> {
   vi.resetModules();
-  configureLoggerTestRuntime(profile);
+  configureLoggerTestRuntime(profile, withSentryDsn);
   vi.stubGlobal("fetch", fetchMock);
   const logger = await import("./frontend-logger");
   logger.initializeFrontendLogging();
@@ -195,6 +203,25 @@ async function runProdSentryDsnCase(): Promise<void> {
   expect(fetchMock.mock.calls).toHaveLength(0);
 }
 
+async function runNoDsnSentryInitCase(): Promise<void> {
+  const fetchMock = vi.fn<FetchFunction>().mockResolvedValue(okResponse());
+  const logger = await setupLogger(fetchMock, "dev", false);
+
+  logger.logInfo("frontend.sentry.no_dsn");
+  const sentryMock = await importSentryMock();
+
+  expect(sentryMock.init).toHaveBeenCalledWith(
+    expect.objectContaining({
+      dsn: undefined,
+      enabled: false,
+      environment: "dev",
+      sendDefaultPii: false,
+    }),
+  );
+  expect(sentryMock.addBreadcrumb).not.toHaveBeenCalled();
+  expect(sentryMock.captureMessage).not.toHaveBeenCalled();
+}
+
 describe("frontend logger Sentry sink", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -211,4 +238,8 @@ describe("frontend logger Sentry sink", () => {
     runSentryFailureCase,
   );
   it("enables Sentry in prod when a DSN is configured", runProdSentryDsnCase);
+  it(
+    "initializes disabled Sentry before root wrapping without a DSN",
+    runNoDsnSentryInitCase,
+  );
 });

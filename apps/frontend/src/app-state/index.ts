@@ -24,7 +24,11 @@ export {
   openSessionRow,
   submitPrompt,
 } from "./session-commands";
-export type { OpenSessionFailure, PromptFailure } from "./session-commands";
+export type {
+  OpenSessionFailure,
+  PromptFailure,
+  PromptTimelineBase,
+} from "./session-commands";
 export {
   addProjectPath,
   removeProjectById,
@@ -64,8 +68,10 @@ export {
 export type { ActiveSession } from "./session-selection";
 export {
   selectSessionPromptTurnStreaming,
+  sessionPromptTurnCleared,
   sessionPromptTurnFinished,
   sessionPromptTurnStarted,
+  sessionPromptTurnsCleared,
 } from "./session-prompt-turns";
 export type { SessionPromptTurnIdentity } from "./session-prompt-turns";
 export { pendingPromptSubmitted } from "./session-pending-prompts";

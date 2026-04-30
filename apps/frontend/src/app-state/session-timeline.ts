@@ -7,6 +7,7 @@ import {
 } from "./api-hooks";
 import type { SessionHistoryWindow } from "@conduit/session-client";
 import { withPendingPromptMessages } from "./session-pending-prompts";
+import type { PendingPromptMessage } from "./session-pending-prompts";
 import type { RootState } from "./store";
 
 interface SessionTimelineView {
@@ -18,6 +19,21 @@ interface SessionTimelineView {
   isLoading: boolean;
   isOlderError: boolean;
   loadOlderIfNeeded: () => void;
+}
+
+const emptyPendingPrompts: PendingPromptMessage[] = [];
+
+function selectPendingPromptsForOpenSession(
+  state: Pick<RootState, "sessionPendingPrompts">,
+  openSessionId: string | null,
+): PendingPromptMessage[] {
+  if (openSessionId === null) {
+    return emptyPendingPrompts;
+  }
+  return (
+    state.sessionPendingPrompts.byOpenSessionId[openSessionId] ??
+    emptyPendingPrompts
+  );
 }
 
 function timelineHistoryWithPending(
@@ -38,12 +54,9 @@ function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
   }
   const timelineQuery = useReadSessionTimelineQuery(timelineQueryArg);
   const [loadOlder] = useLoadOlderSessionTimelineMutation();
-  const pendingPrompts = useSelector((state: RootState) => {
-    if (openSessionId === null) {
-      return [];
-    }
-    return state.sessionPendingPrompts.byOpenSessionId[openSessionId] ?? [];
-  });
+  const pendingPrompts = useSelector((state: RootState) =>
+    selectPendingPromptsForOpenSession(state, openSessionId),
+  );
   const history = timelineHistoryWithPending(
     timelineQuery.data?.history,
     pendingPrompts,
@@ -78,4 +91,4 @@ function useSessionTimeline(openSessionId: string | null): SessionTimelineView {
   };
 }
 
-export { useSessionTimeline };
+export { selectPendingPromptsForOpenSession, useSessionTimeline };

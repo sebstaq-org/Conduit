@@ -5,7 +5,11 @@ import {
   draftSessionProviderSelected,
   useReadSessionTimelineQuery,
 } from "@/app-state";
-import type { ActiveSession, AppDispatch } from "@/app-state";
+import type {
+  ActiveSession,
+  AppDispatch,
+  PromptTimelineBase,
+} from "@/app-state";
 
 const PROVIDER_CONFIG_DRAFT_POLLING_INTERVAL_MS = 1000;
 
@@ -40,17 +44,23 @@ function openSessionTimelineArg(
   return { openSessionId: activeSession.openSessionId };
 }
 
-function useActiveSessionTimelineRevision(
+function useActiveSessionTimelineBase(
   activeSession: ActiveSession | null,
-): number | null {
+): PromptTimelineBase | null {
   const { data } = useReadSessionTimelineQuery(
     openSessionTimelineArg(activeSession),
   );
-  return data?.history.revision ?? null;
+  if (data === undefined) {
+    return null;
+  }
+  return {
+    lastItemId: data.history.items.at(-1)?.id ?? null,
+    revision: data.history.revision,
+  };
 }
 
 export {
   createHandleProviderSelect,
   providerConfigPollingInterval,
-  useActiveSessionTimelineRevision,
+  useActiveSessionTimelineBase,
 };

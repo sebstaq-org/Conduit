@@ -5,20 +5,25 @@ Call sites must not write directly to Sentry, `/api/client-log`, or console logg
 helpers. The logger creates one redacted `FrontendLogRecord` and fans it out to the
 configured sinks.
 
-The Sentry sink is enabled when `EXPO_PUBLIC_SENTRY_DSN` is present. Native and web
-builds use the same DSN variable, `EXPO_PUBLIC_CONDUIT_LOG_PROFILE` as the Sentry
-environment, and the Sentry wizard's Expo plugin configured for org `sebstaq` and
-project `conduit`. `SENTRY_AUTH_TOKEN` is build-only for sourcemap upload and must
-never be committed.
+The Sentry sink is enabled when `EXPO_PUBLIC_SENTRY_DSN` is present. Native
+builds read it from Expo environment at build time. Packaged desktop stage reads
+the same variable when Electron starts and injects it into the renderer runtime
+config. `EXPO_PUBLIC_CONDUIT_LOG_PROFILE` is the Sentry environment, and the
+Sentry wizard's Expo plugin is configured for org `sebstaq` and project
+`conduit`. `SENTRY_AUTH_TOKEN` is build-only for sourcemap upload and must never
+be committed.
 
 The Sentry sink sends each frontend record through Sentry Structured Logs and keeps
 the same record as a breadcrumb. Error records also create Sentry events with the
 redacted record attached as context.
 
-Run builds through Doppler so `EXPO_PUBLIC_SENTRY_DSN` and `SENTRY_AUTH_TOKEN`
-come from the `conduit` project/config instead of local files. The Sentry wizard
-may create `.env.local` or `android/sentry.properties` for local testing; those
-files must stay uncommitted.
+Run mobile builds through Doppler so `EXPO_PUBLIC_SENTRY_DSN` and
+`SENTRY_AUTH_TOKEN` come from the `conduit` project/config instead of local
+files. Run desktop stage through Doppler when starting or deploying it so Electron
+has `EXPO_PUBLIC_SENTRY_DSN` at runtime; the stage artifact build intentionally
+does not bake the DSN into exported web assets. The Sentry wizard may create
+`.env.local` or `android/sentry.properties` for local testing; those files must
+stay uncommitted.
 
 The file sink is enabled when `EXPO_PUBLIC_CONDUIT_CLIENT_LOG_URL` is present, or
 when `EXPO_PUBLIC_CONDUIT_SESSION_WS_URL` can be mapped to `/api/client-log`. This

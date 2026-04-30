@@ -98,10 +98,17 @@ jobs:
           name: ${{ needs.build.outputs.artifact_name }}
           path: stage-artifact
 
+      - name: Check stage runtime environment
+        env:
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+        run: bash scripts/stage/conduit-stage.sh check-runtime-env
+
       - name: Install stage artifact
         run: bash scripts/stage/conduit-stage.sh install-artifact "stage-artifact/${{ needs.build.outputs.artifact_name }}"
 
       - name: Restart stage
+        env:
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
           bash scripts/stage/conduit-stage.sh stop
           bash scripts/stage/conduit-stage.sh start

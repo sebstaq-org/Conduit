@@ -16,9 +16,9 @@ pub(super) struct ProviderConfigSnapshots {
     entries: Arc<RwLock<Vec<ProviderConfigSnapshotEntry>>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum ProviderConfigSnapshotStatus {
+pub(super) enum ProviderConfigSnapshotStatus {
     Loading,
     Ready,
     Error,
@@ -56,6 +56,15 @@ impl ProviderConfigSnapshots {
             .ok()
             .map_or_else(Vec::new, |guard| guard.clone());
         json!({ "entries": entries })
+    }
+
+    pub(super) fn provider_status(&self, provider: &str) -> Option<ProviderConfigSnapshotStatus> {
+        self.entries.read().ok().and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry.provider.as_str() == provider)
+                .map(|entry| entry.status)
+        })
     }
 
     fn replace_entries(&self, entries: Vec<ProviderConfigSnapshotEntry>) {

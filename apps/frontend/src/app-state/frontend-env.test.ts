@@ -39,14 +39,15 @@ describe("frontend environment access", () => {
     );
   });
 
-  it("reads Sentry public DSN from Expo environment only", () => {
+  it("lets packaged stage runtime config override Sentry public DSN", () => {
     process.env.EXPO_PUBLIC_SENTRY_DSN = "https://public@example.com/1";
     globalThis.CONDUIT_RUNTIME_CONFIG = {
       logProfile: "stage",
+      sentryDsn: "https://runtime-public@example.com/2",
     };
 
     expect(frontendEnvValue("EXPO_PUBLIC_SENTRY_DSN")).toBe(
-      "https://public@example.com/1",
+      "https://runtime-public@example.com/2",
     );
   });
 });

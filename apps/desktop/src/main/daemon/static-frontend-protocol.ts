@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { createDesktopRuntimeConfig } from "./runtime-config.js";
 import type { DesktopDaemonConfig } from "./types.js";
 
 const desktopStaticScheme = "conduit-desktop";
@@ -49,21 +50,12 @@ function isPathInside(root: string, candidate: string): boolean {
   );
 }
 
-function runtimeConfig(config: DesktopDaemonConfig): Record<string, string> {
-  return {
-    clientLogUrl: `http://${config.backendHost}:${String(config.backendPort)}/api/client-log`,
-    logProfile: config.logProfile,
-    runtimeSurface: "desktop_app",
-    sessionWsUrl: `ws://${config.backendHost}:${String(config.backendPort)}/api/session`,
-  };
-}
-
 function injectRuntimeConfig(
   desktopConfig: DesktopDaemonConfig,
   html: string,
 ): string {
   const serializedConfig = JSON.stringify(
-    runtimeConfig(desktopConfig),
+    createDesktopRuntimeConfig(desktopConfig),
   ).replaceAll("<", String.raw`\u003c`);
   const script = `<script>globalThis.CONDUIT_RUNTIME_CONFIG=${serializedConfig};</script>`;
   if (html.includes("</head>")) {

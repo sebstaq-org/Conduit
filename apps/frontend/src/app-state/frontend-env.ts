@@ -12,6 +12,7 @@ interface ConduitRuntimeConfig {
   readonly clientLogUrl?: string;
   readonly logProfile?: string;
   readonly runtimeSurface?: string;
+  readonly sentryDsn?: string;
   readonly sessionWsUrl?: string;
 }
 
@@ -50,7 +51,7 @@ function frontendEnvValue(name: keyof FrontendEnv): string | undefined {
       );
     }
     case "EXPO_PUBLIC_SENTRY_DSN": {
-      return process.env.EXPO_PUBLIC_SENTRY_DSN;
+      return runtimeConfig?.sentryDsn ?? process.env.EXPO_PUBLIC_SENTRY_DSN;
     }
     case "NODE_ENV": {
       return process.env.NODE_ENV;

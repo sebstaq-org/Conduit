@@ -21,7 +21,7 @@ function DropdownMenuContent({
   return (
     <Content
       align={dropdownMenuContentAlign}
-      side={dropdownMenuContentSide}
+      side={dropdownMenuContentSide()}
       sideOffset={dropdownMenuContentSideOffset}
       style={createDropdownMenuContentStyle(theme)}
     >
